@@ -6,7 +6,7 @@ use support\Redis;
 use support\Log;
 use Webman\Http\Request;
 use Erik\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
-
+use Erik\Xhprof\Webman\Xhprof;
 
 
 class XhprofLib
@@ -51,15 +51,8 @@ class XhprofLib
    */
   public static function init_metrics($xhprof_data, $rep_symbol, $sort, $diff_report = false)
   {
-    $stats=XhprofDisplay::$stats;
-    $pc_stats=XhprofDisplay::$pc_stats;
-    $metrics=XhprofDisplay::$metrics;
-    $diff_mode=XhprofDisplay::$diff_mode;
-    $sortable_columns=XhprofDisplay::$sortable_columns;
     $sort_col=XhprofDisplay::$sort_col;
-    $display_calls=XhprofDisplay::$display_calls;
-    $diff_mode = $diff_report;
-
+    $sortable_columns=XhprofDisplay::$sortable_columns;
     if (!empty($sort)) {
       if (array_key_exists($sort, $sortable_columns)) {
         $sort_col = $sort;
@@ -94,6 +87,13 @@ class XhprofLib
       $pc_stats[] = $metric;
       $pc_stats[] = "I" . $desc[0] . "%";
     }
+    XhprofDisplay::$metrics=$metrics;
+    XhprofDisplay::$stats=$stats;
+    XhprofDisplay::$pc_stats=$pc_stats;
+    XhprofDisplay::$diff_mode= $diff_report;
+    XhprofDisplay::$sort_col=$sort_col;
+    XhprofDisplay::$display_calls=$display_calls;
+
   }
 
   /*
@@ -197,7 +197,7 @@ class XhprofLib
   {
 
 
-    $$function_map = array_fill_keys($functions_to_keep, 1);
+    $function_map = array_fill_keys($functions_to_keep, 1);
     $function_map['main()'] = 1;
     $new_raw_data = array();
     foreach ($raw_data as $parent_child => $info) {
@@ -400,7 +400,6 @@ class XhprofLib
       if ($display_calls) $overall_totals["ct"] += $info["ct"];
     }
 
-    /* adjust exclusive times by deducting inclusive time of children */
     foreach ($raw_data as $parent_child => $info) {
       list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
       if ($parent) {
@@ -712,7 +711,7 @@ class XhprofLib
    */
   public static function isIgnore()
   {
-    $ignoreArr = X_IGNORE_URL_ARR;
+    $ignoreArr = Xhprof::$ignore_url_arr;
     if (!is_array($ignoreArr)) return true;
     //当前请求url
     $request_uri = self::getRequest()->uri();
@@ -743,7 +742,7 @@ class XhprofLib
    */
   public static function getRequestLog($run_id)
   {
-    $key = X_KEY_PREFIX . ":request_log:" . $run_id;
+    $key = Xhprof::$key_prefix . ":request_log:" . $run_id;
     $info = Redis::get($key);
     if ($info) return json_decode($info, true);
     return false;

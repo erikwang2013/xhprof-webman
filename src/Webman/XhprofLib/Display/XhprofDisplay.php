@@ -4,6 +4,7 @@ namespace Erik\Xhprof\Webman\XhprofLib\Display;
 
 use Erik\Xhprof\Webman\XhprofLib\Utils\XhprofLib;
 use Erik\Xhprof\Webman\XhprofLib\Utils\XHProfRunsDefault;
+use Erik\Xhprof\Webman\Xhprof;
 
 class XhprofDisplay
 {
@@ -40,6 +41,7 @@ class XhprofDisplay
     "samples" => 1,
     "excl_samples" => 1
   );
+
   public static $vwbar;
   public static $vbar;
   public static  $vbbar;
@@ -89,43 +91,42 @@ class XhprofDisplay
 
   public static $format_cbk = array(
     "fn" => "",
-    "ct" => "xhprof_count_format",
-    "Calls%" => "xhprof_percent_format",
-
+    "ct" => "self::xhprof_count_format",
+    "Calls%" => "self::xhprof_percent_format",
     "wt" => "number_format",
-    "IWall%" => "xhprof_percent_format",
+    "IWall%" => "self::xhprof_percent_format",
     "excl_wt" => "number_format",
-    "EWall%" => "xhprof_percent_format",
+    "EWall%" => "self::xhprof_percent_format",
 
     "ut" => "number_format",
-    "IUser%" => "xhprof_percent_format",
+    "IUser%" => "self::xhprof_percent_format",
     "excl_ut" => "number_format",
-    "EUser%" => "xhprof_percent_format",
+    "EUser%" => "self::xhprof_percent_format",
 
     "st" => "number_format",
-    "ISys%" => "xhprof_percent_format",
+    "ISys%" => "self::xhprof_percent_format",
     "excl_st" => "number_format",
-    "ESys%" => "xhprof_percent_format",
+    "ESys%" => "self::xhprof_percent_format",
 
     "cpu" => "number_format",
-    "ICpu%" => "xhprof_percent_format",
+    "ICpu%" => "self::xhprof_percent_format",
     "excl_cpu" => "number_format",
-    "ECpu%" => "xhprof_percent_format",
+    "ECpu%" => "self::xhprof_percent_format",
 
     "mu" => "number_format",
-    "IMUse%" => "xhprof_percent_format",
+    "IMUse%" => "self::xhprof_percent_format",
     "excl_mu" => "number_format",
-    "EMUse%" => "xhprof_percent_format",
+    "EMUse%" => "self::xhprof_percent_format",
 
     "pmu" => "number_format",
-    "IPMUse%" => "xhprof_percent_format",
+    "IPMUse%" => "self::xhprof_percent_format",
     "excl_pmu" => "number_format",
-    "EPMUse%" => "xhprof_percent_format",
+    "EPMUse%" => "self::xhprof_percent_format",
 
     "samples" => "number_format",
-    "ISamples%" => "xhprof_percent_format",
+    "ISamples%" => "self::xhprof_percent_format",
     "excl_samples" => "number_format",
-    "ESamples%" => "xhprof_percent_format",
+    "ESamples%" => "self::xhprof_percent_format",
   );
 
 
@@ -238,11 +239,8 @@ class XhprofDisplay
   public static function xhprof_count_format($num)
   {
     $num = round($num, 3);
-    if (round($num) == $num) {
-      return number_format($num);
-    } else {
-      return number_format($num, 3);
-    }
+    if (round($num) == $num)return number_format($num);
+    return number_format($num, 3);
   }
 
   public static function xhprof_percent_format($s, $precision = 1)
@@ -432,9 +430,9 @@ class XhprofDisplay
     $run2_desc = "",
     $run2_data = array()
   ) {
-    $totals = self::$totals;
-    $totals_1 = self::$totals_1;
-    $totals_2 = self::$totals_2;
+    $totals;
+    $totals_1;
+    $totals_2;
     $stats = self::$stats;
     $pc_stats = self::$pc_stats;
     $diff_mode = self::$diff_mode;
@@ -457,10 +455,13 @@ class XhprofDisplay
       $symbol_tab  = XhprofLib::xhprof_compute_flat_info($run_delta, $totals);
       $symbol_tab1 = XhprofLib::xhprof_compute_flat_info($run1_data, $totals_1);
       $symbol_tab2 = XhprofLib::xhprof_compute_flat_info($run2_data, $totals_2);
+      self::$totals=$totals;
+      self::$totals_1=$totals_1;
+      self::$totals_2=$totals_2;
     } else {
       $symbol_tab = XhprofLib::xhprof_compute_flat_info($run1_data, $totals);
+      self::$totals=$totals;
     }
-
     $run1_txt = sprintf(
       "<b>Run #%s:</b> %s",
       $run1,
@@ -468,8 +469,6 @@ class XhprofDisplay
     );
 
     $base_url_params = XhprofLib::xhprof_array_unset(XhprofLib::xhprof_array_unset($url_params, 'symbol'), 'all');
-
-    $top_link_query_string = "$base_path?" . http_build_query($base_url_params);
 
     if ($diff_mode) {
       $diff_text = "Diff";
@@ -490,7 +489,7 @@ class XhprofDisplay
         $run2_desc
       );
 
-      $run2_link = xhprof_render_link(
+      $run2_link = self::xhprof_render_link(
         'View Run #' . $run2,
         "$base_path?" .
           http_build_query(XhprofLib::xhprof_array_set(
@@ -515,7 +514,7 @@ class XhprofDisplay
       // view the different runs or invert the current diff
       $links[] = $run1_link;
       $links[] = $run2_link;
-      $links[] = xhprof_render_link(
+      $links[] = self::xhprof_render_link(
         'Invert ' . $diff_text . ' Report',
         "$base_path?" .
           http_build_query($inverted_params)
@@ -527,7 +526,7 @@ class XhprofDisplay
     //  $links [] = '<input class="public static function_typeahead form-control" '.' type="input" size="40" maxlength="100" /><button type="button" id="funcSub">提交</button>';
     $links[] = '<div class="input-group" style="width: 400px;"> <input type="text" class="public static function_typeahead form-control" placeholder="查找 函数/方法名..."> <span class="input-group-btn"> <button class="btn btn-default" type="button" id="funcSub">搜索</button> </span> </div>';
 
-    $echo_page = xhprof_render_actions($links);
+    $echo_page = self::xhprof_render_actions($links);
 
 
     // data tables
@@ -544,7 +543,7 @@ class XhprofDisplay
           $symbol_tab1[$rep_symbol] : null;
         $info2 = isset($symbol_tab2[$rep_symbol]) ?
           $symbol_tab2[$rep_symbol] : null;
-        $echo_page .= symbol_report(
+        $echo_page .= self::symbol_report(
           $url_params,
           $run_delta,
           $symbol_tab[$rep_symbol],
@@ -556,7 +555,7 @@ class XhprofDisplay
           $info2
         );
       } else {
-        $echo_page .= symbol_report(
+        $echo_page .= self::symbol_report(
           $url_params,
           $run1_data,
           $symbol_tab[$rep_symbol],
@@ -567,7 +566,7 @@ class XhprofDisplay
       }
     } else {
       /* flat top-level report of all public static functions */
-      $echo_page .= full_report($url_params, $symbol_tab, $sort, $run1, $run2);
+      $echo_page .= self::full_report($url_params, $symbol_tab, $sort, $run1, $run2);
     }
     return $echo_page;
   }
@@ -624,12 +623,10 @@ class XhprofDisplay
   public static function print_td_num($num, $fmt_func, $bold = false, $attributes = null)
   {
 
-    $class = get_print_class($num, $bold);
-
+    $class = self::get_print_class($num, $bold);
     if (!empty($fmt_func) && is_numeric($num)) {
       $num = call_user_func($fmt_func, $num);
     }
-
     return "<td $attributes $class>$num</td>\n";
   }
 
@@ -638,16 +635,11 @@ class XhprofDisplay
    */
   public static function print_td_pct($numer, $denom, $bold = false, $attributes = null)
   {
-    $vbar = self::$vbar;
-    $vbbar = self::$vbbar;
-    $diff_mode = self::$diff_mode;
-
-    $class = get_print_class($numer, $bold);
-
+    $class = self::get_print_class($numer, $bold);
     if ($denom == 0) {
       $pct = "N/A%";
     } else {
-      $pct = xhprof_percent_format($numer / abs($denom));
+      $pct = self::xhprof_percent_format($numer / abs($denom));
     }
 
     return "<td $attributes $class>$pct</td>\n";
@@ -686,37 +678,37 @@ class XhprofDisplay
       ));
 
     $echo_page .= '<td>';
-    $echo_page .= xhprof_render_link($info["fn"], $href);
-    $echo_page .= print_source_link($info);
+    $echo_page .= self::xhprof_render_link($info["fn"], $href);
+    $echo_page .= self::print_source_link($info);
     $echo_page .= "</td>\n";
 
     if ($display_calls) {
       // Call Count..
-      $echo_page .= print_td_num($info["ct"], $format_cbk["ct"], ($sort_col == "ct"));
-      $echo_page .= print_td_pct($info["ct"], $totals["ct"], ($sort_col == "ct"));
+      $echo_page .= self::print_td_num($info["ct"], $format_cbk["ct"], ($sort_col == "ct"));
+      $echo_page .= self::print_td_pct($info["ct"], $totals["ct"], ($sort_col == "ct"));
     }
 
     // Other metrics..
     foreach ($metrics as $metric) {
       // Inclusive metric
-      $echo_page .= print_td_num(
+      $echo_page .= self::print_td_num(
         $info[$metric],
         $format_cbk[$metric],
         ($sort_col == $metric)
       );
-      $echo_page .= print_td_pct(
+      $echo_page .= self::print_td_pct(
         $info[$metric],
         $totals[$metric],
         ($sort_col == $metric)
       );
 
       // Exclusive Metric
-      $echo_page .= print_td_num(
+      $echo_page .= self::print_td_num(
         $info["excl_" . $metric],
         $format_cbk["excl_" . $metric],
         ($sort_col == "excl_" . $metric)
       );
-      $echo_page .= print_td_pct(
+      $echo_page .= self::print_td_pct(
         $info["excl_" . $metric],
         $totals[$metric],
         ($sort_col == "excl_" . $metric)
@@ -746,7 +738,7 @@ class XhprofDisplay
       $limit = $size;
       $display_link = "";
     } else {
-      $display_link = xhprof_render_link(
+      $display_link = self::xhprof_render_link(
         " [ <b class=bubble>display all </b>]",
         "$base_path?" .
           http_build_query(XhprofLib::xhprof_array_set(
@@ -764,11 +756,11 @@ class XhprofDisplay
     $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
 
     foreach ($stats as $stat) {
-      $desc = stat_description($stat);
+      $desc = self::stat_description($stat);
       if (array_key_exists($stat, $sortable_columns)) {
         $href = "$base_path?"
           . http_build_query(XhprofLib::xhprof_array_set($url_params, 'sort', $stat));
-        $header = xhprof_render_link($desc, $href);
+        $header = self::xhprof_render_link($desc, $href);
       } else {
         $header = $desc;
       }
@@ -909,7 +901,6 @@ class XhprofDisplay
       $echo_page .= "<td>{$create_time_text}</td>";
       $echo_page .= "<td style='text-align:right; font-weight:bold'>来源IP：</td>";
       $echo_page .= "<td>{$ip}</td>";
-
       if ($display_calls) {
         $echo_page .= "<td style='text-align:right; font-weight:bold'>函数/方法调用总次数：</td>";
         $echo_page .= "<td>" . number_format($totals['ct']) . "</td>";
@@ -919,7 +910,7 @@ class XhprofDisplay
       $echo_page .= "<tr>";
       foreach ($metrics as $metric) {
         $echo_page .= "<td style='text-align:right; font-weight:bold'>"
-          . str_replace("<br>", " ", stat_description($metric)) . "：</td>";
+          . str_replace("<br>", " ", self::stat_description($metric)) . "：</td>";
         $echo_page .= "<td>" . number_format($totals[$metric]) .  " "
           . $possible_metrics[$metric][1] . "</td>";
       }
@@ -939,7 +930,7 @@ class XhprofDisplay
       $tmp["fn"] = $symbol;
       $flat_data[] = $tmp;
     }
-    usort($flat_data, 'sort_cbk');
+    usort($flat_data, 'self::sort_cbk');
 
     //  print("<br>");
 
@@ -969,7 +960,7 @@ class XhprofDisplay
         $title = "Displaying top $limit public static functions: Sorted by $desc";
       }
     }
-    $echo_page .= print_flat_data($url_params, $title, $flat_data, $sort, $run1, $run2, $limit);
+    $echo_page .= self::print_flat_data($url_params, $title, $flat_data, $sort, $run1, $run2, $limit);
     $echo_page .= '</div></div></div>';  //结束
     return $echo_page;
   }
@@ -1001,7 +992,7 @@ class XhprofDisplay
     else $type = "Child";
 
     if ($display_calls) {
-      $mouseoverct = get_tooltip_attributes($type, "ct");
+      $mouseoverct = self::get_tooltip_attributes($type, "ct");
       /* call count */
       self::print_td_num($info["ct"], $format_cbk["ct"], ($sort_col == "ct"), $mouseoverct);
       self::print_td_pct($info["ct"], $base_ct, ($sort_col == "ct"), $mouseoverct);
@@ -1079,10 +1070,10 @@ class XhprofDisplay
   {
     $echo_page = "";
     if (strncmp($info['fn'], 'run_init', 8) && $info['fn'] !== 'main()') {
-      if (defined('XHPROF_SYMBOL_LOOKUP_URL')) {
+      if (Xhprof::$symbol_lookup_url) {
         $link = self::xhprof_render_link(
           'source',
-          XHPROF_SYMBOL_LOOKUP_URL . '?symbol=' . rawurlencode($info["fn"])
+          Xhprof::$symbol_lookup_url . '?symbol=' . rawurlencode($info["fn"])
         );
         $echo_page .= ' (' . $link . ')';
       }
@@ -1099,10 +1090,10 @@ class XhprofDisplay
 
     $echo_page = "$desc: </td>";
     $echo_page .= number_format($val);
-    $echo_page .= " (" . pct($val, $base) . "% of overall)";
+    $echo_page .= " (" . self::pct($val, $base) . "% of overall)";
     if (substr($stat, 0, 4) == "excl") {
       $func_base = $symbol_info[str_replace("excl_", "", $stat)];
-      $echo_page .= " (" . pct($val, $func_base) . "% of this public static function)";
+      $echo_page .= " (" . self::pct($val, $func_base) . "% of this public static function)";
     }
     $echo_page .= "<br>";
     return $echo_page;
@@ -1248,7 +1239,7 @@ class XhprofDisplay
     $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
 
     foreach ($pc_stats as $stat) {
-      $desc = stat_description($stat);
+      $desc = self::stat_description($stat);
       if (array_key_exists($stat, $sortable_columns)) {
 
         $href = "$base_path?" .
@@ -1336,7 +1327,7 @@ class XhprofDisplay
         $results[] = $info_tmp;
       }
     }
-    usort($results, 'sort_cbk');
+    usort($results, 'self::sort_cbk');
 
     if (count($results) > 0) {
       $echo_page .= self::print_pc_array(
@@ -1364,7 +1355,7 @@ class XhprofDisplay
         }
       }
     }
-    usort($results, 'sort_cbk');
+    usort($results, 'self::sort_cbk');
 
     if (count($results)) {
       $echo_page .= self::print_pc_array(
@@ -1520,8 +1511,7 @@ class XhprofDisplay
     $run2
   ) {
 
-    $data = show_nav($url_params);
-
+    $data = self::show_nav($url_params);
     if ($run) {                              // specific run to display?
       $runs_array = explode(",", $run);
 
@@ -1572,9 +1562,7 @@ class XhprofDisplay
         $run2
       );
     } else {
-      if (method_exists(new XHProfRunsDefault, 'XHProfRunsDefault')) {
-        $data .= XHProfRunsDefault::list_runs();
-      }
+      $data .= XHProfRunsDefault::list_runs();
     }
     return $data;
   }

@@ -160,9 +160,9 @@ class Callgraph
     $max_fontsize = 35;
     $max_sizing_ratio = 20;
 
-    $totals=XhprofDisplay::$totals;
+    XhprofDisplay::$totals=$totals_callback;
 
-    $sym_table = XhprofLib::xhprof_compute_flat_info($raw_data, $totals);
+    $sym_table = XhprofLib::xhprof_compute_flat_info($raw_data, $totals_callback);
     if ($critical_path) {
       $children_table = self::xhprof_get_children_table($raw_data);
       $node = "main()";
@@ -240,7 +240,7 @@ class Callgraph
     $cur_id = 0;
     $max_wt = 0;
     foreach ($sym_table as $symbol => $info) {
-      if (empty($func) && abs($info["wt"] / $totals["wt"]) < $threshold) {
+      if (empty($func) && abs($info["wt"] / XhprofDisplay::$totals["wt"]) < $threshold) {
         unset($sym_table[$symbol]);
         continue;
       }
@@ -271,17 +271,17 @@ class Callgraph
 
       if ($symbol == "main()") {
         $shape = "octagon";
-        $name = "Total: " . ($totals["wt"] / 1000.0) . " ms\\n";
+        $name = "Total: " . (XhprofDisplay::$totals["wt"] / 1000.0) . " ms\\n";
         $name .= addslashes(isset($page) ? $page : $symbol);
       } else {
         $shape = "box";
         $name = addslashes($symbol) . "\\nInc: " . sprintf("%.3f", $info["wt"] / 1000) .
-          " ms (" . sprintf("%.1f%%", 100 * $info["wt"] / $totals["wt"]) . ")";
+          " ms (" . sprintf("%.1f%%", 100 * $info["wt"] / XhprofDisplay::$totals["wt"]) . ")";
       }
       if ($left === null) {
         $label = ", label=\"" . $name . "\\nExcl: "
           . (sprintf("%.3f", $info["excl_wt"] / 1000.0)) . " ms ("
-          . sprintf("%.1f%%", 100 * $info["excl_wt"] / $totals["wt"])
+          . sprintf("%.1f%%", 100 * $info["excl_wt"] / XhprofDisplay::$totals["wt"])
           . ")\\n" . $info["ct"] . " total calls\"";
       } else {
         if (isset($left[$symbol]) && isset($right[$symbol])) {
@@ -379,7 +379,8 @@ class Callgraph
     $threshold,
     $source
   ) {
-
+    $total1;
+    $total2;
     $raw_data1 = XHProfRunsDefault::get_run($run1, $source, $desc_unused);
     $raw_data2 = XHProfRunsDefault::get_run($run2, $source, $desc_unused);
 

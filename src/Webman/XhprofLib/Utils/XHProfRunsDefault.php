@@ -3,12 +3,14 @@ declare(strict_types=1);
 namespace Erik\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Redis;
+use Erik\Xhprof\Webman\Xhprof;
 
 class XHProfRunsDefault implements XHProfRuns
 {
 
     private static $dir = '';
     private static $suffix = 'xhprof';
+
 
 
     public function __construct($dir = null)
@@ -31,7 +33,7 @@ class XHProfRunsDefault implements XHProfRuns
     public static function get_run($run_id, $type, &$run_desc)
     {
         $run_desc = "XHProf Run (Namespace=$type)";
-        $res = Redis::get(X_KEY_PREFIX . ':xhprof_log:' . $run_id);
+        $res = Redis::get(Xhprof::$key_prefix . ':xhprof_log:' . $run_id);
         return unserialize($res);
     }
 
@@ -39,7 +41,7 @@ class XHProfRunsDefault implements XHProfRuns
     public static function save_run($xhprof_data, $type, $run_id = null)
     {
         //根据响应时间判断是否需要记录
-        if (X_TIME_LIMIT > 0 && $xhprof_data['main()']['wt'] < (X_TIME_LIMIT * 1000 * 1000)) return false;
+        if (Xhprof::$time_limit > 0 && $xhprof_data['main()']['wt'] < (Xhprof::$time_limit * 1000 * 1000)) return false;
         //根据忽略配置判断是否忽略当前请求
         if (!XhprofLib::isIgnore()) return false;
         //控制日志长度
@@ -57,12 +59,12 @@ class XHProfRunsDefault implements XHProfRuns
     protected static function _checkLogNum()
     {
 
-        $num = Redis::incr(X_KEY_PREFIX . ":run_id_num");
-        if ($num > X_LOG_NUM) {
-            $old_run_id = Redis::rpop(X_KEY_PREFIX . ':run_id');
-            Redis::delete(X_KEY_PREFIX . ':request_log:' . $old_run_id);
-            Redis::delete(X_KEY_PREFIX . ':xhprof_log:' . $old_run_id);
-            Redis::decr(X_KEY_PREFIX . ':run_id_num');  //计数-1
+        $num = Redis::incr(Xhprof::$key_prefix . ":run_id_num");
+        if ($num > Xhprof::$log_num) {
+            $old_run_id = Redis::rpop(Xhprof::$key_prefix . ':run_id');
+            Redis::delete(Xhprof::$key_prefix . ':request_log:' . $old_run_id);
+            Redis::delete(Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id);
+            Redis::decr(Xhprof::$key_prefix . ':run_id_num');  //计数-1
         }
         return true;
     }
@@ -75,7 +77,7 @@ class XHProfRunsDefault implements XHProfRuns
     {
 
         $run_id = uniqid();
-        Redis::lPush(X_KEY_PREFIX . ":run_id", $run_id);
+        Redis::lPush(Xhprof::$key_prefix . ":run_id", $run_id);
         $wt = 0;   //请求总耗时
         $mu = 0;   //总消耗内存
         if (!empty($xhprof_data['main()']['wt']) && $xhprof_data['main()']['wt'] > 0) {
@@ -94,9 +96,9 @@ class XHProfRunsDefault implements XHProfRuns
             'ip'          => XhprofLib::xhprof_get_ip(),
             'create_time' => time(),  //请求时间
         );
-        $key = X_KEY_PREFIX . ':request_log:' . $run_id;  //请求列表log
+        $key = Xhprof::$key_prefix . ':request_log:' . $run_id;  //请求列表log
         Redis::set($key, json_encode($row));
-        $key = X_KEY_PREFIX . ':xhprof_log:' . $run_id;   //列表存储log
+        $key = Xhprof::$key_prefix . ':xhprof_log:' . $run_id;   //列表存储log
         $xhprof_data_str = serialize($xhprof_data);
         if (!empty($xhprof_data_str)) Redis::set($key, $xhprof_data_str);
         return $run_id;
@@ -111,14 +113,14 @@ class XHProfRunsDefault implements XHProfRuns
         $echo_page .= '<li><small class="small_filemtime">请求时间</small><small class="small_wt">耗时(s)</small><small class="small_wt">内存(MB)</small><small class="small_log">xhprof日志</small><small class="small_method">Method</small><small>请求url</small></li>';
 
         //取所有请求数据
-        $run_id_lists = Redis::lrange(X_KEY_PREFIX . ':run_id', 0, X_LOG_NUM);
+        $run_id_lists = Redis::lrange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
         foreach ($run_id_lists as $run_id) {
-            $res = Redis::get(X_KEY_PREFIX . ":request_log:" . $run_id);
+            $res = Redis::get(Xhprof::$key_prefix . ":request_log:" . $run_id);
             if (!$res) continue;
             $request_arr = json_decode($res, true);
             if (!is_array($request_arr)) continue;
             //耗时是否标红显示
-            $wtClass = $request_arr['wt'] > X_VIEW_WTRED ? "red" : "";
+            $wtClass = $request_arr['wt'] > Xhprof::$view_wtred ? "red" : "";
             $echo_page .= '<li><small class="small_filemtime">'
                 . date("Y-m-d H:i:s", $request_arr['create_time'])
                 . '</small><small class="small_wt ' . $wtClass . '">' . $request_arr['wt'] . '</small></small><small class="small_wt">' . $request_arr['mu'] . '</small><small class="small_log"><a href="' . htmlentities($_SERVER['SCRIPT_NAME'])
@@ -134,15 +136,15 @@ class XHProfRunsDefault implements XHProfRuns
     public static function list_runs()
     {
         //取所有请求数据
-        $run_id_lists = Redis::lrange(X_KEY_PREFIX . ':run_id', 0, X_LOG_NUM);
+        $run_id_lists = Redis::lrange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
         $table_html = "";
         foreach ($run_id_lists as $run_id) {
-            $res = Redis::get(X_KEY_PREFIX . ":request_log:" . $run_id);
+            $res = Redis::get(Xhprof::$key_prefix . ":request_log:" . $run_id);
             if (!$res) continue;
             $request_arr = json_decode($res, true);
             if (!is_array($request_arr)) continue;
             //耗时是否标红显示
-            $wtClass = $request_arr['wt'] > X_VIEW_WTRED ? "red" : "";
+            $wtClass = $request_arr['wt'] > Xhprof::$view_wtred ? "red" : "";
             $http = XhprofLib::getRequest()->header('x-forwarded-proto');
             $http = !empty($http) ? $http . ":" : "http:";
             $path = $http . XhprofLib::getRequest()->url();
