@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace Erik\Xhprof\Webman\XhprofLib\Display;
+namespace Aaron\Xhprof\Webman\XhprofLib\Display;
 
-use Erik\Xhprof\Webman\XhprofLib\Utils\XhprofLib;
-use Erik\Xhprof\Webman\XhprofLib\Utils\XHProfRunsDefault;
-use Erik\Xhprof\Webman\Xhprof;
+use Aaron\Xhprof\Webman\XhprofLib\Utils\XhprofLib;
+use Aaron\Xhprof\Webman\XhprofLib\Utils\XHProfRunsDefault;
+use Aaron\Xhprof\Webman\Xhprof;
 
 class XhprofDisplay
 {

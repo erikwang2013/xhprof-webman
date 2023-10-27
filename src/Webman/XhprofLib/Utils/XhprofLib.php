@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Erik\Xhprof\Webman\XhprofLib\Utils;
+namespace Aaron\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Redis;
 use support\Log;
 use Webman\Http\Request;
-use Erik\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
-use Erik\Xhprof\Webman\Xhprof;
+use Aaron\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
+use Aaron\Xhprof\Webman\Xhprof;
 
 
 class XhprofLib

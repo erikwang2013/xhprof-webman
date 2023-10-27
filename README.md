@@ -19,7 +19,7 @@ composer require erikwang2013/xhprof-webman
 namespace app\controller;
 
 use support\Request;
-use Erik\Xhprof\Webman\Xhprof;
+use Aaron\Xhprof\Webman\Xhprof;
 
 class TestController
 {

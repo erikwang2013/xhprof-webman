@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erik\Xhprof\Webman\XhprofLib\Utils;
+namespace Aaron\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Log;
-use Erik\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
+use Aaron\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
 
 class Callgraph
 {

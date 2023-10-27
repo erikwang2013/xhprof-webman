@@ -31,7 +31,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Erik\\Xhprof\\Webman\\": "src/Webman"
+            "Aaron\\Xhprof\\Webman\\": "src/Webman"
         }
     },
     "repositories": {

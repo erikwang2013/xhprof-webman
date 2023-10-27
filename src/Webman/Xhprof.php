@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erik\Xhprof\Webman;
+namespace Aaron\Xhprof\Webman;
 
-use Erik\Xhprof\Webman\XhprofLib\Utils\XHProfRunsDefault;
-use Erik\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
+use Aaron\Xhprof\Webman\XhprofLib\Utils\XHProfRunsDefault;
+use Aaron\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
 
 class Xhprof
 {

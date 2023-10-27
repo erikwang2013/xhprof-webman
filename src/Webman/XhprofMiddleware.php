@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Erik\Xhprof\Webman;
+namespace Aaron\Xhprof\Webman;
 
 use Webman\MiddlewareInterface;
 use Webman\Http\Response;
