@@ -19,7 +19,7 @@ composer require erikwang2013/xhprof-webman
 
 ```
 
-2.创建控制器,复制下面代码
+2. 创建控制器,复制下面代码
 
 ```
 <?php
@@ -39,10 +39,10 @@ class TestController
 
 ```
 
-3.路由增加以下代码
+3. 路由增加以下代码
 ```
 Route::get('/test', ['app\controller\TestController','index']);
 
 ```
 
-4.然后重启服务就可以访问了。
+4. 然后重启服务就可以访问了。
