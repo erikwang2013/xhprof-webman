@@ -4,7 +4,7 @@
 
 Use [Composer](https://github.com/composer/composer):
 ```sh
-composer require aaron/xhprof-webman
+composer require aaron-dev/xhprof-webman
 ```
 
 ## 配置 ##

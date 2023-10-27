@@ -1,8 +1,8 @@
 {
-    "name": "aaron/xhprof-webman",
+    "name": "aaron-dev/xhprof-webman",
     "description": "Xhprof web interface browsing, suitable for web, larravel, tp and other frameworks",
     "keywords": [
-        "erikwang2013",
+        "aaron",
         "erik",
         "xhprof",
         "webman"
