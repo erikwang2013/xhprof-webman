@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Erik\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Log;
@@ -160,7 +162,7 @@ class Callgraph
     $max_fontsize = 35;
     $max_sizing_ratio = 20;
 
-    XhprofDisplay::$totals=$totals_callback;
+    XhprofDisplay::$totals = $totals_callback;
 
     $sym_table = XhprofLib::xhprof_compute_flat_info($raw_data, $totals_callback);
     if ($critical_path) {
@@ -383,9 +385,6 @@ class Callgraph
     $total2;
     $raw_data1 = XHProfRunsDefault::get_run($run1, $source, $desc_unused);
     $raw_data2 = XHProfRunsDefault::get_run($run2, $source, $desc_unused);
-
-    $children_table1 = self::xhprof_get_children_table($raw_data1);
-    $children_table2 = self::xhprof_get_children_table($raw_data2);
     $symbol_tab1 = XhprofLib::xhprof_compute_flat_info($raw_data1, $total1);
     $symbol_tab2 = XhprofLib::xhprof_compute_flat_info($raw_data2, $total2);
     $run_delta = XhprofLib::xhprof_compute_diff($raw_data1, $raw_data2);

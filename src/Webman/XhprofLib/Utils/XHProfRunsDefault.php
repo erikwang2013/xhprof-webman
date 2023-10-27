@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Erik\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Redis;
@@ -7,15 +9,8 @@ use Erik\Xhprof\Webman\Xhprof;
 
 class XHProfRunsDefault implements XHProfRuns
 {
-
-    private static $dir = '';
-    private static $suffix = 'xhprof';
-
-
-
     public function __construct($dir = null)
     {
-
         if (empty($dir)) {
             $dir = ini_get("xhprof.output_dir");
             if (empty($dir)) {
@@ -111,7 +106,6 @@ class XHProfRunsDefault implements XHProfRuns
         $echo_page = "<meta charset='utf-8'>";
         $echo_page .= "<hr/>Existing runs:\n<ul>\n";
         $echo_page .= '<li><small class="small_filemtime">请求时间</small><small class="small_wt">耗时(s)</small><small class="small_wt">内存(MB)</small><small class="small_log">xhprof日志</small><small class="small_method">Method</small><small>请求url</small></li>';
-
         //取所有请求数据
         $run_id_lists = Redis::lrange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
         foreach ($run_id_lists as $run_id) {

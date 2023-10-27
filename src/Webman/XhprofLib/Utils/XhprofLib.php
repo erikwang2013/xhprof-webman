@@ -1,5 +1,7 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Erik\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Redis;
@@ -12,7 +14,6 @@ use Erik\Xhprof\Webman\Xhprof;
 class XhprofLib
 {
 
-
   public static function getRequest()
   {
     return  request();
@@ -20,7 +21,7 @@ class XhprofLib
 
   public static function xhprof_error($message)
   {
-    Log::error("Xhprof：".$message);
+    Log::error("Xhprof：" . $message);
   }
 
   /*
@@ -51,8 +52,8 @@ class XhprofLib
    */
   public static function init_metrics($xhprof_data, $rep_symbol, $sort, $diff_report = false)
   {
-    $sort_col=XhprofDisplay::$sort_col;
-    $sortable_columns=XhprofDisplay::$sortable_columns;
+    $sort_col = XhprofDisplay::$sort_col;
+    $sortable_columns = XhprofDisplay::$sortable_columns;
     if (!empty($sort)) {
       if (array_key_exists($sort, $sortable_columns)) {
         $sort_col = $sort;
@@ -87,13 +88,12 @@ class XhprofLib
       $pc_stats[] = $metric;
       $pc_stats[] = "I" . $desc[0] . "%";
     }
-    XhprofDisplay::$metrics=$metrics;
-    XhprofDisplay::$stats=$stats;
-    XhprofDisplay::$pc_stats=$pc_stats;
-    XhprofDisplay::$diff_mode= $diff_report;
-    XhprofDisplay::$sort_col=$sort_col;
-    XhprofDisplay::$display_calls=$display_calls;
-
+    XhprofDisplay::$metrics = $metrics;
+    XhprofDisplay::$stats = $stats;
+    XhprofDisplay::$pc_stats = $pc_stats;
+    XhprofDisplay::$diff_mode = $diff_report;
+    XhprofDisplay::$sort_col = $sort_col;
+    XhprofDisplay::$display_calls = $display_calls;
   }
 
   /*
@@ -148,7 +148,7 @@ class XhprofLib
    *
    *  @return  bool   true on success, false on failure
    *
-   *  @author Kannan
+   *
    */
   public static function xhprof_valid_run($run_id, $raw_data)
   {
@@ -247,7 +247,7 @@ class XhprofLib
    *
    *  @return array  Return aggregated raw data
    *
-   *  @author Kannan
+   *
    */
   public static function xhprof_aggregate_runs(
     $runs,
@@ -277,11 +277,7 @@ class XhprofLib
       $raw_data = XHProfRunsDefault::get_run($run_id, $source, $description);
       if ($idx == 0) {
         foreach ($raw_data["main()"] as $metric => $val) {
-          if ($metric != "pmu") {
-            if (isset($val)) {
-              $metrics[] = $metric;
-            }
-          }
+          if ($metric != "pmu" && isset($val)) $metrics[] = $metric;
         }
       }
 
@@ -292,7 +288,6 @@ class XhprofLib
 
       if ($use_script_name) {
         $page = $description;
-
         if ($page) {
           foreach ($raw_data["main()"] as $metric => $val) {
             $fake_edge[$metric] = $val;
@@ -374,8 +369,7 @@ class XhprofLib
   public static function xhprof_compute_flat_info($raw_data, &$overall_totals)
   {
 
-    $display_calls=XhprofDisplay::$display_calls;
-
+    $display_calls = XhprofDisplay::$display_calls;
     $metrics = self::xhprof_get_metrics($raw_data);
     $overall_totals = array(
       "ct" => 0,
@@ -420,13 +414,11 @@ class XhprofLib
    */
   public static function xhprof_compute_diff($xhprof_data1, $xhprof_data2)
   {
-    $display_calls=XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::$display_calls;
 
     // use the second run to decide what metrics we will do the diff on
     $metrics = self::xhprof_get_metrics($xhprof_data2);
-
     $xhprof_delta = $xhprof_data2;
-
     foreach ($xhprof_data1 as $parent_child => $info) {
 
       if (!isset($xhprof_delta[$parent_child])) {
@@ -455,8 +447,7 @@ class XhprofLib
    */
   public static function xhprof_compute_inclusive_times($raw_data)
   {
-    $display_calls=XhprofDisplay::$display_calls;
-
+    $display_calls = XhprofDisplay::$display_calls;
     $metrics = self::xhprof_get_metrics($raw_data);
     $symbol_tab = array();
 
@@ -496,7 +487,7 @@ class XhprofLib
  *
  *  @return  array  Returns the pruned raw data.
  *
- *  @author Kannan
+ *
  */
   public static function xhprof_prune_run($raw_data, $prune_percent)
   {

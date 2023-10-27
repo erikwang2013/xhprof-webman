@@ -433,16 +433,10 @@ class XhprofDisplay
     $totals;
     $totals_1;
     $totals_2;
-    $stats = self::$stats;
-    $pc_stats = self::$pc_stats;
+
     $diff_mode = self::$diff_mode;
     $base_path = self::base_path();
 
-
-    // if we are reporting on a specific public static function, we can trim down
-    // the report(s) to just stuff that is relevant to this public static function.
-    // That way compute_flat_info()/compute_diff() etc. do not have
-    // to needlessly work hard on churning irrelevant data.
     if (!empty($rep_symbol)) {
       $run1_data = XhprofLib::xhprof_trim_run($run1_data, array($rep_symbol));
       if ($diff_mode) {
@@ -521,11 +515,8 @@ class XhprofDisplay
       );
     }
 
-    // lookup public static function typeahead form
-    //  $links [] = '<input class="public static function_typeahead" '.' type="input" size="40" maxlength="100" />';
-    //  $links [] = '<input class="public static function_typeahead form-control" '.' type="input" size="40" maxlength="100" /><button type="button" id="funcSub">提交</button>';
-    $links[] = '<div class="input-group" style="width: 400px;"> <input type="text" class="public static function_typeahead form-control" placeholder="查找 函数/方法名..."> <span class="input-group-btn"> <button class="btn btn-default" type="button" id="funcSub">搜索</button> </span> </div>';
 
+    $links[] = '<div class="input-group" style="width: 400px;"> <input type="text" class="public static function_typeahead form-control" placeholder="查找 函数/方法名..."> <span class="input-group-btn"> <button class="btn btn-default" type="button" id="funcSub">搜索</button> </span> </div>';
     $echo_page = self::xhprof_render_actions($links);
 
 
