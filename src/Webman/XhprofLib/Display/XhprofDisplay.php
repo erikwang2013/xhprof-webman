@@ -1,5 +1,5 @@
 <?php
-
+declare(strict_types=1);
 namespace Erik\Xhprof\Webman\XhprofLib\Display;
 
 use Erik\Xhprof\Webman\XhprofLib\Utils\XhprofLib;

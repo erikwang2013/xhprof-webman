@@ -1,5 +1,5 @@
 <?php
-
+declare(strict_types=1);
 namespace Erik\Xhprof\Webman;
 
 use Erik\Xhprof\Webman\XhprofLib\Utils\XHProfRunsDefault;
