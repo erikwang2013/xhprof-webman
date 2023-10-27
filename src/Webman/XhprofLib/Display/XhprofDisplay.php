@@ -1612,7 +1612,7 @@ HTML;
 		</ul>
 
 		<ul class="nav navbar-nav navbar-right">
-			<li><a href="https://github.com/erikwang2013/xhprof/webman" target="_blank" title="感谢Star支持！比心心！">>>> GitHub</a></li>
+			<li><a href="https://github.com/erikwang2013/xhprof-webman" target="_blank" title="感谢Star支持！比心心！">>>> GitHub</a></li>
 		</ul>
 		</div>
 	</div>
