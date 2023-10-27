@@ -76,7 +76,7 @@ class Xhprof
         define('XHPROF_BOOL_PARAM',   4);
         defined('XHPROF_SYMBOL_LOOKUP_URL', "");
         /**************  ui_dir_url_path **************/
-        defined('X_UI_DIR_URL_PATH') || define('X_UI_DIR_URL_PATH', "/xhprof_html");
+        defined('X_UI_DIR_URL_PATH') || define('X_UI_DIR_URL_PATH', "../html");
 
         /**************  redis **************/
         $config['key_prefix'] = $config['key_prefix'] ?? 'xhprof';
