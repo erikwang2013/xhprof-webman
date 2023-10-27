@@ -15,7 +15,7 @@ class XhprofMiddleware implements MiddlewareInterface
 {
     public function process(Request $request, callable $next): Response
     {
-        $config=config('plugin.erikwang2013.xhprof.xhprof');
+        $config=config('plugin.aaron-dev.xhprof.xhprof');
         $xhprof =$config['enable']?:false;
         $extension = extension_loaded('xhprof');
         Xhprof::$ignore_url_arr=$config['ignore_url_arr']?:"/test";

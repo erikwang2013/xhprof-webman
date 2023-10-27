@@ -12,7 +12,7 @@ class Install
      * @var array
      */
     protected static $pathRelation = [
-        'config/plugin/erikwang2013/xhprof' => 'config/plugin/erikwang2013/xhprof',
+        'config/plugin/aaron-dev/xhprof' => 'config/plugin/aaron-dev/xhprof',
         '../html'=>'public/html'
     ];
 
