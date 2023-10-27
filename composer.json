@@ -9,6 +9,7 @@
     ],
     "type": "library",
     "license": "MIT",
+    "minimum-stability": "dev",
     "authors": [
         {
             "name": "erik",
@@ -21,7 +22,6 @@
         "issues": "https://github.com/erikwang2013/xhprof-webman/issues",
         "source": "https://github.com/erikwang2013/xhprof-webman"
       },
-    "minimum-stability": "dev",
     "require": {
         "php": ">=7.4",
         "ext-xhprof": "*",
