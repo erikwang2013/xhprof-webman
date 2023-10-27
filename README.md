@@ -40,3 +40,5 @@ Route::get('/test', ['app\controller\TestController','index']);
 3. 然后重启服务就可以访问了。
 ![](./doc/1.jpg)
 ![](./doc/2.jpg)
+
+本插件参考[phpxxb/xhprof](https://github.com/xiexianbo123/xhprof)
