@@ -1,0 +1,26 @@
+{
+    "name": "erik/xhprof",
+    "description": "Xhprof web interface browsing, suitable for web, larravel, tp and other frameworks",
+    "keywords": [
+        "erikwang2013",
+        "erik",
+        "xhprof"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "erik",
+            "email": "erik@erik.xyz"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=7.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Erik\\Xhprof\\Webman\\": "src/Webman"
+        }
+    }
+}
