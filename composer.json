@@ -1,6 +1,6 @@
 {
     "name": "aaron-dev/xhprof-webman",
-    "description": "Xhprof web interface browsing, suitable for web, larravel, tp and other frameworks",
+    "description": "aaron-dev/xhprof-webman is a code performance analysis plugin that is compatible with webman. Mainly optimize and adjust the old and unusable xhprof for adapting to webman, making installation simple and fast.Developers can quickly access performance analysis reports through browsers to troubleshoot code performance issues.",
     "keywords": [
         "aaron",
         "aaron-dev",
