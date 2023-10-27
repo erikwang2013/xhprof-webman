@@ -11,7 +11,7 @@ class Xhprof
 {
 
     public static $time_limit = 0;  //仅记录响应超过多少秒的请求  默认0记录所有
-    public static $ignore_url_arr =config('app.xhprof')['ignore_url_arr'];  //忽略URL配置
+    public static $ignore_url_arr =["/test"];  //忽略URL配置
     public static $key_prefix = 'xhprof'; //redis前缀
     public static $log_num = 1000;  //仅记录最近的多少次请求(最大值有待观察，看日志、查看响应时间) 默认1000
     public static $view_wtred = 3; //列表耗时超过多少秒标红 默认3s
