@@ -16,10 +16,7 @@ class XhprofDisplay
   }
 
   public static $sort_col = "wt";
-
-
   public static $diff_mode = false;
-
   public static $display_calls = true;
 
 
@@ -191,9 +188,7 @@ class XhprofDisplay
   public static function xhprof_include_js_css($ui_dir_url_path = null)
   {
 
-    if (empty($ui_dir_url_path)) {
-      $ui_dir_url_path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
-    }
+    if (empty($ui_dir_url_path)) $ui_dir_url_path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 
     // style sheets
     $echo_page = "<link href='$ui_dir_url_path/css/xhprof.css' rel='stylesheet' " .
@@ -220,22 +215,6 @@ class XhprofDisplay
   }
 
 
-  /*
- * Formats call counts for XHProf reports.
- *
- * Description:
- * Call counts in single-run reports are integer values.
- * However, call counts for aggregated reports can be
- * fractional. This public static function will print integer values
- * without decimal point, but with commas etc.
- *
- *   4000 ==> 4,000
- *
- * It'll round fractional values to decimal precision of 3
- *   4000.1212 ==> 4,000.121
- *   4000.0001 ==> 4,000
- *
- */
   public static function xhprof_count_format($num)
   {
     $num = round($num, 3);
@@ -255,7 +234,6 @@ class XhprofDisplay
   public static function xhprof_render_actions($actions)
   {
     $out = array();
-
     if (count($actions)) {
       $out[] = '<ul class="xhprof_actions">';
       foreach ($actions as $action) {
@@ -268,22 +246,6 @@ class XhprofDisplay
   }
 
 
-  /**
-   * @param html-str $content  the text/image/innerhtml/whatever for the link
-   * @param raw-str  $href
-   * @param raw-str  $class
-   * @param raw-str  $id
-   * @param raw-str  $title
-   * @param raw-str  $target
-   * @param raw-str  $onclick
-   * @param raw-str  $style
-   * @param raw-str  $access
-   * @param raw-str  $onmouseover
-   * @param raw-str  $onmouseout
-   * @param raw-str  $onmousedown
-   * @param raw-str  $dir
-   * @param raw-str  $rel
-   */
   public static function xhprof_render_link(
     $content,
     $href,
@@ -299,46 +261,19 @@ class XhprofDisplay
     $onmousedown = ''
   ) {
 
-    if (!$content) {
-      return '';
-    }
-
-    if ($href) {
-      $link = '<a href="' . ($href) . '"';
-    } else {
-      $link = '<span';
-    }
-
-    if ($class) {
-      $link .= ' class="' . ($class) . '"';
-    }
-    if ($id) {
-      $link .= ' id="' . ($id) . '"';
-    }
-    if ($title) {
-      $link .= ' title="' . ($title) . '"';
-    }
-    if ($target) {
-      $link .= ' target="' . ($target) . '"';
-    }
-    if ($onclick && $href) {
-      $link .= ' onclick="' . ($onclick) . '"';
-    }
-    if ($style && $href) {
-      $link .= ' style="' . ($style) . '"';
-    }
-    if ($access && $href) {
-      $link .= ' accesskey="' . ($access) . '"';
-    }
-    if ($onmouseover) {
-      $link .= ' onmouseover="' . ($onmouseover) . '"';
-    }
-    if ($onmouseout) {
-      $link .= ' onmouseout="' . ($onmouseout) . '"';
-    }
-    if ($onmousedown) {
-      $link .= ' onmousedown="' . ($onmousedown) . '"';
-    }
+    if (!$content) return '';
+    $link = '<span';
+    if ($href) $link = '<a href="' . ($href) . '"';
+    if ($class)  $link .= ' class="' . ($class) . '"';
+    if ($id) $link .= ' id="' . ($id) . '"';
+    if ($title) $link .= ' title="' . ($title) . '"';
+    if ($target) $link .= ' target="' . ($target) . '"';
+    if ($onclick && $href) $link .= ' onclick="' . ($onclick) . '"';
+    if ($style && $href) $link .= ' style="' . ($style) . '"';
+    if ($access && $href) $link .= ' accesskey="' . ($access) . '"';
+    if ($onmouseover) $link .= ' onmouseover="' . ($onmouseover) . '"';
+    if ($onmouseout) $link .= ' onmouseout="' . ($onmouseout) . '"';
+    if ($onmousedown) $link .= ' onmousedown="' . ($onmousedown) . '"';
 
     $link .= '>';
     $link .= $content;
@@ -352,73 +287,38 @@ class XhprofDisplay
   }
 
 
-
-  /**
-   * Callback comparison operator (passed to usort() for sorting array of
-   * tuples) that compares array elements based on the sort column
-   * specified in $sort_col (global parameter).
-   *
-   *
-   */
   public static function sort_cbk($a, $b)
   {
     $sort_col = self::$sort_col;
     $diff_mode = self::$diff_mode;
-
     if ($sort_col == "fn") {
-
-      // case insensitive ascending sort for public static function names
       $left = strtoupper($a["fn"]);
       $right = strtoupper($b["fn"]);
-
-      if ($left == $right)
-        return 0;
+      if ($left == $right) return 0;
       return ($left < $right) ? -1 : 1;
     } else {
-
-      // descending sort for all others
       $left = $a[$sort_col];
       $right = $b[$sort_col];
-
-      // if diff mode, sort by absolute value of regression/improvement
       if ($diff_mode) {
         $left = abs($left);
         $right = abs($right);
       }
-
-      if ($left == $right)
-        return 0;
+      if ($left == $right)  return 0;
       return ($left > $right) ? -1 : 1;
     }
   }
 
-  /**
-   * Get the appropriate description for a statistic
-   * (depending upon whether we are in diff report mode
-   * or single run report mode).
-   *
-   *
-   */
+
   public static function stat_description($stat)
   {
     $descriptions = self::$descriptions;
     $diff_descriptions = self::$diff_descriptions;
     $diff_mode = self::$diff_mode;
-
-    if ($diff_mode) {
-      return $diff_descriptions[$stat];
-    } else {
-      return $descriptions[$stat];
-    }
+    $result=$descriptions[$stat];;
+    if ($diff_mode) $result=$diff_descriptions[$stat];
+    return $result;
   }
 
-
-  /**
-   * Analyze raw data & generate the profiler report
-   * (common for both single run mode and diff mode).
-   *
-   * @author: Kannan
-   */
   public static function profiler_report(
     $url_params,
     $rep_symbol,
@@ -439,11 +339,10 @@ class XhprofDisplay
 
     if (!empty($rep_symbol)) {
       $run1_data = XhprofLib::xhprof_trim_run($run1_data, array($rep_symbol));
-      if ($diff_mode) {
-        $run2_data = XhprofLib::xhprof_trim_run($run2_data, array($rep_symbol));
-      }
+      if ($diff_mode) $run2_data = XhprofLib::xhprof_trim_run($run2_data, array($rep_symbol));
     }
-
+    $symbol_tab = XhprofLib::xhprof_compute_flat_info($run1_data, $totals);
+    self::$totals=$totals;
     if ($diff_mode) {
       $run_delta = XhprofLib::xhprof_compute_diff($run1_data, $run2_data);
       $symbol_tab  = XhprofLib::xhprof_compute_flat_info($run_delta, $totals);
@@ -452,9 +351,6 @@ class XhprofDisplay
       self::$totals=$totals;
       self::$totals_1=$totals_1;
       self::$totals_2=$totals_2;
-    } else {
-      $symbol_tab = XhprofLib::xhprof_compute_flat_info($run1_data, $totals);
-      self::$totals=$totals;
     }
     $run1_txt = sprintf(
       "<b>Run #%s:</b> %s",
@@ -463,7 +359,6 @@ class XhprofDisplay
     );
 
     $base_url_params = XhprofLib::xhprof_array_unset(XhprofLib::xhprof_array_unset($url_params, 'symbol'), 'all');
-
     if ($diff_mode) {
       $diff_text = "Diff";
       $base_url_params = XhprofLib::xhprof_array_unset($base_url_params, 'run1');
@@ -498,8 +393,6 @@ class XhprofDisplay
 
     // set up the action links for operations that can be done on this report
     $links = array();
-    //  $links [] =  xhprof_render_link("View11 Top Level $diff_text Report", $top_link_query_string);
-
     if ($diff_mode) {
       $inverted_params = $url_params;
       $inverted_params['run1'] = $url_params['run2'];
@@ -568,12 +461,9 @@ class XhprofDisplay
    */
   public static function pct($a, $b)
   {
-    if ($b == 0) {
-      return "N/A";
-    } else {
-      $res = (round(($a * 1000 / $b)) / 10);
-      return $res;
-    }
+    $res="N/A";
+    if ($b != 0) $res = (round(($a * 1000 / $b)) / 10);
+    return $res;
   }
 
   /**
@@ -593,11 +483,8 @@ class XhprofDisplay
 
     if ($bold) {
       if ($diff_mode) {
-        if ($num <= 0) {
-          $class = $vgbar; // green (improvement)
-        } else {
-          $class = $vrbar; // red (regression)
-        }
+        $class = $vrbar; // red (regression)
+        if ($num <= 0) $class = $vgbar; // green (improvement)
       } else {
         $class = $vbbar; // blue
       }
@@ -627,12 +514,8 @@ class XhprofDisplay
   public static function print_td_pct($numer, $denom, $bold = false, $attributes = null)
   {
     $class = self::get_print_class($numer, $bold);
-    if ($denom == 0) {
-      $pct = "N/A%";
-    } else {
-      $pct = self::xhprof_percent_format($numer / abs($denom));
-    }
-
+    $pct = "N/A%";
+    if ($denom != 0) $pct = self::xhprof_percent_format($numer / abs($denom));
     return "<td $attributes $class>$pct</td>\n";
   }
 
@@ -722,8 +605,6 @@ class XhprofDisplay
     $sortable_columns = self::$sortable_columns;
     $vwbar = self::$vwbar;
     $base_path = self::base_path();
-
-
     $size  = count($flat_data);
     if (!$limit) {              // no limit
       $limit = $size;
@@ -777,10 +658,7 @@ class XhprofDisplay
     $echo_page .= "</table>";
     $echo_page .= "</div>";
 
-    // let's print the display all link at the bottom as well...
-    if ($display_link) {
-      $echo_page .= '<div style="text-align: left; padding: 2em">' . $display_link . '</div>';
-    }
+    if ($display_link) $echo_page .= '<div style="text-align: left; padding: 2em">' . $display_link . '</div>';
     return $echo_page;
   }
 
@@ -805,12 +683,9 @@ class XhprofDisplay
     $base_path = self::base_path();
 
     $echo_page = '<div class="container-fluid" style="width: 90%"> <div class="row"> <div class="col-xs-12">';  //开始
-
     $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
-
     $echo_page .= '<div class="well well-sm">';
     if ($diff_mode) {
-
       $base_url_params = XhprofLib::xhprof_array_unset(
         XhprofLib::xhprof_array_unset(
           $url_params,
@@ -874,9 +749,7 @@ class XhprofDisplay
       $request_uri = isset($request_info['request_uri']) ? urldecode($request_info['request_uri']) : "";
       $method = $request_info['method'] ?? "";
       $create_time_text = "";
-      if (isset($request_info['create_time']) && !empty($request_info['create_time'])) {
-        $create_time_text = date('Y-m-d H:i:s', $request_info['create_time']);
-      }
+      if (isset($request_info['create_time']) && !empty($request_info['create_time'])) $create_time_text = date('Y-m-d H:i:s', $request_info['create_time']);
       $ip = $request_info['ip'] ?? "";
 
       $echo_page .= '<table cellpadding=2 cellspacing=1 width="100%" '
@@ -897,7 +770,6 @@ class XhprofDisplay
         $echo_page .= "<td>" . number_format($totals['ct']) . "</td>";
       }
       $echo_page .= "</tr>";
-
       $echo_page .= "<tr>";
       foreach ($metrics as $metric) {
         $echo_page .= "<td style='text-align:right; font-weight:bold'>"
@@ -924,32 +796,22 @@ class XhprofDisplay
     usort($flat_data, 'self::sort_cbk');
 
     //  print("<br>");
-
+    $all = false;
+    $limit = 100;
     if (!empty($url_params['all'])) {
       $all = true;
       $limit = 0;    // display all rows
-    } else {
-      $all = false;
-      $limit = 100;  // display only limited number of rows
     }
 
     $desc = str_replace("<br>", " ", $descriptions[$sort_col]);
-
     if ($diff_mode) {
-      if ($all) {
-        $title = "Total Diff Report: '
-               .'Sorted by absolute value of regression/improvement in $desc";
-      } else {
-        $title = "Top 100 <i style='color:red'>Regressions</i>/"
+      $title = "Top 100 <i style='color:red'>Regressions</i>/"
           . "<i style='color:green'>Improvements</i>: "
           . "Sorted by $desc Diff";
-      }
+      if ($all) $title = "Total Diff Report: Sorted by absolute value of regression/improvement in $desc";
     } else {
-      if ($all) {
-        $title = "Sorted by $desc";
-      } else {
-        $title = "Displaying top $limit public static functions: Sorted by $desc";
-      }
+      $title = "Displaying top $limit public static functions: Sorted by $desc";
+      if ($all)  $title = "Sorted by $desc";
     }
     $echo_page .= self::print_flat_data($url_params, $title, $flat_data, $sort, $run1, $run2, $limit);
     $echo_page .= '</div></div></div>';  //结束
@@ -977,11 +839,8 @@ class XhprofDisplay
     $metrics = self::$metrics;
     $format_cbk = self::$format_cbk;
     $display_calls = self::$display_calls;
-
-    if ($parent)
-      $type = "Parent";
-    else $type = "Child";
-
+    $type = "Child";
+    if ($parent)$type = "Parent";
     if ($display_calls) {
       $mouseoverct = self::get_tooltip_attributes($type, "ct");
       /* call count */
@@ -1016,17 +875,9 @@ class XhprofDisplay
     $run2
   ) {
     $base_path = self::base_path();
-
-    // Construct section title
-    if ($parent) {
-      $title = 'Parent public static function';
-    } else {
-      $title = 'Child public static function';
-    }
-    if (count($results) > 1) {
-      $title .= 's';
-    }
-
+    $title = 'Child public static function';
+    if ($parent) $title = 'Parent public static function';
+    if (count($results) > 1) $title .= 's';
     $echo_page = "<tr bgcolor='#e0e0ff'><td>";
     $echo_page .= "<b><i><center>" . $title . "</center></i></b>";
     $echo_page .= "</td></tr>";
@@ -1041,7 +892,6 @@ class XhprofDisplay
         ));
 
       $odd_even = 1 - $odd_even;
-
       if ($odd_even) {
         $echo_page .= '<tr>';
       } else {
@@ -1121,13 +971,11 @@ class XhprofDisplay
 
     $echo_page = '<div class="container-fluid" style="width: 90%;"> <div class="row"> <div class="col-xs-12">';  //开始
     $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
-
+    $diff_text = "";
+    $regr_impr = "";
     if ($diff_mode) {
       $diff_text = "<b>Diff</b>";
       $regr_impr = "<i style='color:red'>Regression</i>/<i style='color:green'>Improvement</i>";
-    } else {
-      $diff_text = "";
-      $regr_impr = "";
     }
 
     if ($diff_mode) {
@@ -1191,12 +1039,8 @@ class XhprofDisplay
         $echo_page .= "<td>" . str_replace("<br>", " ", $descriptions[$m]) . " per call </td>";
         $avg_info1 = 'N/A';
         $avg_info2 = 'N/A';
-        if ($symbol_info1['ct'] > 0) {
-          $avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
-        }
-        if ($symbol_info2['ct'] > 0) {
-          $avg_info2 = ($symbol_info2[$m] / $symbol_info2['ct']);
-        }
+        if ($symbol_info1['ct'] > 0)$avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
+        if ($symbol_info2['ct'] > 0) $avg_info2 = ($symbol_info2[$m] / $symbol_info2['ct']);
         $echo_page .= self::print_td_num($avg_info1, $format_cbk[$m]);
         $echo_page .= self::print_td_num($avg_info2, $format_cbk[$m]);
         $echo_page .= self::print_td_num($avg_info2 - $avg_info1, $format_cbk[$m], true);
@@ -1232,7 +1076,6 @@ class XhprofDisplay
     foreach ($pc_stats as $stat) {
       $desc = self::stat_description($stat);
       if (array_key_exists($stat, $sortable_columns)) {
-
         $href = "$base_path?" .
           http_build_query(XhprofLib::xhprof_array_set(
             $url_params,
@@ -1272,7 +1115,6 @@ class XhprofDisplay
       $echo_page .= self::print_td_pct($symbol_info[$metric], $totals[$metric], ($sort_col == $metric));
     }
     $echo_page .= "</tr>";
-
     $echo_page .= "<tr bgcolor='#ffffff'>";
     $echo_page .= "<td style='text-align:right;color:blue'>"
       . "Exclusive Metrics $diff_text for Current Function</td>";
@@ -1302,11 +1144,8 @@ class XhprofDisplay
 
     // list of callers/parent public static functions
     $results = array();
-    if ($display_calls) {
-      $base_ct = $symbol_info["ct"];
-    } else {
-      $base_ct = 0;
-    }
+    $base_ct = 0;
+    if ($display_calls) $base_ct = $symbol_info["ct"];
     foreach ($metrics as $metric) {
       $base_info[$metric] = $symbol_info[$metric];
     }
@@ -1341,9 +1180,7 @@ class XhprofDisplay
         $info_tmp = $info;
         $info_tmp["fn"] = $child;
         $results[] = $info_tmp;
-        if ($display_calls) {
-          $base_ct += $info["ct"];
-        }
+        if ($display_calls) $base_ct += $info["ct"];
       }
     }
     usort($results, 'self::sort_cbk');
@@ -1369,9 +1206,7 @@ class XhprofDisplay
     $echo_page .= '<script language="javascript">' . "\n";
     $echo_page .= "var func_name = '\"" . $rep_symbol . "\"';\n";
     $echo_page .= "var total_child_ct  = " . $base_ct . ";\n";
-    if ($display_calls) {
-      $echo_page .= "var func_ct   = " . $symbol_info["ct"] . ";\n";
-    }
+    if ($display_calls) $echo_page .= "var func_ct   = " . $symbol_info["ct"] . ";\n";
     $echo_page .= "var func_metrics = new Array();\n";
     $echo_page .= "var metrics_col  = new Array();\n";
     $echo_page .= "var metrics_desc  = new Array();\n";
@@ -1442,7 +1277,6 @@ class XhprofDisplay
 
     // Initialize what metrics we'll display based on data in Run2
     XhprofLib::init_metrics($xhprof_data2, $rep_symbol, $sort, true);
-
     return self::profiler_report(
       $url_params,
       $rep_symbol,
@@ -1457,40 +1291,7 @@ class XhprofDisplay
   }
 
 
-  /**
-   * Generate a XHProf Display View given the various URL parameters
-   * as arguments. The first argument is an object that implements
-   * the iXHProfRuns interface.
-   *
-   * @param object  $xhprof_runs_impl  An object that implements
-   *                                   the iXHProfRuns interface
-   *.
-   * @param array   $url_params   Array of non-default URL params.
-   *
-   * @param string  $source       Category/type of the run. The source in
-   *                              combination with the run id uniquely
-   *                              determines a profiler run.
-   *
-   * @param string  $run          run id, or comma separated sequence of
-   *                              run ids. The latter is used if an aggregate
-   *                              report of the runs is desired.
-   *
-   * @param string  $wts          Comma separate list of integers.
-   *                              Represents the weighted ratio in
-   *                              which which a set of runs will be
-   *                              aggregated. [Used only for aggregate
-   *                              reports.]
-   *
-   * @param string  $symbol       Function symbol. If non-empty then the
-   *                              parent/child view of this public static function is
-   *                              displayed. If empty, a flat-profile view
-   *                              of the public static functions is displayed.
-   *
-   * @param string  $run1         Base run id (for diff reports)
-   *
-   * @param string  $run2         New run id (for diff reports)
-   *
-   */
+
   public static function displayXHProfReport(
     $url_params,
     $source,
@@ -1505,7 +1306,6 @@ class XhprofDisplay
     $data = self::show_nav($url_params);
     if ($run) {                              // specific run to display?
       $runs_array = explode(",", $run);
-
       if (count($runs_array) == 1) {
         $xhprof_data = XHProfRunsDefault::get_run(
           $runs_array[0],
@@ -1513,11 +1313,8 @@ class XhprofDisplay
           $description
         );
       } else {
-        if (!empty($wts)) {
-          $wts_array  = explode(",", $wts);
-        } else {
-          $wts_array = null;
-        }
+        $wts_array = null;
+        if (!empty($wts)) $wts_array  = explode(",", $wts);
         $datas = XhprofLib::xhprof_aggregate_runs(
           $runs_array,
           $wts_array,
@@ -1540,7 +1337,6 @@ class XhprofDisplay
 
       $xhprof_data1 = XHProfRunsDefault::get_run($run1, $source, $description1);
       $xhprof_data2 = XHProfRunsDefault::get_run($run2, $source, $description2);
-
       $data .= self::profiler_diff_report(
         $url_params,
         $xhprof_data1,
@@ -1561,11 +1357,8 @@ class XhprofDisplay
   public static function show_nav($url_params)
   {
     $base_path = self::base_path();
-
     $base_url_params = XhprofLib::xhprof_array_unset($url_params, 'symbol');
-
     $top_link_query_string = "$base_path?" . http_build_query($base_url_params);
-
     $li_html = "";
     if (isset($url_params['run']) && isset($url_params['symbol'])) {
       $li_html = <<<HTML

@@ -61,23 +61,12 @@ class Callgraph
       default:
         $mime = false;
     }
-
     if ($mime) {
       self::xhprof_http_header('Content-type', $mime);
       self::xhprof_http_header('Content-length', (string)$length);
     }
   }
 
-  /**
-   *
-   * @param dot_script, string, the script for DOT to generate the image.
-   * @param type, one of the supported image types, see
-   * $xhprof_legal_image_types.
-   * @returns, binary content of the generated image on success. empty string on
-   *           failure.
-   *
-   *
-   */
   public static function xhprof_generate_image_by_dot($dot_script, $type)
   {
     $descriptorspec = array(
@@ -129,23 +118,7 @@ class Callgraph
     return $children_table;
   }
 
-  /**
-   * Generate DOT script from the given raw phprof data.
-   *
-   * @param raw_data, phprof profile data.
-   * @param threshold, float, the threshold value [0,1). The public static functions in the
-   *                   raw_data whose exclusive wall times ratio are below the
-   *                   threshold will be filtered out and won't apprear in the
-   *                   generated image.
-   * @param page, string(optional), the root node name. This can be used to
-   *              replace the 'main()' as the root node.
-   * @param func, string, the focus public static function.
-   * @param critical_path, bool, whether or not to display critical path with
-   *                             bold lines.
-   * @returns, string, the DOT script to generate image.
-   *
-   *
-   */
+
   public static function xhprof_generate_dot_script(
     $raw_data,
     $threshold,
@@ -262,23 +235,18 @@ class Callgraph
       $fillcolor = (($sizing_factor < 1.5) ?
         ", style=filled, fillcolor=red" : "");
 
-
       if ($critical_path && !$fillcolor && array_key_exists($symbol, $path)) $fillcolor = ", style=filled, fillcolor=yellow";
 
-
       $fontsize = ", fontsize=" . (int)($max_fontsize / (($sizing_factor - 1) / 10 + 1));
-
       $width = ", width=" . sprintf("%.1f", $max_width / $sizing_factor);
       $height = ", height=" . sprintf("%.1f", $max_height / $sizing_factor);
-
+      $shape = "box";
+      $name = addslashes($symbol) . "\\nInc: " . sprintf("%.3f", $info["wt"] / 1000) .
+        " ms (" . sprintf("%.1f%%", 100 * $info["wt"] / XhprofDisplay::$totals["wt"]) . ")";
       if ($symbol == "main()") {
         $shape = "octagon";
         $name = "Total: " . (XhprofDisplay::$totals["wt"] / 1000.0) . " ms\\n";
         $name .= addslashes(isset($page) ? $page : $symbol);
-      } else {
-        $shape = "box";
-        $name = addslashes($symbol) . "\\nInc: " . sprintf("%.3f", $info["wt"] / 1000) .
-          " ms (" . sprintf("%.1f%%", 100 * $info["wt"] / XhprofDisplay::$totals["wt"]) . ")";
       }
       if ($left === null) {
         $label = ", label=\"" . $name . "\\nExcl: "
@@ -394,24 +362,6 @@ class Callgraph
     return $content;
   }
 
-  /**
-   * Generate image content from phprof run id.
-   *
-   * @param object  $xhprof_runs_impl  An object that implements
-   *                                   the iXHProfRuns interface
-   * @param run_id, integer, the unique id for the phprof run, this is the
-   *                primary key for phprof database table.
-   * @param type, string, one of the supported image types. See also
-   *              $xhprof_legal_image_types.
-   * @param threshold, float, the threshold value [0,1). The public static functions in the
-   *                   raw_data whose exclusive wall times ratio are below the
-   *                   threshold will be filtered out and won't apprear in the
-   *                   generated image.
-   * @param func, string, the focus public static function.
-   * @returns, string, the DOT script to generate image.
-   *
-   *
-   */
   public static function xhprof_get_content_by_run(
     $run_id,
     $type,
@@ -421,7 +371,6 @@ class Callgraph
     $critical_path
   ) {
     if (!$run_id) return "";
-
     $raw_data = XHProfRunsDefault::get_run($run_id, $source, $description);
     if (!$raw_data) {
       XhprofLib::xhprof_error("Raw data is empty");
@@ -439,23 +388,7 @@ class Callgraph
     return $content;
   }
 
-  /**
-   * Generate image from phprof run id and send it to client.
-   *
-   * @param object  $xhprof_runs_impl  An object that implements
-   *                                   the iXHProfRuns interface
-   * @param run_id, integer, the unique id for the phprof run, this is the
-   *                primary key for phprof database table.
-   * @param type, string, one of the supported image types. See also
-   *              $xhprof_legal_image_types.
-   * @param threshold, float, the threshold value [0,1). The public static functions in the
-   *                   raw_data whose exclusive wall times ratio are below the
-   *                   threshold will be filtered out and won't apprear in the
-   *                   generated image.
-   * @param func, string, the focus public static function.
-   * @param bool, does this run correspond to a PHProfLive run or a dev run?
-   *
-   */
+
   public static function xhprof_render_image(
     $run_id,
     $type,

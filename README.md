@@ -59,4 +59,4 @@ Route::get('/test', ['app\controller\TestController','index']);
 ![](./doc/1.jpg)
 ![](./doc/2.jpg)
 
-本插件参考[phpxxb/xhprof](https://github.com/xiexianbo123/xhprof)
+本插件参考[phacility/xhprof](https://github.com/phacility/xhprof)、[phpxxb/xhprof](https://github.com/xiexianbo123/xhprof)

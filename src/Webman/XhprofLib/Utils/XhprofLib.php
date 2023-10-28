@@ -64,18 +64,13 @@ class XhprofLib
 
     $display_calls = true;
     if (!isset($xhprof_data["main()"]["wt"])) {
-      if ($sort_col == "wt") {
-        $sort_col = "samples";
-      }
+      if ($sort_col == "wt") $sort_col = "samples";
       $display_calls = false;
     }
 
-    if (!empty($rep_symbol)) {
-      $sort_col = str_replace("excl_", "", $sort_col);
-    }
+    if (!empty($rep_symbol)) $sort_col = str_replace("excl_", "", $sort_col);
     $stats = array("fn");
     if ($display_calls) $stats = array("fn", "ct", "Calls%");
-
     $pc_stats = $stats;
     $possible_metrics = self::xhprof_get_possible_metrics($xhprof_data);
     foreach ($possible_metrics as $metric => $desc) {
@@ -112,12 +107,7 @@ class XhprofLib
     return $metrics;
   }
 
-  /**
-   * Takes a parent/child public static function name encoded as
-   * "a==>b" and returns array("a", "b").
-   *
-   *
-   */
+
   public static function xhprof_parse_parent_child($parent_child)
   {
     $ret = explode("==>", $parent_child);
@@ -125,12 +115,7 @@ class XhprofLib
     return array(null, $ret[0]);
   }
 
-  /**
-   * Given parent & child public static function name, composes the key
-   * in the format present in the raw data.
-   *
-   *
-   */
+
   public static function xhprof_build_parent_child_key($parent, $child)
   {
     if ($parent) return $parent . "==>" . $child;
@@ -138,18 +123,6 @@ class XhprofLib
   }
 
 
-  /**
-   * Checks if XHProf raw data appears to be valid and not corrupted.
-   *
-   *  @param   int    $run_id        Run id of run to be pruned.
-   *                                 [Used only for reporting errors.]
-   *  @param   array  $raw_data      XHProf raw data to be pruned
-   *                                 & validated.
-   *
-   *  @return  bool   true on success, false on failure
-   *
-   *
-   */
   public static function xhprof_valid_run($run_id, $raw_data)
   {
 
@@ -185,14 +158,6 @@ class XhprofLib
   }
 
 
-  /**
-   * @param  array  XHProf raw data
-   * @param  array  array of public static function names
-   *
-   * @return array  Trimmed XHProf Report
-   *
-   *
-   */
   public static function xhprof_trim_run($raw_data, $functions_to_keep)
   {
 
@@ -210,13 +175,6 @@ class XhprofLib
     return $new_raw_data;
   }
 
-  /**
-   * Takes raw XHProf data that was aggregated over "$num_runs" number
-   * of runs averages/nomalizes the data. Essentially the various metrics
-   * collected are divided by $num_runs.
-   *
-   *
-   */
   public static function xhprof_normalize_metrics($raw_data, $num_runs)
   {
 
@@ -233,22 +191,6 @@ class XhprofLib
   }
 
 
-  /**
-   *
-   *  @param object  $xhprof_runs_impl  An object that implements
-   *                                    the iXHProfRuns interface
-   *  @param  array  $runs            run ids of the XHProf runs..
-   *  @param  array  $wts             integral (ideally) weights for $runs
-   *  @param  string $source          source to fetch raw data for run from
-   *  @param  bool   $use_script_name If true, a fake edge from main() to
-   *                                  to __script::<scriptname> is introduced
-   *                                  in the raw data so that after aggregations
-   *                                  the script name is still preserved.
-   *
-   *  @return array  Return aggregated raw data
-   *
-   *
-   */
   public static function xhprof_aggregate_runs(
     $runs,
     $wts,
@@ -350,22 +292,6 @@ class XhprofLib
   }
 
 
-  /**
-   * Analyze hierarchical raw data, and compute per-public static function (flat)
-   * inclusive and exclusive metrics.
-   *
-   * Also, store overall totals in the 2nd argument.
-   *
-   * @param  array $raw_data          XHProf format raw profiler data.
-   * @param  array &$overall_totals   OUT argument for returning
-   *                                  overall totals for various
-   *                                  metrics.
-   * @return array Returns a map from public static function name to its
-   *               call count and inclusive & exclusive metrics
-   *               (such as wall time, etc.).
-   *
-   * Muthukkaruppan
-   */
   public static function xhprof_compute_flat_info($raw_data, &$overall_totals)
   {
 
@@ -439,12 +365,6 @@ class XhprofLib
   }
 
 
-  /**
-   * @return array  Returns a map of public static function name to total (across all parents)
-   *                inclusive metrics for the public static function.
-   *
-   *
-   */
   public static function xhprof_compute_inclusive_times($raw_data)
   {
     $display_calls = XhprofDisplay::$display_calls;
@@ -476,19 +396,6 @@ class XhprofLib
   }
 
 
-  /*
- * Prunes XHProf raw data:
- *
- *
- *  @param   array  $raw_data      XHProf raw data to be pruned & validated.
- *  @param   double $prune_percent Any edges that account for less than
- *                                 $prune_percent of time will be pruned
- *                                 from the raw data.
- *
- *  @return  array  Returns the pruned raw data.
- *
- *
- */
   public static function xhprof_prune_run($raw_data, $prune_percent)
   {
 
@@ -568,28 +475,14 @@ class XhprofLib
     return $arr;
   }
 
-  /**
-   * Internal helper public static function used by various
-   * xhprof_get_param* flavors for various
-   * types of parameters.
-   *
-   * @param string   name of the URL query string param
-   *
-   *
-   */
+
   public static function xhprof_get_param_helper($param)
   {
     $get_data = request()->all();
     return isset($get_data[$param]) ? $get_data[$param] : null;
   }
 
-  /**
-   * Extracts value for string param $param from query
-   * string. If param is not specified, return the
-   * $default value.
-   *
-   *
-   */
+
   public static function xhprof_get_string_param($param, $default = '')
   {
     $val = self::xhprof_get_param_helper($param);
@@ -597,13 +490,6 @@ class XhprofLib
     return $val;
   }
 
-  /**
-   *
-   * If value is not a valid unsigned integer, logs error
-   * and returns null.
-   *
-   *
-   */
   public static function xhprof_get_uint_param($param, $default = 0)
   {
     $val = self::xhprof_get_param_helper($param);
@@ -615,16 +501,6 @@ class XhprofLib
   }
 
 
-  /**
-   * Extracts value for a float param $param from
-   * query string. If param is not specified, return
-   * the $default value.
-   *
-   * If value is not a valid unsigned integer, logs error
-   * and returns null.
-   *
-   *
-   */
   public static function xhprof_get_float_param($param, $default = 0)
   {
     $val = self::xhprof_get_param_helper($param);
@@ -635,16 +511,7 @@ class XhprofLib
     return null;
   }
 
-  /**
-   * Extracts value for a boolean param $param from
-   * query string. If param is not specified, return
-   * the $default value.
-   *
-   * If value is not a valid unsigned integer, logs error
-   * and returns null.
-   *
-   *
-   */
+
   public static function xhprof_get_bool_param($param, $default = false)
   {
     $val = self::xhprof_get_param_helper($param);
@@ -675,12 +542,6 @@ class XhprofLib
   }
 
 
-  /**
-   * Given a partial query string $q return matching public static function names in
-   * specified XHProf run. This is used for the type ahead public static function
-   * selector.
-   *
-   */
   public static function xhprof_get_matching_functions($q, $xhprof_data)
   {
 
