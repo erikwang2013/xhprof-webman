@@ -67,7 +67,9 @@ class Xhprof
     protected static function _init()
     {
         date_default_timezone_set('PRC');
-        extension_loaded("xhprof") || trigger_error('请检查「xhprof」扩展是否安装!', E_USER_ERROR);
-        extension_loaded("redis") || trigger_error('请检查「redis」扩展是否安装!', E_USER_ERROR);
+        $extension = extension_loaded('xhprof');
+        if(false==$extension) return response()->withBody("请安装xhprof扩展");
+        $redis=extension_loaded("redis");
+        if(false==$redis) return response()->withBody("请安装redis扩展");
     }
 }
