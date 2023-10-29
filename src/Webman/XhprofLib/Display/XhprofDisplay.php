@@ -322,7 +322,6 @@ class XhprofDisplay
   public static function profiler_report(
     $url_params,
     $rep_symbol,
-    $sort,
     $run1,
     $run1_desc,
     $run1_data,
@@ -431,7 +430,6 @@ class XhprofDisplay
           $url_params,
           $run_delta,
           $symbol_tab[$rep_symbol],
-          $sort,
           $rep_symbol,
           $run1,
           $info1,
@@ -443,14 +441,13 @@ class XhprofDisplay
           $url_params,
           $run1_data,
           $symbol_tab[$rep_symbol],
-          $sort,
           $rep_symbol,
           $run1
         );
       }
     } else {
       /* flat top-level report of all public static functions */
-      $echo_page .= self::full_report($url_params, $symbol_tab, $sort, $run1, $run2);
+      $echo_page .= self::full_report($url_params, $symbol_tab, $run1, $run2);
     }
     return $echo_page;
   }
@@ -524,7 +521,7 @@ class XhprofDisplay
    *
    *
    */
-  public static function print_function_info($url_params, $info, $sort, $run1, $run2)
+  public static function print_function_info($url_params, $info)
   {
     static $odd_even = 0;
 
@@ -598,7 +595,7 @@ class XhprofDisplay
    *
    *
    */
-  public static function print_flat_data($url_params, $title, $flat_data, $sort, $run1, $run2, $limit)
+  public static function print_flat_data($url_params,$title,$flat_data,$limit)
   {
 
     $stats = self::$stats;
@@ -622,8 +619,8 @@ class XhprofDisplay
     }
 
 
-
-    $echo_page = '<div /*style="overflow-x: scroll;overflow-y: hidden;"*/>';
+    $echo_page ='<h3 align=center>'.$title.' '.$display_link.'</h3><br>';
+    $echo_page .= '<div style="overflow-x: scroll;overflow-y: hidden;">';
     $echo_page .= '<table class="table table-condensed table-bordered">';
     $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
 
@@ -646,13 +643,13 @@ class XhprofDisplay
     if ($limit >= 0) {
       $limit = min($size, $limit);
       for ($i = 0; $i < $limit; $i++) {
-        $echo_page .= self::print_function_info($url_params, $flat_data[$i], $sort, $run1, $run2);
+        $echo_page .= self::print_function_info($url_params, $flat_data[$i]);
       }
     } else {
       // if $limit is negative, print abs($limit) items starting from the end
       $limit = min($size, abs($limit));
       for ($i = 0; $i < $limit; $i++) {
-        $echo_page .= self::print_function_info($url_params, $flat_data[$size - $i - 1], $sort, $run1, $run2);
+        $echo_page .= self::print_function_info($url_params, $flat_data[$size - $i - 1]);
       }
     }
     $echo_page .= "</table>";
@@ -667,7 +664,7 @@ class XhprofDisplay
    *
    *
    */
-  public static function full_report($url_params, $symbol_tab, $sort, $run1, $run2)
+  public static function full_report($url_params, $symbol_tab, $run1, $run2)
   {
     $vwbar = self::$vwbar;
     $vbar = self::$vbar;
@@ -745,7 +742,7 @@ class XhprofDisplay
       $echo_page .= "<p><center>\n";
 
       //取信息
-      $request_info = XhprofLib::getRequestLog(request()->get('run')) ?: [];
+      $request_info = XhprofLib::getRequestLog(Xhprof::getRequest()->get('run')) ?: [];
       $request_uri = isset($request_info['request_uri']) ? urldecode($request_info['request_uri']) : "";
       $method = $request_info['method'] ?? "";
       $create_time_text = "";
@@ -813,7 +810,7 @@ class XhprofDisplay
       $title = "Displaying top $limit public static functions: Sorted by $desc";
       if ($all)  $title = "Sorted by $desc";
     }
-    $echo_page .= self::print_flat_data($url_params, $title, $flat_data, $sort, $run1, $run2, $limit);
+    $echo_page .= self::print_flat_data($url_params,$title, $flat_data,$limit);
     $echo_page .= '</div></div></div>';  //结束
     return $echo_page;
   }
@@ -949,7 +946,6 @@ class XhprofDisplay
     $url_params,
     $run_data,
     $symbol_info,
-    $sort,
     $rep_symbol,
     $run1,
     $symbol_info1 = null,
@@ -1280,7 +1276,6 @@ class XhprofDisplay
     return self::profiler_report(
       $url_params,
       $rep_symbol,
-      $sort,
       $run1,
       $run1_desc,
       $xhprof_data1,

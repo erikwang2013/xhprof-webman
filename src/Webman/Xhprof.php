@@ -18,18 +18,26 @@ class Xhprof
     public static $ui_html = '../html';
     public static $symbol_lookup_url = "";
 
+    public static function getRequest()
+    {
+      return  request();
+    }
 
+    public static function getResponse()
+    {
+      return  response();
+    }
     //页面输出
     public static function index()
     {
-        $run = request()->get('run');
-        $wts = request()->get('wts');
-        $symbol = request()->get('symbol');
-        $sort = request()->get('sort');
-        $run1 = request()->get('run1');
-        $run2 = request()->get('run2');
-        $source = request()->get('source');
-        $params = request()->all();
+        $run = self::getRequest()->get('run');
+        $wts = self::getRequest()->get('wts');
+        $symbol = self::getRequest()->get('symbol');
+        $sort = self::getRequest()->get('sort');
+        $run1 = self::getRequest()->get('run1');
+        $run2 = self::getRequest()->get('run2');
+        $source = self::getRequest()->get('source');
+        $params = self::getRequest()->all();
         $echo_page = "<html>";
 
         $echo_page .= "<head><title>XHProf性能分析报告</title>";
@@ -68,8 +76,8 @@ class Xhprof
     {
         date_default_timezone_set('PRC');
         $extension = extension_loaded('xhprof');
-        if(false==$extension) return response()->withBody("请安装xhprof扩展");
+        if(false==$extension) return self::getResponse()->withBody("请安装xhprof扩展");
         $redis=extension_loaded("redis");
-        if(false==$redis) return response()->withBody("请安装redis扩展");
+        if(false==$redis) return self::getResponse()->withBody("请安装redis扩展");
     }
 }

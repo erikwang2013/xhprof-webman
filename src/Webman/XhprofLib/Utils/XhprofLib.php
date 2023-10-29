@@ -6,7 +6,6 @@ namespace Aaron\Xhprof\Webman\XhprofLib\Utils;
 
 use support\Redis;
 use support\Log;
-use Webman\Http\Request;
 use Aaron\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
 use Aaron\Xhprof\Webman\Xhprof;
 
@@ -14,14 +13,11 @@ use Aaron\Xhprof\Webman\Xhprof;
 class XhprofLib
 {
 
-  public static function getRequest()
-  {
-    return  request();
-  }
 
   public static function xhprof_error($message)
   {
     Log::error("Xhprof：" . $message);
+    return;
   }
 
   /*
@@ -478,7 +474,7 @@ class XhprofLib
 
   public static function xhprof_get_param_helper($param)
   {
-    $get_data = request()->all();
+    $get_data = Xhprof::getRequest()->all();
     return isset($get_data[$param]) ? $get_data[$param] : null;
   }
 
@@ -566,7 +562,7 @@ class XhprofLib
     $ignoreArr = Xhprof::$ignore_url_arr;
     if (!is_array($ignoreArr)) return true;
     //当前请求url
-    $request_uri = self::getRequest()->uri();
+    $request_uri = Xhprof::getRequest()->uri();
     if (empty($request_uri)) return false;
     $request_uri = strtolower($request_uri);
     //是否需要忽略当前url
@@ -585,7 +581,7 @@ class XhprofLib
    */
   public static function xhprof_get_ip()
   {
-    return self::getRequest()->getRealIp($safe_mode = true);
+    return Xhprof::getRequest()->getRealIp($safe_mode = true);
   }
 
   /**
