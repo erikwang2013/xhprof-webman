@@ -11,7 +11,7 @@ class XhprofDisplay
 
   public static function base_path()
   {
-    $arr = parse_url(XhprofLib::getRequest()->uri());
+    $arr = parse_url(Xhprof::getRequest()->uri());
     return rtrim($arr['path'], '/\\');
   }
 
@@ -619,8 +619,8 @@ class XhprofDisplay
     }
 
 
-    $echo_page ='<h3 align=center>'.$title.' '.$display_link.'</h3><br>';
-    $echo_page .= '<div style="overflow-x: scroll;overflow-y: hidden;">';
+    //$echo_page ='<h3 align=center>'.$title.' '.$display_link.'</h3><br>';
+    $echo_page = '<div style="overflow-x: scroll;overflow-y: hidden;">';
     $echo_page .= '<table class="table table-condensed table-bordered">';
     $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
 
@@ -1244,7 +1244,6 @@ class XhprofDisplay
     return self::profiler_report(
       $url_params,
       $rep_symbol,
-      $sort,
       $run,
       $run_desc,
       $xhprof_data

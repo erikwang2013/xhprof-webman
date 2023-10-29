@@ -315,7 +315,7 @@ class XhprofLib
       }
       if ($display_calls) $overall_totals["ct"] += $info["ct"];
     }
-
+    if(false==is_array($raw_data)) return $symbol_tab;
     foreach ($raw_data as $parent_child => $info) {
       list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
       if ($parent) {
@@ -366,7 +366,7 @@ class XhprofLib
     $display_calls = XhprofDisplay::$display_calls;
     $metrics = self::xhprof_get_metrics($raw_data);
     $symbol_tab = array();
-
+    if(false==is_array($raw_data)) return $symbol_tab;
     foreach ($raw_data as $parent_child => $info) {
       list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
       if ($parent == $child) {

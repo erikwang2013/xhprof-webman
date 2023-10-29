@@ -80,11 +80,11 @@ class XHProfRunsDefault implements XHProfRuns
             $mu = round($xhprof_data['main()']['mu'] / 1024 / 1024, 4);      //消耗内存 单位mb   1mb=1024kb=1024*1024b(字节)
         }
 
-        $method = XhprofLib::getRequest()->method();
-        $http = XhprofLib::getRequest()->header('x-forwarded-proto');
+        $method = Xhprof::getRequest()->method();
+        $http = Xhprof::getRequest()->header('x-forwarded-proto');
         $http = !empty($http) ? $http . "://" : "";
         $row = array(
-            'request_uri' => $http . XhprofLib::getRequest()->host() . XhprofLib::getRequest()->uri(),
+            'request_uri' => $http . Xhprof::getRequest()->host() . Xhprof::getRequest()->uri(),
             'method'      => $method,
             'wt'          => $wt,
             'mu'          => $mu,
@@ -139,9 +139,9 @@ class XHProfRunsDefault implements XHProfRuns
             if (!is_array($request_arr)) continue;
             //耗时是否标红显示
             $wtClass = $request_arr['wt'] > Xhprof::$view_wtred ? "red" : "";
-            $http = XhprofLib::getRequest()->header('x-forwarded-proto');
+            $http = Xhprof::getRequest()->header('x-forwarded-proto');
             $http = !empty($http) ? $http . ":" : "http:";
-            $path = $http . XhprofLib::getRequest()->url();
+            $path = $http . Xhprof::getRequest()->url();
             $tr = '<tr>'
                 . '<td>' . $request_arr['method'] . '</td>'
                 . '<td><a href="' . htmlentities($path) . '?all=1&run=' . $run_id . '&source=xhprof_foo&requrl=' . urlencode($request_arr['request_uri']) . '">' . $request_arr['request_uri'] . "</a></td>"
