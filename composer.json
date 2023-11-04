@@ -24,7 +24,7 @@
         "source": "https://github.com/erikwang2013/xhprof-webman"
       },
     "require": {
-        "php": ">=7.4",
+        "php": ">=7.2",
         "ext-xhprof": "*",
         "workerman/webman": "*",
         "monolog/monolog": "*",
