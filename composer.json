@@ -8,6 +8,7 @@
         "xhprof",
         "webman"
     ],
+    "version":"v1.0.4",
     "type": "library",
     "license": "MIT",
     "minimum-stability": "dev",
@@ -15,6 +16,7 @@
         {
             "name": "erik",
             "email": "erik@erik.xyz",
+            "homepage": "https://erik.xyz",
             "role": "Developer"
         }
     ],
