@@ -7,7 +7,7 @@ namespace Aaron\Xhprof\Webman\XhprofLib\Utils;
 use support\Log;
 use Aaron\Xhprof\Webman\XhprofLib\Display\XhprofDisplay;
 
-class Callgraph
+class CallGraph
 {
   // Supported ouput format
   public static $xhprof_legal_image_types = array(
@@ -349,8 +349,8 @@ class Callgraph
     $threshold,
     $source
   ) {
-    $total1;
-    $total2;
+    $total1=0;
+    $total2=0;
     $raw_data1 = XHProfRunsDefault::get_run($run1, $source, $desc_unused);
     $raw_data2 = XHProfRunsDefault::get_run($run2, $source, $desc_unused);
     $symbol_tab1 = XhprofLib::xhprof_compute_flat_info($raw_data1, $total1);
