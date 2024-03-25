@@ -1,9 +1,9 @@
 {
-    "name": "aaron-dev/xhprof-webman",
-    "description": "aaron-dev/xhprof-webman is a code performance analysis plugin that is compatible with webman. Mainly optimize and adjust the old and unusable xhprof for adapting to webman, making installation simple and fast.Developers can quickly access performance analysis reports through browsers to troubleshoot code performance issues.",
+    "name": "shiroi/xhprof-webman",
+    "description": "适用于webman的xhprof扩展",
     "keywords": [
         "aaron",
-        "aaron-dev",
+        "shiroi",
         "erik",
         "xhprof",
         "webman"
@@ -14,17 +14,10 @@
     "minimum-stability": "dev",
     "authors": [
         {
-            "name": "erik",
-            "email": "erik@erik.xyz",
-            "homepage": "https://erik.xyz",
-            "role": "Developer"
+            "name": "hcr707305003",
+            "email": "707305003@qq.com"
         }
     ],
-    "support": {
-        "email": "erik@erik.xyz",
-        "issues": "https://github.com/erikwang2013/xhprof-webman/issues",
-        "source": "https://github.com/erikwang2013/xhprof-webman"
-      },
     "require": {
         "php": ">=7.2",
         "ext-xhprof": "*",
