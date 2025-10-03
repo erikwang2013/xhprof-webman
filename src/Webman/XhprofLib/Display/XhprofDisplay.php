@@ -792,7 +792,7 @@ class XhprofDisplay
       $tmp["fn"] = $symbol;
       $flat_data[] = $tmp;
     }
-    usort($flat_data, 'self::sort_cbk');
+    usort($flat_data, self::class . '::sort_cbk');
 
     //  print("<br>");
     $all = false;
@@ -1155,7 +1155,7 @@ class XhprofDisplay
         $results[] = $info_tmp;
       }
     }
-    usort($results, 'self::sort_cbk');
+    usort($results, self::class . '::sort_cbk');
 
     if (count($results) > 0) {
       $echo_page .= self::print_pc_array(
@@ -1181,7 +1181,7 @@ class XhprofDisplay
         if ($display_calls) $base_ct += $info["ct"];
       }
     }
-    usort($results, 'self::sort_cbk');
+    usort($results, self::class . '::sort_cbk');
 
     if (count($results)) {
       $echo_page .= self::print_pc_array(
