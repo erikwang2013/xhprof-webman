@@ -8,7 +8,7 @@
         "xhprof",
         "webman"
     ],
-    "version":"v1.0.5",
+    "version":"v2.0.0",
     "type": "library",
     "license": "MIT",
     "minimum-stability": "dev",
