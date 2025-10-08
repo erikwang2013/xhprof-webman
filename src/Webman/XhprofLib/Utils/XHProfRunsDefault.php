@@ -23,7 +23,7 @@ class XHProfRunsDefault implements XHProfRuns
                     "ini param.");
             }
         }
-        self::$dir = $dir;
+        XHProfRunsDefault::$dir = $dir;
     }
 
     public static function get_run($run_id, $type, &$run_desc)
@@ -41,9 +41,9 @@ class XHProfRunsDefault implements XHProfRuns
         //根据忽略配置判断是否忽略当前请求
         if (!XhprofLib::isIgnore()) return false;
         //控制日志长度
-        self::_checkLogNum();
+        XHProfRunsDefault::_checkLogNum();
         //数据存储至redis
-        $run_id = self::_saveToRedis($xhprof_data);
+        $run_id = XHProfRunsDefault::_saveToRedis($xhprof_data);
         return $run_id;
     }
 
@@ -59,8 +59,7 @@ class XHProfRunsDefault implements XHProfRuns
         if ($num > Xhprof::$log_num) {
             $old_run_id = Redis::rpop(Xhprof::$key_prefix . ':run_id');
             Redis::setNex();
-            Redis::delete(Xhprof::$key_prefix . ':request_log:' . $old_run_id);
-            Redis::delete(Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id);
+            Redis::del(Xhprof::$key_prefix . ':request_log:' . $old_run_id,Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id);
             Redis::decr(Xhprof::$key_prefix . ':run_id_num');  //计数-1
         }
         return true;

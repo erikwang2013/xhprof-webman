@@ -68,7 +68,7 @@ class XhprofLib
     $stats = array("fn");
     if ($display_calls) $stats = array("fn", "ct", "Calls%");
     $pc_stats = $stats;
-    $possible_metrics = self::xhprof_get_possible_metrics($xhprof_data);
+    $possible_metrics = XhprofLib::xhprof_get_possible_metrics($xhprof_data);
     foreach ($possible_metrics as $metric => $desc) {
       if (!isset($xhprof_data["main()"][$metric])) continue;
       $metrics[] = $metric;
@@ -94,7 +94,7 @@ class XhprofLib
  */
   public static function xhprof_get_metrics($xhprof_data)
   {
-    $possible_metrics = self::xhprof_get_possible_metrics();
+    $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
     $metrics = array();
     foreach ($possible_metrics as $metric => $desc) {
       if (!isset($xhprof_data["main()"][$metric])) continue;
@@ -124,7 +124,7 @@ class XhprofLib
 
     $main_info = $raw_data["main()"];
     if (empty($main_info)) {
-      self::xhprof_error("XHProf: main() missing in raw data for Run ID: $run_id");
+      XhprofLib::xhprof_error("XHProf: main() missing in raw data for Run ID: $run_id");
       return false;
     }
 
@@ -133,19 +133,19 @@ class XhprofLib
     } else if (isset($main_info["samples"])) {
       $metric = "samples";
     } else {
-      self::xhprof_error("XHProf: Wall Time information missing from Run ID: $run_id");
+      XhprofLib::xhprof_error("XHProf: Wall Time information missing from Run ID: $run_id");
       return false;
     }
 
     foreach ($raw_data as $info) {
       $val = $info[$metric];
       if ($val < 0) {
-        self::xhprof_error("XHProf: $metric should not be negative: Run ID $run_id"
+        XhprofLib::xhprof_error("XHProf: $metric should not be negative: Run ID $run_id"
           . serialize($info));
         return false;
       }
       if ($val > (86400000000)) {
-        self::xhprof_error("XHProf: $metric > 1 day found in Run ID: $run_id "
+        XhprofLib::xhprof_error("XHProf: $metric > 1 day found in Run ID: $run_id "
           . serialize($info));
         return false;
       }
@@ -162,7 +162,7 @@ class XhprofLib
     $function_map['main()'] = 1;
     $new_raw_data = array();
     foreach ($raw_data as $parent_child => $info) {
-      list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
+      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
       if (isset($function_map[$parent]) || isset($function_map[$child])) {
         $new_raw_data[$parent_child] = $info;
       }
@@ -176,7 +176,7 @@ class XhprofLib
 
     if (empty($raw_data) || ($num_runs == 0)) return $raw_data;
     $raw_data_total = array();
-    if (isset($raw_data["==>main()"]) && isset($raw_data["main()"])) self::xhprof_error("XHProf Error: both ==>main() and main() set in raw data...");
+    if (isset($raw_data["==>main()"]) && isset($raw_data["main()"])) XhprofLib::xhprof_error("XHProf Error: both ==>main() and main() set in raw data...");
     foreach ($raw_data as $parent_child => $info) {
       foreach ($info as $metric => $value) {
         $raw_data_total[$parent_child][$metric] = ($value / $num_runs);
@@ -219,7 +219,7 @@ class XhprofLib
         }
       }
 
-      if (!self::xhprof_valid_run($run_id, $raw_data)) {
+      if (!XhprofLib::xhprof_valid_run($run_id, $raw_data)) {
         $bad_runs[] = $run_id;
         continue;
       }
@@ -232,7 +232,7 @@ class XhprofLib
             $new_main[$metric]  = $val + 0.00001;
           }
           $raw_data["main()"] = $new_main;
-          $raw_data[self::xhprof_build_parent_child_key(
+          $raw_data[XhprofLib::xhprof_build_parent_child_key(
             "main()",
             "__script::$page"
           )]
@@ -247,7 +247,7 @@ class XhprofLib
           if (substr($parent_child, 0, 9) == "main()==>") {
             $child = substr($parent_child, 9);
             if (substr($child, 0, 10) != "__script::") {
-              $parent_child = self::xhprof_build_parent_child_key(
+              $parent_child = XhprofLib::xhprof_build_parent_child_key(
                 "__script::$page",
                 $child
               );
@@ -278,7 +278,7 @@ class XhprofLib
     $run_count = $run_count - count($bad_runs);
     $data['description'] = "Aggregated Report for $run_count runs: " .
       "$runs_string $wts_string\n";
-    $data['raw'] = self::xhprof_normalize_metrics(
+    $data['raw'] = XhprofLib::xhprof_normalize_metrics(
       $raw_data_total,
       $normalization_count
     );
@@ -292,7 +292,7 @@ class XhprofLib
   {
 
     $display_calls = XhprofDisplay::$display_calls;
-    $metrics = self::xhprof_get_metrics($raw_data);
+    $metrics = XhprofLib::xhprof_get_metrics($raw_data);
     $overall_totals = array(
       "ct" => 0,
       "wt" => 0,
@@ -304,7 +304,7 @@ class XhprofLib
       "samples" => 0
     );
 
-    $symbol_tab = self::xhprof_compute_inclusive_times($raw_data);
+    $symbol_tab = XhprofLib::xhprof_compute_inclusive_times($raw_data);
     foreach ($metrics as $metric) {
       $overall_totals[$metric] = $symbol_tab["main()"][$metric];
     }
@@ -317,7 +317,7 @@ class XhprofLib
     }
     if(false==is_array($raw_data)) return $symbol_tab;
     foreach ($raw_data as $parent_child => $info) {
-      list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
+      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
       if ($parent) {
         foreach ($metrics as $metric) {
           if (isset($symbol_tab[$parent])) $symbol_tab[$parent]["excl_" . $metric] -= $info[$metric];
@@ -339,7 +339,7 @@ class XhprofLib
     $display_calls = XhprofDisplay::$display_calls;
 
     // use the second run to decide what metrics we will do the diff on
-    $metrics = self::xhprof_get_metrics($xhprof_data2);
+    $metrics = XhprofLib::xhprof_get_metrics($xhprof_data2);
     $xhprof_delta = $xhprof_data2;
     foreach ($xhprof_data1 as $parent_child => $info) {
 
@@ -364,13 +364,13 @@ class XhprofLib
   public static function xhprof_compute_inclusive_times($raw_data)
   {
     $display_calls = XhprofDisplay::$display_calls;
-    $metrics = self::xhprof_get_metrics($raw_data);
+    $metrics = XhprofLib::xhprof_get_metrics($raw_data);
     $symbol_tab = array();
     if(false==is_array($raw_data)) return $symbol_tab;
     foreach ($raw_data as $parent_child => $info) {
-      list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
+      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
       if ($parent == $child) {
-        self::xhprof_error("Error in Raw Data: parent & child are both: $parent");
+        XhprofLib::xhprof_error("Error in Raw Data: parent & child are both: $parent");
         return;
       }
 
@@ -397,7 +397,7 @@ class XhprofLib
 
     $main_info = $raw_data["main()"];
     if (empty($main_info)) {
-      self::xhprof_error("XHProf: main() missing in raw data");
+      XhprofLib::xhprof_error("XHProf: main() missing in raw data");
       return false;
     }
 
@@ -407,7 +407,7 @@ class XhprofLib
     } else if (isset($main_info["samples"])) {
       $prune_metric = "samples";
     } else {
-      self::xhprof_error("XHProf: for main() we must have either wt "
+      XhprofLib::xhprof_error("XHProf: for main() we must have either wt "
         . "or samples attribute set");
       return false;
     }
@@ -419,12 +419,12 @@ class XhprofLib
     }
 
     $prune_threshold = (($main_info[$prune_metric] * $prune_percent) / 100.0);
-    self::init_metrics($raw_data, null, null, false);
-    $flat_info = self::xhprof_compute_inclusive_times($raw_data);
+    XhprofLib::init_metrics($raw_data, null, null, false);
+    $flat_info = XhprofLib::xhprof_compute_inclusive_times($raw_data);
 
     foreach ($raw_data as $parent_child => $info) {
 
-      list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
+      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
       if ($flat_info[$child][$prune_metric] < $prune_threshold) {
         unset($raw_data[$parent_child]); // prune the edge
       } else if (
@@ -432,7 +432,7 @@ class XhprofLib
         ($parent != "__pruned__()") &&
         ($flat_info[$parent][$prune_metric] < $prune_threshold)
       ) {
-        $pruned_edge = self::xhprof_build_parent_child_key("__pruned__()", $child);
+        $pruned_edge = XhprofLib::xhprof_build_parent_child_key("__pruned__()", $child);
         if (isset($raw_data[$pruned_edge])) {
           foreach ($metrics as $metric) {
             $raw_data[$pruned_edge][$metric] += $raw_data[$parent_child][$metric];
@@ -481,36 +481,36 @@ class XhprofLib
 
   public static function xhprof_get_string_param($param, $default = '')
   {
-    $val = self::xhprof_get_param_helper($param);
+    $val = XhprofLib::xhprof_get_param_helper($param);
     if ($val === null) return $default;
     return $val;
   }
 
   public static function xhprof_get_uint_param($param, $default = 0)
   {
-    $val = self::xhprof_get_param_helper($param);
+    $val = XhprofLib::xhprof_get_param_helper($param);
     if ($val === null) $val = $default;
     $val = trim($val);
     if (ctype_digit($val)) return $val;
-    self::xhprof_error("$param is $val. It must be an unsigned integer.");
+    XhprofLib::xhprof_error("$param is $val. It must be an unsigned integer.");
     return null;
   }
 
 
   public static function xhprof_get_float_param($param, $default = 0)
   {
-    $val = self::xhprof_get_param_helper($param);
+    $val = XhprofLib::xhprof_get_param_helper($param);
     if ($val === null) $val = $default;
     $val = trim($val);
     if (true) return (float)$val;
-    self::xhprof_error("$param is $val. It must be a float.");
+    XhprofLib::xhprof_error("$param is $val. It must be a float.");
     return null;
   }
 
 
   public static function xhprof_get_bool_param($param, $default = false)
   {
-    $val = self::xhprof_get_param_helper($param);
+    $val = XhprofLib::xhprof_get_param_helper($param);
 
     if ($val === null) $val = $default;
     $val = trim($val);
@@ -530,7 +530,7 @@ class XhprofLib
         $val = false;
         break;
       default:
-        self::xhprof_error("$param is $val. It must be a valid boolean string.");
+        XhprofLib::xhprof_error("$param is $val. It must be a valid boolean string.");
         return null;
     }
 
@@ -543,7 +543,7 @@ class XhprofLib
 
     $matches = array();
     foreach ($xhprof_data as $parent_child => $info) {
-      list($parent, $child) = self::xhprof_parse_parent_child($parent_child);
+      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
       if (stripos($parent, $q) !== false) $matches[$parent] = 1;
       if (stripos($child, $q) !== false) $matches[$child] = 1;
     }

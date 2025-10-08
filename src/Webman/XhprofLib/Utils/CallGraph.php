@@ -62,8 +62,8 @@ class CallGraph
         $mime = false;
     }
     if ($mime) {
-      self::xhprof_http_header('Content-type', $mime);
-      self::xhprof_http_header('Content-length', (string)$length);
+      CallGraph::xhprof_http_header('Content-type', $mime);
+      CallGraph::xhprof_http_header('Content-length', (string)$length);
     }
   }
 
@@ -134,12 +134,12 @@ class CallGraph
     $max_height = 3.5;
     $max_fontsize = 35;
     $max_sizing_ratio = 20;
-
+    $totals_callback = 0;
     XhprofDisplay::$totals = $totals_callback;
 
     $sym_table = XhprofLib::xhprof_compute_flat_info($raw_data, $totals_callback);
     if ($critical_path) {
-      $children_table = self::xhprof_get_children_table($raw_data);
+      $children_table = CallGraph::xhprof_get_children_table($raw_data);
       $node = "main()";
       $path = array();
       $path_edges = array();
@@ -349,16 +349,16 @@ class CallGraph
     $threshold,
     $source
   ) {
-    $total1=0;
-    $total2=0;
+    $total1 = 0;
+    $total2 = 0;
     $raw_data1 = XHProfRunsDefault::get_run($run1, $source, $desc_unused);
     $raw_data2 = XHProfRunsDefault::get_run($run2, $source, $desc_unused);
     $symbol_tab1 = XhprofLib::xhprof_compute_flat_info($raw_data1, $total1);
     $symbol_tab2 = XhprofLib::xhprof_compute_flat_info($raw_data2, $total2);
     $run_delta = XhprofLib::xhprof_compute_diff($raw_data1, $raw_data2);
-    $script = self::xhprof_generate_dot_script($run_delta, $threshold, $source, null, null, true, $symbol_tab1, $symbol_tab2);
-    $content = self::xhprof_generate_image_by_dot($script, $type);
-    self::xhprof_generate_mime_header($type, strlen($content));
+    $script = CallGraph::xhprof_generate_dot_script($run_delta, $threshold, $source, null, null, true, $symbol_tab1, $symbol_tab2);
+    $content = CallGraph::xhprof_generate_image_by_dot($script, $type);
+    CallGraph::xhprof_generate_mime_header($type, strlen($content));
     return $content;
   }
 
@@ -376,7 +376,7 @@ class CallGraph
       XhprofLib::xhprof_error("Raw data is empty");
       return "";
     }
-    $script = self::xhprof_generate_dot_script(
+    $script = CallGraph::xhprof_generate_dot_script(
       $raw_data,
       $threshold,
       $source,
@@ -384,7 +384,7 @@ class CallGraph
       $func,
       $critical_path
     );
-    $content = self::xhprof_generate_image_by_dot($script, $type);
+    $content = CallGraph::xhprof_generate_image_by_dot($script, $type);
     return $content;
   }
 
@@ -398,7 +398,7 @@ class CallGraph
     $critical_path
   ) {
 
-    $content = self::xhprof_get_content_by_run(
+    $content = CallGraph::xhprof_get_content_by_run(
       $run_id,
       $type,
       $threshold,
@@ -413,7 +413,7 @@ class CallGraph
       return;
     }
 
-    self::xhprof_generate_mime_header($type, strlen($content));
+    CallGraph::xhprof_generate_mime_header($type, strlen($content));
     return $content;
   }
 }
