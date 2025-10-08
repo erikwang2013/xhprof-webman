@@ -30,7 +30,7 @@
         "ext-xhprof": "*",
         "workerman/webman": "*",
         "monolog/monolog": "*",
-        "illuminate/redis": "*"
+        "webman/redis": "*"
     },
     "autoload": {
         "psr-4": {

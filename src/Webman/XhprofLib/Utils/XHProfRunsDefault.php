@@ -9,6 +9,7 @@ use Aaron\Xhprof\Webman\Xhprof;
 
 class XHProfRunsDefault implements XHProfRuns
 {
+    public static $dir;
     public function __construct($dir = null)
     {
         if (empty($dir)) {
@@ -57,6 +58,7 @@ class XHProfRunsDefault implements XHProfRuns
         $num = Redis::incr(Xhprof::$key_prefix . ":run_id_num");
         if ($num > Xhprof::$log_num) {
             $old_run_id = Redis::rpop(Xhprof::$key_prefix . ':run_id');
+            Redis::setNex();
             Redis::delete(Xhprof::$key_prefix . ':request_log:' . $old_run_id);
             Redis::delete(Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id);
             Redis::decr(Xhprof::$key_prefix . ':run_id_num');  //计数-1

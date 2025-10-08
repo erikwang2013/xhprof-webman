@@ -1,7 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
 namespace Aaron\Xhprof\Webman\XhprofLib\Display;
 
 use Aaron\Xhprof\Webman\XhprofLib\Utils\XhprofLib;
@@ -220,7 +218,7 @@ class XhprofDisplay
   public static function xhprof_count_format($num)
   {
     $num = round($num, 3);
-    if (round($num) == $num) return number_format($num);
+    if (round($num) == $num)return number_format($num);
     return number_format($num, 3);
   }
 
@@ -316,8 +314,8 @@ class XhprofDisplay
     $descriptions = self::$descriptions;
     $diff_descriptions = self::$diff_descriptions;
     $diff_mode = self::$diff_mode;
-    $result = $descriptions[$stat];;
-    if ($diff_mode) $result = $diff_descriptions[$stat];
+    $result=$descriptions[$stat];;
+    if ($diff_mode) $result=$diff_descriptions[$stat];
     return $result;
   }
 
@@ -331,9 +329,9 @@ class XhprofDisplay
     $run2_desc = "",
     $run2_data = array()
   ) {
-    $totals = 0;
-    $totals_1 = 0;
-    $totals_2 = 0;
+    $totals=0;
+    $totals_1=0;
+    $totals_2=0;
 
     $diff_mode = self::$diff_mode;
     $base_path = self::base_path();
@@ -343,15 +341,15 @@ class XhprofDisplay
       if ($diff_mode) $run2_data = XhprofLib::xhprof_trim_run($run2_data, array($rep_symbol));
     }
     $symbol_tab = XhprofLib::xhprof_compute_flat_info($run1_data, $totals);
-    self::$totals = $totals;
+    self::$totals=$totals;
     if ($diff_mode) {
       $run_delta = XhprofLib::xhprof_compute_diff($run1_data, $run2_data);
       $symbol_tab  = XhprofLib::xhprof_compute_flat_info($run_delta, $totals);
       $symbol_tab1 = XhprofLib::xhprof_compute_flat_info($run1_data, $totals_1);
       $symbol_tab2 = XhprofLib::xhprof_compute_flat_info($run2_data, $totals_2);
-      self::$totals = $totals;
-      self::$totals_1 = $totals_1;
-      self::$totals_2 = $totals_2;
+      self::$totals=$totals;
+      self::$totals_1=$totals_1;
+      self::$totals_2=$totals_2;
     }
     $run1_txt = sprintf(
       "<b>Run #%s:</b> %s",
@@ -460,7 +458,7 @@ class XhprofDisplay
    */
   public static function pct($a, $b)
   {
-    $res = "N/A";
+    $res="N/A";
     if ($b != 0) $res = (round(($a * 1000 / $b)) / 10);
     return $res;
   }
@@ -597,7 +595,7 @@ class XhprofDisplay
    *
    *
    */
-  public static function print_flat_data($url_params, $title, $flat_data, $limit)
+  public static function print_flat_data($url_params,$title,$flat_data,$limit)
   {
 
     $stats = self::$stats;
@@ -738,7 +736,7 @@ class XhprofDisplay
       }
       $echo_page .= '</table>';
 
-      //    $callgraph_report_title = '[View Regressions/Improvements using CallGraph Diff]';
+      //    $callgraph_report_title = '[View Regressions/Improvements using Callgraph Diff]';
 
     } else {
       $echo_page .= "<p><center>\n";
@@ -792,7 +790,7 @@ class XhprofDisplay
       $tmp["fn"] = $symbol;
       $flat_data[] = $tmp;
     }
-    usort($flat_data, 'self::sort_cbk');
+    if(count($flat_data)>0) usort($flat_data, 'self::sort_cbk');
 
     //  print("<br>");
     $all = false;
@@ -805,14 +803,14 @@ class XhprofDisplay
     $desc = str_replace("<br>", " ", $descriptions[$sort_col]);
     if ($diff_mode) {
       $title = "Top 100 <i style='color:red'>Regressions</i>/"
-        . "<i style='color:green'>Improvements</i>: "
-        . "Sorted by $desc Diff";
+          . "<i style='color:green'>Improvements</i>: "
+          . "Sorted by $desc Diff";
       if ($all) $title = "Total Diff Report: Sorted by absolute value of regression/improvement in $desc";
     } else {
       $title = "Displaying top $limit public static functions: Sorted by $desc";
       if ($all)  $title = "Sorted by $desc";
     }
-    $echo_page .= self::print_flat_data($url_params, $title, $flat_data, $limit);
+    $echo_page .= self::print_flat_data($url_params,$title, $flat_data,$limit);
     $echo_page .= '</div></div></div>';  //结束
     return $echo_page;
   }
@@ -839,7 +837,7 @@ class XhprofDisplay
     $format_cbk = self::$format_cbk;
     $display_calls = self::$display_calls;
     $type = "Child";
-    if ($parent) $type = "Parent";
+    if ($parent)$type = "Parent";
     if ($display_calls) {
       $mouseoverct = self::get_tooltip_attributes($type, "ct");
       /* call count */
@@ -1037,7 +1035,7 @@ class XhprofDisplay
         $echo_page .= "<td>" . str_replace("<br>", " ", $descriptions[$m]) . " per call </td>";
         $avg_info1 = 'N/A';
         $avg_info2 = 'N/A';
-        if ($symbol_info1['ct'] > 0) $avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
+        if ($symbol_info1['ct'] > 0)$avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
         if ($symbol_info2['ct'] > 0) $avg_info2 = ($symbol_info2[$m] / $symbol_info2['ct']);
         $echo_page .= self::print_td_num($avg_info1, $format_cbk[$m]);
         $echo_page .= self::print_td_num($avg_info2, $format_cbk[$m]);
@@ -1061,7 +1059,7 @@ class XhprofDisplay
     $echo_page .= "<h4><center>";
     $echo_page .= "Parent/Child $regr_impr report for <b>$rep_symbol</b>";
 
-    $callgraph_href = "$base_path/CallGraph.php?"
+    $callgraph_href = "$base_path/callgraph.php?"
       . http_build_query(XhprofLib::xhprof_array_set($url_params, 'func', $rep_symbol));
 
     $echo_page .= "</center></h4>";
@@ -1155,7 +1153,7 @@ class XhprofDisplay
         $results[] = $info_tmp;
       }
     }
-    usort($results, 'self::sort_cbk');
+    if(count($results)>0)usort($results, 'self::sort_cbk');
 
     if (count($results) > 0) {
       $echo_page .= self::print_pc_array(
@@ -1181,7 +1179,7 @@ class XhprofDisplay
         if ($display_calls) $base_ct += $info["ct"];
       }
     }
-    usort($results, 'self::sort_cbk');
+    if(count($results)>0)usort($results, 'self::sort_cbk');
 
     if (count($results)) {
       $echo_page .= self::print_pc_array(
