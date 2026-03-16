@@ -13,21 +13,29 @@ use Webman\Http\Request;
  */
 class XhprofMiddleware implements MiddlewareInterface
 {
-    public function process(Request $request, callable $next): Response
+    public function process(Request $request, callable $handler): Response
     {
-        $config=config('plugin.aaron-dev.xhprof.xhprof');
-        $xhprof =$config['enable']?:false;
+        $config = config('plugin.aaron-dev.xhprof.xhprof', []);
+        $xhprof = $config['enable'] ?? false;
         $extension = extension_loaded('xhprof');
-        if(false==$extension) return response()->withBody("请安装xhprof扩展");
-        $redis=extension_loaded("redis");
-        if(false==$redis) return response()->withBody("请安装redis扩展");
-        Xhprof::$ignore_url_arr=$config['ignore_url_arr']?:"/test";
-        Xhprof::$time_limit=$config['time_limit']?:0;
-        Xhprof::$log_num=$config['log_num']?:1000;
-        Xhprof::$view_wtred=$config['view_wtred']?:3;
-        if ($xhprof && $extension) Xhprof::xhprofStart();
-        $response = $next($request);
-        if ($xhprof && $extension) Xhprof::xhprofStop();
+        if (!$extension) {
+            return response()->withBody('请安装xhprof扩展');
+        }
+        $redis = extension_loaded('redis');
+        if (!$redis) {
+            return response()->withBody('请安装redis扩展');
+        }
+        Xhprof::$ignore_url_arr = $config['ignore_url_arr'] ?? ['/test'];
+        Xhprof::$time_limit = (int) ($config['time_limit'] ?? 0);
+        Xhprof::$log_num = (int) ($config['log_num'] ?? 1000);
+        Xhprof::$view_wtred = (int) ($config['view_wtred'] ?? 3);
+        if ($xhprof && $extension) {
+            Xhprof::xhprofStart();
+        }
+        $response = $handler($request);
+        if ($xhprof && $extension) {
+            Xhprof::xhprofStop();
+        }
         return $response;
     }
 }

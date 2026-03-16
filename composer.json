@@ -26,11 +26,10 @@
         "source": "https://github.com/erikwang2013/xhprof-webman"
       },
     "require": {
-        "php": ">=7.2",
+        "php": ">=8.0",
         "ext-xhprof": "*",
-        "workerman/webman": "*",
-        "monolog/monolog": "*",
-        "webman/redis": "*"
+        "workerman/webman": "^1.6|^2.0",
+        "webman/redis": "^1.0|^2.0"
     },
     "autoload": {
         "psr-4": {

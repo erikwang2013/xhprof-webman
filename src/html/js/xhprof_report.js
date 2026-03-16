@@ -208,7 +208,7 @@ $(document).ready(function() {
    */
 
   $("#funcSub").click(function(){
-    cur_params['symbol'] = $("input.function_typeahead").val();
+    cur_params['symbol'] = $("input.xhprof-search-input").val();
     location.search = '?' + jQuery.param(cur_params);
   });
 

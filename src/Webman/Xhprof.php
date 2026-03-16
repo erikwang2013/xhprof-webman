@@ -38,9 +38,8 @@ class Xhprof
         $run2 = self::getRequest()->get('run2');
         $source = self::getRequest()->get('source');
         $params = self::getRequest()->all();
-        $echo_page = "<html>";
-
-        $echo_page .= "<head><title>XHProf性能分析报告</title>";
+        $echo_page = "<html lang=\"zh-CN\">";
+        $echo_page .= "<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>XHProf 性能分析报告</title>";
         $echo_page .= XhprofDisplay::xhprof_include_js_css(self::$ui_html);
         $echo_page .= "</head>";
         $echo_page .= "<body>";
@@ -72,12 +71,16 @@ class Xhprof
         XHProfRunsDefault::save_run($xhprof_data, "xhprof_foo");
     }
 
-    protected static function _init()
+    protected static function _init(): void
     {
         date_default_timezone_set('PRC');
-        $extension = extension_loaded('xhprof');
-        if(false==$extension) return self::getResponse()->withBody("请安装xhprof扩展");
-        $redis=extension_loaded("redis");
-        if(false==$redis) return self::getResponse()->withBody("请安装redis扩展");
+        if (!extension_loaded('xhprof')) {
+            self::getResponse()->withBody('请安装xhprof扩展');
+            return;
+        }
+        if (!extension_loaded('redis')) {
+            self::getResponse()->withBody('请安装redis扩展');
+            return;
+        }
     }
 }

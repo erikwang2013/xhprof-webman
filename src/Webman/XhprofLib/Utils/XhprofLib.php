@@ -85,6 +85,11 @@ class XhprofLib
     XhprofDisplay::$diff_mode = $diff_report;
     XhprofDisplay::$sort_col = $sort_col;
     XhprofDisplay::$display_calls = $display_calls;
+    XhprofDisplay::$vwbar = 'class="vwbar"';
+    XhprofDisplay::$vbar = 'class="vbar"';
+    XhprofDisplay::$vbbar = 'class="vbbar"';
+    XhprofDisplay::$vrbar = 'class="vrbar"';
+    XhprofDisplay::$vgbar = 'class="vgbar"';
   }
 
   /*

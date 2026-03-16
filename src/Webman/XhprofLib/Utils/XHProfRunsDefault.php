@@ -58,9 +58,13 @@ class XHProfRunsDefault implements XHProfRuns
         $num = Redis::incr(Xhprof::$key_prefix . ":run_id_num");
         if ($num > Xhprof::$log_num) {
             $old_run_id = Redis::rpop(Xhprof::$key_prefix . ':run_id');
-            Redis::setNex();
-            Redis::del(Xhprof::$key_prefix . ':request_log:' . $old_run_id,Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id);
-            Redis::decr(Xhprof::$key_prefix . ':run_id_num');  //计数-1
+            if ($old_run_id !== null) {
+                Redis::del(
+                    Xhprof::$key_prefix . ':request_log:' . $old_run_id,
+                    Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id
+                );
+                Redis::decr(Xhprof::$key_prefix . ':run_id_num');  //计数-1
+            }
         }
         return true;
     }
@@ -138,46 +142,27 @@ class XHProfRunsDefault implements XHProfRuns
             if (!$res) continue;
             $request_arr = json_decode($res, true);
             if (!is_array($request_arr)) continue;
-            //耗时是否标红显示
-            $wtClass = $request_arr['wt'] > Xhprof::$view_wtred ? "red" : "";
+            $wtClass = $request_arr['wt'] > Xhprof::$view_wtred ? 'xp-wt-warn' : '';
             $http = Xhprof::getRequest()->header('x-forwarded-proto');
             $http = !empty($http) ? $http . ":" : "http:";
             $path = $http . Xhprof::getRequest()->url();
             $tr = '<tr>'
-                . '<td>' . $request_arr['method'] . '</td>'
-                . '<td><a href="' . htmlentities($path) . '?all=1&run=' . $run_id . '&source=xhprof_foo&requrl=' . urlencode($request_arr['request_uri']) . '">' . $request_arr['request_uri'] . "</a></td>"
-                . '<td>' . date("Y-m-d H:i:s", $request_arr['create_time']) . '</td>'
-                . '<td class="' . $wtClass . '">' . $request_arr['wt'] . '</small></small>'
+                . '<td>' . htmlspecialchars($request_arr['method']) . '</td>'
+                . '<td><a href="' . htmlspecialchars($path) . '?all=1&run=' . $run_id . '&source=xhprof_foo&requrl=' . urlencode($request_arr['request_uri']) . '">' . htmlspecialchars($request_arr['request_uri']) . '</a></td>'
+                . '<td>' . date('Y-m-d H:i:s', $request_arr['create_time']) . '</td>'
+                . '<td class="' . trim($wtClass) . '">' . $request_arr['wt'] . '</td>'
                 . '<td>' . $request_arr['mu'] . '</td>'
-                . '<td>' . $request_arr['ip'] . '</td>'
+                . '<td>' . htmlspecialchars($request_arr['ip']) . '</td>'
                 . '</tr>';
             $table_html .= $tr;
         }
 
-        $str_html = <<<HTML
-<div class="container-fluid" style="width: 90%">
-<div class="row">
-<div class="col-xs-12">
-<!--第二步：添加如下 HTML 代码-->
-<table id="table_id_example" class="table table-bordered table-hover">
-    <thead>
-        <tr>
-            <th width="40">方法</th>
-            <th>请求地址</th>
-            <th>请求时间</th>
-            <th width="90">运行耗时(s)</th>
-            <th width="100">内存占用(Mb)</th>
-            <th width="100">IP地址</th>
-        </tr>
-    </thead>
-    <tbody>
-        {$table_html}
-    </tbody>
-</table>
-</div>
-</div>
-</div>
-HTML;
+        $str_html = '<div class="xp-main">'
+            . '<div class="xp-card"><div class="xp-card-title">请求记录</div>'
+            . '<div class="xp-table-wrap"><table id="table_id_example" class="xp-table xp-runs-table">'
+            . '<thead><tr>'
+            . '<th>方法</th><th>请求地址</th><th>请求时间</th><th>耗时(s)</th><th>内存(Mb)</th><th>IP</th>'
+            . '</tr></thead><tbody>' . $table_html . '</tbody></table></div></div></div>';
         return $str_html;
     }
 }

@@ -410,16 +410,14 @@ class XhprofDisplay
     }
 
 
-    $links[] = '<div class="input-group" style="width: 400px;"> <input type="text" class="public static function_typeahead form-control" placeholder="查找 函数/方法名..."> <span class="input-group-btn"> <button class="btn btn-default" type="button" id="funcSub">搜索</button> </span> </div>';
+    $links[] = '<div class="xp-search"><input type="text" class="xhprof-search-input" placeholder="查找 函数/方法名..." id="xhprofFuncSearch"><button type="button" id="funcSub">搜索</button></div>';
     $echo_page = XhprofDisplay::xhprof_render_actions($links);
 
 
     // data tables
     if (!empty($rep_symbol)) {
       if (!isset($symbol_tab[$rep_symbol])) {
-        $echo_page .= '<div class="container-fluid" style="width: 90%"> <div class="row"> <div class="col-xs-12">';  //开始
-        $echo_page .= "<hr>Symbol <b>$rep_symbol</b> not found in XHProf run</b><hr>";
-        $echo_page .= '</div></div></div>';
+        $echo_page .= '<div class="xp-main"><div class="xp-card"><p class="xp-card-title">Symbol <b>' . htmlspecialchars($rep_symbol) . '</b> not found in XHProf run.</p></div></div>';
       }
 
       /* single public static function report with parent/child information */
@@ -539,11 +537,7 @@ class XhprofDisplay
     // Toggle $odd_or_even
     $odd_even = 1 - $odd_even;
     $echo_page = "";
-    if ($odd_even) {
-      $echo_page .= "<tr>";
-    } else {
-      $echo_page .= '<tr bgcolor="#e5e5e5">';
-    }
+    $echo_page .= $odd_even ? '<tr>' : '<tr class="xp-tr-alt">';
 
     $href = "$base_path?" .
       http_build_query(XhprofLib::xhprof_array_set(
@@ -624,9 +618,9 @@ class XhprofDisplay
 
 
     //$echo_page ='<h3 align=center>'.$title.' '.$display_link.'</h3><br>';
-    $echo_page = '<div style="overflow-x: scroll;overflow-y: hidden;">';
-    $echo_page .= '<table class="table table-condensed table-bordered">';
-    $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
+    $echo_page = '<div class="xp-card"><div class="xp-card-title">' . htmlspecialchars(strip_tags($title)) . ' ' . $display_link . '</div>';
+    $echo_page .= '<div class="xp-table-wrap"><table class="xp-table">';
+    $echo_page .= '<thead><tr>';
 
     foreach ($stats as $stat) {
       $desc = XhprofDisplay::stat_description($stat);
@@ -639,10 +633,10 @@ class XhprofDisplay
       }
 
       if ($stat == "fn")
-        $echo_page .= "<th align=left><nobr>$header</th>";
+        $echo_page .= "<th><nobr>$header</th>";
       else $echo_page .= "<th " . $vwbar . "><nobr>$header</th>";
     }
-    $echo_page .= "</tr>\n";
+    $echo_page .= "</tr></thead>\n<tbody>";
 
     if ($limit >= 0) {
       $limit = min($size, $limit);
@@ -656,10 +650,11 @@ class XhprofDisplay
         $echo_page .= XhprofDisplay::print_function_info($url_params, $flat_data[$size - $i - 1]);
       }
     }
-    $echo_page .= "</table>";
-    $echo_page .= "</div>";
-
-    if ($display_link) $echo_page .= '<div style="text-align: left; padding: 2em">' . $display_link . '</div>';
+    $echo_page .= '</tbody></table></div>';
+    if ($display_link) {
+      $echo_page .= '<div style="padding: 16px 20px">' . $display_link . '</div>';
+    }
+    $echo_page .= '</div>';
     return $echo_page;
   }
 
@@ -683,9 +678,9 @@ class XhprofDisplay
     $display_calls = XhprofDisplay::$display_calls;
     $base_path = XhprofDisplay::base_path();
 
-    $echo_page = '<div class="container-fluid" style="width: 90%"> <div class="row"> <div class="col-xs-12">';  //开始
+    $echo_page = '<div class="xp-main">';
     $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
-    $echo_page .= '<div class="well well-sm">';
+    $echo_page .= '<div class="xp-summary">';
     if ($diff_mode) {
       $base_url_params = XhprofLib::xhprof_array_unset(
         XhprofLib::xhprof_array_unset(
@@ -707,10 +702,8 @@ class XhprofDisplay
           $run2
         ));
 
-      $echo_page .= "<h3><center>Overall Diff Summary</center></h3>";
-      $echo_page .= '<table border=1 cellpadding=2 cellspacing=1 width="30%" '
-        . 'rules=rows bordercolor="#bdc7d8" align=center>' . "\n";
-      $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
+      $echo_page .= '<h3 style="margin:0 0 12px 0;font-size:15px">Overall Diff Summary</h3>';
+      $echo_page .= '<table class="xp-table"><tr>';
       $echo_page .= "<th></th>";
       $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link("Run #$run1", $href1) . "</th>";
       $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link("Run #$run2", $href2) . "</th>";
@@ -736,55 +729,37 @@ class XhprofDisplay
         $echo_page .= XhprofDisplay::print_td_num($totals_2[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($totals_2[$m] - $totals_1[$m], $format_cbk[$m], true);
         $echo_page .= XhprofDisplay::print_td_pct($totals_2[$m] - $totals_1[$m], $totals_1[$m], true);
-        $echo_page .= '<tr>';
+        $echo_page .= '</tr>';
       }
       $echo_page .= '</table>';
 
-      //    $callgraph_report_title = '[View Regressions/Improvements using Callgraph Diff]';
-
     } else {
-      $echo_page .= "<p><center>\n";
-
-      //取信息
       $request_info = XhprofLib::getRequestLog(Xhprof::getRequest()->get('run')) ?: [];
-      $request_uri = isset($request_info['request_uri']) ? urldecode($request_info['request_uri']) : "";
+      $request_uri = isset($request_info['request_uri']) ? htmlspecialchars(urldecode($request_info['request_uri'])) : "";
       $method = $request_info['method'] ?? "";
       $create_time_text = "";
-      if (isset($request_info['create_time']) && !empty($request_info['create_time'])) $create_time_text = date('Y-m-d H:i:s', $request_info['create_time']);
+      if (isset($request_info['create_time']) && !empty($request_info['create_time'])) {
+        $create_time_text = date('Y-m-d H:i:s', $request_info['create_time']);
+      }
       $ip = $request_info['ip'] ?? "";
 
-      $echo_page .= '<table cellpadding=2 cellspacing=1 width="100%" '
-        . 'bgcolor="#bdc7d8" align=center>' . "\n";
-      $echo_page .= "<tr>";
-      $echo_page .= "<td style='text-align:center;font-weight:bold;height: 36px;' colspan='8'>{$request_uri}</td>";
-      $echo_page .= "</tr>";
-
-      $echo_page .= "<tr>";
-      $echo_page .= "<td style='text-align:right; font-weight:bold'>请求方法：</td>";
-      $echo_page .= "<td>{$method}</td>";
-      $echo_page .= "<td style='text-align:right; font-weight:bold'>请求时间：</td>";
-      $echo_page .= "<td>{$create_time_text}</td>";
-      $echo_page .= "<td style='text-align:right; font-weight:bold'>来源IP：</td>";
-      $echo_page .= "<td>{$ip}</td>";
+      $echo_page .= '<table class="xp-table"><tr>';
+      $echo_page .= "<td colspan='8' style='text-align:center;font-weight:600'>{$request_uri}</td>";
+      $echo_page .= "</tr><tr>";
+      $echo_page .= "<td>请求方法</td><td>{$method}</td>";
+      $echo_page .= "<td>请求时间</td><td>{$create_time_text}</td>";
+      $echo_page .= "<td>来源IP</td><td>{$ip}</td>";
       if ($display_calls) {
-        $echo_page .= "<td style='text-align:right; font-weight:bold'>函数/方法调用总次数：</td>";
-        $echo_page .= "<td>" . number_format($totals['ct']) . "</td>";
+        $echo_page .= "<td>函数/方法调用总次数</td><td>" . number_format($totals['ct']) . "</td>";
       }
-      $echo_page .= "</tr>";
-      $echo_page .= "<tr>";
+      $echo_page .= "</tr><tr>";
       foreach ($metrics as $metric) {
-        $echo_page .= "<td style='text-align:right; font-weight:bold'>"
-          . str_replace("<br>", " ", XhprofDisplay::stat_description($metric)) . "：</td>";
-        $echo_page .= "<td>" . number_format($totals[$metric]) .  " "
-          . $possible_metrics[$metric][1] . "</td>";
+        $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::stat_description($metric)) . "</td>";
+        $echo_page .= "<td>" . number_format($totals[$metric]) . " " . $possible_metrics[$metric][1] . "</td>";
       }
-      $echo_page .= "</tr>";
-
-      $echo_page .= "</table>";
-      $echo_page .= "</center></p>\n";
+      $echo_page .= "</tr></table>";
     }
     $echo_page .= '</div>';
-    $echo_page .= '</div></div><div class="row"> <div class="col-xs-12">';
 
 
 
@@ -816,7 +791,7 @@ class XhprofDisplay
       if ($all)  $title = "Sorted by $desc";
     }
     $echo_page .= XhprofDisplay::print_flat_data($url_params, $title, $flat_data, $limit);
-    $echo_page .= '</div></div></div>';  //结束
+    $echo_page .= '</div>';
     return $echo_page;
   }
 
@@ -880,8 +855,9 @@ class XhprofDisplay
     $title = 'Child public static function';
     if ($parent) $title = 'Parent public static function';
     if (count($results) > 1) $title .= 's';
-    $echo_page = "<tr bgcolor='#e0e0ff'><td>";
-    $echo_page .= "<b><i><center>" . $title . "</center></i></b>";
+    $colspan = count(XhprofDisplay::$pc_stats);
+    $echo_page = "<tr class=\"xp-pc-section-title\"><td colspan=\"{$colspan}\">";
+    $echo_page .= "<b>" . $title . "</b>";
     $echo_page .= "</td></tr>";
 
     $odd_even = 0;
@@ -970,7 +946,7 @@ class XhprofDisplay
     $display_calls = XhprofDisplay::$display_calls;
     $base_path = XhprofDisplay::base_path();
 
-    $echo_page = '<div class="container-fluid" style="width: 90%;"> <div class="row"> <div class="col-xs-12">';  //开始
+    $echo_page = '<div class="xp-main"><div class="xp-card">';
     $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
     $diff_text = "";
     $regr_impr = "";
@@ -1070,9 +1046,8 @@ class XhprofDisplay
     $echo_page .= "</center></h4>";
 
     //    print('<table class="table table-condensed table-bordered">');
-    $echo_page .= '<table border=1 cellpadding=2 cellspacing=1 width="100%" '
-      . 'rules=rows bordercolor="#bdc7d8" align=center class="table table-condensed">' . "\n";
-    $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
+    $echo_page .= '<div class="xp-table-wrap"><table class="xp-table xp-pc-section">';
+    $echo_page .= '<thead><tr>';
 
     foreach ($pc_stats as $stat) {
       $desc = XhprofDisplay::stat_description($stat);
@@ -1089,13 +1064,13 @@ class XhprofDisplay
       }
 
       if ($stat == "fn")
-        $echo_page .= "<th align=left><nobr>$header</th>";
+        $echo_page .= "<th><nobr>$header</th>";
       else $echo_page .= "<th " . $vwbar . "><nobr>$header</th>";
     }
-    $echo_page .= "</tr>";
+    $echo_page .= "</tr></thead><tbody>";
 
-    $echo_page .= "<tr bgcolor='#e0e0ff'><td>";
-    $echo_page .= "<b><i><center>Current Function</center></i></b>";
+    $echo_page .= "<tr class=\"xp-pc-current\"><td colspan=\"" . (count($pc_stats)) . "\">";
+    $echo_page .= "<b>Current Function</b>";
     $echo_page .= "</td></tr>";
 
     $echo_page .= "<tr>";
@@ -1116,8 +1091,8 @@ class XhprofDisplay
       $echo_page .= XhprofDisplay::print_td_pct($symbol_info[$metric], $totals[$metric], ($sort_col == $metric));
     }
     $echo_page .= "</tr>";
-    $echo_page .= "<tr bgcolor='#ffffff'>";
-    $echo_page .= "<td style='text-align:right;color:blue'>"
+    $echo_page .= "<tr class=\"xp-excl-row\">";
+    $echo_page .= "<td style='text-align:right'>"
       . "Exclusive Metrics $diff_text for Current Function</td>";
 
     if ($display_calls) {
@@ -1198,8 +1173,8 @@ class XhprofDisplay
       );
     }
 
-    $echo_page .= "</table>";
-    $echo_page .= '</div></div></div>';  //结束
+    $echo_page .= "</tbody></table></div>";
+    $echo_page .= '</div></div>';
 
     // These will be used for pop-up tips/help.
     // Related javascript code is in: xhprof_report.js
@@ -1360,48 +1335,17 @@ class XhprofDisplay
     $top_link_query_string = "$base_path?" . http_build_query($base_url_params);
     $li_html = "";
     if (isset($url_params['run']) && isset($url_params['symbol'])) {
-      $li_html = <<<HTML
-<li><a href="{$base_path}">首页</a></li>
-<li><a href="{$top_link_query_string}">运行报告</a></li>
-<li class="active"><a >方法详情</a></li>
-HTML;
+      $li_html = '<li><a href="' . $base_path . '">首页</a></li><li><a href="' . $top_link_query_string . '">运行报告</a></li><li class="active"><span>方法详情</span></li>';
     } else if (isset($url_params['run'])) {
-      $li_html = <<<HTML
-<li><a href="{$base_path}">首页</a></li>
-<li class="active"><a href="{$top_link_query_string}">运行报告</a></li>
-HTML;
+      $li_html = '<li><a href="' . $base_path . '">首页</a></li><li class="active"><a href="' . $top_link_query_string . '">运行报告</a></li>';
     } else {
-      $li_html = <<<HTML
-<li class="active"><a href="{$base_path}">首页</a></li>
-HTML;
+      $li_html = '<li class="active"><a href="' . $base_path . '">首页</a></li>';
     }
 
-    $title_html = <<<HTML
-<nav class="navbar navbar-inverse navbar-static-top">
-	<div class="container" style="width: 90%;">
-		<div class="navbar-header">
-			<button class="navbar-toggle" data-toggle="collapse" data-target="#response">
-				<span class="icon-bar"></span>
-				<span class="icon-bar"></span>
-				<span class="icon-bar"></span>
-			</button>
-			<a class="navbar-brand">XHProf性能分析</a>
-		</div>
-
-		<!-- 移动端响应式 -->
-		<div class="collapse navbar-collapse" id="response">
-		<ul class="nav navbar-nav navbar-left">
-			{$li_html}
-		</ul>
-
-		<ul class="nav navbar-nav navbar-right">
-			<li><a href="https://github.com/erikwang2013/xhprof-webman" target="_blank" title="感谢Star支持！比心心！">>>> GitHub</a></li>
-		</ul>
-		</div>
-	</div>
-</nav>
-HTML;
-
-    return $title_html;
+    return '<nav class="xp-nav"><div class="xp-nav-inner">'
+      . '<a href="' . $base_path . '" class="xp-brand"><span class="xp-brand-icon"></span>XHProf 性能分析</a>'
+      . '<ul class="xp-nav-links">' . $li_html . '</ul>'
+      . '<div class="xp-nav-extra"><a href="https://github.com/erikwang2013/xhprof-webman" target="_blank" rel="noopener" title="GitHub">GitHub</a></div>'
+      . '</div></nav>';
   }
 }
