@@ -52,23 +52,22 @@ class TestController
 
 ```
 
-3. 路由增加以下代码
+3. 路由增加以下代码（页面入口 + 静态资源，静态资源从包内直接提供，无需复制到 public）
+
 ```
 Route::get('/test', ['app\controller\TestController','index']);
-
+Route::get('/xhprof-assets/{path:.+}', [\Aaron\Xhprof\Webman\StaticController::class, 'serve']);
 ```
 
-4. 基础配置在config/plugin/aaron-dev/xhprof/xhprof.php中
+4. 基础配置在 config/plugin/aaron-dev/xhprof/xhprof.php 中
 
 ```
-
 'enable' => true,
-'time_limit' => 0,  //仅记录响应超过多少秒的请求  默认0记录所有
-'log_num' => 1000, //仅记录最近的多少次请求(最大值有待观察，看日志、查看响应时间) 默认1000
-'view_wtred' => 3, //列表耗时超过多少秒标红 默认3s
-'ignore_url_arr' => ["/test"],  //忽略URL配置
-
-
+'time_limit' => 0,
+'log_num' => 1000,
+'view_wtred' => 3,
+'ignore_url_arr' => ["/test"],
+'assets_url' => '/xhprof-assets',  // 静态资源 URL，须与上面路由中的 path 一致
 ```
 
 

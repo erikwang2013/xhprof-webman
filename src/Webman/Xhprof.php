@@ -15,7 +15,8 @@ class Xhprof
     public static $key_prefix = 'xhprof'; //redis前缀
     public static $log_num = 1000;  //仅记录最近的多少次请求(最大值有待观察，看日志、查看响应时间) 默认1000
     public static $view_wtred = 3; //列表耗时超过多少秒标红 默认3s
-    public static $ui_html = '../html';
+    /** @deprecated 已改为从 config plugin.aaron-dev.xhprof.xhprof.assets_url 读取，包内静态资源无需复制 */
+    public static $ui_html = '';
     public static $symbol_lookup_url = "";
 
     public static function getRequest()
@@ -39,8 +40,12 @@ class Xhprof
         $source = self::getRequest()->get('source');
         $params = self::getRequest()->all();
         $echo_page = "<html lang=\"zh-CN\">";
+        $assetsUrl = config('plugin.aaron-dev.xhprof.xhprof.assets_url', '');
+        if ($assetsUrl === '') {
+            $assetsUrl = self::$ui_html ?: '/xhprof-assets';
+        }
         $echo_page .= "<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>XHProf 性能分析报告</title>";
-        $echo_page .= XhprofDisplay::xhprof_include_js_css(self::$ui_html);
+        $echo_page .= XhprofDisplay::xhprof_include_js_css($assetsUrl);
         $echo_page .= "</head>";
         $echo_page .= "<body>";
         $echo_page .= XhprofDisplay::displayXHProfReport(

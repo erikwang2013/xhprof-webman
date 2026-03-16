@@ -11,9 +11,9 @@ class Install
     /**
      * @var array
      */
+    // 仅复制插件配置；静态资源由 StaticController 从包内直接提供，无需复制
     protected static $pathRelation = [
         'config/plugin/aaron-dev/xhprof' => 'config/plugin/aaron-dev/xhprof',
-        '../html'=>'public/html'
     ];
 
     /**
