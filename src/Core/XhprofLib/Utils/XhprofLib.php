@@ -14,7 +14,7 @@ class XhprofLib
 
   public static function xhprof_error($message)
   {
-    Xhprof::$logger->error("Xhprof：" . $message);
+    Xhprof::getLogger()->error("Xhprof：" . $message);
     return;
   }
 
@@ -52,7 +52,7 @@ class XhprofLib
       if (array_key_exists($sort, $sortable_columns)) {
         $sort_col = $sort;
       } else {
-        Xhprof::$logger->error("Invalid Sort Key $sort specified in URL");
+        Xhprof::getLogger()->error("Invalid Sort Key $sort specified in URL");
       }
     }
 
@@ -477,7 +477,7 @@ class XhprofLib
 
   public static function xhprof_get_param_helper($param)
   {
-    $get_data = Xhprof::$request->all();
+    $get_data = Xhprof::getRequest()->all();
     return isset($get_data[$param]) ? $get_data[$param] : null;
   }
 
@@ -565,7 +565,7 @@ class XhprofLib
     $ignoreArr = Xhprof::$ignore_url_arr;
     if (!is_array($ignoreArr)) return true;
     //当前请求url
-    $request_uri = Xhprof::$request->uri();
+    $request_uri = Xhprof::getRequest()->uri();
     if (empty($request_uri)) return false;
     $request_uri = strtolower($request_uri);
     //是否需要忽略当前url
@@ -584,7 +584,7 @@ class XhprofLib
    */
   public static function xhprof_get_ip()
   {
-    return Xhprof::$request->getRealIp();
+    return Xhprof::getRequest()->getRealIp();
   }
 
   /**
@@ -594,7 +594,7 @@ class XhprofLib
   public static function getRequestLog($run_id)
   {
     $key = Xhprof::$key_prefix . ":request_log:" . $run_id;
-    $info = Xhprof::$cache->get($key);
+    $info = Xhprof::getCache()->get($key);
     if ($info) return json_decode($info, true);
     return false;
   }

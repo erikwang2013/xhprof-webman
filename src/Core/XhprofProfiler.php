@@ -28,7 +28,7 @@ class XhprofProfiler
 
     public static function bootstrap(): void
     {
-        $config = Xhprof::$config;
+        $config = Xhprof::getConfig();
         if ($config === null) {
             return;
         }
@@ -41,10 +41,11 @@ class XhprofProfiler
 
     public static function isEnabled(): bool
     {
-        if (Xhprof::$config === null) {
+        $cfg = Xhprof::getConfig();
+        if ($cfg === null) {
             return false;
         }
-        $config = Xhprof::$config->get('xhprof', []);
+        $config = $cfg->get('xhprof', []);
         return (bool) ($config['enable'] ?? false);
     }
 }

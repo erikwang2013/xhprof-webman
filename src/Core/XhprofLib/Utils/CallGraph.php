@@ -88,7 +88,7 @@ class CallGraph
       $output = stream_get_contents($pipes[1]);
       $err = stream_get_contents($pipes[2]);
       if (!empty($err)) {
-        Xhprof::$logger->error("failed to execute cmd: \"$cmd\". stderr: `$err'\n");
+        Xhprof::getLogger()->error("failed to execute cmd: \"$cmd\". stderr: `$err'\n");
         return;
       }
 
@@ -97,7 +97,7 @@ class CallGraph
       proc_close($process);
       return $output;
     }
-    Xhprof::$logger->error("failed to execute cmd \"$cmd\"");
+    Xhprof::getLogger()->error("failed to execute cmd \"$cmd\"");
     return;
   }
 
@@ -407,7 +407,7 @@ class CallGraph
       $critical_path
     );
     if (!$content) {
-      Xhprof::$logger->error("Error: either we can not find profile data for run_id " . $run_id
+      Xhprof::getLogger()->error("Error: either we can not find profile data for run_id " . $run_id
         . " or the threshold " . $threshold . " is too small or you do not"
         . " have 'dot' image generation utility installed.");
       return;

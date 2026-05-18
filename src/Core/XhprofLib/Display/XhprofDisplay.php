@@ -13,7 +13,7 @@ class XhprofDisplay
 
   public static function base_path()
   {
-    $arr = parse_url(Xhprof::$request->uri());
+    $arr = parse_url(Xhprof::getRequest()->uri());
     return rtrim($arr['path'], '/\\');
   }
 
@@ -190,7 +190,7 @@ class XhprofDisplay
   public static function xhprof_include_js_css($ui_dir_url_path = null)
   {
 
-    if (empty($ui_dir_url_path)) $ui_dir_url_path = rtrim(dirname(Xhprof::$request->url()), '/\\');
+    if (empty($ui_dir_url_path)) $ui_dir_url_path = rtrim(dirname(Xhprof::getRequest()->url()), '/\\');
 
     // style sheets
     $echo_page = "<link href='$ui_dir_url_path/css/xhprof.css' rel='stylesheet' " .
@@ -734,7 +734,7 @@ class XhprofDisplay
       $echo_page .= '</table>';
 
     } else {
-      $request_info = XhprofLib::getRequestLog(Xhprof::$request->get('run')) ?: [];
+      $request_info = XhprofLib::getRequestLog(Xhprof::getRequest()->get('run')) ?: [];
       $request_uri = isset($request_info['request_uri']) ? htmlspecialchars(urldecode($request_info['request_uri'])) : "";
       $method = $request_info['method'] ?? "";
       $create_time_text = "";

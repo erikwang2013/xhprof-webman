@@ -14,7 +14,7 @@ class RedisAdapter implements CacheInterface
         return Redis::get($key);
     }
 
-    public function set(string $key, mixed $value): bool
+    public function set(string $key, mixed $value): mixed
     {
         return Redis::set($key, $value);
     }
