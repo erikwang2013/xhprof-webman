@@ -1,41 +1,51 @@
 <?php
+
 declare(strict_types=1);
 
-namespace Aaron\Xhprof\Webman;
+namespace ErikWang2013\Xhprof\Webman;
 
 use Webman\MiddlewareInterface;
 use Webman\Http\Response;
 use Webman\Http\Request;
+use ErikWang2013\Xhprof\Core\XhprofMiddleware as CoreMiddleware;
+use ErikWang2013\Xhprof\Core\Xhprof;
+use ErikWang2013\Xhprof\Core\XhprofProfiler;
+use ErikWang2013\Xhprof\Webman\Adapter\RequestAdapter;
+use ErikWang2013\Xhprof\Webman\Adapter\ResponseAdapter;
+use ErikWang2013\Xhprof\Webman\Adapter\ConfigAdapter;
+use ErikWang2013\Xhprof\Webman\Adapter\RedisAdapter;
+use ErikWang2013\Xhprof\Webman\Adapter\LogAdapter;
 
-/**
- * Class StaticFile
- * @package app\middleware
- */
 class XhprofMiddleware implements MiddlewareInterface
 {
     public function process(Request $request, callable $handler): Response
     {
-        $config = config('plugin.aaron-dev.xhprof.xhprof', []);
-        $xhprof = $config['enable'] ?? false;
+        $req = new RequestAdapter($request);
+        $res = new ResponseAdapter(response(''));
+
+        Xhprof::bootstrap($req, $res, new ConfigAdapter(), new RedisAdapter(), new LogAdapter());
+
+        $xhprof = XhprofProfiler::isEnabled();
         $extension = extension_loaded('xhprof');
+        $redis = extension_loaded('redis');
+
         if (!$extension) {
             return response()->withBody('请安装xhprof扩展');
         }
-        $redis = extension_loaded('redis');
         if (!$redis) {
             return response()->withBody('请安装redis扩展');
         }
-        Xhprof::$ignore_url_arr = $config['ignore_url_arr'] ?? ['/test'];
-        Xhprof::$time_limit = (int) ($config['time_limit'] ?? 0);
-        Xhprof::$log_num = (int) ($config['log_num'] ?? 1000);
-        Xhprof::$view_wtred = (int) ($config['view_wtred'] ?? 3);
+
         if ($xhprof && $extension) {
             Xhprof::xhprofStart();
         }
+
         $response = $handler($request);
+
         if ($xhprof && $extension) {
             Xhprof::xhprofStop();
         }
+
         return $response;
     }
 }
