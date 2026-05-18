@@ -30,7 +30,22 @@ class ResponseAdapter implements ResponseInterface
 
     public function file(string $path): self
     {
-        $this->response = download($path, '');
+        if (file_exists($path)) {
+            $content = file_get_contents($path);
+            $ext = pathinfo($path, PATHINFO_EXTENSION);
+            $type = [
+                'css' => 'text/css',
+                'js' => 'application/javascript',
+                'png' => 'image/png',
+                'gif' => 'image/gif',
+                'jpg' => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'svg' => 'image/svg+xml',
+            ][$ext] ?? 'application/octet-stream';
+            $this->response = response($content)->header(['Content-Type' => $type]);
+        } else {
+            $this->response = response('', 404);
+        }
         return $this;
     }
 

@@ -7,7 +7,7 @@ namespace ErikWang2013\Xhprof\Webman;
 use Webman\MiddlewareInterface;
 use Webman\Http\Response;
 use Webman\Http\Request;
-use ErikWang2013\Xhprof\Core\XhprofMiddleware as CoreMiddleware;
+
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
 use ErikWang2013\Xhprof\Webman\Adapter\RequestAdapter;

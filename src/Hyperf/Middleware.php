@@ -39,9 +39,14 @@ class Middleware implements MiddlewareInterface
             new LogAdapter($container->get(LoggerInterface::class))
         );
 
+        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
+        if ($enabled) {
+            Xhprof::xhprofStart();
+        }
+
         $response = $handler->handle($request);
 
-        if (XhprofProfiler::isEnabled() && extension_loaded('xhprof')) {
+        if ($enabled) {
             Xhprof::xhprofStop();
         }
 

@@ -23,9 +23,14 @@ class Middleware
 
         Xhprof::bootstrap($req, $res, new ConfigAdapter(), new RedisAdapter(), new LogAdapter());
 
+        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
+        if ($enabled) {
+            Xhprof::xhprofStart();
+        }
+
         $response = $next($request);
 
-        if (XhprofProfiler::isEnabled() && extension_loaded('xhprof')) {
+        if ($enabled) {
             Xhprof::xhprofStop();
         }
 

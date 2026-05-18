@@ -53,6 +53,13 @@ class RequestAdapter implements RequestInterface
 
     public function getRealIp(): string
     {
-        return $this->request->getServerParams()['remote_addr'] ?? '127.0.0.1';
+        $params = $this->request->getServerParams();
+        if (!empty($params['x-forwarded-for'])) {
+            return trim(explode(',', $params['x-forwarded-for'])[0]);
+        }
+        if (!empty($params['x-real-ip'])) {
+            return $params['x-real-ip'];
+        }
+        return $params['remote_addr'] ?? '127.0.0.1';
     }
 }

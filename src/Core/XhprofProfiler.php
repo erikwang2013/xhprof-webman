@@ -11,14 +11,8 @@ class XhprofProfiler
     public static function init(): void
     {
         date_default_timezone_set('PRC');
-        if (!extension_loaded('xhprof')) {
-            Xhprof::$response->withBody('请安装xhprof扩展');
-            return;
-        }
-        if (!extension_loaded('redis')) {
-            Xhprof::$response->withBody('请安装redis扩展');
-            return;
-        }
+        // Extension checks are handled by framework middleware layers;
+        // init() is called by xhprofStart(), which is only invoked after those checks pass.
     }
 
     public static function start(): void

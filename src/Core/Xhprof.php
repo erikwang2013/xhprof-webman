@@ -94,10 +94,10 @@ class Xhprof
     ): void {
         if ($request !== null) {
             self::$request = $request;
-            self::$response = $response;
-            self::$config = $config;
-            self::$cache = $cache;
-            self::$logger = $logger;
+            if ($response !== null) self::$response = $response;
+            if ($config !== null) self::$config = $config;
+            if ($cache !== null) self::$cache = $cache;
+            if ($logger !== null) self::$logger = $logger;
         } else {
             self::autoDetect();
         }
