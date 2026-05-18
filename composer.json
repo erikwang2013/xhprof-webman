@@ -1,12 +1,15 @@
 {
     "name": "aaron-dev/xhprof-webman",
-    "description": "aaron-dev/xhprof-webman is a code performance analysis plugin that is compatible with webman. Mainly optimize and adjust the old and unusable xhprof for adapting to webman, making installation simple and fast.Developers can quickly access performance analysis reports through browsers to troubleshoot code performance issues.",
+    "description": "aaron-dev/xhprof-webman is a code performance analysis plugin compatible with webman, Laravel, ThinkPHP and Hyperf. Uses xhprof extension for profiling, Redis for storage, provides browser-based performance analysis reports.",
     "keywords": [
-        "aaron",
-        "aaron-dev",
-        "erik",
+        "erikwang2013",
         "xhprof",
-        "webman"
+        "webman",
+        "laravel",
+        "thinkphp",
+        "hyperf",
+        "profiling",
+        "performance"
     ],
     "type": "library",
     "license": "MIT",
@@ -23,22 +26,29 @@
         "email": "erik@erik.xyz",
         "issues": "https://github.com/erikwang2013/xhprof-webman/issues",
         "source": "https://github.com/erikwang2013/xhprof-webman"
-      },
+    },
     "require": {
         "php": ">=8.0",
         "ext-xhprof": "*",
+        "ext-redis": "*"
+    },
+    "suggest": {
         "workerman/webman": "^2.1",
-        "webman/redis": "^2.1"
+        "webman/redis": "^2.1",
+        "laravel/framework": "^9.0|^10.0|^11.0",
+        "topthink/framework": "^6.0|^8.0",
+        "hyperf/framework": "^3.0"
     },
     "autoload": {
         "psr-4": {
-            "Aaron\\Xhprof\\Webman\\": "src/Webman"
+            "ErikWang2013\\Xhprof\\": "src/"
         }
     },
-    "repositories": {
-        "packagist": {
-          "type": "composer",
-          "url": "https://repo.packagist.org/"
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ErikWang2013\\Xhprof\\Laravel\\XhprofServiceProvider"
+            ]
         }
-      }
+    }
 }
