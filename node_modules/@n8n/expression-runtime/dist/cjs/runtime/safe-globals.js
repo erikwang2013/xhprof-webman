@@ -1,0 +1,160 @@
+// ============================================================================
+// Safe Wrappers for Security-Sensitive Globals
+// ============================================================================
+(function (factory) {
+    if (typeof module === "object" && typeof module.exports === "object") {
+        var v = factory(require, exports);
+        if (v !== undefined) module.exports = v;
+    }
+    else if (typeof define === "function" && define.amd) {
+        define(["require", "exports"], factory);
+    }
+})(function (require, exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.ExpressionError = exports.SafeError = exports.SafeObject = void 0;
+    exports.createSafeErrorSubclass = createSafeErrorSubclass;
+    exports.__sanitize = __sanitize;
+    /**
+     * SafeObject - Blocks dangerous Object methods that could lead to RCE
+     *
+     * Blocked methods:
+     * - defineProperty, setPrototypeOf: Prevent prototype pollution
+     * - getOwnPropertyDescriptor: Prevent property descriptor manipulation
+     * - __defineGetter__, __defineSetter__: Legacy descriptor manipulation
+     */
+    exports.SafeObject = new Proxy(Object, {
+        get(target, prop) {
+            // Block dangerous methods (return undefined)
+            const blockedMethods = [
+                'defineProperty',
+                'defineProperties',
+                'setPrototypeOf',
+                'getOwnPropertyDescriptor',
+                'getOwnPropertyDescriptors',
+                '__defineGetter__',
+                '__defineSetter__',
+                '__lookupGetter__',
+                '__lookupSetter__',
+            ];
+            if (blockedMethods.includes(prop)) {
+                return undefined;
+            }
+            // Block getPrototypeOf by throwing (more secure than returning undefined)
+            if (prop === 'getPrototypeOf') {
+                throw new Error('Object.getPrototypeOf is not allowed');
+            }
+            // Wrap Object.create to accept only one argument (blocks property descriptor injection)
+            if (prop === 'create') {
+                return (proto) => Object.create(proto);
+            }
+            // Allow other Object methods
+            const value = target[prop];
+            if (typeof value === 'function') {
+                // Use arrow function wrapper to preserve 'this' binding
+                return (...args) => value.apply(target, args);
+            }
+            return value;
+        },
+    });
+    /**
+     * Properties blocked on Error and all Error subclasses.
+     * These can be exploited for sandbox escape via V8's stack trace API.
+     */
+    const blockedErrorProperties = new Set([
+        'captureStackTrace',
+        'prepareStackTrace',
+        'stackTraceLimit',
+        '__defineGetter__',
+        '__defineSetter__',
+        '__lookupGetter__',
+        '__lookupSetter__',
+    ]);
+    /**
+     * SafeError - Blocks stack manipulation methods on Error constructor.
+     */
+    exports.SafeError = new Proxy(Error, {
+        get(target, prop) {
+            if (blockedErrorProperties.has(prop)) {
+                return undefined;
+            }
+            const value = target[prop];
+            if (typeof value === 'function') {
+                return (...args) => value.apply(target, args);
+            }
+            return value;
+        },
+        set(target, prop, value) {
+            // Block setting prepareStackTrace
+            if (prop === 'prepareStackTrace') {
+                return false;
+            }
+            target[prop] = value;
+            return true;
+        },
+        defineProperty() {
+            return false;
+        },
+    });
+    /**
+     * Creates a safe wrapper for Error subclasses (TypeError, SyntaxError, etc.)
+     * Blocks the same dangerous properties as SafeError for defense in depth.
+     */
+    function createSafeErrorSubclass(ErrorClass) {
+        return new Proxy(ErrorClass, {
+            get(target, prop) {
+                if (blockedErrorProperties.has(prop)) {
+                    return undefined;
+                }
+                const value = target[prop];
+                if (typeof value === 'function') {
+                    return (...args) => value.apply(target, args);
+                }
+                return value;
+            },
+            set() {
+                return false;
+            },
+            defineProperty() {
+                return false;
+            },
+        });
+    }
+    // ============================================================================
+    // ExpressionError - used by tournament-generated error handlers
+    // ============================================================================
+    class ExpressionError extends Error {
+        constructor(message) {
+            super(message);
+            this.name = 'ExpressionError';
+        }
+    }
+    exports.ExpressionError = ExpressionError;
+    // ============================================================================
+    // Runtime sanitizer for dynamic property access
+    // Generated by PrototypeSanitizer: obj[expr] → obj[this.__sanitize(expr)]
+    // Must match the blocklist in packages/workflow/src/expression-sandboxing.ts
+    // ============================================================================
+    const unsafeObjectProperties = new Set([
+        '__proto__',
+        'prototype',
+        'constructor',
+        '__defineGetter__',
+        '__defineSetter__',
+        '__lookupGetter__',
+        '__lookupSetter__',
+        'toString',
+        'valueOf',
+        'toLocaleString',
+        'hasOwnProperty',
+        'isPrototypeOf',
+        'propertyIsEnumerable',
+    ]);
+    function __sanitize(value) {
+        if (typeof value === 'string' && unsafeObjectProperties.has(value)) {
+            throw new ExpressionError(`Cannot access "${value}" due to security concerns`);
+        }
+        return value;
+    }
+});
+//# sourceMappingURL=safe-globals.js.map

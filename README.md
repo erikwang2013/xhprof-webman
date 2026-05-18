@@ -28,7 +28,7 @@ composer require aaron-dev/xhprof-webman
 
 ```
     '' => [
-        Aaron\Xhprof\Webman\XhprofMiddleware::class,
+        ErikWang2013\Xhprof\Webman\XhprofMiddleware::class,
     ]
 ```
 
@@ -40,7 +40,7 @@ composer require aaron-dev/xhprof-webman
 namespace app\controller;
 
 use support\Request;
-use Aaron\Xhprof\Webman\Xhprof;
+use ErikWang2013\Xhprof\Webman\Xhprof;
 
 class TestController
 {
@@ -56,7 +56,7 @@ class TestController
 
 ```
 Route::get('/test', ['app\controller\TestController','index']);
-Route::get('/xhprof-assets/{path:.+}', [\Aaron\Xhprof\Webman\StaticController::class, 'serve']);
+Route::get('/xhprof-assets/{path:.+}', [\ErikWang2013\Xhprof\Webman\StaticController::class, 'serve']);
 ```
 
 4. 基础配置在 config/plugin/aaron-dev/xhprof/xhprof.php 中
@@ -74,5 +74,13 @@ Route::get('/xhprof-assets/{path:.+}', [\Aaron\Xhprof\Webman\StaticController::c
 5. 然后重启服务就可以访问了。
 ![](./doc/1.jpg)
 ![](./doc/2.jpg)
+
+## 开源不易，欢迎支持
+
+| 微信 | 支付宝 |
+|:---:|:---:|
+| ![微信](./docs/weixinpay.png "微信") | ![支付宝](./docs/alipay.png "支付宝") |
+
+---
 
 本插件参考[phacility/xhprof](https://github.com/phacility/xhprof)、[phpxxb/xhprof](https://github.com/xiexianbo123/xhprof)
