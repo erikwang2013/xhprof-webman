@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Core\XhprofLib\Utils;
 
+use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 
 class CallGraph
