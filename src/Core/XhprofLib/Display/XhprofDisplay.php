@@ -500,9 +500,7 @@ class XhprofDisplay
 
     $class = XhprofDisplay::get_print_class($num, $bold);
     if (!empty($fmt_func) && is_numeric($num)) {
-      $num = call_user_func(function ($fmt_func) {
-        return $fmt_func;
-      }, $num);
+      $num = call_user_func($fmt_func, $num);
     }
     return "<td $attributes $class>$num</td>\n";
   }

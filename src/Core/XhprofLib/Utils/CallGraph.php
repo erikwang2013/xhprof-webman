@@ -58,6 +58,7 @@ class CallGraph
         break;
       case 'ps':
         $mime = 'application/postscript';
+        break;
       default:
         $mime = false;
     }

@@ -66,7 +66,8 @@ class XhprofLib
     $stats = array("fn");
     if ($display_calls) $stats = array("fn", "ct", "Calls%");
     $pc_stats = $stats;
-    $possible_metrics = XhprofLib::xhprof_get_possible_metrics($xhprof_data);
+    $metrics = array();
+    $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
     foreach ($possible_metrics as $metric => $desc) {
       if (!isset($xhprof_data["main()"][$metric])) continue;
       $metrics[] = $metric;
@@ -505,7 +506,7 @@ class XhprofLib
     $val = XhprofLib::xhprof_get_param_helper($param);
     if ($val === null) $val = $default;
     $val = trim($val);
-    if (true) return (float)$val;
+    return (float)$val;
     XhprofLib::xhprof_error("$param is $val. It must be a float.");
     return null;
   }

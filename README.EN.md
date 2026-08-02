@@ -1,19 +1,19 @@
-# XHProf 性能分析插件
+# XHProf Performance Profiler
 
-兼容 webman / Laravel / ThinkPHP / Hyperf 的代码性能分析插件。
+A code performance profiling plugin compatible with webman / Laravel / ThinkPHP / Hyperf.
 
-基于 xhprof 扩展采集数据并存入 Redis，开发者可通过浏览器快速访问性能分析报告，排查代码性能瓶颈。
+Collects profiling data via the xhprof extension and stores it in Redis. Developers can quickly access performance analysis reports through a browser to identify code performance bottlenecks.
 
-## 环境要求
+## Requirements
 
 - PHP >= 8.0
-- xhprof 扩展
-- redis 扩展
-- Redis 服务
+- xhprof extension
+- redis extension
+- Redis server
 
-## 安装
+## Installation
 
-php.ini 中增加 xhprof 配置：
+Add xhprof configuration in php.ini:
 
 ```ini
 [xhprof]
@@ -21,7 +21,7 @@ extension=xhprof.so
 xhprof.output_dir=/tmp/xhprof
 ```
 
-Composer 安装：
+Install via Composer:
 
 ```sh
 composer require aaron-dev/xhprof-webman
@@ -29,11 +29,11 @@ composer require aaron-dev/xhprof-webman
 
 ---
 
-## 框架配置
+## Framework Configuration
 
 ### Webman
 
-**1. 注册全局中间件** — `config/middleware.php`：
+**1. Register global middleware** — `config/middleware.php`:
 
 ```php
 return [
@@ -43,7 +43,7 @@ return [
 ];
 ```
 
-**2. 创建控制器**：
+**2. Create controller**:
 
 ```php
 <?php
@@ -62,7 +62,7 @@ class XhprofController
 }
 ```
 
-**3. 注册路由** — `config/route.php`：
+**3. Register routes** — `config/route.php`:
 
 ```php
 use Webman\Route;
@@ -71,17 +71,17 @@ use ErikWang2013\Xhprof\Webman\StaticController;
 Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
 Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
 
-// CallGraph 调用图路由（可选，需要服务器安装 graphviz `dot` 命令）
+// CallGraph route (optional, requires graphviz `dot` command on server)
 // Route::any('/xhprof/callgraph', [app\controller\XhprofController::class, 'callgraph']);
 ```
 
-**4. 配置** — 见 `config/plugin/aaron-dev/xhprof/xhprof.php`。
+**4. Configuration** — See `config/plugin/aaron-dev/xhprof/xhprof.php`.
 
 ---
 
 ### Laravel
 
-**1. 注册中间件** — `app/Http/Kernel.php`：
+**1. Register middleware** — `app/Http/Kernel.php`:
 
 ```php
 protected $middleware = [
@@ -90,7 +90,7 @@ protected $middleware = [
 ];
 ```
 
-**2. 创建控制器**：
+**2. Create controller**:
 
 ```php
 <?php
@@ -110,7 +110,7 @@ class XhprofController extends Controller
 }
 ```
 
-**3. 注册路由** — `routes/web.php`：
+**3. Register routes** — `routes/web.php`:
 
 ```php
 use App\Http\Controllers\XhprofController;
@@ -124,23 +124,23 @@ Route::get('/xhprof-assets/{path}', function ($path) {
     return StaticController::serve($req, $res)->send();
 })->where('path', '.*');
 
-// CallGraph 调用图路由（可选，需要 graphviz `dot` 命令）
+// CallGraph route (optional, requires graphviz `dot` command)
 // Route::any('/xhprof/callgraph', [XhprofController::class, 'callgraph']);
 ```
 
-**4. 发布配置**：
+**4. Publish config**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
 ```
 
-配置文件在 `config/xhprof.php`。Laravel 支持自动发现 ServiceProvider。
+Config file at `config/xhprof.php`. Laravel supports auto-discovery of ServiceProvider.
 
 ---
 
 ### ThinkPHP
 
-**1. 注册中间件** — `app/middleware.php`：
+**1. Register middleware** — `app/middleware.php`:
 
 ```php
 return [
@@ -148,7 +148,7 @@ return [
 ];
 ```
 
-**2. 创建控制器**：
+**2. Create controller**:
 
 ```php
 <?php
@@ -168,7 +168,7 @@ class XhprofController
 }
 ```
 
-**3. 注册路由** — `route/app.php`：
+**3. Register routes** — `route/app.php`:
 
 ```php
 use think\facade\Route;
@@ -183,19 +183,19 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
     return StaticController::serve($req, $res)->send();
 })->pattern(['path' => '.*']);
 
-// CallGraph 调用图路由（可选，需要 graphviz `dot` 命令）
+// CallGraph route (optional, requires graphviz `dot` command)
 // Route::any('/xhprof/callgraph', 'app\controller\XhprofController@callgraph');
 ```
 
-**4. 配置** — 复制 `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` 到项目 `config/xhprof.php`。
+**4. Configuration** — Copy `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` to project `config/xhprof.php`.
 
 ---
 
 ### Hyperf
 
-**1. 中间件自动注册** — ConfigProvider 自动将中间件加入 HTTP 中间件队列。
+**1. Middleware auto-registration** — ConfigProvider automatically adds middleware to the HTTP middleware queue.
 
-**2. 创建控制器**：
+**2. Create controller**:
 
 ```php
 <?php
@@ -218,7 +218,7 @@ class XhprofController
 }
 ```
 
-**3. 静态资源路由** — `config/routes.php`：
+**3. Static asset routes** — `config/routes.php`:
 
 ```php
 use Hyperf\HttpServer\Router\Router;
@@ -234,38 +234,38 @@ Router::get('/xhprof-assets/{path:.+}', function ($path) {
     return StaticController::serve($req, $res)->send();
 });
 
-// CallGraph 调用图路由（可选，需要 graphviz `dot` 命令）
+// CallGraph route (optional, requires graphviz `dot` command)
 // Router::addRoute(['GET', 'POST'], '/xhprof/callgraph', 'App\Controller\XhprofController@callgraph');
 ```
 
-**4. 发布配置**：
+**4. Publish config**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
 ```
 
-配置输出在 `config/autoload/xhprof.php`。
+Config output at `config/autoload/xhprof.php`.
 
 ---
 
-## 配置项说明
+## Configuration Reference
 
-所有框架共用以下配置项：
+All frameworks share these configuration options:
 
-| 配置 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `enable` | bool | `true` | 是否启用性能分析 |
-| `time_limit` | int | `0` | 仅记录响应超过 n 秒的请求，0 表示全部 |
-| `log_num` | int | `1000` | 最大记录条数 |
-| `view_wtred` | int | `3` | 列表耗时超过 n 秒标红 |
-| `ignore_url_arr` | array | `["/xhprof"]` | 忽略的 URL 路径 |
-| `assets_url` | string | `/xhprof-assets` | 静态资源 URL 前缀 |
+| Config | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enable` | bool | `true` | Enable/disable profiling |
+| `time_limit` | int | `0` | Only profile requests exceeding n seconds, 0 means all |
+| `log_num` | int | `1000` | Maximum number of records |
+| `view_wtred` | int | `3` | Highlight rows with response time > n seconds in red |
+| `ignore_url_arr` | array | `["/xhprof"]` | URL paths to ignore |
+| `assets_url` | string | `/xhprof-assets` | Static asset URL prefix |
 
 ---
 
-## CallGraph 调用图
+## CallGraph
 
-报告页面中的「CallGraph」功能依赖服务器安装 Graphviz：
+The "CallGraph" feature in the report page requires Graphviz on the server:
 
 ```sh
 # Debian/Ubuntu
@@ -275,13 +275,13 @@ apt install graphviz
 yum install graphviz
 ```
 
-安装后在各框架中注册 CallGraph 路由（见上方各框架路由配置中的注释部分）即可使用。
+After installation, register the CallGraph route in each framework (see the commented sections in each framework's route config above).
 
 ---
 
-## 手动初始化
+## Manual Initialization
 
-如果自动检测框架失败，可以手动注入适配器：
+If automatic framework detection fails, you can manually inject adapters:
 
 ```php
 use ErikWang2013\Xhprof\Core\Xhprof;
@@ -297,17 +297,17 @@ Xhprof::bootstrap(
 
 ---
 
-## 作者
+## Author
 
-[艾瑞可 erik](https://erik.xyz)
+[erik](https://erik.xyz)
 
-## 开源不易，欢迎支持
+## Support Open Source
 
 <p align="center">
-  <img src="./docs/weixinpay.png" alt="微信支付" width="130" height="130" title="微信支付" />
-  <img src="./docs/alipay.png" alt="支付宝" width="130" height="130" title="支付宝" />
+  <img src="./docs/weixinpay.png" alt="WeChat Pay" width="130" height="130" title="WeChat Pay" />
+  <img src="./docs/alipay.png" alt="Alipay" width="130" height="130" title="Alipay" />
 </p>
 
 ---
 
-本插件参考 [phacility/xhprof](https://github.com/phacility/xhprof)、[phpxxb/xhprof](https://github.com/xiexianbo123/xhprof)
+This plugin references [phacility/xhprof](https://github.com/phacility/xhprof) and [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof).
