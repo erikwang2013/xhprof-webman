@@ -10,7 +10,6 @@ class XhprofProfiler
 {
     public static function init(): void
     {
-        date_default_timezone_set('PRC');
         // Extension checks are handled by framework middleware layers;
         // init() is called by xhprofStart(), which is only invoked after those checks pass.
     }
@@ -37,6 +36,7 @@ class XhprofProfiler
         Xhprof::$time_limit = (int) ($pluginConfig['time_limit'] ?? 0);
         Xhprof::$log_num = (int) ($pluginConfig['log_num'] ?? 1000);
         Xhprof::$view_wtred = (int) ($pluginConfig['view_wtred'] ?? 3);
+        Xhprof::$key_prefix = (string) ($pluginConfig['key_prefix'] ?? 'xhprof');
     }
 
     public static function isEnabled(): bool

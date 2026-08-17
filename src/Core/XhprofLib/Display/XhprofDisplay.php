@@ -198,15 +198,8 @@ class XhprofDisplay
     $echo_page .= "<link href='$ui_dir_url_path/css/bootstrap.css' rel='stylesheet' " .
       " type='text/css' />";
     $echo_page .= "<link href='$ui_dir_url_path/css/dataTables.bootstrap.css' rel='stylesheet' type='text/css' />";
-    $echo_page .= "<link href='$ui_dir_url_path/jquery/jquery.tooltip.css' " .
-      " rel='stylesheet' type='text/css' />";
-    $echo_page .= "<link href='$ui_dir_url_path/jquery/jquery.autocomplete.css' " .
-      " rel='stylesheet' type='text/css' />";
 
     // javascript
-    $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery-1.2.6.js'></script>";
-    $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery.tooltip.js'></script>";
-    $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery.autocomplete.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/xhprof_report.js'></script>";
 
     $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery-3.0.0.min.js'></script>";
@@ -417,7 +410,7 @@ class XhprofDisplay
     // data tables
     if (!empty($rep_symbol)) {
       if (!isset($symbol_tab[$rep_symbol])) {
-        $echo_page .= '<div class="xp-main"><div class="xp-card"><p class="xp-card-title">Symbol <b>' . htmlspecialchars($rep_symbol) . '</b> not found in XHProf run.</p></div></div>';
+        $echo_page .= '<div class="xp-main"><div class="xp-card"><p class="xp-card-title">Symbol <b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b> not found in XHProf run.</p></div></div>';
       }
 
       /* single public static function report with parent/child information */
@@ -545,7 +538,7 @@ class XhprofDisplay
       ));
 
     $echo_page .= '<td>';
-    $echo_page .= XhprofDisplay::xhprof_render_link($info["fn"], $href);
+    $echo_page .= XhprofDisplay::xhprof_render_link(htmlspecialchars($info["fn"], ENT_QUOTES, 'UTF-8'), $href);
     $echo_page .= XhprofDisplay::print_source_link($info);
     $echo_page .= "</td>\n";
 
@@ -744,9 +737,9 @@ class XhprofDisplay
       $echo_page .= '<table class="xp-table"><tr>';
       $echo_page .= "<td colspan='8' style='text-align:center;font-weight:600'>{$request_uri}</td>";
       $echo_page .= "</tr><tr>";
-      $echo_page .= "<td>请求方法</td><td>{$method}</td>";
+      $echo_page .= "<td>请求方法</td><td>" . htmlspecialchars($method, ENT_QUOTES, 'UTF-8') . "</td>";
       $echo_page .= "<td>请求时间</td><td>{$create_time_text}</td>";
-      $echo_page .= "<td>来源IP</td><td>{$ip}</td>";
+      $echo_page .= "<td>来源IP</td><td>" . htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') . "</td>";
       if ($display_calls) {
         $echo_page .= "<td>函数/方法调用总次数</td><td>" . number_format($totals['ct']) . "</td>";
       }
@@ -768,7 +761,7 @@ class XhprofDisplay
       $flat_data[] = $tmp;
     }
 
-    if (array_key_exists('XhprofDisplay::sort_cbk', $flat_data)) usort($flat_data, 'XhprofDisplay::sort_cbk');
+    usort($flat_data, 'XhprofDisplay::sort_cbk');
 
     //  print("<br>");
     $all = false;
@@ -874,7 +867,7 @@ class XhprofDisplay
         $echo_page .= '<tr bgcolor="#e5e5e5">';
       }
 
-      $echo_page .= "<td>" . XhprofDisplay::xhprof_render_link($info["fn"], $href);
+      $echo_page .= "<td>" . XhprofDisplay::xhprof_render_link(htmlspecialchars($info["fn"], ENT_QUOTES, 'UTF-8'), $href);
       $echo_page .= XhprofDisplay::print_source_link($info);
       $echo_page .= "</td>";
       $echo_page .= XhprofDisplay::pc_info($info, $base_ct, $base_info, $parent);
@@ -967,11 +960,11 @@ class XhprofDisplay
       $href2 = "$base_path?"
         . http_build_query(XhprofLib::xhprof_array_set($base_url_params, 'run', $run2));
 
-      $echo_page .= "<h3 align=center>$regr_impr summary for $rep_symbol<br><br></h3>";
+      $echo_page .= "<h3 align=center>$regr_impr summary for " . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "<br><br></h3>";
       $echo_page .= '<table border=1 cellpadding=2 cellspacing=1 width="30%" '
         . 'rules=rows bordercolor="#bdc7d8" align=center>' . "\n";
       $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
-      $echo_page .= "<th align=left>$rep_symbol</th>";
+      $echo_page .= "<th align=left>" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</th>";
       $echo_page .= "<th $vwbar><a href=" . $href1 . ">Run #$run1</a></th>";
       $echo_page .= "<th $vwbar><a href=" . $href2 . ">Run #$run2</a></th>";
       $echo_page .= "<th $vwbar>Diff</th>";
@@ -1036,10 +1029,7 @@ class XhprofDisplay
     }
 
     $echo_page .= "<h4><center>";
-    $echo_page .= "Parent/Child $regr_impr report for <b>$rep_symbol</b>";
-
-    $callgraph_href = "$base_path/callgraph.php?"
-      . http_build_query(XhprofLib::xhprof_array_set($url_params, 'func', $rep_symbol));
+    $echo_page .= "Parent/Child $regr_impr report for <b>" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</b>";
 
     $echo_page .= "</center></h4>";
 
@@ -1073,7 +1063,7 @@ class XhprofDisplay
 
     $echo_page .= "<tr>";
     // make this a self-reference to facilitate copy-pasting snippets to e-mails
-    $echo_page .= "<td><a href=''>$rep_symbol</a>";
+    $echo_page .= "<td><a href=''>" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</a>";
     $echo_page .= XhprofDisplay::print_source_link(array('fn' => $rep_symbol));
     $echo_page .= "</td>";
 
@@ -1131,7 +1121,7 @@ class XhprofDisplay
         $results[] = $info_tmp;
       }
     }
-    if (array_key_exists('XhprofDisplay::sort_cbk', $results)) usort($results, 'XhprofDisplay::sort_cbk');
+    usort($results, 'XhprofDisplay::sort_cbk');
 
     if (count($results) > 0) {
       $echo_page .= XhprofDisplay::print_pc_array(
@@ -1157,7 +1147,7 @@ class XhprofDisplay
         if ($display_calls) $base_ct += $info["ct"];
       }
     }
-    if (array_key_exists('XhprofDisplay::sort_cbk', $results)) usort($results, 'XhprofDisplay::sort_cbk');
+    usort($results, 'XhprofDisplay::sort_cbk');
 
     if (count($results)) {
       $echo_page .= XhprofDisplay::print_pc_array(
@@ -1178,7 +1168,7 @@ class XhprofDisplay
     // Related javascript code is in: xhprof_report.js
     $echo_page .= "\n";
     $echo_page .= '<script language="javascript">' . "\n";
-    $echo_page .= "var func_name = '\"" . $rep_symbol . "\"';\n";
+    $echo_page .= "var func_name = " . json_encode($rep_symbol) . ";\n";
     $echo_page .= "var total_child_ct  = " . $base_ct . ";\n";
     if ($display_calls) $echo_page .= "var func_ct   = " . $symbol_info["ct"] . ";\n";
     $echo_page .= "var func_metrics = new Array();\n";

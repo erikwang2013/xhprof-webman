@@ -7,7 +7,8 @@ namespace ErikWang2013\Xhprof\Core\Contract;
 interface CacheInterface
 {
     public function get(string $key): mixed;
-    public function set(string $key, mixed $value): mixed;
+    public function set(string $key, mixed $value, ?int $ttl = null): mixed;
+    public function mget(array $keys): array;
     public function incr(string $key): int;
     public function lPush(string $key, mixed $value): int;
     public function rPop(string $key): mixed;

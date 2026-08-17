@@ -25,11 +25,25 @@ class XHProfRunsDefault implements XHProfRuns
         XHProfRunsDefault::$dir = $dir;
     }
 
+    public static function xhprof_valid_run_id($run_id): bool
+    {
+        return is_string($run_id) && preg_match('/^[a-f0-9]{13,32}$/', $run_id) === 1;
+    }
+
+    public static function xhprof_valid_source($source): bool
+    {
+        return is_string($source) && preg_match('/^[a-z0-9_\-\.]{1,64}$/', $source) === 1;
+    }
+
     public static function get_run($run_id, $type, &$run_desc)
     {
+        // 入口统一白名单校验，防止 run_id/source 注入 Redis key
+        if (!self::xhprof_valid_run_id($run_id) || !self::xhprof_valid_source($type)) {
+            return false;
+        }
         $run_desc = "XHProf Run (Namespace=$type)";
         $res = Xhprof::getCache()->get(Xhprof::$key_prefix . ':xhprof_log:' . $run_id);
-        return unserialize($res);
+        return unserialize($res, ['allowed_classes' => false]);
     }
 
     //实现接口方法
@@ -75,7 +89,7 @@ class XHProfRunsDefault implements XHProfRuns
     protected static function _saveToRedis($xhprof_data)
     {
 
-        $run_id = uniqid();
+        $run_id = bin2hex(random_bytes(8));
         Xhprof::getCache()->lPush(Xhprof::$key_prefix . ":run_id", $run_id);
         $wt = 0;   //请求总耗时
         $mu = 0;   //总消耗内存
@@ -96,10 +110,15 @@ class XHProfRunsDefault implements XHProfRuns
             'create_time' => time(),  //请求时间
         );
         $key = Xhprof::$key_prefix . ':request_log:' . $run_id;  //请求列表log
-        Xhprof::getCache()->set($key, json_encode($row));
+        $ttl = 86400 * 7;  //数据保留时间，默认7天，可用配置 xhprof.log_ttl 覆盖
+        $cfg = Xhprof::getConfig();
+        if ($cfg !== null) {
+            $ttl = (int) $cfg->get('xhprof.log_ttl', 86400 * 7);
+        }
+        Xhprof::getCache()->set($key, json_encode($row), $ttl);
         $key = Xhprof::$key_prefix . ':xhprof_log:' . $run_id;   //列表存储log
         $xhprof_data_str = serialize($xhprof_data);
-        if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str);
+        if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str, $ttl);
         return $run_id;
     }
 
@@ -109,8 +128,13 @@ class XHProfRunsDefault implements XHProfRuns
         //取所有请求数据
         $run_id_lists = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
         $table_html = "";
-        foreach ($run_id_lists as $run_id) {
-            $res = Xhprof::getCache()->get(Xhprof::$key_prefix . ":request_log:" . $run_id);
+        $keys = array_map(function ($run_id) {
+            return Xhprof::$key_prefix . ":request_log:" . $run_id;
+        }, $run_id_lists);
+        // mget 批量取，消除 N+1；兼容部分驱动返回 [key=>value] 的形态
+        $values = array_values(Xhprof::getCache()->mget($keys));
+        foreach ($run_id_lists as $i => $run_id) {
+            $res = $values[$i] ?? null;
             if (!$res) continue;
             $request_arr = json_decode($res, true);
             if (!is_array($request_arr)) continue;

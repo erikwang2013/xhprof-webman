@@ -30,22 +30,22 @@ class XhprofMiddleware implements MiddlewareInterface
         $redis = extension_loaded('redis');
 
         if (!$extension) {
-            return response()->withBody('请安装xhprof扩展');
+            (new LogAdapter())->error('xhprof扩展未安装，性能采样已跳过');
         }
         if (!$redis) {
-            return response()->withBody('请安装redis扩展');
+            (new LogAdapter())->error('redis扩展未安装，性能采样已跳过');
         }
 
         if ($xhprof && $extension) {
             Xhprof::xhprofStart();
         }
 
-        $response = $handler($request);
-
-        if ($xhprof && $extension) {
-            Xhprof::xhprofStop();
+        try {
+            return $handler($request);
+        } finally {
+            if ($xhprof && $extension) {
+                Xhprof::xhprofStop();
+            }
         }
-
-        return $response;
     }
 }

@@ -28,12 +28,12 @@ class Middleware
             Xhprof::xhprofStart();
         }
 
-        $response = $next($request);
-
-        if ($enabled) {
-            Xhprof::xhprofStop();
+        try {
+            return $next($request);
+        } finally {
+            if ($enabled) {
+                Xhprof::xhprofStop();
+            }
         }
-
-        return $response;
     }
 }

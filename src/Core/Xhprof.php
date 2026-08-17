@@ -10,6 +10,7 @@ use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
+use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
 
 class Xhprof
 {
@@ -69,17 +70,34 @@ class Xhprof
         return self::$config;
     }
 
-    public static function index(): string
+    public static function index(): mixed
     {
         $req = self::getRequest();
         $cfg = self::getConfig();
+        // 鉴权：配置了 auth_token 后，报告页必须带 ?token=xxx 才能访问
+        $authToken = $cfg !== null ? $cfg->get('xhprof.auth_token', null) : null;
+        if ($authToken !== null && $authToken !== '' && !hash_equals((string) $authToken, (string) $req->get('token', ''))) {
+            return self::deny('403 Forbidden', 403);
+        }
+        // run_id / source 白名单校验，防止任意 key 读取
         $run = $req->get('run');
-        $wts = $req->get('wts');
-        $symbol = $req->get('symbol');
-        $sort = $req->get('sort');
         $run1 = $req->get('run1');
         $run2 = $req->get('run2');
         $source = $req->get('source');
+        foreach ([$run, $run1, $run2] as $rp) {
+            if (!is_string($rp) || $rp === '') continue;
+            foreach (explode(',', $rp) as $rid) {
+                if (!XHProfRunsDefault::xhprof_valid_run_id($rid)) {
+                    return self::deny('400 Bad Request', 400);
+                }
+            }
+        }
+        if ($source !== null && !XHProfRunsDefault::xhprof_valid_source($source)) {
+            return self::deny('400 Bad Request', 400);
+        }
+        $wts = $req->get('wts');
+        $symbol = $req->get('symbol');
+        $sort = $req->get('sort');
         $params = $req->all();
         $echo_page = "<html lang=\"zh-CN\">";
         $assetsUrl = '';
@@ -106,6 +124,16 @@ class Xhprof
         $echo_page .= "</body>";
         $echo_page .= "</html>";
         return $echo_page;
+    }
+
+    private static function deny(string $body, int $status): mixed
+    {
+        $res = self::getResponse();
+        if ($res !== null) {
+            return $res->withStatus($status)->withBody($body)->send();
+        }
+        http_response_code($status);
+        return $body;
     }
 
     public static function xhprofStart(): void

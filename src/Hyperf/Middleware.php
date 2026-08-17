@@ -44,12 +44,12 @@ class Middleware implements MiddlewareInterface
             Xhprof::xhprofStart();
         }
 
-        $response = $handler->handle($request);
-
-        if ($enabled) {
-            Xhprof::xhprofStop();
+        try {
+            return $handler->handle($request);
+        } finally {
+            if ($enabled) {
+                Xhprof::xhprofStop();
+            }
         }
-
-        return $response;
     }
 }

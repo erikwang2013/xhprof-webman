@@ -27,6 +27,12 @@ class ResponseAdapter implements ResponseInterface
         return $this;
     }
 
+    public function withStatus(int $status): self
+    {
+        $this->response = $this->response->setStatusCode($status);
+        return $this;
+    }
+
     public function file(string $path): self
     {
         $this->response = response()->file($path);

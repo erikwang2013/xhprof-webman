@@ -72,7 +72,6 @@ Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
 Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
 
 // CallGraph 调用图路由（可选，需要服务器安装 graphviz `dot` 命令）
-// Route::any('/xhprof/callgraph', [app\controller\XhprofController::class, 'callgraph']);
 ```
 
 **4. 配置** — 见 `config/plugin/aaron-dev/xhprof/xhprof.php`。
@@ -125,7 +124,6 @@ Route::get('/xhprof-assets/{path}', function ($path) {
 })->where('path', '.*');
 
 // CallGraph 调用图路由（可选，需要 graphviz `dot` 命令）
-// Route::any('/xhprof/callgraph', [XhprofController::class, 'callgraph']);
 ```
 
 **4. 发布配置**：
@@ -184,7 +182,6 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 })->pattern(['path' => '.*']);
 
 // CallGraph 调用图路由（可选，需要 graphviz `dot` 命令）
-// Route::any('/xhprof/callgraph', 'app\controller\XhprofController@callgraph');
 ```
 
 **4. 配置** — 复制 `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` 到项目 `config/xhprof.php`。
@@ -235,7 +232,6 @@ Router::get('/xhprof-assets/{path:.+}', function ($path) {
 });
 
 // CallGraph 调用图路由（可选，需要 graphviz `dot` 命令）
-// Router::addRoute(['GET', 'POST'], '/xhprof/callgraph', 'App\Controller\XhprofController@callgraph');
 ```
 
 **4. 发布配置**：
@@ -260,22 +256,9 @@ php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
 | `view_wtred` | int | `3` | 列表耗时超过 n 秒标红 |
 | `ignore_url_arr` | array | `["/xhprof"]` | 忽略的 URL 路径 |
 | `assets_url` | string | `/xhprof-assets` | 静态资源 URL 前缀 |
-
----
-
-## CallGraph 调用图
-
-报告页面中的「CallGraph」功能依赖服务器安装 Graphviz：
-
-```sh
-# Debian/Ubuntu
-apt install graphviz
-
-# CentOS
-yum install graphviz
-```
-
-安装后在各框架中注册 CallGraph 路由（见上方各框架路由配置中的注释部分）即可使用。
+| `auth_token` | string\|null | `null` | 设置后报告页必须带 `?token=xxx` 才能访问；建议公网部署时设置 |
+| `key_prefix` | string | `xhprof` | Redis key 前缀，多项目共用 Redis 时务必改成各自独立的值 |
+| `log_ttl` | int | `604800` | 性能数据保留时间（秒），默认 7 天 |
 
 ---
 

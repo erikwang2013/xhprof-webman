@@ -72,7 +72,6 @@ Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
 Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
 
 // CallGraph route (optional, requires graphviz `dot` command on server)
-// Route::any('/xhprof/callgraph', [app\controller\XhprofController::class, 'callgraph']);
 ```
 
 **4. Configuration** — See `config/plugin/aaron-dev/xhprof/xhprof.php`.
@@ -125,7 +124,6 @@ Route::get('/xhprof-assets/{path}', function ($path) {
 })->where('path', '.*');
 
 // CallGraph route (optional, requires graphviz `dot` command)
-// Route::any('/xhprof/callgraph', [XhprofController::class, 'callgraph']);
 ```
 
 **4. Publish config**:
@@ -184,7 +182,6 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 })->pattern(['path' => '.*']);
 
 // CallGraph route (optional, requires graphviz `dot` command)
-// Route::any('/xhprof/callgraph', 'app\controller\XhprofController@callgraph');
 ```
 
 **4. Configuration** — Copy `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` to project `config/xhprof.php`.
@@ -235,7 +232,6 @@ Router::get('/xhprof-assets/{path:.+}', function ($path) {
 });
 
 // CallGraph route (optional, requires graphviz `dot` command)
-// Router::addRoute(['GET', 'POST'], '/xhprof/callgraph', 'App\Controller\XhprofController@callgraph');
 ```
 
 **4. Publish config**:
@@ -260,22 +256,9 @@ All frameworks share these configuration options:
 | `view_wtred` | int | `3` | Highlight rows with response time > n seconds in red |
 | `ignore_url_arr` | array | `["/xhprof"]` | URL paths to ignore |
 | `assets_url` | string | `/xhprof-assets` | Static asset URL prefix |
-
----
-
-## CallGraph
-
-The "CallGraph" feature in the report page requires Graphviz on the server:
-
-```sh
-# Debian/Ubuntu
-apt install graphviz
-
-# CentOS
-yum install graphviz
-```
-
-After installation, register the CallGraph route in each framework (see the commented sections in each framework's route config above).
+| `auth_token` | string\|null | `null` | When set, report page requires `?token=xxx`; recommended for public deployments |
+| `key_prefix` | string | `xhprof` | Redis key prefix; set distinct values per project when sharing one Redis |
+| `log_ttl` | int | `604800` | Data retention in seconds (default 7 days) |
 
 ---
 

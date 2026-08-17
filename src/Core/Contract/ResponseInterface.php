@@ -8,6 +8,7 @@ interface ResponseInterface
 {
     public function withBody(string $body): self;
     public function withHeaders(array $headers): self;
+    public function withStatus(int $status): self;
     public function file(string $path): self;
     public function send(): mixed;
 }
