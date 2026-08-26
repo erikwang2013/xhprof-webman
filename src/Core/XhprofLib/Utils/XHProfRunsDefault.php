@@ -43,6 +43,9 @@ class XHProfRunsDefault implements XHProfRuns
         }
         $run_desc = "XHProf Run (Namespace=$type)";
         $res = Xhprof::getCache()->get(Xhprof::$key_prefix . ':xhprof_log:' . $run_id);
+        if (!is_string($res) || $res === '') {
+            return false;
+        }
         return unserialize($res, ['allowed_classes' => false]);
     }
 

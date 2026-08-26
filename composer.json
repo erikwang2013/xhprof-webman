@@ -44,11 +44,19 @@
             "ErikWang2013\\Xhprof\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "ErikWang2013\\Xhprof\\Tests\\": "tests/"
+        }
+    },
     "extra": {
         "laravel": {
             "providers": [
                 "ErikWang2013\\Xhprof\\Laravel\\XhprofServiceProvider"
             ]
         }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
     }
 }

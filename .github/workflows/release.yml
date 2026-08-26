@@ -1,0 +1,59 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '强制版本号（如 v3.1.0）。留空则基于最新 tag 自动递增 patch'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            NEW_VERSION="$INPUT_VERSION"
+          else
+            LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+            if [ -z "$LATEST" ]; then
+              NEW_VERSION="v0.1.0"
+            else
+              IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+              NEW_VERSION="v$MAJOR.$MINOR.$((PATCH + 1))"
+            fi
+          fi
+          if ! echo "$NEW_VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Invalid version: $NEW_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.version }}" -m "Release ${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ steps.version.outputs.version }}" --generate-notes --title "${{ steps.version.outputs.version }}"

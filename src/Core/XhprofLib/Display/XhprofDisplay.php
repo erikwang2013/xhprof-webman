@@ -493,6 +493,9 @@ class XhprofDisplay
 
     $class = XhprofDisplay::get_print_class($num, $bold);
     if (!empty($fmt_func) && is_numeric($num)) {
+      if (is_string($fmt_func) && str_starts_with($fmt_func, 'XhprofDisplay::')) {
+        $fmt_func = [self::class, substr($fmt_func, strlen('XhprofDisplay::'))];
+      }
       $num = call_user_func($fmt_func, $num);
     }
     return "<td $attributes $class>$num</td>\n";
@@ -761,7 +764,7 @@ class XhprofDisplay
       $flat_data[] = $tmp;
     }
 
-    usort($flat_data, 'XhprofDisplay::sort_cbk');
+    usort($flat_data, [self::class, 'sort_cbk']);
 
     //  print("<br>");
     $all = false;
@@ -1121,7 +1124,7 @@ class XhprofDisplay
         $results[] = $info_tmp;
       }
     }
-    usort($results, 'XhprofDisplay::sort_cbk');
+    usort($results, [self::class, 'sort_cbk']);
 
     if (count($results) > 0) {
       $echo_page .= XhprofDisplay::print_pc_array(
@@ -1147,7 +1150,7 @@ class XhprofDisplay
         if ($display_calls) $base_ct += $info["ct"];
       }
     }
-    usort($results, 'XhprofDisplay::sort_cbk');
+    usort($results, [self::class, 'sort_cbk']);
 
     if (count($results)) {
       $echo_page .= XhprofDisplay::print_pc_array(
@@ -1287,6 +1290,11 @@ class XhprofDisplay
         $description = $datas['description'];
       }
 
+      if ($xhprof_data === false || $xhprof_data === null) {
+        // 无数据时优雅降级（run_id 合法但缓存缺失 / 聚合全部无效），不进入渲染管线
+        return $data;
+      }
+
       $data .= XhprofDisplay::profiler_single_run_report(
         $url_params,
         $xhprof_data,
@@ -1299,6 +1307,9 @@ class XhprofDisplay
 
       $xhprof_data1 = XHProfRunsDefault::get_run($run1, $source, $description1);
       $xhprof_data2 = XHProfRunsDefault::get_run($run2, $source, $description2);
+      if ($xhprof_data1 === false || $xhprof_data2 === false) {
+        return $data;
+      }
       $data .= XhprofDisplay::profiler_diff_report(
         $url_params,
         $xhprof_data1,

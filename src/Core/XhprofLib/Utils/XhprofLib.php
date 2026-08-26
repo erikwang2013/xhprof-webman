@@ -203,7 +203,7 @@ class XhprofLib
     $metrics        = array();
 
     $run_count = count($runs);
-    $wts_count = count($wts);
+    $wts_count = is_array($wts) ? count($wts) : 0;
 
     if (($run_count == 0) ||
       (($wts_count > 0) && ($run_count != $wts_count))
@@ -494,6 +494,7 @@ class XhprofLib
   {
     $val = XhprofLib::xhprof_get_param_helper($param);
     if ($val === null) $val = $default;
+    if (!is_string($val)) return $val;  // 缺失参数直接返回默认值，避免 trim(int) 崩溃
     $val = trim($val);
     if (ctype_digit($val)) return $val;
     XhprofLib::xhprof_error("$param is $val. It must be an unsigned integer.");
@@ -505,10 +506,9 @@ class XhprofLib
   {
     $val = XhprofLib::xhprof_get_param_helper($param);
     if ($val === null) $val = $default;
+    if (!is_string($val)) return $val;  // 缺失参数直接返回默认值，避免 trim(int) 崩溃
     $val = trim($val);
     return (float)$val;
-    XhprofLib::xhprof_error("$param is $val. It must be a float.");
-    return null;
   }
 
 
@@ -517,6 +517,7 @@ class XhprofLib
     $val = XhprofLib::xhprof_get_param_helper($param);
 
     if ($val === null) $val = $default;
+    if (!is_string($val)) return $val;  // 缺失参数直接返回默认值，避免 trim(bool) 崩溃
     $val = trim($val);
     switch (strtolower($val)) {
       case '0':
@@ -548,7 +549,8 @@ class XhprofLib
     $matches = array();
     foreach ($xhprof_data as $parent_child => $info) {
       list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
-      if (stripos($parent, $q) !== false) $matches[$parent] = 1;
+      // 裸 main() 键无父函数（parent 为 null），跳过避免 stripos(null) 崩溃
+      if ($parent !== null && stripos($parent, $q) !== false) $matches[$parent] = 1;
       if (stripos($child, $q) !== false) $matches[$child] = 1;
     }
     $res = array_keys($matches);

@@ -30,7 +30,7 @@ class Xhprof
 
     private static bool $_hyperf = false;
 
-    public static function getRequest(): RequestInterface
+    public static function getRequest(): ?RequestInterface
     {
         if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
             return \Hyperf\Context\Context::get('xhprof.request');
@@ -38,7 +38,7 @@ class Xhprof
         return self::$request;
     }
 
-    public static function getResponse(): ResponseInterface
+    public static function getResponse(): ?ResponseInterface
     {
         if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
             return \Hyperf\Context\Context::get('xhprof.response');
@@ -46,7 +46,7 @@ class Xhprof
         return self::$response;
     }
 
-    public static function getCache(): CacheInterface
+    public static function getCache(): ?CacheInterface
     {
         if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
             return \Hyperf\Context\Context::get('xhprof.cache');
@@ -54,7 +54,7 @@ class Xhprof
         return self::$cache;
     }
 
-    public static function getLogger(): LoggerInterface
+    public static function getLogger(): ?LoggerInterface
     {
         if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
             return \Hyperf\Context\Context::get('xhprof.logger');
@@ -85,7 +85,10 @@ class Xhprof
         $run2 = $req->get('run2');
         $source = $req->get('source');
         foreach ([$run, $run1, $run2] as $rp) {
-            if (!is_string($rp) || $rp === '') continue;
+            if ($rp === null || $rp === '') continue;
+            if (!is_string($rp)) {
+                return self::deny('400 Bad Request', 400);
+            }
             foreach (explode(',', $rp) as $rid) {
                 if (!XHProfRunsDefault::xhprof_valid_run_id($rid)) {
                     return self::deny('400 Bad Request', 400);

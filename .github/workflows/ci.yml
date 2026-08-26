@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: PHP ${{ matrix.php }} lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.0', '8.1', '8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: redis, xhprof
+          coverage: none
+      - name: Lint all PHP files
+        run: find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+  test:
+    name: PHP ${{ matrix.php }} unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: redis, xhprof
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
+      - name: Run unit tests
+        run: vendor/bin/phpunit --no-coverage
