@@ -18,6 +18,7 @@ class Xhprof
     public static $ignore_url_arr = ["/test"];
     public static $key_prefix = 'xhprof';
     public static $log_num = 1000;
+    public static $log_ttl = 86400 * 7;
     public static $view_wtred = 3;
     public static $ui_html = '';
     public static $symbol_lookup_url = "";
@@ -141,7 +142,7 @@ class Xhprof
 
     public static function xhprofStart(): void
     {
-        XhprofProfiler::init();
+        // 扩展检查由各框架 middleware 负责，走到这里说明已通过
         XhprofProfiler::start();
     }
 

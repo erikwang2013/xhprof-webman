@@ -517,10 +517,8 @@ class XhprofDisplay
    *
    *
    */
-  public static function print_function_info($url_params, $info)
+  public static function print_function_info($url_params, $info, int $row_index = 0)
   {
-    static $odd_even = 0;
-
     $totals = XhprofDisplay::$totals;
     $sort_col = XhprofDisplay::$sort_col;
     $metrics = XhprofDisplay::$metrics;
@@ -528,10 +526,8 @@ class XhprofDisplay
     $display_calls = XhprofDisplay::$display_calls;
     $base_path = XhprofDisplay::base_path();
 
-    // Toggle $odd_or_even
-    $odd_even = 1 - $odd_even;
     $echo_page = "";
-    $echo_page .= $odd_even ? '<tr>' : '<tr class="xp-tr-alt">';
+    $echo_page .= ($row_index % 2 === 0) ? '<tr>' : '<tr class="xp-tr-alt">';
 
     $href = "$base_path?" .
       http_build_query(XhprofLib::xhprof_array_set(
@@ -611,7 +607,6 @@ class XhprofDisplay
     }
 
 
-    //$echo_page ='<h3 align=center>'.$title.' '.$display_link.'</h3><br>';
     $echo_page = '<div class="xp-card"><div class="xp-card-title">' . htmlspecialchars(strip_tags($title)) . ' ' . $display_link . '</div>';
     $echo_page .= '<div class="xp-table-wrap"><table class="xp-table">';
     $echo_page .= '<thead><tr>';
@@ -635,13 +630,13 @@ class XhprofDisplay
     if ($limit >= 0) {
       $limit = min($size, $limit);
       for ($i = 0; $i < $limit; $i++) {
-        $echo_page .= XhprofDisplay::print_function_info($url_params, $flat_data[$i]);
+        $echo_page .= XhprofDisplay::print_function_info($url_params, $flat_data[$i], $i);
       }
     } else {
       // if $limit is negative, print abs($limit) items starting from the end
       $limit = min($size, abs($limit));
       for ($i = 0; $i < $limit; $i++) {
-        $echo_page .= XhprofDisplay::print_function_info($url_params, $flat_data[$size - $i - 1]);
+        $echo_page .= XhprofDisplay::print_function_info($url_params, $flat_data[$size - $i - 1], $i);
       }
     }
     $echo_page .= '</tbody></table></div>';
@@ -1036,7 +1031,6 @@ class XhprofDisplay
 
     $echo_page .= "</center></h4>";
 
-    //    print('<table class="table table-condensed table-bordered">');
     $echo_page .= '<div class="xp-table-wrap"><table class="xp-table xp-pc-section">';
     $echo_page .= '<thead><tr>';
 

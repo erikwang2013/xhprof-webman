@@ -573,9 +573,7 @@ class XhprofLib
     $request_uri = strtolower($request_uri);
     //是否需要忽略当前url
     foreach ($ignoreArr as $value) {
-      $res = strpos($request_uri, strtolower($value));
-      //是否存在
-      if ($res !== false && $res >= 0) return false;
+      if (strpos($request_uri, strtolower($value)) !== false) return false;
     }
 
     return true;

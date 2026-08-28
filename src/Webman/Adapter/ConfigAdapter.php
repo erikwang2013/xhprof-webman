@@ -10,18 +10,6 @@ class ConfigAdapter implements ConfigInterface
 {
     public function get(string $key, mixed $default = null): mixed
     {
-        $parts = explode('.', $key);
-        $first = 'plugin.aaron-dev.xhprof.' . array_shift($parts);
-        $value = config($first);
-        if ($value === null) {
-            return $default;
-        }
-        foreach ($parts as $part) {
-            if (!is_array($value) || !array_key_exists($part, $value)) {
-                return $default;
-            }
-            $value = $value[$part];
-        }
-        return $value;
+        return config('plugin.aaron-dev.xhprof.' . $key) ?? $default;
     }
 }

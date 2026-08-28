@@ -18,6 +18,8 @@ use ErikWang2013\Xhprof\Webman\Adapter\LogAdapter;
 
 class XhprofMiddleware implements MiddlewareInterface
 {
+    private static bool $warned = false;
+
     public function process(Request $request, callable $handler): Response
     {
         $req = new RequestAdapter($request);
@@ -29,11 +31,8 @@ class XhprofMiddleware implements MiddlewareInterface
         $extension = extension_loaded('xhprof');
         $redis = extension_loaded('redis');
 
-        if (!$extension) {
-            (new LogAdapter())->error('xhprof扩展未安装，性能采样已跳过');
-        }
-        if (!$redis) {
-            (new LogAdapter())->error('redis扩展未安装，性能采样已跳过');
+        if (!$extension || !$redis) {
+            self::warnMissingExtensions($extension, $redis);
         }
 
         if ($xhprof && $extension) {
@@ -46,6 +45,21 @@ class XhprofMiddleware implements MiddlewareInterface
             if ($xhprof && $extension) {
                 Xhprof::xhprofStop();
             }
+        }
+    }
+
+    private static function warnMissingExtensions(bool $extension, bool $redis): void
+    {
+        if (self::$warned) {
+            return;
+        }
+        self::$warned = true;
+        $adapter = new LogAdapter();
+        if (!$extension) {
+            $adapter->error('xhprof扩展未安装，性能采样已跳过');
+        }
+        if (!$redis) {
+            $adapter->error('redis扩展未安装，性能采样已跳过');
         }
     }
 }

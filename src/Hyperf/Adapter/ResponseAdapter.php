@@ -7,6 +7,7 @@ namespace ErikWang2013\Xhprof\Hyperf\Adapter;
 use Hyperf\HttpServer\Response;
 use Hyperf\HttpMessage\Stream\SwooleStream;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
+use ErikWang2013\Xhprof\Core\StaticController;
 
 class ResponseAdapter implements ResponseInterface
 {
@@ -39,23 +40,14 @@ class ResponseAdapter implements ResponseInterface
 
     public function file(string $path): self
     {
-        if (file_exists($path)) {
-            $content = file_get_contents($path);
-            $ext = pathinfo($path, PATHINFO_EXTENSION);
-            $type = [
-                'css' => 'text/css',
-                'js' => 'application/javascript',
-                'png' => 'image/png',
-                'gif' => 'image/gif',
-                'jpg' => 'image/jpeg',
-                'jpeg' => 'image/jpeg',
-                'svg' => 'image/svg+xml',
-            ][$ext] ?? 'application/octet-stream';
+        $file = StaticController::readFile($path);
+        if ($file === null) {
+            $this->response = $this->response->withStatus(404);
+        } else {
+            [$content, $type] = $file;
             $this->response = $this->response
                 ->withBody(new SwooleStream($content))
                 ->withHeader('Content-Type', $type);
-        } else {
-            $this->response = $this->response->withStatus(404);
         }
         return $this;
     }

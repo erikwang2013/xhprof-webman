@@ -49,17 +49,15 @@ class XHProfRunsDefault implements XHProfRuns
         return unserialize($res, ['allowed_classes' => false]);
     }
 
-    //实现接口方法
     public static function save_run($xhprof_data, $type, $run_id = null)
     {
         //根据响应时间判断是否需要记录
-        if (Xhprof::$time_limit > 0 && $xhprof_data['main()']['wt'] < (Xhprof::$time_limit * 1000 * 1000)) return false;
+        if (Xhprof::$time_limit > 0 && ($xhprof_data['main()']['wt'] ?? 0) < (Xhprof::$time_limit * 1000 * 1000)) return false;
         //根据忽略配置判断是否忽略当前请求
         if (!XhprofLib::isIgnore()) return false;
-        //控制日志长度
-        XHProfRunsDefault::_checkLogNum();
-        //数据存储至redis
+        //先写列表再计数，避免 lPush 失败时计数器与实际列表长度漂移
         $run_id = XHProfRunsDefault::_saveToRedis($xhprof_data);
+        XHProfRunsDefault::_checkLogNum();
         return $run_id;
     }
 
@@ -113,15 +111,10 @@ class XHProfRunsDefault implements XHProfRuns
             'create_time' => time(),  //请求时间
         );
         $key = Xhprof::$key_prefix . ':request_log:' . $run_id;  //请求列表log
-        $ttl = 86400 * 7;  //数据保留时间，默认7天，可用配置 xhprof.log_ttl 覆盖
-        $cfg = Xhprof::getConfig();
-        if ($cfg !== null) {
-            $ttl = (int) $cfg->get('xhprof.log_ttl', 86400 * 7);
-        }
-        Xhprof::getCache()->set($key, json_encode($row), $ttl);
+        Xhprof::getCache()->set($key, json_encode($row), Xhprof::$log_ttl);
         $key = Xhprof::$key_prefix . ':xhprof_log:' . $run_id;   //列表存储log
         $xhprof_data_str = serialize($xhprof_data);
-        if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str, $ttl);
+        if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str, Xhprof::$log_ttl);
         return $run_id;
     }
 
@@ -136,22 +129,25 @@ class XHProfRunsDefault implements XHProfRuns
         }, $run_id_lists);
         // mget 批量取，消除 N+1；兼容部分驱动返回 [key=>value] 的形态
         $values = array_values(Xhprof::getCache()->mget($keys));
+        $http = Xhprof::getRequest()->header('x-forwarded-proto');
+        $http = !empty($http) ? $http . ":" : "http:";
+        $path = $http . Xhprof::getRequest()->url();
         foreach ($run_id_lists as $i => $run_id) {
+            if (!self::xhprof_valid_run_id($run_id)) continue;
             $res = $values[$i] ?? null;
             if (!$res) continue;
             $request_arr = json_decode($res, true);
             if (!is_array($request_arr)) continue;
-            $wtClass = $request_arr['wt'] > Xhprof::$view_wtred ? 'xp-wt-warn' : '';
-            $http = Xhprof::getRequest()->header('x-forwarded-proto');
-            $http = !empty($http) ? $http . ":" : "http:";
-            $path = $http . Xhprof::getRequest()->url();
+            $wt = (float) ($request_arr['wt'] ?? 0);
+            $mu = (float) ($request_arr['mu'] ?? 0);
+            $wtClass = $wt > Xhprof::$view_wtred ? 'xp-wt-warn' : '';
             $tr = '<tr>'
-                . '<td>' . htmlspecialchars($request_arr['method']) . '</td>'
-                . '<td><a href="' . htmlspecialchars($path) . '?all=1&run=' . $run_id . '&source=xhprof_foo&requrl=' . urlencode($request_arr['request_uri']) . '">' . htmlspecialchars($request_arr['request_uri']) . '</a></td>'
-                . '<td>' . date('Y-m-d H:i:s', $request_arr['create_time']) . '</td>'
-                . '<td class="' . trim($wtClass) . '">' . $request_arr['wt'] . '</td>'
-                . '<td>' . $request_arr['mu'] . '</td>'
-                . '<td>' . htmlspecialchars($request_arr['ip']) . '</td>'
+                . '<td>' . htmlspecialchars((string) $request_arr['method']) . '</td>'
+                . '<td><a href="' . htmlspecialchars($path) . '?all=1&run=' . $run_id . '&source=xhprof_foo&requrl=' . urlencode((string) $request_arr['request_uri']) . '">' . htmlspecialchars((string) $request_arr['request_uri']) . '</a></td>'
+                . '<td>' . date('Y-m-d H:i:s', (int) ($request_arr['create_time'] ?? 0)) . '</td>'
+                . '<td class="' . trim($wtClass) . '">' . $wt . '</td>'
+                . '<td>' . $mu . '</td>'
+                . '<td>' . htmlspecialchars((string) $request_arr['ip']) . '</td>'
                 . '</tr>';
             $table_html .= $tr;
         }

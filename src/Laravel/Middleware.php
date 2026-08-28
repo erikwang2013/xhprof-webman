@@ -6,8 +6,7 @@ namespace ErikWang2013\Xhprof\Laravel;
 
 use Closure;
 use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-use ErikWang2013\Xhprof\Core\XhprofProfiler;
+use ErikWang2013\Xhprof\Core\MiddlewareTrait;
 use ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Laravel\Adapter\ConfigAdapter;
@@ -16,24 +15,21 @@ use ErikWang2013\Xhprof\Laravel\Adapter\LogAdapter;
 
 class Middleware
 {
+    use MiddlewareTrait;
+
     public function handle(Request $request, Closure $next)
     {
-        $req = new RequestAdapter($request);
-        $res = new ResponseAdapter(response(''));
+        return $this->runXhprof($request, $next);
+    }
 
-        Xhprof::bootstrap($req, $res, new ConfigAdapter(), new RedisAdapter(), new LogAdapter());
-
-        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
-        if ($enabled) {
-            Xhprof::xhprofStart();
-        }
-
-        try {
-            return $next($request);
-        } finally {
-            if ($enabled) {
-                Xhprof::xhprofStop();
-            }
-        }
+    protected function xhprofAdapters($request): array
+    {
+        return [
+            new RequestAdapter($request),
+            new ResponseAdapter(response('')),
+            new ConfigAdapter(),
+            new RedisAdapter(),
+            new LogAdapter(),
+        ];
     }
 }

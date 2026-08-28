@@ -12,6 +12,27 @@ class StaticController
     private const ASSETS_DIR = 'src/html';
     private const URI_PREFIX = '/xhprof-assets';
 
+    private const MIME_TYPES = [
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'svg' => 'image/svg+xml',
+    ];
+
+    /** 读取文件内容并推断 MIME 类型；文件不存在/不可读返回 null。 */
+    public static function readFile(string $path): ?array
+    {
+        $content = @file_get_contents($path);
+        if ($content === false) {
+            return null;
+        }
+        $ext = pathinfo($path, PATHINFO_EXTENSION);
+        return [$content, self::MIME_TYPES[$ext] ?? 'application/octet-stream'];
+    }
+
     public static function getPackageRoot(): string
     {
         return dirname(__DIR__, 2);

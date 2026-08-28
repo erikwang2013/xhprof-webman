@@ -17,7 +17,7 @@ class ResponseAdapter implements ResponseInterface
 
     public function withBody(string $body): self
     {
-        $this->response = response($body);
+        $this->response = response($body, $this->response->getStatusCode());
         return $this;
     }
 

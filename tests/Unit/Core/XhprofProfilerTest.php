@@ -98,13 +98,6 @@ class XhprofProfilerTest extends TestCase
     }
 
     #[Test]
-    public function initRunsWithoutError(): void
-    {
-        XhprofProfiler::init();
-        $this->addToAssertionCount(1);
-    }
-
-    #[Test]
     public function startStopRoundTripSavesRunToCache(): void
     {
         if (!extension_loaded('xhprof')) {

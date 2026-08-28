@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1787776957">
-  <project timestamp="1787776957" name="Clover Coverage">
+<coverage generated="1787954999">
+  <project timestamp="1787954999" name="Clover Coverage">
     <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/Contract/CacheInterface.php">
       <metrics loc="19" ncloc="19" classes="0" methods="0" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="0" coveredstatements="0" elements="0" coveredelements="0"/>
     </file>
@@ -17,89 +17,133 @@
       <metrics loc="15" ncloc="15" classes="0" methods="0" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="0" coveredstatements="0" elements="0" coveredelements="0"/>
     </file>
     <package name="ErikWang2013\Xhprof\Core">
+      <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/MiddlewareTrait.php">
+        <class name="ErikWang2013\Xhprof\Core\MiddlewareTrait" namespace="ErikWang2013\Xhprof\Core">
+          <metrics complexity="4" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="8" coveredstatements="8" elements="9" coveredelements="9"/>
+        </class>
+        <line num="19" type="method" name="runXhprof" visibility="protected" complexity="4" crap="4" count="8"/>
+        <line num="21" type="stmt" count="8"/>
+        <line num="23" type="stmt" count="8"/>
+        <line num="25" type="stmt" count="8"/>
+        <line num="26" type="stmt" count="8"/>
+        <line num="27" type="stmt" count="6"/>
+        <line num="31" type="stmt" count="8"/>
+        <line num="33" type="stmt" count="8"/>
+        <line num="34" type="stmt" count="6"/>
+        <metrics loc="39" ncloc="35" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="8" coveredstatements="8" elements="9" coveredelements="9"/>
+      </file>
+      <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/RedisAdapterTrait.php">
+        <class name="ErikWang2013\Xhprof\Core\RedisAdapterTrait" namespace="ErikWang2013\Xhprof\Core">
+          <metrics complexity="9" methods="9" coveredmethods="9" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="18" coveredelements="18"/>
+        </class>
+        <line num="15" type="method" name="get" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="17" type="stmt" count="3"/>
+        <line num="20" type="method" name="set" visibility="public" complexity="1" crap="1" count="9"/>
+        <line num="22" type="stmt" count="9"/>
+        <line num="25" type="method" name="mget" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="27" type="stmt" count="3"/>
+        <line num="30" type="method" name="incr" visibility="public" complexity="1" crap="1" count="9"/>
+        <line num="32" type="stmt" count="9"/>
+        <line num="35" type="method" name="lPush" visibility="public" complexity="1" crap="1" count="9"/>
+        <line num="37" type="stmt" count="9"/>
+        <line num="40" type="method" name="rPop" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="42" type="stmt" count="3"/>
+        <line num="45" type="method" name="lRange" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="47" type="stmt" count="3"/>
+        <line num="50" type="method" name="del" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="52" type="stmt" count="3"/>
+        <line num="55" type="method" name="decr" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="57" type="stmt" count="3"/>
+        <metrics loc="60" ncloc="56" classes="1" methods="9" coveredmethods="9" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="18" coveredelements="18"/>
+      </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/StaticController.php">
         <class name="ErikWang2013\Xhprof\Core\StaticController" namespace="ErikWang2013\Xhprof\Core">
-          <metrics complexity="17" methods="4" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="29" coveredstatements="27" elements="33" coveredelements="29"/>
+          <metrics complexity="19" methods="5" coveredmethods="3" conditionals="0" coveredconditionals="0" statements="34" coveredstatements="32" elements="39" coveredelements="35"/>
         </class>
-        <line num="15" type="method" name="getPackageRoot" visibility="public" complexity="1" crap="1" count="15"/>
-        <line num="17" type="stmt" count="15"/>
-        <line num="20" type="method" name="getAssetsPath" visibility="public" complexity="1" crap="1" count="13"/>
-        <line num="22" type="stmt" count="13"/>
-        <line num="25" type="method" name="serve" visibility="public" complexity="8" crap="8.02" count="25"/>
-        <line num="27" type="stmt" count="25"/>
-        <line num="28" type="stmt" count="25"/>
-        <line num="29" type="stmt" count="14"/>
-        <line num="32" type="stmt" count="12"/>
-        <line num="33" type="stmt" count="12"/>
-        <line num="34" type="stmt" count="0"/>
-        <line num="37" type="stmt" count="12"/>
-        <line num="38" type="stmt" count="12"/>
-        <line num="39" type="stmt" count="12"/>
-        <line num="41" type="stmt" count="12"/>
-        <line num="42" type="stmt" count="6"/>
-        <line num="45" type="stmt" count="6"/>
-        <line num="46" type="stmt" count="6"/>
-        <line num="47" type="stmt" count="6"/>
-        <line num="50" type="method" name="getPathFromRequest" visibility="private" complexity="7" crap="7.02" count="25"/>
-        <line num="52" type="stmt" count="25"/>
-        <line num="53" type="stmt" count="25"/>
-        <line num="54" type="stmt" count="0"/>
-        <line num="56" type="stmt" count="25"/>
-        <line num="57" type="stmt" count="25"/>
-        <line num="58" type="stmt" count="2"/>
-        <line num="60" type="stmt" count="23"/>
-        <line num="61" type="stmt" count="23"/>
-        <line num="62" type="stmt" count="5"/>
-        <line num="64" type="stmt" count="19"/>
-        <line num="65" type="stmt" count="19"/>
-        <line num="66" type="stmt" count="8"/>
-        <line num="68" type="stmt" count="12"/>
-        <metrics loc="71" ncloc="71" classes="1" methods="4" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="29" coveredstatements="27" elements="33" coveredelements="29"/>
+        <line num="26" type="method" name="readFile" visibility="public" complexity="2" crap="2" count="18"/>
+        <line num="28" type="stmt" count="18"/>
+        <line num="29" type="stmt" count="18"/>
+        <line num="30" type="stmt" count="2"/>
+        <line num="32" type="stmt" count="16"/>
+        <line num="33" type="stmt" count="16"/>
+        <line num="36" type="method" name="getPackageRoot" visibility="public" complexity="1" crap="1" count="15"/>
+        <line num="38" type="stmt" count="15"/>
+        <line num="41" type="method" name="getAssetsPath" visibility="public" complexity="1" crap="1" count="13"/>
+        <line num="43" type="stmt" count="13"/>
+        <line num="46" type="method" name="serve" visibility="public" complexity="8" crap="8.02" count="25"/>
+        <line num="48" type="stmt" count="25"/>
+        <line num="49" type="stmt" count="25"/>
+        <line num="50" type="stmt" count="14"/>
+        <line num="53" type="stmt" count="12"/>
+        <line num="54" type="stmt" count="12"/>
+        <line num="55" type="stmt" count="0"/>
+        <line num="58" type="stmt" count="12"/>
+        <line num="59" type="stmt" count="12"/>
+        <line num="60" type="stmt" count="12"/>
+        <line num="62" type="stmt" count="12"/>
+        <line num="63" type="stmt" count="6"/>
+        <line num="66" type="stmt" count="6"/>
+        <line num="67" type="stmt" count="6"/>
+        <line num="68" type="stmt" count="6"/>
+        <line num="71" type="method" name="getPathFromRequest" visibility="private" complexity="7" crap="7.02" count="25"/>
+        <line num="73" type="stmt" count="25"/>
+        <line num="74" type="stmt" count="25"/>
+        <line num="75" type="stmt" count="0"/>
+        <line num="77" type="stmt" count="25"/>
+        <line num="78" type="stmt" count="25"/>
+        <line num="79" type="stmt" count="2"/>
+        <line num="81" type="stmt" count="23"/>
+        <line num="82" type="stmt" count="23"/>
+        <line num="83" type="stmt" count="5"/>
+        <line num="85" type="stmt" count="19"/>
+        <line num="86" type="stmt" count="19"/>
+        <line num="87" type="stmt" count="8"/>
+        <line num="89" type="stmt" count="12"/>
+        <metrics loc="92" ncloc="91" classes="1" methods="5" coveredmethods="3" conditionals="0" coveredconditionals="0" statements="34" coveredstatements="32" elements="39" coveredelements="35"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/Xhprof.php">
         <class name="ErikWang2013\Xhprof\Core\Xhprof" namespace="ErikWang2013\Xhprof\Core">
-          <metrics complexity="48" methods="11" coveredmethods="10" conditionals="0" coveredconditionals="0" statements="109" coveredstatements="93" elements="120" coveredelements="103"/>
+          <metrics complexity="48" methods="11" coveredmethods="10" conditionals="0" coveredconditionals="0" statements="108" coveredstatements="92" elements="119" coveredelements="102"/>
         </class>
-        <line num="33" type="method" name="getRequest" visibility="public" complexity="3" crap="3" count="87"/>
-        <line num="35" type="stmt" count="87"/>
-        <line num="36" type="stmt" count="76"/>
-        <line num="38" type="stmt" count="11"/>
-        <line num="41" type="method" name="getResponse" visibility="public" complexity="3" crap="3" count="30"/>
-        <line num="43" type="stmt" count="30"/>
-        <line num="44" type="stmt" count="28"/>
-        <line num="46" type="stmt" count="2"/>
-        <line num="49" type="method" name="getCache" visibility="public" complexity="3" crap="3" count="41"/>
-        <line num="51" type="stmt" count="41"/>
-        <line num="52" type="stmt" count="26"/>
-        <line num="54" type="stmt" count="15"/>
-        <line num="57" type="method" name="getLogger" visibility="public" complexity="3" crap="3" count="14"/>
-        <line num="59" type="stmt" count="14"/>
-        <line num="60" type="stmt" count="12"/>
-        <line num="62" type="stmt" count="2"/>
-        <line num="65" type="method" name="getConfig" visibility="public" complexity="3" crap="3" count="201"/>
-        <line num="67" type="stmt" count="201"/>
-        <line num="68" type="stmt" count="169"/>
-        <line num="70" type="stmt" count="33"/>
-        <line num="73" type="method" name="index" visibility="public" complexity="16" crap="16" count="36"/>
-        <line num="75" type="stmt" count="36"/>
+        <line num="34" type="method" name="getRequest" visibility="public" complexity="3" crap="3" count="87"/>
+        <line num="36" type="stmt" count="87"/>
+        <line num="37" type="stmt" count="76"/>
+        <line num="39" type="stmt" count="11"/>
+        <line num="42" type="method" name="getResponse" visibility="public" complexity="3" crap="3" count="30"/>
+        <line num="44" type="stmt" count="30"/>
+        <line num="45" type="stmt" count="28"/>
+        <line num="47" type="stmt" count="2"/>
+        <line num="50" type="method" name="getCache" visibility="public" complexity="3" crap="3" count="41"/>
+        <line num="52" type="stmt" count="41"/>
+        <line num="53" type="stmt" count="26"/>
+        <line num="55" type="stmt" count="15"/>
+        <line num="58" type="method" name="getLogger" visibility="public" complexity="3" crap="3" count="14"/>
+        <line num="60" type="stmt" count="14"/>
+        <line num="61" type="stmt" count="12"/>
+        <line num="63" type="stmt" count="2"/>
+        <line num="66" type="method" name="getConfig" visibility="public" complexity="3" crap="3" count="200"/>
+        <line num="68" type="stmt" count="200"/>
+        <line num="69" type="stmt" count="169"/>
+        <line num="71" type="stmt" count="32"/>
+        <line num="74" type="method" name="index" visibility="public" complexity="16" crap="16" count="36"/>
         <line num="76" type="stmt" count="36"/>
-        <line num="78" type="stmt" count="36"/>
+        <line num="77" type="stmt" count="36"/>
         <line num="79" type="stmt" count="36"/>
-        <line num="80" type="stmt" count="4"/>
-        <line num="83" type="stmt" count="32"/>
+        <line num="80" type="stmt" count="36"/>
+        <line num="81" type="stmt" count="4"/>
         <line num="84" type="stmt" count="32"/>
         <line num="85" type="stmt" count="32"/>
         <line num="86" type="stmt" count="32"/>
         <line num="87" type="stmt" count="32"/>
         <line num="88" type="stmt" count="32"/>
-        <line num="89" type="stmt" count="24"/>
-        <line num="90" type="stmt" count="1"/>
-        <line num="92" type="stmt" count="23"/>
+        <line num="89" type="stmt" count="32"/>
+        <line num="90" type="stmt" count="24"/>
+        <line num="91" type="stmt" count="1"/>
         <line num="93" type="stmt" count="23"/>
-        <line num="94" type="stmt" count="17"/>
-        <line num="98" type="stmt" count="14"/>
-        <line num="99" type="stmt" count="5"/>
-        <line num="101" type="stmt" count="9"/>
+        <line num="94" type="stmt" count="23"/>
+        <line num="95" type="stmt" count="17"/>
+        <line num="99" type="stmt" count="14"/>
+        <line num="100" type="stmt" count="5"/>
         <line num="102" type="stmt" count="9"/>
         <line num="103" type="stmt" count="9"/>
         <line num="104" type="stmt" count="9"/>
@@ -107,9 +151,9 @@
         <line num="106" type="stmt" count="9"/>
         <line num="107" type="stmt" count="9"/>
         <line num="108" type="stmt" count="9"/>
-        <line num="110" type="stmt" count="9"/>
-        <line num="111" type="stmt" count="8"/>
-        <line num="113" type="stmt" count="9"/>
+        <line num="109" type="stmt" count="9"/>
+        <line num="111" type="stmt" count="9"/>
+        <line num="112" type="stmt" count="8"/>
         <line num="114" type="stmt" count="9"/>
         <line num="115" type="stmt" count="9"/>
         <line num="116" type="stmt" count="9"/>
@@ -126,96 +170,98 @@
         <line num="127" type="stmt" count="9"/>
         <line num="128" type="stmt" count="9"/>
         <line num="129" type="stmt" count="9"/>
-        <line num="132" type="method" name="deny" visibility="private" complexity="2" crap="2" count="27"/>
-        <line num="134" type="stmt" count="27"/>
+        <line num="130" type="stmt" count="9"/>
+        <line num="133" type="method" name="deny" visibility="private" complexity="2" crap="2" count="27"/>
         <line num="135" type="stmt" count="27"/>
-        <line num="136" type="stmt" count="25"/>
-        <line num="138" type="stmt" count="2"/>
+        <line num="136" type="stmt" count="27"/>
+        <line num="137" type="stmt" count="25"/>
         <line num="139" type="stmt" count="2"/>
-        <line num="142" type="method" name="xhprofStart" visibility="public" complexity="1" crap="1" count="13"/>
-        <line num="144" type="stmt" count="13"/>
-        <line num="145" type="stmt" count="13"/>
-        <line num="148" type="method" name="xhprofStop" visibility="public" complexity="1" crap="1" count="13"/>
-        <line num="150" type="stmt" count="13"/>
-        <line num="153" type="method" name="bootstrap" visibility="public" complexity="8" crap="8" count="201"/>
-        <line num="160" type="stmt" count="201"/>
-        <line num="161" type="stmt" count="201"/>
-        <line num="162" type="stmt" count="201"/>
-        <line num="163" type="stmt" count="201"/>
-        <line num="164" type="stmt" count="201"/>
-        <line num="165" type="stmt" count="201"/>
-        <line num="167" type="stmt" count="4"/>
-        <line num="170" type="stmt" count="201"/>
-        <line num="171" type="stmt" count="169"/>
+        <line num="140" type="stmt" count="2"/>
+        <line num="143" type="method" name="xhprofStart" visibility="public" complexity="1" crap="1" count="13"/>
+        <line num="146" type="stmt" count="13"/>
+        <line num="149" type="method" name="xhprofStop" visibility="public" complexity="1" crap="1" count="13"/>
+        <line num="151" type="stmt" count="13"/>
+        <line num="154" type="method" name="bootstrap" visibility="public" complexity="8" crap="8" count="200"/>
+        <line num="161" type="stmt" count="200"/>
+        <line num="162" type="stmt" count="200"/>
+        <line num="163" type="stmt" count="200"/>
+        <line num="164" type="stmt" count="200"/>
+        <line num="165" type="stmt" count="200"/>
+        <line num="166" type="stmt" count="200"/>
+        <line num="168" type="stmt" count="4"/>
+        <line num="171" type="stmt" count="200"/>
         <line num="172" type="stmt" count="169"/>
         <line num="173" type="stmt" count="169"/>
         <line num="174" type="stmt" count="169"/>
         <line num="175" type="stmt" count="169"/>
-        <line num="177" type="stmt" count="201"/>
-        <line num="180" type="method" name="autoDetect" visibility="private" complexity="5" crap="10.20" count="4"/>
-        <line num="182" type="stmt" count="4"/>
-        <line num="183" type="stmt" count="0"/>
+        <line num="176" type="stmt" count="169"/>
+        <line num="178" type="stmt" count="200"/>
+        <line num="181" type="method" name="autoDetect" visibility="private" complexity="5" crap="10.20" count="4"/>
+        <line num="183" type="stmt" count="4"/>
         <line num="184" type="stmt" count="0"/>
         <line num="185" type="stmt" count="0"/>
         <line num="186" type="stmt" count="0"/>
         <line num="187" type="stmt" count="0"/>
-        <line num="188" type="stmt" count="4"/>
-        <line num="189" type="stmt" count="0"/>
+        <line num="188" type="stmt" count="0"/>
+        <line num="189" type="stmt" count="4"/>
         <line num="190" type="stmt" count="0"/>
         <line num="191" type="stmt" count="0"/>
         <line num="192" type="stmt" count="0"/>
         <line num="193" type="stmt" count="0"/>
-        <line num="194" type="stmt" count="4"/>
-        <line num="195" type="stmt" count="0"/>
+        <line num="194" type="stmt" count="0"/>
+        <line num="195" type="stmt" count="4"/>
         <line num="196" type="stmt" count="0"/>
         <line num="197" type="stmt" count="0"/>
         <line num="198" type="stmt" count="0"/>
         <line num="199" type="stmt" count="0"/>
-        <line num="200" type="stmt" count="4"/>
+        <line num="200" type="stmt" count="0"/>
         <line num="201" type="stmt" count="4"/>
         <line num="202" type="stmt" count="4"/>
         <line num="203" type="stmt" count="4"/>
-        <line num="204" type="stmt" count="3"/>
+        <line num="204" type="stmt" count="4"/>
         <line num="205" type="stmt" count="3"/>
         <line num="206" type="stmt" count="3"/>
         <line num="207" type="stmt" count="3"/>
-        <line num="209" type="stmt" count="0"/>
-        <metrics loc="213" ncloc="210" classes="1" methods="11" coveredmethods="10" conditionals="0" coveredconditionals="0" statements="109" coveredstatements="93" elements="120" coveredelements="103"/>
+        <line num="208" type="stmt" count="3"/>
+        <line num="210" type="stmt" count="0"/>
+        <metrics loc="214" ncloc="210" classes="1" methods="11" coveredmethods="10" conditionals="0" coveredconditionals="0" statements="108" coveredstatements="92" elements="119" coveredelements="102"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/XhprofProfiler.php">
         <class name="ErikWang2013\Xhprof\Core\XhprofProfiler" namespace="ErikWang2013\Xhprof\Core">
-          <metrics complexity="7" methods="5" coveredmethods="5" conditionals="0" coveredconditionals="0" statements="18" coveredstatements="18" elements="23" coveredelements="23"/>
+          <metrics complexity="7" methods="4" coveredmethods="3" conditionals="0" coveredconditionals="0" statements="21" coveredstatements="17" elements="25" coveredelements="20"/>
         </class>
-        <line num="11" type="method" name="init" visibility="public" complexity="1" crap="1" count="14"/>
-        <line num="15" type="stmt" count="14"/>
-        <line num="17" type="method" name="start" visibility="public" complexity="1" crap="1" count="15"/>
-        <line num="19" type="stmt" count="15"/>
-        <line num="22" type="method" name="stop" visibility="public" complexity="1" crap="1" count="15"/>
-        <line num="24" type="stmt" count="15"/>
-        <line num="25" type="stmt" count="15"/>
-        <line num="28" type="method" name="bootstrap" visibility="public" complexity="2" crap="2" count="201"/>
-        <line num="30" type="stmt" count="201"/>
-        <line num="31" type="stmt" count="201"/>
-        <line num="32" type="stmt" count="1"/>
-        <line num="34" type="stmt" count="201"/>
-        <line num="35" type="stmt" count="201"/>
-        <line num="36" type="stmt" count="201"/>
-        <line num="37" type="stmt" count="201"/>
-        <line num="38" type="stmt" count="201"/>
-        <line num="39" type="stmt" count="201"/>
-        <line num="42" type="method" name="isEnabled" visibility="public" complexity="2" crap="2" count="21"/>
-        <line num="44" type="stmt" count="21"/>
-        <line num="45" type="stmt" count="21"/>
-        <line num="46" type="stmt" count="1"/>
-        <line num="48" type="stmt" count="20"/>
-        <line num="49" type="stmt" count="20"/>
-        <metrics loc="52" ncloc="50" classes="1" methods="5" coveredmethods="5" conditionals="0" coveredconditionals="0" statements="18" coveredstatements="18" elements="23" coveredelements="23"/>
+        <line num="13" type="method" name="start" visibility="public" complexity="1" crap="1" count="15"/>
+        <line num="15" type="stmt" count="15"/>
+        <line num="18" type="method" name="stop" visibility="public" complexity="1" crap="1" count="15"/>
+        <line num="20" type="stmt" count="15"/>
+        <line num="21" type="stmt" count="15"/>
+        <line num="24" type="method" name="bootstrap" visibility="public" complexity="2" crap="2" count="200"/>
+        <line num="26" type="stmt" count="200"/>
+        <line num="27" type="stmt" count="200"/>
+        <line num="28" type="stmt" count="1"/>
+        <line num="30" type="stmt" count="200"/>
+        <line num="31" type="stmt" count="200"/>
+        <line num="32" type="stmt" count="200"/>
+        <line num="33" type="stmt" count="200"/>
+        <line num="34" type="stmt" count="200"/>
+        <line num="35" type="stmt" count="200"/>
+        <line num="36" type="stmt" count="200"/>
+        <line num="37" type="stmt" count="200"/>
+        <line num="40" type="method" name="isEnabled" visibility="public" complexity="3" crap="4.68" count="21"/>
+        <line num="42" type="stmt" count="21"/>
+        <line num="43" type="stmt" count="21"/>
+        <line num="44" type="stmt" count="0"/>
+        <line num="45" type="stmt" count="0"/>
+        <line num="46" type="stmt" count="0"/>
+        <line num="48" type="stmt" count="0"/>
+        <line num="50" type="stmt" count="21"/>
+        <metrics loc="53" ncloc="53" classes="1" methods="4" coveredmethods="3" conditionals="0" coveredconditionals="0" statements="21" coveredstatements="17" elements="25" coveredelements="20"/>
       </file>
     </package>
     <package name="ErikWang2013\Xhprof\Core\XhprofLib\Display">
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/XhprofLib/Display/XhprofDisplay.php">
         <class name="ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay" namespace="ErikWang2013\Xhprof\Core\XhprofLib\Display">
-          <metrics complexity="146" methods="26" coveredmethods="21" conditionals="0" coveredconditionals="0" statements="728" coveredstatements="618" elements="754" coveredelements="639"/>
+          <metrics complexity="146" methods="26" coveredmethods="21" conditionals="0" coveredconditionals="0" statements="726" coveredstatements="616" elements="752" coveredelements="637"/>
         </class>
         <line num="14" type="method" name="base_path" visibility="public" complexity="1" crap="1" count="17"/>
         <line num="16" type="stmt" count="17"/>
@@ -414,96 +460,99 @@
         <line num="512" type="stmt" count="11"/>
         <line num="520" type="method" name="print_function_info" visibility="public" complexity="4" crap="4" count="8"/>
         <line num="522" type="stmt" count="8"/>
+        <line num="523" type="stmt" count="8"/>
         <line num="524" type="stmt" count="8"/>
         <line num="525" type="stmt" count="8"/>
         <line num="526" type="stmt" count="8"/>
         <line num="527" type="stmt" count="8"/>
-        <line num="528" type="stmt" count="8"/>
         <line num="529" type="stmt" count="8"/>
+        <line num="530" type="stmt" count="8"/>
         <line num="532" type="stmt" count="8"/>
         <line num="533" type="stmt" count="8"/>
         <line num="534" type="stmt" count="8"/>
+        <line num="535" type="stmt" count="8"/>
         <line num="536" type="stmt" count="8"/>
         <line num="537" type="stmt" count="8"/>
-        <line num="538" type="stmt" count="8"/>
         <line num="539" type="stmt" count="8"/>
         <line num="540" type="stmt" count="8"/>
         <line num="541" type="stmt" count="8"/>
-        <line num="543" type="stmt" count="8"/>
+        <line num="542" type="stmt" count="8"/>
         <line num="544" type="stmt" count="8"/>
-        <line num="545" type="stmt" count="8"/>
         <line num="546" type="stmt" count="8"/>
-        <line num="548" type="stmt" count="8"/>
-        <line num="550" type="stmt" count="8"/>
+        <line num="547" type="stmt" count="8"/>
         <line num="551" type="stmt" count="8"/>
+        <line num="553" type="stmt" count="8"/>
+        <line num="554" type="stmt" count="8"/>
         <line num="555" type="stmt" count="8"/>
+        <line num="556" type="stmt" count="8"/>
         <line num="557" type="stmt" count="8"/>
         <line num="558" type="stmt" count="8"/>
         <line num="559" type="stmt" count="8"/>
         <line num="560" type="stmt" count="8"/>
         <line num="561" type="stmt" count="8"/>
         <line num="562" type="stmt" count="8"/>
-        <line num="563" type="stmt" count="8"/>
-        <line num="564" type="stmt" count="8"/>
         <line num="565" type="stmt" count="8"/>
         <line num="566" type="stmt" count="8"/>
+        <line num="567" type="stmt" count="8"/>
+        <line num="568" type="stmt" count="8"/>
         <line num="569" type="stmt" count="8"/>
         <line num="570" type="stmt" count="8"/>
         <line num="571" type="stmt" count="8"/>
         <line num="572" type="stmt" count="8"/>
         <line num="573" type="stmt" count="8"/>
         <line num="574" type="stmt" count="8"/>
-        <line num="575" type="stmt" count="8"/>
-        <line num="576" type="stmt" count="8"/>
         <line num="577" type="stmt" count="8"/>
         <line num="578" type="stmt" count="8"/>
-        <line num="581" type="stmt" count="8"/>
-        <line num="582" type="stmt" count="8"/>
-        <line num="590" type="method" name="print_flat_data" visibility="public" complexity="9" crap="9" count="8"/>
+        <line num="586" type="method" name="print_flat_data" visibility="public" complexity="9" crap="9" count="8"/>
+        <line num="589" type="stmt" count="8"/>
+        <line num="590" type="stmt" count="8"/>
+        <line num="591" type="stmt" count="8"/>
+        <line num="592" type="stmt" count="8"/>
         <line num="593" type="stmt" count="8"/>
         <line num="594" type="stmt" count="8"/>
-        <line num="595" type="stmt" count="8"/>
-        <line num="596" type="stmt" count="8"/>
-        <line num="597" type="stmt" count="8"/>
-        <line num="598" type="stmt" count="8"/>
-        <line num="599" type="stmt" count="4"/>
-        <line num="600" type="stmt" count="4"/>
+        <line num="595" type="stmt" count="4"/>
+        <line num="596" type="stmt" count="4"/>
+        <line num="598" type="stmt" count="6"/>
+        <line num="599" type="stmt" count="6"/>
+        <line num="600" type="stmt" count="6"/>
+        <line num="601" type="stmt" count="6"/>
         <line num="602" type="stmt" count="6"/>
         <line num="603" type="stmt" count="6"/>
         <line num="604" type="stmt" count="6"/>
         <line num="605" type="stmt" count="6"/>
         <line num="606" type="stmt" count="6"/>
-        <line num="607" type="stmt" count="6"/>
-        <line num="608" type="stmt" count="6"/>
-        <line num="609" type="stmt" count="6"/>
-        <line num="610" type="stmt" count="6"/>
+        <line num="610" type="stmt" count="8"/>
+        <line num="611" type="stmt" count="8"/>
+        <line num="612" type="stmt" count="8"/>
+        <line num="614" type="stmt" count="8"/>
         <line num="615" type="stmt" count="8"/>
         <line num="616" type="stmt" count="8"/>
         <line num="617" type="stmt" count="8"/>
+        <line num="618" type="stmt" count="8"/>
         <line num="619" type="stmt" count="8"/>
-        <line num="620" type="stmt" count="8"/>
-        <line num="621" type="stmt" count="8"/>
-        <line num="622" type="stmt" count="8"/>
-        <line num="623" type="stmt" count="8"/>
+        <line num="621" type="stmt" count="7"/>
         <line num="624" type="stmt" count="8"/>
-        <line num="626" type="stmt" count="7"/>
-        <line num="629" type="stmt" count="8"/>
+        <line num="625" type="stmt" count="8"/>
+        <line num="626" type="stmt" count="8"/>
+        <line num="628" type="stmt" count="8"/>
         <line num="630" type="stmt" count="8"/>
         <line num="631" type="stmt" count="8"/>
+        <line num="632" type="stmt" count="8"/>
         <line num="633" type="stmt" count="8"/>
-        <line num="635" type="stmt" count="8"/>
-        <line num="636" type="stmt" count="8"/>
-        <line num="637" type="stmt" count="8"/>
-        <line num="638" type="stmt" count="8"/>
-        <line num="642" type="stmt" count="1"/>
-        <line num="643" type="stmt" count="1"/>
-        <line num="644" type="stmt" count="1"/>
+        <line num="637" type="stmt" count="1"/>
+        <line num="638" type="stmt" count="1"/>
+        <line num="639" type="stmt" count="1"/>
+        <line num="642" type="stmt" count="8"/>
+        <line num="643" type="stmt" count="8"/>
+        <line num="644" type="stmt" count="6"/>
+        <line num="646" type="stmt" count="8"/>
         <line num="647" type="stmt" count="8"/>
-        <line num="648" type="stmt" count="8"/>
-        <line num="649" type="stmt" count="6"/>
-        <line num="651" type="stmt" count="8"/>
-        <line num="652" type="stmt" count="8"/>
-        <line num="660" type="method" name="full_report" visibility="public" complexity="15" crap="15" count="7"/>
+        <line num="655" type="method" name="full_report" visibility="public" complexity="15" crap="15" count="7"/>
+        <line num="657" type="stmt" count="7"/>
+        <line num="658" type="stmt" count="7"/>
+        <line num="659" type="stmt" count="7"/>
+        <line num="660" type="stmt" count="7"/>
+        <line num="661" type="stmt" count="7"/>
         <line num="662" type="stmt" count="7"/>
         <line num="663" type="stmt" count="7"/>
         <line num="664" type="stmt" count="7"/>
@@ -511,15 +560,15 @@
         <line num="666" type="stmt" count="7"/>
         <line num="667" type="stmt" count="7"/>
         <line num="668" type="stmt" count="7"/>
-        <line num="669" type="stmt" count="7"/>
         <line num="670" type="stmt" count="7"/>
         <line num="671" type="stmt" count="7"/>
         <line num="672" type="stmt" count="7"/>
         <line num="673" type="stmt" count="7"/>
-        <line num="675" type="stmt" count="7"/>
-        <line num="676" type="stmt" count="7"/>
-        <line num="677" type="stmt" count="7"/>
-        <line num="678" type="stmt" count="7"/>
+        <line num="674" type="stmt" count="1"/>
+        <line num="675" type="stmt" count="1"/>
+        <line num="676" type="stmt" count="1"/>
+        <line num="677" type="stmt" count="1"/>
+        <line num="678" type="stmt" count="1"/>
         <line num="679" type="stmt" count="1"/>
         <line num="680" type="stmt" count="1"/>
         <line num="681" type="stmt" count="1"/>
@@ -534,93 +583,93 @@
         <line num="690" type="stmt" count="1"/>
         <line num="691" type="stmt" count="1"/>
         <line num="692" type="stmt" count="1"/>
-        <line num="693" type="stmt" count="1"/>
         <line num="694" type="stmt" count="1"/>
         <line num="695" type="stmt" count="1"/>
         <line num="696" type="stmt" count="1"/>
         <line num="697" type="stmt" count="1"/>
+        <line num="698" type="stmt" count="1"/>
         <line num="699" type="stmt" count="1"/>
         <line num="700" type="stmt" count="1"/>
         <line num="701" type="stmt" count="1"/>
-        <line num="702" type="stmt" count="1"/>
         <line num="703" type="stmt" count="1"/>
         <line num="704" type="stmt" count="1"/>
         <line num="705" type="stmt" count="1"/>
         <line num="706" type="stmt" count="1"/>
+        <line num="707" type="stmt" count="1"/>
         <line num="708" type="stmt" count="1"/>
         <line num="709" type="stmt" count="1"/>
         <line num="710" type="stmt" count="1"/>
-        <line num="711" type="stmt" count="1"/>
-        <line num="712" type="stmt" count="1"/>
         <line num="713" type="stmt" count="1"/>
         <line num="714" type="stmt" count="1"/>
         <line num="715" type="stmt" count="1"/>
+        <line num="716" type="stmt" count="1"/>
+        <line num="717" type="stmt" count="1"/>
         <line num="718" type="stmt" count="1"/>
         <line num="719" type="stmt" count="1"/>
         <line num="720" type="stmt" count="1"/>
         <line num="721" type="stmt" count="1"/>
-        <line num="722" type="stmt" count="1"/>
         <line num="723" type="stmt" count="1"/>
-        <line num="724" type="stmt" count="1"/>
-        <line num="725" type="stmt" count="1"/>
-        <line num="726" type="stmt" count="1"/>
-        <line num="728" type="stmt" count="1"/>
-        <line num="731" type="stmt" count="6"/>
-        <line num="732" type="stmt" count="6"/>
+        <line num="726" type="stmt" count="6"/>
+        <line num="727" type="stmt" count="6"/>
+        <line num="728" type="stmt" count="6"/>
+        <line num="729" type="stmt" count="6"/>
+        <line num="730" type="stmt" count="6"/>
+        <line num="731" type="stmt" count="1"/>
         <line num="733" type="stmt" count="6"/>
-        <line num="734" type="stmt" count="6"/>
         <line num="735" type="stmt" count="6"/>
-        <line num="736" type="stmt" count="1"/>
+        <line num="736" type="stmt" count="6"/>
+        <line num="737" type="stmt" count="6"/>
         <line num="738" type="stmt" count="6"/>
+        <line num="739" type="stmt" count="6"/>
         <line num="740" type="stmt" count="6"/>
         <line num="741" type="stmt" count="6"/>
         <line num="742" type="stmt" count="6"/>
-        <line num="743" type="stmt" count="6"/>
         <line num="744" type="stmt" count="6"/>
         <line num="745" type="stmt" count="6"/>
         <line num="746" type="stmt" count="6"/>
         <line num="747" type="stmt" count="6"/>
         <line num="749" type="stmt" count="6"/>
-        <line num="750" type="stmt" count="6"/>
-        <line num="751" type="stmt" count="6"/>
-        <line num="752" type="stmt" count="6"/>
-        <line num="754" type="stmt" count="6"/>
+        <line num="751" type="stmt" count="7"/>
+        <line num="755" type="stmt" count="7"/>
         <line num="756" type="stmt" count="7"/>
-        <line num="760" type="stmt" count="7"/>
-        <line num="761" type="stmt" count="7"/>
+        <line num="757" type="stmt" count="7"/>
+        <line num="758" type="stmt" count="7"/>
+        <line num="759" type="stmt" count="7"/>
         <line num="762" type="stmt" count="7"/>
-        <line num="763" type="stmt" count="7"/>
-        <line num="764" type="stmt" count="7"/>
+        <line num="765" type="stmt" count="7"/>
+        <line num="766" type="stmt" count="7"/>
         <line num="767" type="stmt" count="7"/>
-        <line num="770" type="stmt" count="7"/>
-        <line num="771" type="stmt" count="7"/>
+        <line num="768" type="stmt" count="3"/>
+        <line num="769" type="stmt" count="3"/>
         <line num="772" type="stmt" count="7"/>
-        <line num="773" type="stmt" count="3"/>
-        <line num="774" type="stmt" count="3"/>
-        <line num="777" type="stmt" count="7"/>
-        <line num="778" type="stmt" count="7"/>
-        <line num="779" type="stmt" count="1"/>
-        <line num="780" type="stmt" count="1"/>
-        <line num="781" type="stmt" count="1"/>
-        <line num="782" type="stmt" count="1"/>
-        <line num="784" type="stmt" count="6"/>
-        <line num="785" type="stmt" count="6"/>
-        <line num="787" type="stmt" count="7"/>
-        <line num="788" type="stmt" count="7"/>
-        <line num="789" type="stmt" count="7"/>
-        <line num="796" type="method" name="get_tooltip_attributes" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="798" type="stmt" count="3"/>
-        <line num="807" type="method" name="pc_info" visibility="public" complexity="4" crap="4" count="1"/>
+        <line num="773" type="stmt" count="7"/>
+        <line num="774" type="stmt" count="1"/>
+        <line num="775" type="stmt" count="1"/>
+        <line num="776" type="stmt" count="1"/>
+        <line num="777" type="stmt" count="1"/>
+        <line num="779" type="stmt" count="6"/>
+        <line num="780" type="stmt" count="6"/>
+        <line num="782" type="stmt" count="7"/>
+        <line num="783" type="stmt" count="7"/>
+        <line num="784" type="stmt" count="7"/>
+        <line num="791" type="method" name="get_tooltip_attributes" visibility="public" complexity="1" crap="1" count="3"/>
+        <line num="793" type="stmt" count="3"/>
+        <line num="802" type="method" name="pc_info" visibility="public" complexity="4" crap="4" count="1"/>
+        <line num="804" type="stmt" count="1"/>
+        <line num="805" type="stmt" count="1"/>
+        <line num="806" type="stmt" count="1"/>
+        <line num="807" type="stmt" count="1"/>
+        <line num="808" type="stmt" count="1"/>
         <line num="809" type="stmt" count="1"/>
         <line num="810" type="stmt" count="1"/>
         <line num="811" type="stmt" count="1"/>
-        <line num="812" type="stmt" count="1"/>
         <line num="813" type="stmt" count="1"/>
         <line num="814" type="stmt" count="1"/>
-        <line num="815" type="stmt" count="1"/>
-        <line num="816" type="stmt" count="1"/>
         <line num="818" type="stmt" count="1"/>
         <line num="819" type="stmt" count="1"/>
+        <line num="820" type="stmt" count="1"/>
+        <line num="821" type="stmt" count="1"/>
+        <line num="822" type="stmt" count="1"/>
         <line num="823" type="stmt" count="1"/>
         <line num="824" type="stmt" count="1"/>
         <line num="825" type="stmt" count="1"/>
@@ -629,60 +678,60 @@
         <line num="828" type="stmt" count="1"/>
         <line num="829" type="stmt" count="1"/>
         <line num="830" type="stmt" count="1"/>
-        <line num="831" type="stmt" count="1"/>
-        <line num="832" type="stmt" count="1"/>
-        <line num="833" type="stmt" count="1"/>
-        <line num="834" type="stmt" count="1"/>
-        <line num="835" type="stmt" count="1"/>
-        <line num="839" type="method" name="print_pc_array" visibility="public" complexity="5" crap="5" count="1"/>
+        <line num="834" type="method" name="print_pc_array" visibility="public" complexity="5" crap="5" count="1"/>
+        <line num="843" type="stmt" count="1"/>
+        <line num="844" type="stmt" count="1"/>
+        <line num="845" type="stmt" count="1"/>
+        <line num="846" type="stmt" count="1"/>
+        <line num="847" type="stmt" count="1"/>
         <line num="848" type="stmt" count="1"/>
         <line num="849" type="stmt" count="1"/>
         <line num="850" type="stmt" count="1"/>
-        <line num="851" type="stmt" count="1"/>
         <line num="852" type="stmt" count="1"/>
         <line num="853" type="stmt" count="1"/>
         <line num="854" type="stmt" count="1"/>
         <line num="855" type="stmt" count="1"/>
+        <line num="856" type="stmt" count="1"/>
         <line num="857" type="stmt" count="1"/>
         <line num="858" type="stmt" count="1"/>
         <line num="859" type="stmt" count="1"/>
-        <line num="860" type="stmt" count="1"/>
         <line num="861" type="stmt" count="1"/>
         <line num="862" type="stmt" count="1"/>
         <line num="863" type="stmt" count="1"/>
-        <line num="864" type="stmt" count="1"/>
-        <line num="866" type="stmt" count="1"/>
-        <line num="867" type="stmt" count="1"/>
+        <line num="865" type="stmt" count="0"/>
         <line num="868" type="stmt" count="1"/>
-        <line num="870" type="stmt" count="0"/>
-        <line num="873" type="stmt" count="1"/>
+        <line num="869" type="stmt" count="1"/>
+        <line num="870" type="stmt" count="1"/>
+        <line num="871" type="stmt" count="1"/>
+        <line num="872" type="stmt" count="1"/>
         <line num="874" type="stmt" count="1"/>
-        <line num="875" type="stmt" count="1"/>
-        <line num="876" type="stmt" count="1"/>
-        <line num="877" type="stmt" count="1"/>
-        <line num="879" type="stmt" count="1"/>
-        <line num="882" type="method" name="print_source_link" visibility="public" complexity="4" crap="4" count="11"/>
-        <line num="884" type="stmt" count="11"/>
-        <line num="885" type="stmt" count="11"/>
-        <line num="886" type="stmt" count="11"/>
-        <line num="887" type="stmt" count="1"/>
-        <line num="888" type="stmt" count="1"/>
-        <line num="889" type="stmt" count="1"/>
-        <line num="890" type="stmt" count="1"/>
-        <line num="891" type="stmt" count="1"/>
-        <line num="894" type="stmt" count="11"/>
-        <line num="898" type="method" name="print_symbol_summary" visibility="public" complexity="2" crap="6" count="0"/>
+        <line num="877" type="method" name="print_source_link" visibility="public" complexity="4" crap="4" count="11"/>
+        <line num="879" type="stmt" count="11"/>
+        <line num="880" type="stmt" count="11"/>
+        <line num="881" type="stmt" count="11"/>
+        <line num="882" type="stmt" count="1"/>
+        <line num="883" type="stmt" count="1"/>
+        <line num="884" type="stmt" count="1"/>
+        <line num="885" type="stmt" count="1"/>
+        <line num="886" type="stmt" count="1"/>
+        <line num="889" type="stmt" count="11"/>
+        <line num="893" type="method" name="print_symbol_summary" visibility="public" complexity="2" crap="6" count="0"/>
+        <line num="896" type="stmt" count="0"/>
+        <line num="897" type="stmt" count="0"/>
+        <line num="899" type="stmt" count="0"/>
+        <line num="900" type="stmt" count="0"/>
         <line num="901" type="stmt" count="0"/>
         <line num="902" type="stmt" count="0"/>
+        <line num="903" type="stmt" count="0"/>
         <line num="904" type="stmt" count="0"/>
-        <line num="905" type="stmt" count="0"/>
         <line num="906" type="stmt" count="0"/>
         <line num="907" type="stmt" count="0"/>
-        <line num="908" type="stmt" count="0"/>
-        <line num="909" type="stmt" count="0"/>
-        <line num="911" type="stmt" count="0"/>
-        <line num="912" type="stmt" count="0"/>
-        <line num="920" type="method" name="symbol_report" visibility="public" complexity="27" crap="55.21" count="2"/>
+        <line num="915" type="method" name="symbol_report" visibility="public" complexity="27" crap="55.21" count="2"/>
+        <line num="925" type="stmt" count="2"/>
+        <line num="926" type="stmt" count="2"/>
+        <line num="927" type="stmt" count="2"/>
+        <line num="928" type="stmt" count="2"/>
+        <line num="929" type="stmt" count="2"/>
         <line num="930" type="stmt" count="2"/>
         <line num="931" type="stmt" count="2"/>
         <line num="932" type="stmt" count="2"/>
@@ -690,41 +739,41 @@
         <line num="934" type="stmt" count="2"/>
         <line num="935" type="stmt" count="2"/>
         <line num="936" type="stmt" count="2"/>
-        <line num="937" type="stmt" count="2"/>
         <line num="938" type="stmt" count="2"/>
         <line num="939" type="stmt" count="2"/>
         <line num="940" type="stmt" count="2"/>
         <line num="941" type="stmt" count="2"/>
-        <line num="943" type="stmt" count="2"/>
-        <line num="944" type="stmt" count="2"/>
-        <line num="945" type="stmt" count="2"/>
-        <line num="946" type="stmt" count="2"/>
+        <line num="942" type="stmt" count="2"/>
+        <line num="943" type="stmt" count="0"/>
+        <line num="944" type="stmt" count="0"/>
         <line num="947" type="stmt" count="2"/>
-        <line num="948" type="stmt" count="0"/>
         <line num="949" type="stmt" count="0"/>
-        <line num="952" type="stmt" count="2"/>
+        <line num="950" type="stmt" count="0"/>
+        <line num="951" type="stmt" count="0"/>
+        <line num="952" type="stmt" count="0"/>
+        <line num="953" type="stmt" count="0"/>
         <line num="954" type="stmt" count="0"/>
         <line num="955" type="stmt" count="0"/>
         <line num="956" type="stmt" count="0"/>
         <line num="957" type="stmt" count="0"/>
         <line num="958" type="stmt" count="0"/>
         <line num="959" type="stmt" count="0"/>
-        <line num="960" type="stmt" count="0"/>
         <line num="961" type="stmt" count="0"/>
         <line num="962" type="stmt" count="0"/>
         <line num="963" type="stmt" count="0"/>
         <line num="964" type="stmt" count="0"/>
+        <line num="965" type="stmt" count="0"/>
         <line num="966" type="stmt" count="0"/>
         <line num="967" type="stmt" count="0"/>
         <line num="968" type="stmt" count="0"/>
         <line num="969" type="stmt" count="0"/>
         <line num="970" type="stmt" count="0"/>
         <line num="971" type="stmt" count="0"/>
-        <line num="972" type="stmt" count="0"/>
         <line num="973" type="stmt" count="0"/>
         <line num="974" type="stmt" count="0"/>
         <line num="975" type="stmt" count="0"/>
         <line num="976" type="stmt" count="0"/>
+        <line num="977" type="stmt" count="0"/>
         <line num="978" type="stmt" count="0"/>
         <line num="979" type="stmt" count="0"/>
         <line num="980" type="stmt" count="0"/>
@@ -735,56 +784,55 @@
         <line num="985" type="stmt" count="0"/>
         <line num="986" type="stmt" count="0"/>
         <line num="987" type="stmt" count="0"/>
-        <line num="988" type="stmt" count="0"/>
-        <line num="989" type="stmt" count="0"/>
-        <line num="990" type="stmt" count="0"/>
         <line num="991" type="stmt" count="0"/>
         <line num="992" type="stmt" count="0"/>
+        <line num="995" type="stmt" count="0"/>
         <line num="996" type="stmt" count="0"/>
         <line num="997" type="stmt" count="0"/>
+        <line num="998" type="stmt" count="0"/>
+        <line num="999" type="stmt" count="0"/>
         <line num="1000" type="stmt" count="0"/>
         <line num="1001" type="stmt" count="0"/>
-        <line num="1002" type="stmt" count="0"/>
-        <line num="1003" type="stmt" count="0"/>
         <line num="1004" type="stmt" count="0"/>
         <line num="1005" type="stmt" count="0"/>
         <line num="1006" type="stmt" count="0"/>
+        <line num="1007" type="stmt" count="0"/>
+        <line num="1008" type="stmt" count="0"/>
         <line num="1009" type="stmt" count="0"/>
         <line num="1010" type="stmt" count="0"/>
         <line num="1011" type="stmt" count="0"/>
         <line num="1012" type="stmt" count="0"/>
         <line num="1013" type="stmt" count="0"/>
         <line num="1014" type="stmt" count="0"/>
-        <line num="1015" type="stmt" count="0"/>
-        <line num="1016" type="stmt" count="0"/>
         <line num="1017" type="stmt" count="0"/>
         <line num="1018" type="stmt" count="0"/>
         <line num="1019" type="stmt" count="0"/>
+        <line num="1020" type="stmt" count="0"/>
+        <line num="1021" type="stmt" count="0"/>
         <line num="1022" type="stmt" count="0"/>
         <line num="1023" type="stmt" count="0"/>
         <line num="1024" type="stmt" count="0"/>
-        <line num="1025" type="stmt" count="0"/>
         <line num="1026" type="stmt" count="0"/>
-        <line num="1027" type="stmt" count="0"/>
-        <line num="1028" type="stmt" count="0"/>
-        <line num="1029" type="stmt" count="0"/>
-        <line num="1031" type="stmt" count="0"/>
+        <line num="1029" type="stmt" count="2"/>
+        <line num="1030" type="stmt" count="2"/>
+        <line num="1032" type="stmt" count="2"/>
         <line num="1034" type="stmt" count="2"/>
         <line num="1035" type="stmt" count="2"/>
         <line num="1037" type="stmt" count="2"/>
+        <line num="1038" type="stmt" count="2"/>
+        <line num="1039" type="stmt" count="2"/>
         <line num="1040" type="stmt" count="2"/>
         <line num="1041" type="stmt" count="2"/>
+        <line num="1042" type="stmt" count="2"/>
         <line num="1043" type="stmt" count="2"/>
         <line num="1044" type="stmt" count="2"/>
         <line num="1045" type="stmt" count="2"/>
         <line num="1046" type="stmt" count="2"/>
-        <line num="1047" type="stmt" count="2"/>
         <line num="1048" type="stmt" count="2"/>
-        <line num="1049" type="stmt" count="2"/>
-        <line num="1050" type="stmt" count="2"/>
         <line num="1051" type="stmt" count="2"/>
         <line num="1052" type="stmt" count="2"/>
-        <line num="1054" type="stmt" count="2"/>
+        <line num="1053" type="stmt" count="2"/>
+        <line num="1055" type="stmt" count="2"/>
         <line num="1057" type="stmt" count="2"/>
         <line num="1058" type="stmt" count="2"/>
         <line num="1059" type="stmt" count="2"/>
@@ -795,20 +843,22 @@
         <line num="1067" type="stmt" count="2"/>
         <line num="1069" type="stmt" count="2"/>
         <line num="1070" type="stmt" count="2"/>
-        <line num="1071" type="stmt" count="2"/>
-        <line num="1073" type="stmt" count="2"/>
+        <line num="1074" type="stmt" count="2"/>
         <line num="1075" type="stmt" count="2"/>
         <line num="1076" type="stmt" count="2"/>
+        <line num="1078" type="stmt" count="2"/>
+        <line num="1079" type="stmt" count="2"/>
         <line num="1080" type="stmt" count="2"/>
         <line num="1081" type="stmt" count="2"/>
-        <line num="1082" type="stmt" count="2"/>
-        <line num="1084" type="stmt" count="2"/>
+        <line num="1083" type="stmt" count="2"/>
         <line num="1085" type="stmt" count="2"/>
         <line num="1086" type="stmt" count="2"/>
-        <line num="1087" type="stmt" count="2"/>
-        <line num="1089" type="stmt" count="2"/>
+        <line num="1090" type="stmt" count="2"/>
         <line num="1091" type="stmt" count="2"/>
         <line num="1092" type="stmt" count="2"/>
+        <line num="1093" type="stmt" count="2"/>
+        <line num="1094" type="stmt" count="2"/>
+        <line num="1095" type="stmt" count="2"/>
         <line num="1096" type="stmt" count="2"/>
         <line num="1097" type="stmt" count="2"/>
         <line num="1098" type="stmt" count="2"/>
@@ -816,162 +866,156 @@
         <line num="1100" type="stmt" count="2"/>
         <line num="1101" type="stmt" count="2"/>
         <line num="1102" type="stmt" count="2"/>
-        <line num="1103" type="stmt" count="2"/>
         <line num="1104" type="stmt" count="2"/>
-        <line num="1105" type="stmt" count="2"/>
-        <line num="1106" type="stmt" count="2"/>
         <line num="1107" type="stmt" count="2"/>
         <line num="1108" type="stmt" count="2"/>
+        <line num="1109" type="stmt" count="2"/>
         <line num="1110" type="stmt" count="2"/>
+        <line num="1111" type="stmt" count="2"/>
         <line num="1113" type="stmt" count="2"/>
         <line num="1114" type="stmt" count="2"/>
         <line num="1115" type="stmt" count="2"/>
-        <line num="1116" type="stmt" count="2"/>
-        <line num="1117" type="stmt" count="2"/>
-        <line num="1119" type="stmt" count="2"/>
-        <line num="1120" type="stmt" count="2"/>
+        <line num="1116" type="stmt" count="1"/>
+        <line num="1117" type="stmt" count="1"/>
+        <line num="1118" type="stmt" count="1"/>
         <line num="1121" type="stmt" count="2"/>
-        <line num="1122" type="stmt" count="1"/>
-        <line num="1123" type="stmt" count="1"/>
+        <line num="1123" type="stmt" count="2"/>
         <line num="1124" type="stmt" count="1"/>
-        <line num="1127" type="stmt" count="2"/>
-        <line num="1129" type="stmt" count="2"/>
+        <line num="1125" type="stmt" count="1"/>
+        <line num="1126" type="stmt" count="1"/>
+        <line num="1127" type="stmt" count="1"/>
+        <line num="1128" type="stmt" count="1"/>
+        <line num="1129" type="stmt" count="1"/>
         <line num="1130" type="stmt" count="1"/>
         <line num="1131" type="stmt" count="1"/>
         <line num="1132" type="stmt" count="1"/>
-        <line num="1133" type="stmt" count="1"/>
-        <line num="1134" type="stmt" count="1"/>
-        <line num="1135" type="stmt" count="1"/>
-        <line num="1136" type="stmt" count="1"/>
-        <line num="1137" type="stmt" count="1"/>
-        <line num="1138" type="stmt" count="1"/>
-        <line num="1142" type="stmt" count="2"/>
-        <line num="1143" type="stmt" count="2"/>
-        <line num="1144" type="stmt" count="2"/>
-        <line num="1145" type="stmt" count="2"/>
-        <line num="1146" type="stmt" count="2"/>
-        <line num="1147" type="stmt" count="1"/>
-        <line num="1148" type="stmt" count="1"/>
-        <line num="1149" type="stmt" count="1"/>
+        <line num="1136" type="stmt" count="2"/>
+        <line num="1137" type="stmt" count="2"/>
+        <line num="1138" type="stmt" count="2"/>
+        <line num="1139" type="stmt" count="2"/>
+        <line num="1140" type="stmt" count="2"/>
+        <line num="1141" type="stmt" count="1"/>
+        <line num="1142" type="stmt" count="1"/>
+        <line num="1143" type="stmt" count="1"/>
+        <line num="1144" type="stmt" count="1"/>
+        <line num="1147" type="stmt" count="2"/>
+        <line num="1149" type="stmt" count="2"/>
         <line num="1150" type="stmt" count="1"/>
-        <line num="1153" type="stmt" count="2"/>
-        <line num="1155" type="stmt" count="2"/>
+        <line num="1151" type="stmt" count="1"/>
+        <line num="1152" type="stmt" count="1"/>
+        <line num="1153" type="stmt" count="1"/>
+        <line num="1154" type="stmt" count="1"/>
+        <line num="1155" type="stmt" count="1"/>
         <line num="1156" type="stmt" count="1"/>
         <line num="1157" type="stmt" count="1"/>
         <line num="1158" type="stmt" count="1"/>
-        <line num="1159" type="stmt" count="1"/>
-        <line num="1160" type="stmt" count="1"/>
-        <line num="1161" type="stmt" count="1"/>
-        <line num="1162" type="stmt" count="1"/>
-        <line num="1163" type="stmt" count="1"/>
-        <line num="1164" type="stmt" count="1"/>
+        <line num="1161" type="stmt" count="2"/>
+        <line num="1162" type="stmt" count="2"/>
+        <line num="1166" type="stmt" count="2"/>
         <line num="1167" type="stmt" count="2"/>
         <line num="1168" type="stmt" count="2"/>
+        <line num="1169" type="stmt" count="2"/>
+        <line num="1170" type="stmt" count="2"/>
+        <line num="1171" type="stmt" count="2"/>
         <line num="1172" type="stmt" count="2"/>
         <line num="1173" type="stmt" count="2"/>
         <line num="1174" type="stmt" count="2"/>
-        <line num="1175" type="stmt" count="2"/>
-        <line num="1176" type="stmt" count="2"/>
+        <line num="1175" type="stmt" count="0"/>
         <line num="1177" type="stmt" count="2"/>
-        <line num="1178" type="stmt" count="2"/>
         <line num="1179" type="stmt" count="2"/>
         <line num="1180" type="stmt" count="2"/>
-        <line num="1181" type="stmt" count="0"/>
+        <line num="1181" type="stmt" count="2"/>
+        <line num="1182" type="stmt" count="2"/>
         <line num="1183" type="stmt" count="2"/>
-        <line num="1185" type="stmt" count="2"/>
         <line num="1186" type="stmt" count="2"/>
-        <line num="1187" type="stmt" count="2"/>
         <line num="1188" type="stmt" count="2"/>
         <line num="1189" type="stmt" count="2"/>
-        <line num="1192" type="stmt" count="2"/>
-        <line num="1194" type="stmt" count="2"/>
-        <line num="1195" type="stmt" count="2"/>
-        <line num="1196" type="stmt" count="2"/>
-        <line num="1204" type="method" name="profiler_single_run_report" visibility="public" complexity="1" crap="1" count="8"/>
+        <line num="1190" type="stmt" count="2"/>
+        <line num="1198" type="method" name="profiler_single_run_report" visibility="public" complexity="1" crap="1" count="8"/>
+        <line num="1207" type="stmt" count="8"/>
+        <line num="1209" type="stmt" count="8"/>
+        <line num="1210" type="stmt" count="8"/>
+        <line num="1211" type="stmt" count="8"/>
+        <line num="1212" type="stmt" count="8"/>
         <line num="1213" type="stmt" count="8"/>
+        <line num="1214" type="stmt" count="8"/>
         <line num="1215" type="stmt" count="8"/>
-        <line num="1216" type="stmt" count="8"/>
-        <line num="1217" type="stmt" count="8"/>
-        <line num="1218" type="stmt" count="8"/>
-        <line num="1219" type="stmt" count="8"/>
-        <line num="1220" type="stmt" count="8"/>
-        <line num="1221" type="stmt" count="8"/>
-        <line num="1231" type="method" name="profiler_diff_report" visibility="public" complexity="1" crap="1" count="1"/>
+        <line num="1225" type="method" name="profiler_diff_report" visibility="public" complexity="1" crap="1" count="1"/>
+        <line num="1239" type="stmt" count="1"/>
+        <line num="1240" type="stmt" count="1"/>
+        <line num="1241" type="stmt" count="1"/>
+        <line num="1242" type="stmt" count="1"/>
+        <line num="1243" type="stmt" count="1"/>
+        <line num="1244" type="stmt" count="1"/>
         <line num="1245" type="stmt" count="1"/>
         <line num="1246" type="stmt" count="1"/>
         <line num="1247" type="stmt" count="1"/>
         <line num="1248" type="stmt" count="1"/>
         <line num="1249" type="stmt" count="1"/>
-        <line num="1250" type="stmt" count="1"/>
-        <line num="1251" type="stmt" count="1"/>
-        <line num="1252" type="stmt" count="1"/>
-        <line num="1253" type="stmt" count="1"/>
-        <line num="1254" type="stmt" count="1"/>
-        <line num="1255" type="stmt" count="1"/>
-        <line num="1260" type="method" name="displayXHProfReport" visibility="public" complexity="10" crap="13.25" count="11"/>
-        <line num="1271" type="stmt" count="11"/>
-        <line num="1272" type="stmt" count="11"/>
-        <line num="1273" type="stmt" count="7"/>
-        <line num="1274" type="stmt" count="7"/>
-        <line num="1275" type="stmt" count="6"/>
-        <line num="1276" type="stmt" count="6"/>
-        <line num="1277" type="stmt" count="6"/>
-        <line num="1278" type="stmt" count="6"/>
-        <line num="1279" type="stmt" count="6"/>
+        <line num="1254" type="method" name="displayXHProfReport" visibility="public" complexity="10" crap="13.25" count="11"/>
+        <line num="1265" type="stmt" count="11"/>
+        <line num="1266" type="stmt" count="11"/>
+        <line num="1267" type="stmt" count="7"/>
+        <line num="1268" type="stmt" count="7"/>
+        <line num="1269" type="stmt" count="6"/>
+        <line num="1270" type="stmt" count="6"/>
+        <line num="1271" type="stmt" count="6"/>
+        <line num="1272" type="stmt" count="6"/>
+        <line num="1273" type="stmt" count="6"/>
+        <line num="1275" type="stmt" count="1"/>
+        <line num="1276" type="stmt" count="1"/>
+        <line num="1277" type="stmt" count="1"/>
+        <line num="1278" type="stmt" count="1"/>
+        <line num="1279" type="stmt" count="1"/>
+        <line num="1280" type="stmt" count="1"/>
         <line num="1281" type="stmt" count="1"/>
         <line num="1282" type="stmt" count="1"/>
         <line num="1283" type="stmt" count="1"/>
         <line num="1284" type="stmt" count="1"/>
-        <line num="1285" type="stmt" count="1"/>
-        <line num="1286" type="stmt" count="1"/>
-        <line num="1287" type="stmt" count="1"/>
-        <line num="1288" type="stmt" count="1"/>
+        <line num="1287" type="stmt" count="7"/>
         <line num="1289" type="stmt" count="1"/>
-        <line num="1290" type="stmt" count="1"/>
-        <line num="1293" type="stmt" count="7"/>
-        <line num="1295" type="stmt" count="1"/>
+        <line num="1292" type="stmt" count="6"/>
+        <line num="1293" type="stmt" count="6"/>
+        <line num="1294" type="stmt" count="6"/>
+        <line num="1295" type="stmt" count="6"/>
+        <line num="1296" type="stmt" count="6"/>
+        <line num="1297" type="stmt" count="6"/>
         <line num="1298" type="stmt" count="6"/>
         <line num="1299" type="stmt" count="6"/>
-        <line num="1300" type="stmt" count="6"/>
-        <line num="1301" type="stmt" count="6"/>
-        <line num="1302" type="stmt" count="6"/>
-        <line num="1303" type="stmt" count="6"/>
-        <line num="1304" type="stmt" count="6"/>
-        <line num="1305" type="stmt" count="6"/>
-        <line num="1306" type="stmt" count="4"/>
+        <line num="1300" type="stmt" count="4"/>
+        <line num="1302" type="stmt" count="0"/>
+        <line num="1303" type="stmt" count="0"/>
+        <line num="1304" type="stmt" count="0"/>
+        <line num="1305" type="stmt" count="0"/>
+        <line num="1307" type="stmt" count="0"/>
         <line num="1308" type="stmt" count="0"/>
         <line num="1309" type="stmt" count="0"/>
         <line num="1310" type="stmt" count="0"/>
         <line num="1311" type="stmt" count="0"/>
+        <line num="1312" type="stmt" count="0"/>
         <line num="1313" type="stmt" count="0"/>
         <line num="1314" type="stmt" count="0"/>
         <line num="1315" type="stmt" count="0"/>
         <line num="1316" type="stmt" count="0"/>
         <line num="1317" type="stmt" count="0"/>
-        <line num="1318" type="stmt" count="0"/>
-        <line num="1319" type="stmt" count="0"/>
-        <line num="1320" type="stmt" count="0"/>
-        <line num="1321" type="stmt" count="0"/>
-        <line num="1322" type="stmt" count="0"/>
-        <line num="1323" type="stmt" count="0"/>
-        <line num="1325" type="stmt" count="4"/>
-        <line num="1327" type="stmt" count="10"/>
-        <line num="1330" type="method" name="show_nav" visibility="public" complexity="4" crap="4" count="12"/>
-        <line num="1332" type="stmt" count="12"/>
-        <line num="1333" type="stmt" count="12"/>
-        <line num="1334" type="stmt" count="12"/>
-        <line num="1335" type="stmt" count="12"/>
-        <line num="1336" type="stmt" count="12"/>
-        <line num="1337" type="stmt" count="2"/>
-        <line num="1338" type="stmt" count="11"/>
-        <line num="1339" type="stmt" count="7"/>
-        <line num="1341" type="stmt" count="5"/>
-        <line num="1344" type="stmt" count="12"/>
-        <line num="1345" type="stmt" count="12"/>
-        <line num="1346" type="stmt" count="12"/>
-        <line num="1347" type="stmt" count="12"/>
-        <line num="1348" type="stmt" count="12"/>
-        <metrics loc="1351" ncloc="1239" classes="1" methods="26" coveredmethods="21" conditionals="0" coveredconditionals="0" statements="728" coveredstatements="618" elements="754" coveredelements="639"/>
+        <line num="1319" type="stmt" count="4"/>
+        <line num="1321" type="stmt" count="10"/>
+        <line num="1324" type="method" name="show_nav" visibility="public" complexity="4" crap="4" count="12"/>
+        <line num="1326" type="stmt" count="12"/>
+        <line num="1327" type="stmt" count="12"/>
+        <line num="1328" type="stmt" count="12"/>
+        <line num="1329" type="stmt" count="12"/>
+        <line num="1330" type="stmt" count="12"/>
+        <line num="1331" type="stmt" count="2"/>
+        <line num="1332" type="stmt" count="11"/>
+        <line num="1333" type="stmt" count="7"/>
+        <line num="1335" type="stmt" count="5"/>
+        <line num="1338" type="stmt" count="12"/>
+        <line num="1339" type="stmt" count="12"/>
+        <line num="1340" type="stmt" count="12"/>
+        <line num="1341" type="stmt" count="12"/>
+        <line num="1342" type="stmt" count="12"/>
+        <metrics loc="1345" ncloc="1236" classes="1" methods="26" coveredmethods="21" conditionals="0" coveredconditionals="0" statements="726" coveredstatements="616" elements="752" coveredelements="637"/>
       </file>
     </package>
     <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/XhprofLib/Utils/XHProfRuns.php">
@@ -980,7 +1024,7 @@
     <package name="ErikWang2013\Xhprof\Core\XhprofLib\Utils">
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/XhprofLib/Utils/XHProfRunsDefault.php">
         <class name="ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault" namespace="ErikWang2013\Xhprof\Core\XhprofLib\Utils">
-          <metrics complexity="31" methods="8" coveredmethods="7" conditionals="0" coveredconditionals="0" statements="93" coveredstatements="87" elements="101" coveredelements="94"/>
+          <metrics complexity="31" methods="8" coveredmethods="7" conditionals="0" coveredconditionals="0" statements="92" coveredstatements="86" elements="100" coveredelements="93"/>
         </class>
         <line num="12" type="method" name="__construct" visibility="public" complexity="3" crap="4.94" count="2"/>
         <line num="14" type="stmt" count="2"/>
@@ -993,8 +1037,8 @@
         <line num="21" type="stmt" count="0"/>
         <line num="22" type="stmt" count="0"/>
         <line num="25" type="stmt" count="2"/>
-        <line num="28" type="method" name="xhprof_valid_run_id" visibility="public" complexity="2" crap="2" count="42"/>
-        <line num="30" type="stmt" count="42"/>
+        <line num="28" type="method" name="xhprof_valid_run_id" visibility="public" complexity="2" crap="2" count="44"/>
+        <line num="30" type="stmt" count="44"/>
         <line num="33" type="method" name="xhprof_valid_source" visibility="public" complexity="2" crap="2" count="29"/>
         <line num="35" type="stmt" count="29"/>
         <line num="38" type="method" name="get_run" visibility="public" complexity="5" crap="5" count="14"/>
@@ -1005,31 +1049,33 @@
         <line num="46" type="stmt" count="12"/>
         <line num="47" type="stmt" count="2"/>
         <line num="49" type="stmt" count="10"/>
-        <line num="53" type="method" name="save_run" visibility="public" complexity="4" crap="4" count="20"/>
-        <line num="56" type="stmt" count="20"/>
-        <line num="58" type="stmt" count="14"/>
+        <line num="52" type="method" name="save_run" visibility="public" complexity="4" crap="4" count="20"/>
+        <line num="55" type="stmt" count="20"/>
+        <line num="57" type="stmt" count="14"/>
+        <line num="59" type="stmt" count="13"/>
         <line num="60" type="stmt" count="13"/>
-        <line num="62" type="stmt" count="13"/>
-        <line num="63" type="stmt" count="13"/>
-        <line num="71" type="method" name="_checkLogNum" visibility="protected" complexity="3" crap="3" count="13"/>
-        <line num="74" type="stmt" count="13"/>
-        <line num="75" type="stmt" count="13"/>
+        <line num="61" type="stmt" count="13"/>
+        <line num="69" type="method" name="_checkLogNum" visibility="protected" complexity="3" crap="3" count="13"/>
+        <line num="72" type="stmt" count="13"/>
+        <line num="73" type="stmt" count="13"/>
+        <line num="74" type="stmt" count="1"/>
+        <line num="75" type="stmt" count="1"/>
         <line num="76" type="stmt" count="1"/>
         <line num="77" type="stmt" count="1"/>
         <line num="78" type="stmt" count="1"/>
         <line num="79" type="stmt" count="1"/>
         <line num="80" type="stmt" count="1"/>
-        <line num="81" type="stmt" count="1"/>
-        <line num="82" type="stmt" count="1"/>
-        <line num="85" type="stmt" count="13"/>
-        <line num="92" type="method" name="_saveToRedis" visibility="protected" complexity="6" crap="6" count="13"/>
+        <line num="83" type="stmt" count="13"/>
+        <line num="90" type="method" name="_saveToRedis" visibility="protected" complexity="5" crap="5" count="13"/>
+        <line num="93" type="stmt" count="13"/>
+        <line num="94" type="stmt" count="13"/>
         <line num="95" type="stmt" count="13"/>
         <line num="96" type="stmt" count="13"/>
         <line num="97" type="stmt" count="13"/>
         <line num="98" type="stmt" count="13"/>
         <line num="99" type="stmt" count="13"/>
-        <line num="100" type="stmt" count="13"/>
-        <line num="101" type="stmt" count="13"/>
+        <line num="102" type="stmt" count="13"/>
+        <line num="103" type="stmt" count="13"/>
         <line num="104" type="stmt" count="13"/>
         <line num="105" type="stmt" count="13"/>
         <line num="106" type="stmt" count="13"/>
@@ -1045,20 +1091,21 @@
         <line num="116" type="stmt" count="13"/>
         <line num="117" type="stmt" count="13"/>
         <line num="118" type="stmt" count="13"/>
-        <line num="119" type="stmt" count="13"/>
-        <line num="121" type="stmt" count="13"/>
-        <line num="122" type="stmt" count="13"/>
-        <line num="123" type="stmt" count="13"/>
-        <line num="124" type="stmt" count="13"/>
-        <line num="125" type="stmt" count="13"/>
-        <line num="129" type="method" name="list_runs" visibility="public" complexity="6" crap="6" count="5"/>
+        <line num="122" type="method" name="list_runs" visibility="public" complexity="7" crap="7" count="5"/>
+        <line num="125" type="stmt" count="5"/>
+        <line num="126" type="stmt" count="5"/>
+        <line num="127" type="stmt" count="5"/>
+        <line num="128" type="stmt" count="2"/>
+        <line num="129" type="stmt" count="5"/>
+        <line num="131" type="stmt" count="5"/>
         <line num="132" type="stmt" count="5"/>
         <line num="133" type="stmt" count="5"/>
         <line num="134" type="stmt" count="5"/>
-        <line num="135" type="stmt" count="2"/>
-        <line num="136" type="stmt" count="5"/>
-        <line num="138" type="stmt" count="5"/>
-        <line num="139" type="stmt" count="5"/>
+        <line num="135" type="stmt" count="5"/>
+        <line num="136" type="stmt" count="2"/>
+        <line num="137" type="stmt" count="2"/>
+        <line num="138" type="stmt" count="2"/>
+        <line num="139" type="stmt" count="2"/>
         <line num="140" type="stmt" count="2"/>
         <line num="141" type="stmt" count="2"/>
         <line num="142" type="stmt" count="2"/>
@@ -1072,22 +1119,18 @@
         <line num="150" type="stmt" count="2"/>
         <line num="151" type="stmt" count="2"/>
         <line num="152" type="stmt" count="2"/>
-        <line num="153" type="stmt" count="2"/>
-        <line num="154" type="stmt" count="2"/>
-        <line num="155" type="stmt" count="2"/>
-        <line num="156" type="stmt" count="2"/>
+        <line num="155" type="stmt" count="5"/>
+        <line num="156" type="stmt" count="5"/>
+        <line num="157" type="stmt" count="5"/>
+        <line num="158" type="stmt" count="5"/>
         <line num="159" type="stmt" count="5"/>
         <line num="160" type="stmt" count="5"/>
         <line num="161" type="stmt" count="5"/>
-        <line num="162" type="stmt" count="5"/>
-        <line num="163" type="stmt" count="5"/>
-        <line num="164" type="stmt" count="5"/>
-        <line num="165" type="stmt" count="5"/>
-        <metrics loc="168" ncloc="144" classes="1" methods="8" coveredmethods="7" conditionals="0" coveredconditionals="0" statements="93" coveredstatements="87" elements="101" coveredelements="94"/>
+        <metrics loc="164" ncloc="143" classes="1" methods="8" coveredmethods="7" conditionals="0" coveredconditionals="0" statements="92" coveredstatements="86" elements="100" coveredelements="93"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Core/XhprofLib/Utils/XhprofLib.php">
         <class name="ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib" namespace="ErikWang2013\Xhprof\Core\XhprofLib\Utils">
-          <metrics complexity="137" methods="25" coveredmethods="22" conditionals="0" coveredconditionals="0" statements="311" coveredstatements="299" elements="336" coveredelements="321"/>
+          <metrics complexity="136" methods="25" coveredmethods="22" conditionals="0" coveredconditionals="0" statements="310" coveredstatements="298" elements="335" coveredelements="320"/>
         </class>
         <line num="15" type="method" name="xhprof_error" visibility="public" complexity="1" crap="1" count="10"/>
         <line num="17" type="stmt" count="10"/>
@@ -1408,7 +1451,7 @@
         <line num="556" type="stmt" count="2"/>
         <line num="557" type="stmt" count="2"/>
         <line num="558" type="stmt" count="2"/>
-        <line num="566" type="method" name="isIgnore" visibility="public" complexity="6" crap="6" count="19"/>
+        <line num="566" type="method" name="isIgnore" visibility="public" complexity="5" crap="5" count="19"/>
         <line num="568" type="stmt" count="19"/>
         <line num="569" type="stmt" count="19"/>
         <line num="571" type="stmt" count="18"/>
@@ -1416,16 +1459,15 @@
         <line num="573" type="stmt" count="17"/>
         <line num="575" type="stmt" count="17"/>
         <line num="576" type="stmt" count="14"/>
-        <line num="578" type="stmt" count="14"/>
-        <line num="581" type="stmt" count="14"/>
-        <line num="588" type="method" name="xhprof_get_ip" visibility="public" complexity="1" crap="1" count="13"/>
-        <line num="590" type="stmt" count="13"/>
-        <line num="597" type="method" name="getRequestLog" visibility="public" complexity="2" crap="2" count="9"/>
+        <line num="579" type="stmt" count="14"/>
+        <line num="586" type="method" name="xhprof_get_ip" visibility="public" complexity="1" crap="1" count="13"/>
+        <line num="588" type="stmt" count="13"/>
+        <line num="595" type="method" name="getRequestLog" visibility="public" complexity="2" crap="2" count="9"/>
+        <line num="597" type="stmt" count="9"/>
+        <line num="598" type="stmt" count="9"/>
         <line num="599" type="stmt" count="9"/>
-        <line num="600" type="stmt" count="9"/>
-        <line num="601" type="stmt" count="9"/>
-        <line num="602" type="stmt" count="6"/>
-        <metrics loc="605" ncloc="549" classes="1" methods="25" coveredmethods="22" conditionals="0" coveredconditionals="0" statements="311" coveredstatements="299" elements="336" coveredelements="321"/>
+        <line num="600" type="stmt" count="6"/>
+        <metrics loc="603" ncloc="548" classes="1" methods="25" coveredmethods="22" conditionals="0" coveredconditionals="0" statements="310" coveredstatements="298" elements="335" coveredelements="320"/>
       </file>
     </package>
     <package name="ErikWang2013\Xhprof\Hyperf\Adapter">
@@ -1451,29 +1493,13 @@
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Hyperf/Adapter/RedisAdapter.php">
         <class name="ErikWang2013\Xhprof\Hyperf\Adapter\RedisAdapter" namespace="ErikWang2013\Xhprof\Hyperf\Adapter">
-          <metrics complexity="10" methods="10" coveredmethods="10" conditionals="0" coveredconditionals="0" statements="10" coveredstatements="10" elements="20" coveredelements="20"/>
+          <metrics complexity="2" methods="2" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="2" coveredstatements="2" elements="4" coveredelements="4"/>
         </class>
-        <line num="14" type="method" name="__construct" visibility="public" complexity="1" crap="1" count="8"/>
-        <line num="16" type="stmt" count="8"/>
-        <line num="19" type="method" name="get" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="21" type="stmt" count="1"/>
-        <line num="24" type="method" name="set" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="26" type="stmt" count="3"/>
-        <line num="29" type="method" name="mget" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="31" type="stmt" count="1"/>
-        <line num="34" type="method" name="incr" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="36" type="stmt" count="3"/>
-        <line num="39" type="method" name="lPush" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="41" type="stmt" count="3"/>
-        <line num="44" type="method" name="rPop" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="46" type="stmt" count="1"/>
-        <line num="49" type="method" name="lRange" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="51" type="stmt" count="1"/>
-        <line num="54" type="method" name="del" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="56" type="stmt" count="1"/>
-        <line num="59" type="method" name="decr" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="61" type="stmt" count="1"/>
-        <metrics loc="64" ncloc="64" classes="1" methods="10" coveredmethods="10" conditionals="0" coveredconditionals="0" statements="10" coveredstatements="10" elements="20" coveredelements="20"/>
+        <line num="17" type="method" name="__construct" visibility="public" complexity="1" crap="1" count="8"/>
+        <line num="19" type="stmt" count="8"/>
+        <line num="22" type="method" name="redis" visibility="protected" complexity="1" crap="1" count="3"/>
+        <line num="24" type="stmt" count="3"/>
+        <metrics loc="27" ncloc="27" classes="1" methods="2" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="2" coveredstatements="2" elements="4" coveredelements="4"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Hyperf/Adapter/RequestAdapter.php">
         <class name="ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter" namespace="ErikWang2013\Xhprof\Hyperf\Adapter">
@@ -1506,41 +1532,32 @@
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Hyperf/Adapter/ResponseAdapter.php">
         <class name="ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter" namespace="ErikWang2013\Xhprof\Hyperf\Adapter">
-          <metrics complexity="8" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="26" coveredstatements="26" elements="32" coveredelements="32"/>
+          <metrics complexity="8" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="17" coveredstatements="17" elements="23" coveredelements="23"/>
         </class>
-        <line num="15" type="method" name="__construct" visibility="public" complexity="1" crap="1" count="17"/>
-        <line num="17" type="stmt" count="17"/>
-        <line num="20" type="method" name="withBody" visibility="public" complexity="1" crap="1" count="2"/>
-        <line num="22" type="stmt" count="2"/>
+        <line num="16" type="method" name="__construct" visibility="public" complexity="1" crap="1" count="17"/>
+        <line num="18" type="stmt" count="17"/>
+        <line num="21" type="method" name="withBody" visibility="public" complexity="1" crap="1" count="2"/>
         <line num="23" type="stmt" count="2"/>
-        <line num="26" type="method" name="withHeaders" visibility="public" complexity="2" crap="2" count="1"/>
-        <line num="28" type="stmt" count="1"/>
+        <line num="24" type="stmt" count="2"/>
+        <line num="27" type="method" name="withHeaders" visibility="public" complexity="2" crap="2" count="1"/>
         <line num="29" type="stmt" count="1"/>
-        <line num="31" type="stmt" count="1"/>
-        <line num="34" type="method" name="withStatus" visibility="public" complexity="1" crap="1" count="2"/>
-        <line num="36" type="stmt" count="2"/>
+        <line num="30" type="stmt" count="1"/>
+        <line num="32" type="stmt" count="1"/>
+        <line num="35" type="method" name="withStatus" visibility="public" complexity="1" crap="1" count="2"/>
         <line num="37" type="stmt" count="2"/>
-        <line num="40" type="method" name="file" visibility="public" complexity="2" crap="2" count="9"/>
-        <line num="42" type="stmt" count="9"/>
-        <line num="43" type="stmt" count="8"/>
-        <line num="44" type="stmt" count="8"/>
-        <line num="45" type="stmt" count="8"/>
-        <line num="46" type="stmt" count="8"/>
+        <line num="38" type="stmt" count="2"/>
+        <line num="41" type="method" name="file" visibility="public" complexity="2" crap="2" count="9"/>
+        <line num="43" type="stmt" count="9"/>
+        <line num="44" type="stmt" count="9"/>
+        <line num="45" type="stmt" count="1"/>
         <line num="47" type="stmt" count="8"/>
         <line num="48" type="stmt" count="8"/>
         <line num="49" type="stmt" count="8"/>
         <line num="50" type="stmt" count="8"/>
-        <line num="51" type="stmt" count="8"/>
-        <line num="52" type="stmt" count="8"/>
-        <line num="53" type="stmt" count="8"/>
-        <line num="54" type="stmt" count="8"/>
-        <line num="55" type="stmt" count="8"/>
-        <line num="56" type="stmt" count="8"/>
-        <line num="58" type="stmt" count="1"/>
-        <line num="60" type="stmt" count="9"/>
-        <line num="63" type="method" name="send" visibility="public" complexity="1" crap="1" count="11"/>
-        <line num="65" type="stmt" count="11"/>
-        <metrics loc="68" ncloc="68" classes="1" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="26" coveredstatements="26" elements="32" coveredelements="32"/>
+        <line num="52" type="stmt" count="9"/>
+        <line num="55" type="method" name="send" visibility="public" complexity="1" crap="1" count="11"/>
+        <line num="57" type="stmt" count="11"/>
+        <metrics loc="60" ncloc="60" classes="1" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="17" coveredstatements="17" elements="23" coveredelements="23"/>
       </file>
     </package>
     <package name="ErikWang2013\Xhprof\Hyperf">
@@ -1623,27 +1640,11 @@
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Laravel/Adapter/RedisAdapter.php">
         <class name="ErikWang2013\Xhprof\Laravel\Adapter\RedisAdapter" namespace="ErikWang2013\Xhprof\Laravel\Adapter">
-          <metrics complexity="9" methods="9" coveredmethods="9" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="18" coveredelements="18"/>
+          <metrics complexity="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="1" elements="2" coveredelements="2"/>
         </class>
-        <line num="12" type="method" name="get" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="14" type="stmt" count="1"/>
-        <line num="17" type="method" name="set" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="19" type="stmt" count="3"/>
-        <line num="22" type="method" name="mget" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="24" type="stmt" count="1"/>
-        <line num="27" type="method" name="incr" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="29" type="stmt" count="3"/>
-        <line num="32" type="method" name="lPush" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="34" type="stmt" count="3"/>
-        <line num="37" type="method" name="rPop" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="39" type="stmt" count="1"/>
-        <line num="42" type="method" name="lRange" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="44" type="stmt" count="1"/>
-        <line num="47" type="method" name="del" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="49" type="stmt" count="1"/>
-        <line num="52" type="method" name="decr" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="54" type="stmt" count="1"/>
-        <metrics loc="57" ncloc="57" classes="1" methods="9" coveredmethods="9" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="18" coveredelements="18"/>
+        <line num="14" type="method" name="redis" visibility="protected" complexity="1" crap="1" count="3"/>
+        <line num="16" type="stmt" count="3"/>
+        <metrics loc="19" ncloc="19" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="1" elements="2" coveredelements="2"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Laravel/Adapter/RequestAdapter.php">
         <class name="ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter" namespace="ErikWang2013\Xhprof\Laravel\Adapter">
@@ -1695,19 +1696,19 @@
     <package name="ErikWang2013\Xhprof\Laravel">
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Laravel/Middleware.php">
         <class name="ErikWang2013\Xhprof\Laravel\Middleware" namespace="ErikWang2013\Xhprof\Laravel">
-          <metrics complexity="4" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="10" coveredelements="10"/>
+          <metrics complexity="2" methods="2" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="8" coveredstatements="8" elements="10" coveredelements="10"/>
         </class>
-        <line num="19" type="method" name="handle" visibility="public" complexity="4" crap="4" count="4"/>
-        <line num="21" type="stmt" count="4"/>
+        <line num="20" type="method" name="handle" visibility="public" complexity="1" crap="1" count="4"/>
         <line num="22" type="stmt" count="4"/>
-        <line num="24" type="stmt" count="4"/>
-        <line num="26" type="stmt" count="4"/>
+        <line num="25" type="method" name="xhprofAdapters" visibility="protected" complexity="1" crap="1" count="4"/>
         <line num="27" type="stmt" count="4"/>
-        <line num="28" type="stmt" count="3"/>
+        <line num="28" type="stmt" count="4"/>
+        <line num="29" type="stmt" count="4"/>
+        <line num="30" type="stmt" count="4"/>
+        <line num="31" type="stmt" count="4"/>
         <line num="32" type="stmt" count="4"/>
-        <line num="34" type="stmt" count="4"/>
-        <line num="35" type="stmt" count="3"/>
-        <metrics loc="40" ncloc="40" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="10" coveredelements="10"/>
+        <line num="33" type="stmt" count="4"/>
+        <metrics loc="36" ncloc="36" classes="1" methods="2" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="8" coveredstatements="8" elements="10" coveredelements="10"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Laravel/XhprofServiceProvider.php">
         <class name="ErikWang2013\Xhprof\Laravel\XhprofServiceProvider" namespace="ErikWang2013\Xhprof\Laravel">
@@ -1827,56 +1828,47 @@
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Thinkphp/Adapter/ResponseAdapter.php">
         <class name="ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter" namespace="ErikWang2013\Xhprof\Thinkphp\Adapter">
-          <metrics complexity="7" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="23" coveredstatements="23" elements="29" coveredelements="29"/>
+          <metrics complexity="7" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="14" coveredstatements="14" elements="20" coveredelements="20"/>
         </class>
-        <line num="14" type="method" name="__construct" visibility="public" complexity="1" crap="1" count="14"/>
-        <line num="16" type="stmt" count="14"/>
-        <line num="19" type="method" name="withBody" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="21" type="stmt" count="1"/>
+        <line num="15" type="method" name="__construct" visibility="public" complexity="1" crap="1" count="14"/>
+        <line num="17" type="stmt" count="14"/>
+        <line num="20" type="method" name="withBody" visibility="public" complexity="1" crap="1" count="1"/>
         <line num="22" type="stmt" count="1"/>
-        <line num="25" type="method" name="withHeaders" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="27" type="stmt" count="1"/>
+        <line num="23" type="stmt" count="1"/>
+        <line num="26" type="method" name="withHeaders" visibility="public" complexity="1" crap="1" count="1"/>
         <line num="28" type="stmt" count="1"/>
-        <line num="31" type="method" name="withStatus" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="33" type="stmt" count="1"/>
+        <line num="29" type="stmt" count="1"/>
+        <line num="32" type="method" name="withStatus" visibility="public" complexity="1" crap="1" count="1"/>
         <line num="34" type="stmt" count="1"/>
-        <line num="37" type="method" name="file" visibility="public" complexity="2" crap="2" count="9"/>
-        <line num="39" type="stmt" count="9"/>
-        <line num="40" type="stmt" count="8"/>
-        <line num="41" type="stmt" count="8"/>
-        <line num="42" type="stmt" count="8"/>
-        <line num="43" type="stmt" count="8"/>
+        <line num="35" type="stmt" count="1"/>
+        <line num="38" type="method" name="file" visibility="public" complexity="2" crap="2" count="9"/>
+        <line num="40" type="stmt" count="9"/>
+        <line num="41" type="stmt" count="9"/>
+        <line num="42" type="stmt" count="1"/>
         <line num="44" type="stmt" count="8"/>
         <line num="45" type="stmt" count="8"/>
-        <line num="46" type="stmt" count="8"/>
-        <line num="47" type="stmt" count="8"/>
-        <line num="48" type="stmt" count="8"/>
-        <line num="49" type="stmt" count="8"/>
-        <line num="50" type="stmt" count="8"/>
-        <line num="51" type="stmt" count="8"/>
-        <line num="53" type="stmt" count="1"/>
-        <line num="55" type="stmt" count="9"/>
-        <line num="58" type="method" name="send" visibility="public" complexity="1" crap="1" count="10"/>
-        <line num="60" type="stmt" count="10"/>
-        <metrics loc="63" ncloc="63" classes="1" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="23" coveredstatements="23" elements="29" coveredelements="29"/>
+        <line num="47" type="stmt" count="9"/>
+        <line num="50" type="method" name="send" visibility="public" complexity="1" crap="1" count="10"/>
+        <line num="52" type="stmt" count="10"/>
+        <metrics loc="55" ncloc="55" classes="1" methods="6" coveredmethods="6" conditionals="0" coveredconditionals="0" statements="14" coveredstatements="14" elements="20" coveredelements="20"/>
       </file>
     </package>
     <package name="ErikWang2013\Xhprof\Thinkphp">
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Thinkphp/Middleware.php">
         <class name="ErikWang2013\Xhprof\Thinkphp\Middleware" namespace="ErikWang2013\Xhprof\Thinkphp">
-          <metrics complexity="4" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="10" coveredelements="10"/>
+          <metrics complexity="2" methods="2" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="8" coveredstatements="8" elements="10" coveredelements="10"/>
         </class>
-        <line num="19" type="method" name="handle" visibility="public" complexity="4" crap="4" count="4"/>
-        <line num="21" type="stmt" count="4"/>
+        <line num="20" type="method" name="handle" visibility="public" complexity="1" crap="1" count="4"/>
         <line num="22" type="stmt" count="4"/>
-        <line num="24" type="stmt" count="4"/>
-        <line num="26" type="stmt" count="4"/>
+        <line num="25" type="method" name="xhprofAdapters" visibility="protected" complexity="1" crap="1" count="4"/>
         <line num="27" type="stmt" count="4"/>
-        <line num="28" type="stmt" count="3"/>
+        <line num="28" type="stmt" count="4"/>
+        <line num="29" type="stmt" count="4"/>
+        <line num="30" type="stmt" count="4"/>
+        <line num="31" type="stmt" count="4"/>
         <line num="32" type="stmt" count="4"/>
-        <line num="34" type="stmt" count="4"/>
-        <line num="35" type="stmt" count="3"/>
-        <metrics loc="40" ncloc="40" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="10" coveredelements="10"/>
+        <line num="33" type="stmt" count="4"/>
+        <metrics loc="36" ncloc="36" classes="1" methods="2" coveredmethods="2" conditionals="0" coveredconditionals="0" statements="8" coveredstatements="8" elements="10" coveredelements="10"/>
       </file>
     </package>
     <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Thinkphp/config/middleware.php">
@@ -1908,20 +1900,11 @@
     <package name="ErikWang2013\Xhprof\Webman\Adapter">
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Webman/Adapter/ConfigAdapter.php">
         <class name="ErikWang2013\Xhprof\Webman\Adapter\ConfigAdapter" namespace="ErikWang2013\Xhprof\Webman\Adapter">
-          <metrics complexity="5" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="10" coveredstatements="10" elements="11" coveredelements="11"/>
+          <metrics complexity="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="1" elements="2" coveredelements="2"/>
         </class>
-        <line num="11" type="method" name="get" visibility="public" complexity="5" crap="5" count="5"/>
+        <line num="11" type="method" name="get" visibility="public" complexity="1" crap="1" count="5"/>
         <line num="13" type="stmt" count="5"/>
-        <line num="14" type="stmt" count="5"/>
-        <line num="15" type="stmt" count="5"/>
-        <line num="16" type="stmt" count="5"/>
-        <line num="17" type="stmt" count="1"/>
-        <line num="19" type="stmt" count="5"/>
-        <line num="20" type="stmt" count="4"/>
-        <line num="21" type="stmt" count="3"/>
-        <line num="23" type="stmt" count="2"/>
-        <line num="25" type="stmt" count="5"/>
-        <metrics loc="28" ncloc="28" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="10" coveredstatements="10" elements="11" coveredelements="11"/>
+        <metrics loc="16" ncloc="16" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="1" elements="2" coveredelements="2"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Webman/Adapter/LogAdapter.php">
         <class name="ErikWang2013\Xhprof\Webman\Adapter\LogAdapter" namespace="ErikWang2013\Xhprof\Webman\Adapter">
@@ -1933,27 +1916,11 @@
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Webman/Adapter/RedisAdapter.php">
         <class name="ErikWang2013\Xhprof\Webman\Adapter\RedisAdapter" namespace="ErikWang2013\Xhprof\Webman\Adapter">
-          <metrics complexity="9" methods="9" coveredmethods="9" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="18" coveredelements="18"/>
+          <metrics complexity="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="1" elements="2" coveredelements="2"/>
         </class>
-        <line num="12" type="method" name="get" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="14" type="stmt" count="1"/>
-        <line num="17" type="method" name="set" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="19" type="stmt" count="3"/>
-        <line num="22" type="method" name="mget" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="24" type="stmt" count="1"/>
-        <line num="27" type="method" name="incr" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="29" type="stmt" count="3"/>
-        <line num="32" type="method" name="lPush" visibility="public" complexity="1" crap="1" count="3"/>
-        <line num="34" type="stmt" count="3"/>
-        <line num="37" type="method" name="rPop" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="39" type="stmt" count="1"/>
-        <line num="42" type="method" name="lRange" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="44" type="stmt" count="1"/>
-        <line num="47" type="method" name="del" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="49" type="stmt" count="1"/>
-        <line num="52" type="method" name="decr" visibility="public" complexity="1" crap="1" count="1"/>
-        <line num="54" type="stmt" count="1"/>
-        <metrics loc="57" ncloc="57" classes="1" methods="9" coveredmethods="9" conditionals="0" coveredconditionals="0" statements="9" coveredstatements="9" elements="18" coveredelements="18"/>
+        <line num="14" type="method" name="redis" visibility="protected" complexity="1" crap="1" count="3"/>
+        <line num="16" type="stmt" count="3"/>
+        <metrics loc="19" ncloc="19" classes="1" methods="1" coveredmethods="1" conditionals="0" coveredconditionals="0" statements="1" coveredstatements="1" elements="2" coveredelements="2"/>
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Webman/Adapter/RequestAdapter.php">
         <class name="ErikWang2013\Xhprof\Webman\Adapter\RequestAdapter" namespace="ErikWang2013\Xhprof\Webman\Adapter">
@@ -2050,25 +2017,32 @@
       </file>
       <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Webman/XhprofMiddleware.php">
         <class name="ErikWang2013\Xhprof\Webman\XhprofMiddleware" namespace="ErikWang2013\Xhprof\Webman">
-          <metrics complexity="7" methods="1" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="15" coveredstatements="13" elements="16" coveredelements="13"/>
+          <metrics complexity="11" methods="2" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="21" coveredstatements="12" elements="23" coveredelements="12"/>
         </class>
-        <line num="21" type="method" name="process" visibility="public" complexity="7" crap="7.12" count="4"/>
-        <line num="23" type="stmt" count="4"/>
-        <line num="24" type="stmt" count="4"/>
+        <line num="23" type="method" name="process" visibility="public" complexity="7" crap="7.02" count="4"/>
+        <line num="25" type="stmt" count="4"/>
         <line num="26" type="stmt" count="4"/>
         <line num="28" type="stmt" count="4"/>
-        <line num="29" type="stmt" count="4"/>
         <line num="30" type="stmt" count="4"/>
+        <line num="31" type="stmt" count="4"/>
         <line num="32" type="stmt" count="4"/>
-        <line num="33" type="stmt" count="0"/>
-        <line num="35" type="stmt" count="4"/>
-        <line num="36" type="stmt" count="0"/>
-        <line num="39" type="stmt" count="4"/>
-        <line num="40" type="stmt" count="3"/>
-        <line num="44" type="stmt" count="4"/>
-        <line num="46" type="stmt" count="4"/>
-        <line num="47" type="stmt" count="3"/>
-        <metrics loc="52" ncloc="52" classes="1" methods="1" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="15" coveredstatements="13" elements="16" coveredelements="13"/>
+        <line num="34" type="stmt" count="4"/>
+        <line num="35" type="stmt" count="0"/>
+        <line num="38" type="stmt" count="4"/>
+        <line num="39" type="stmt" count="3"/>
+        <line num="43" type="stmt" count="4"/>
+        <line num="45" type="stmt" count="4"/>
+        <line num="46" type="stmt" count="3"/>
+        <line num="51" type="method" name="warnMissingExtensions" visibility="private" complexity="4" crap="20" count="0"/>
+        <line num="53" type="stmt" count="0"/>
+        <line num="54" type="stmt" count="0"/>
+        <line num="56" type="stmt" count="0"/>
+        <line num="57" type="stmt" count="0"/>
+        <line num="58" type="stmt" count="0"/>
+        <line num="59" type="stmt" count="0"/>
+        <line num="61" type="stmt" count="0"/>
+        <line num="62" type="stmt" count="0"/>
+        <metrics loc="66" ncloc="66" classes="1" methods="2" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="21" coveredstatements="12" elements="23" coveredelements="12"/>
       </file>
     </package>
     <file name="/home/wwwroot/erikwang2013/xhprof-webman/src/Webman/config/plugin/aaron-dev/xhprof/app.php">
@@ -2091,6 +2065,6 @@
       <line num="14" type="stmt" count="0"/>
       <metrics loc="15" ncloc="8" classes="0" methods="0" coveredmethods="0" conditionals="0" coveredconditionals="0" statements="11" coveredstatements="0" elements="11" coveredelements="0"/>
     </file>
-    <metrics files="47" loc="3875" ncloc="3643" classes="34" methods="199" coveredmethods="184" conditionals="0" coveredconditionals="0" statements="1623" coveredstatements="1417" elements="1822" coveredelements="1601"/>
+    <metrics files="49" loc="3850" ncloc="3617" classes="36" methods="188" coveredmethods="171" conditionals="0" coveredconditionals="0" statements="1596" coveredstatements="1379" elements="1784" coveredelements="1550"/>
   </project>
 </coverage>

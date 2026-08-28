@@ -6,8 +6,7 @@ namespace ErikWang2013\Xhprof\Thinkphp;
 
 use think\Request;
 use Closure;
-use ErikWang2013\Xhprof\Core\Xhprof;
-use ErikWang2013\Xhprof\Core\XhprofProfiler;
+use ErikWang2013\Xhprof\Core\MiddlewareTrait;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\ConfigAdapter;
@@ -16,24 +15,21 @@ use ErikWang2013\Xhprof\Thinkphp\Adapter\LogAdapter;
 
 class Middleware
 {
+    use MiddlewareTrait;
+
     public function handle(Request $request, Closure $next)
     {
-        $req = new RequestAdapter($request);
-        $res = new ResponseAdapter(response(''));
+        return $this->runXhprof($request, $next);
+    }
 
-        Xhprof::bootstrap($req, $res, new ConfigAdapter(), new RedisAdapter(), new LogAdapter());
-
-        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
-        if ($enabled) {
-            Xhprof::xhprofStart();
-        }
-
-        try {
-            return $next($request);
-        } finally {
-            if ($enabled) {
-                Xhprof::xhprofStop();
-            }
-        }
+    protected function xhprofAdapters($request): array
+    {
+        return [
+            new RequestAdapter($request),
+            new ResponseAdapter(response('')),
+            new ConfigAdapter(),
+            new RedisAdapter(),
+            new LogAdapter(),
+        ];
     }
 }

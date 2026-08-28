@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Thinkphp\Adapter;
 
 use think\Response;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
+use ErikWang2013\Xhprof\Core\StaticController;
 
 class ResponseAdapter implements ResponseInterface
 {
@@ -18,7 +19,7 @@ class ResponseAdapter implements ResponseInterface
 
     public function withBody(string $body): self
     {
-        $this->response = response($body);
+        $this->response = response($body, $this->response->getCode());
         return $this;
     }
 
@@ -36,21 +37,12 @@ class ResponseAdapter implements ResponseInterface
 
     public function file(string $path): self
     {
-        if (file_exists($path)) {
-            $content = file_get_contents($path);
-            $ext = pathinfo($path, PATHINFO_EXTENSION);
-            $type = [
-                'css' => 'text/css',
-                'js' => 'application/javascript',
-                'png' => 'image/png',
-                'gif' => 'image/gif',
-                'jpg' => 'image/jpeg',
-                'jpeg' => 'image/jpeg',
-                'svg' => 'image/svg+xml',
-            ][$ext] ?? 'application/octet-stream';
-            $this->response = response($content)->header(['Content-Type' => $type]);
-        } else {
+        $file = StaticController::readFile($path);
+        if ($file === null) {
             $this->response = response('', 404);
+        } else {
+            [$content, $type] = $file;
+            $this->response = response($content)->header(['Content-Type' => $type]);
         }
         return $this;
     }

@@ -8,11 +8,7 @@ use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
 
 class XhprofProfiler
 {
-    public static function init(): void
-    {
-        // Extension checks are handled by framework middleware layers;
-        // init() is called by xhprofStart(), which is only invoked after those checks pass.
-    }
+    private static ?array $config = null;
 
     public static function start(): void
     {
@@ -32,20 +28,25 @@ class XhprofProfiler
             return;
         }
         $pluginConfig = $config->get('xhprof', []);
+        self::$config = $pluginConfig;
         Xhprof::$ignore_url_arr = $pluginConfig['ignore_url_arr'] ?? ['/test'];
         Xhprof::$time_limit = (int) ($pluginConfig['time_limit'] ?? 0);
         Xhprof::$log_num = (int) ($pluginConfig['log_num'] ?? 1000);
         Xhprof::$view_wtred = (int) ($pluginConfig['view_wtred'] ?? 3);
         Xhprof::$key_prefix = (string) ($pluginConfig['key_prefix'] ?? 'xhprof');
+        Xhprof::$log_ttl = (int) ($pluginConfig['log_ttl'] ?? 86400 * 7);
     }
 
     public static function isEnabled(): bool
     {
-        $cfg = Xhprof::getConfig();
-        if ($cfg === null) {
-            return false;
+        $config = self::$config;
+        if ($config === null) {
+            $cfg = Xhprof::getConfig();
+            if ($cfg === null) {
+                return false;
+            }
+            $config = $cfg->get('xhprof', []);
         }
-        $config = $cfg->get('xhprof', []);
         return (bool) ($config['enable'] ?? false);
     }
 }

@@ -377,6 +377,11 @@ namespace Illuminate\Http {
             $this->headers = $headers;
         }
 
+        public function getStatusCode(): int
+        {
+            return $this->status;
+        }
+
         public function withHeaders(array $headers): self
         {
             $this->headers = array_merge($this->headers, $headers);
@@ -654,6 +659,11 @@ namespace think {
         {
             $this->status = $status;
             return $this;
+        }
+
+        public function getCode(): int
+        {
+            return $this->status;
         }
     }
 }
