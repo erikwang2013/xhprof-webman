@@ -85,4 +85,112 @@ class AnalyzerTest extends TestCase
         $this->assertSame('细节', $f->detail);
         $this->assertSame(123.0, $f->score);
     }
+
+    /** 造一个 symbol_tab 项：只给关心的键 */
+    private static function sym(float $ct, float $wt, float $exclWt, float $pmu = 0.0): array
+    {
+        return ['ct' => $ct, 'wt' => $wt, 'excl_wt' => $exclWt, 'mu' => 0, 'pmu' => $pmu, 'excl_mu' => 0, 'excl_pmu' => $pmu];
+    }
+
+    #[Test]
+    public function r1FiresWhenShareReachesThreshold(): void
+    {
+        // 10% 恰好等于阈值 → 触发（语义是 >=）
+        $tab = ['main()' => self::sym(1, 1000, 100)];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+
+        $this->assertCount(1, $found);
+        $this->assertSame('R1', $found[0]->rule);
+        $this->assertSame('main()', $found[0]->symbol);
+    }
+
+    #[Test]
+    public function r1DoesNotFireJustBelowThreshold(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 99)];
+        $this->assertSame([], Analyzer::analyze($tab, [], ['wt' => 1000]));
+    }
+
+    /** R1 不排除 main()：它占比高说明热点在采样覆盖之外，排除会给出错误结论 */
+    #[Test]
+    public function r1DoesNotExcludeMain(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 900)];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+        $this->assertSame('main()', $found[0]->symbol);
+    }
+
+    #[Test]
+    public function r1SortsByExclusiveTimeDescending(): void
+    {
+        $tab = [
+            'small()' => self::sym(1, 100, 200),
+            'big()'   => self::sym(1, 100, 500),
+            'mid()'   => self::sym(1, 100, 300),
+        ];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+        $this->assertSame(['big()', 'mid()', 'small()'], array_map(fn($f) => $f->symbol, $found));
+    }
+
+    #[Test]
+    public function r2FiresAtCallCountThreshold(): void
+    {
+        $tab = ['loop()' => self::sym(1000, 10, 1)];
+        $found = Analyzer::analyze($tab, [], ['wt' => 10000]);
+
+        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R2'));
+        $this->assertCount(1, $hits);
+        $this->assertSame('loop()', $hits[0]->symbol);
+        $this->assertStringContainsString('1,000', $hits[0]->title);
+    }
+
+    #[Test]
+    public function r2DoesNotFireAt999(): void
+    {
+        $tab = ['loop()' => self::sym(999, 10, 1)];
+        $found = Analyzer::analyze($tab, [], ['wt' => 10000]);
+        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R2'));
+    }
+
+    #[Test]
+    public function r3FiresOnHotEdge(): void
+    {
+        $tab = [
+            'main()' => self::sym(1, 1000, 100),
+            'foo()'  => self::sym(600, 600, 100),   // 自身占 10% ≥ 5%
+        ];
+        $raw = [
+            'main()' => ['ct' => 1, 'wt' => 1000],
+            'main()==>foo()' => ['ct' => 600, 'wt' => 400],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+
+        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R3'));
+        $this->assertCount(1, $hits);
+        $this->assertStringContainsString('main() → foo()', $hits[0]->title);
+        $this->assertStringContainsString('600', $hits[0]->title);
+    }
+
+    /** R3 不得出现"循环"字样——profiler 数据无法区分循环与多个调用点 */
+    #[Test]
+    public function r3NeverClaimsLoop(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 100)];
+        $raw = ['main()==>foo()' => ['ct' => 600, 'wt' => 400]];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+
+        foreach ($found as $f) {
+            $this->assertStringNotContainsString('循环', $f->title . $f->detail);
+        }
+    }
+
+    /** 裸 main() 键没有父，不能当成边来处理 */
+    #[Test]
+    public function r3SkipsBareMainKey(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100)];
+        $raw = ['main()' => ['ct' => 9999, 'wt' => 900]];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R3'));
+    }
 }
