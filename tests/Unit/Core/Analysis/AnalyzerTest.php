@@ -189,10 +189,12 @@ class AnalyzerTest extends TestCase
     #[Test]
     public function r1SortsByExclusiveTimeDescending(): void
     {
+        // wt 必须 >= excl_wt：本测试断言的是**全部**结论，而 excl_wt > wt（逻辑上不可能）
+        // 会（正确地）触发 Task 3 的 R6 探针，让这里的期望多出 3 条与排序无关的结论。
         $tab = [
-            'small()' => self::sym(1, 100, 200),
-            'big()'   => self::sym(1, 100, 500),
-            'mid()'   => self::sym(1, 100, 300),
+            'small()' => self::sym(1, 1000, 200),
+            'big()'   => self::sym(1, 1000, 500),
+            'mid()'   => self::sym(1, 1000, 300),
         ];
         $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
         $this->assertSame(['big()', 'mid()', 'small()'], array_map(fn($f) => $f->symbol, $found));
@@ -341,5 +343,81 @@ class AnalyzerTest extends TestCase
     public static function parentlessKeyProvider(): array
     {
         return ['裸 main() 键' => ['main()'], '==>main() 形式' => ['==>main()']];
+    }
+
+    #[Test]
+    public function r4DetectsRecursionAndReportsMaxDepth(): void
+    {
+        $raw = [
+            'main()==>fib' => ['ct' => 1, 'wt' => 100],
+            'fib@1==>fib@2' => ['ct' => 1, 'wt' => 90],
+            'fib@2==>fib@3' => ['ct' => 1, 'wt' => 80],
+        ];
+        $tab = ['main()' => self::sym(1, 100, 10), 'fib@1' => self::sym(1, 90, 5)];
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
+
+        $this->assertCount(1, $hits);
+        // 精确断言，不用 containsString：'3' 这种短串到处都是，弱断言放过错误实现
+        $this->assertSame('检测到 fib() 递归，最大深度 3', $hits[0]->title);
+        $this->assertSame(3.0, $hits[0]->score, 'score 应是最大深度');
+        $this->assertSame('', $hits[0]->symbol, 'R4 的符号必须为空，否则详情页链接必然死链');
+    }
+
+    /** 同名只出现在一个深度 → 不是递归 */
+    #[Test]
+    public function r4IgnoresSingleDepth(): void
+    {
+        $raw = ['main()==>foo@1' => ['ct' => 1, 'wt' => 10]];
+        $tab = ['main()' => self::sym(1, 100, 10)];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4'));
+    }
+
+    /** a@1==>b@2 是两个不同名字，不得判为递归 */
+    #[Test]
+    public function r4DoesNotConfuseDifferentNames(): void
+    {
+        $raw = ['a@1==>b@2' => ['ct' => 1, 'wt' => 10]];
+        $tab = ['main()' => self::sym(1, 100, 10)];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4'));
+    }
+
+    #[Test]
+    public function r5FiresAtPmuShare(): void
+    {
+        // 30/100 = 30%，恰好等于 PMU_SHARE_THRESHOLD 的边界
+        $tab = ['hog()' => self::sym(1, 10, 1, 30)];
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 100]), 'R5');
+
+        $this->assertCount(1, $hits);
+        $this->assertSame('hog()', $hits[0]->symbol);
+        $this->assertSame('hog() 内存峰值 30B，占全局 30.0%', $hits[0]->title);
+        $this->assertSame(30.0, $hits[0]->score);
+    }
+
+    #[Test]
+    public function r5SkippedWhenPmuTotalIsZero(): void
+    {
+        $tab = ['hog()' => self::sym(1, 10, 1, 30)];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 0]), 'R5'));
+    }
+
+    /** R6 探针：excl_wt > wt 逻辑上不可能，健康数据下永不触发 */
+    #[Test]
+    public function r6FiresWhenExclusiveExceedsInclusive(): void
+    {
+        $tab = ['bad()' => ['ct' => 1, 'wt' => 180, 'excl_wt' => 210, 'pmu' => 0, 'excl_pmu' => 0]];
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6');
+
+        $this->assertCount(1, $hits);
+        $this->assertSame('bad()', $hits[0]->symbol);
+        $this->assertSame('bad() 自身耗时 210μs 大于其总耗时 180μs，差 30μs', $hits[0]->title);
+        $this->assertSame(30.0, $hits[0]->score, 'score 应是差值');
+    }
+
+    #[Test]
+    public function r6DoesNotFireWhenEqual(): void
+    {
+        $tab = ['ok()' => ['ct' => 1, 'wt' => 200, 'excl_wt' => 200, 'pmu' => 0, 'excl_pmu' => 0]];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6'));
     }
 }

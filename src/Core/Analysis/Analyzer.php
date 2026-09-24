@@ -67,11 +67,18 @@ final class Analyzer
         //
         // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
         // 不会连累其他规则，更不会冒泡成报告页 500。
-        return array_merge(
+        $main = array_merge(
             self::safe(static fn(): array => self::ruleR1($symbol_tab, $totals)),
             self::safe(static fn(): array => self::ruleR3($symbol_tab, $raw_data, $totals)),
             self::safe(static fn(): array => self::ruleR2($symbol_tab))
         );
+        $supplement = array_merge(
+            self::safe(static fn(): array => self::ruleR4($raw_data)),
+            self::safe(static fn(): array => self::ruleR5($symbol_tab, $totals)),
+            self::safe(static fn(): array => self::ruleR6($symbol_tab))
+        );
+
+        return array_merge($main, $supplement);
     }
 
     /**
@@ -209,6 +216,147 @@ final class Analyzer
             );
         }
         return $out;
+    }
+
+    /**
+     * R4：递归。
+     * xhprof 把递归展开成 fib@1、fib@2 …，非递归调用没有 @ 后缀（如 main()==>fib）。
+     * 判据是同名符号出现在 >= 2 个不同深度。
+     */
+    private static function ruleR4(array $raw_data): array
+    {
+        $depths = array();
+        foreach (array_keys($raw_data) as $edge) {
+            foreach (explode('==>', (string) $edge) as $sym) {
+                if (preg_match('/^(.+)@(\d+)$/', $sym, $m) !== 1) {
+                    continue;
+                }
+                $depths[$m[1]][(int) $m[2]] = true;
+            }
+        }
+
+        $hits = array();
+        foreach ($depths as $name => $ds) {
+            if (count($ds) < 2) {
+                continue;
+            }
+            $hits[] = array(max(array_keys($ds)), (string) $name);
+        }
+        usort($hits, static fn($a, $b) => $b[0] <=> $a[0]);
+
+        $out = array();
+        foreach ($hits as $h) {
+            $out[] = new Finding(
+                'R4',
+                Finding::SEVERITY_SUPPLEMENT,
+                // 符号置空：递归在 symbol_tab 里的键是 fib@1/fib@2，而详情页按 symbol=fib 查，
+                // 必然"未找到"。spec 允许 symbol 为空（渲染层会跳过链接），这里就该为空。
+                '',
+                sprintf('检测到 %s() 递归，最大深度 %d', $h[1], $h[0]),
+                '递归深度过大可能导致栈溢出或耗时呈指数增长',
+                (float) $h[0]
+            );
+        }
+        return $out;
+    }
+
+    /** R5：内存峰值占比 */
+    private static function ruleR5(array $symbol_tab, array $totals): array
+    {
+        $total = self::num($totals, 'pmu');
+        if (!is_finite($total) || $total <= 0) {
+            return array();
+        }
+
+        $hits = array();
+        foreach ($symbol_tab as $fn => $info) {
+            if (!is_array($info) || !isset($info['excl_pmu']) || !is_numeric($info['excl_pmu'])) {
+                continue;
+            }
+            $pmu   = (float) $info['excl_pmu'];
+            $share = $pmu / $total;
+            if ($share < self::PMU_SHARE_THRESHOLD) {
+                continue;
+            }
+            $hits[] = array($pmu, (string) $fn, $share);
+        }
+        usort($hits, static fn($a, $b) => $b[0] <=> $a[0]);
+
+        $out = array();
+        foreach ($hits as $h) {
+            $out[] = new Finding(
+                'R5',
+                Finding::SEVERITY_SUPPLEMENT,
+                $h[1],
+                sprintf('%s 内存峰值 %s，占全局 %s', $h[1], self::bytes($h[0]), self::pct($h[2])),
+                '峰值内存集中在单个函数，可优先核查其数据结构',
+                $h[0]
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * R6：计时倒挂探针。
+     *
+     * 判据是**同一符号内部** excl_wt > wt（自身耗时大于总耗时，逻辑上不可能）。
+     * 不要改成"与父函数比较"——一个函数被多处调用时，父的 inclusive 时间
+     * 并不覆盖所有来源，会产生大量误报。
+     *
+     * 健康数据下本规则永远不触发，它是数据完整性探针，不是常规发现。
+     */
+    private static function ruleR6(array $symbol_tab): array
+    {
+        $hits = array();
+        foreach ($symbol_tab as $fn => $info) {
+            if (!is_array($info) || !isset($info['excl_wt'], $info['wt'])) {
+                continue;
+            }
+            if (!is_numeric($info['excl_wt']) || !is_numeric($info['wt'])) {
+                continue;
+            }
+            $excl = (float) $info['excl_wt'];
+            $incl = (float) $info['wt'];
+            if ($excl <= $incl) {
+                continue;
+            }
+            $hits[] = array($excl - $incl, (string) $fn, $excl, $incl);
+        }
+        usort($hits, static fn($a, $b) => $b[0] <=> $a[0]);
+
+        $out = array();
+        foreach ($hits as $h) {
+            $out[] = new Finding(
+                'R6',
+                Finding::SEVERITY_SUPPLEMENT,
+                $h[1],
+                // 必须用微秒而不是 ms()：R6 抓的是亚毫秒级倒挂，
+                // 而 ms() 保留 1 位小数会把 210µs 与 180µs 都变成 0.2ms，
+                // 标题就成了自相矛盾的「0.2ms 大于 0.2ms」。
+                sprintf(
+                    '%s 自身耗时 %s 大于其总耗时 %s，差 %s',
+                    $h[1],
+                    number_format($h[2]) . 'μs',
+                    number_format($h[3]) . 'μs',
+                    number_format($h[0]) . 'μs'
+                ),
+                '自身耗时不应大于总耗时，采样数据或统计计算可能异常',
+                $h[0]
+            );
+        }
+        return $out;
+    }
+
+    /** 字节 → 人类可读 */
+    private static function bytes(float $b): string
+    {
+        if ($b >= 1048576) {
+            return number_format($b / 1048576, 1) . 'MB';
+        }
+        if ($b >= 1024) {
+            return number_format($b / 1024, 1) . 'KB';
+        }
+        return number_format($b) . 'B';
     }
 
     /** 从 totals 取数值：缺失/非数值一律当 0，其余原样返回（含负数） */
