@@ -71,7 +71,6 @@ use ErikWang2013\Xhprof\Webman\StaticController;
 Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
 Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
 
-// CallGraph route (optional, requires graphviz `dot` command on server)
 ```
 
 **4. Configuration** — See `config/plugin/aaron-dev/xhprof/xhprof.php`.
@@ -123,7 +122,6 @@ Route::get('/xhprof-assets/{path}', function ($path) {
     return StaticController::serve($req, $res)->send();
 })->where('path', '.*');
 
-// CallGraph route (optional, requires graphviz `dot` command)
 ```
 
 **4. Publish config**:
@@ -181,7 +179,6 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
     return StaticController::serve($req, $res)->send();
 })->pattern(['path' => '.*']);
 
-// CallGraph route (optional, requires graphviz `dot` command)
 ```
 
 **4. Configuration** — Copy `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` to project `config/xhprof.php`.
@@ -231,7 +228,6 @@ Router::get('/xhprof-assets/{path:.+}', function ($path) {
     return StaticController::serve($req, $res)->send();
 });
 
-// CallGraph route (optional, requires graphviz `dot` command)
 ```
 
 **4. Publish config**:

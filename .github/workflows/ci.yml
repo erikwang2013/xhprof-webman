@@ -23,12 +23,66 @@ jobs:
       - name: Lint all PHP files
         run: find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
+  # composer.json 声明 php >= 8.0，但 PHPUnit 11 要求 >= 8.2，
+  # 单测无法在 8.0/8.1 上运行。此 job 用 --no-dev 只装运行时依赖，
+  # 实测底线上代码可加载、纯逻辑可执行，避免"声明支持 8.0 却从未验证"。
+  smoke:
+    name: PHP ${{ matrix.php }} runtime smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.0', '8.1']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: redis, xhprof
+          coverage: none
+      - name: Required extensions are really loaded
+        run: |
+          php -r 'foreach (["xhprof", "redis"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing extension: $e\n"); exit(1); } } echo "extensions ok\n";'
+      # 不加 --ignore-platform-reqs：此处的 composer install 本身就是
+      # "php >= 8.0 + ext-xhprof + ext-redis 在本版本上确实可满足"的证明。
+      - name: Install runtime dependencies only
+        run: composer install --no-dev --no-interaction --prefer-dist
+      - name: No post-8.0 functions in src
+        run: |
+          if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ --include='*.php'; then
+            echo "::error::src/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
+            exit 1
+          fi
+      - name: Load shipped classes and exercise pure logic
+        run: |
+          php -r '
+          require "vendor/autoload.php";
+          $ns = "ErikWang2013\\Xhprof\\";
+          $classes = [
+            "Core\\Xhprof",
+            "Core\\XhprofProfiler",
+            "Core\\StaticController",
+            "Core\\XhprofLib\\Utils\\XhprofLib",
+            "Core\\XhprofLib\\Utils\\XHProfRunsDefault",
+            "Core\\XhprofLib\\Display\\XhprofDisplay",
+          ];
+          foreach ($classes as $c) {
+            if (!class_exists($ns . $c)) { fwrite(STDERR, "cannot load {$ns}{$c}\n"); exit(1); }
+          }
+          $lib  = $ns . "Core\\XhprofLib\\Utils\\XhprofLib";
+          $disp = $ns . "Core\\XhprofLib\\Display\\XhprofDisplay";
+          if (count($lib::xhprof_get_possible_metrics()) !== 7) { exit(1); }
+          if ($disp::xhprof_count_format(1234) !== "1,234") { exit(1); }
+          echo "runtime smoke ok on ", PHP_VERSION, "\n";
+          '
+
   test:
     name: PHP ${{ matrix.php }} unit tests
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        # 下限由 PHPUnit 11 决定（>= 8.2）；8.0/8.1 的覆盖见上面的 smoke job
         php: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +91,11 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: redis, xhprof
           coverage: none
+      # 扩展缺失时必须显式失败：--ignore-platform-reqs 会让 composer 忽略
+      # ext-xhprof/ext-redis，单测用的又是 fake，于是"全绿"其实没验证过任何真实扩展行为。
+      - name: Required extensions are really loaded
+        run: |
+          php -r 'foreach (["xhprof", "redis"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing extension: $e\n"); exit(1); } } echo "extensions ok\n";'
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
       - name: Run unit tests

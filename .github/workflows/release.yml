@@ -25,6 +25,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 本 workflow 与 ci.yml 并行触发，且没有 needs: 依赖。
+      # 不自己先跑一遍测试的话，一个测试全红的提交照样会被打 tag 并发 Release，
+      # Packagist 随之发布坏版本。
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: redis, xhprof
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
+      - name: Unit tests must pass before tagging
+        run: vendor/bin/phpunit --no-coverage
+
       - name: Compute next version
         id: version
         run: |
