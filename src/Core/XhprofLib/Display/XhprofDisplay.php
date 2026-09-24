@@ -601,8 +601,8 @@ class XhprofDisplay
    * 符号名来自 profile 数据，动态调用（call_user_func、$obj->$method()）
    * 可以让请求影响它，不转义就是反射型 XSS。
    *
-   * 顺序即 Analyzer 给出的顺序，**不要重排**：$score 是各规则自己的量纲
-   * （微秒 / 次数 / 深度 / 字节），跨规则不可比。
+   * 顺序：先由 severity 分区（主区在前），分区内保持 Analyzer 给出的顺序，
+   * **不要重排**：$score 是各规则自己的量纲（微秒 / 次数 / 深度 / 字节），跨规则不可比。
    *
    * @param Finding[] $findings
    * @param array     $url_params 当前查询参数，用于生成带 run 的详情页链接
@@ -639,7 +639,9 @@ class XhprofDisplay
     if ($main) {
       $echo_page .= '<div class="xp-card-title">为什么慢</div>'
         . '<ul style="list-style:none;margin:0;padding:0">';
-      foreach ($main as $f) $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      foreach ($main as $f) {
+        $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      }
       $echo_page .= '</ul>';
     }
 
@@ -651,7 +653,9 @@ class XhprofDisplay
     if ($supplement) {
       $echo_page .= '<div class="xp-card-title">其他发现</div>'
         . '<ul style="list-style:none;margin:0;padding:0">';
-      foreach ($supplement as $f) $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      foreach ($supplement as $f) {
+        $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      }
       $echo_page .= '</ul>';
     }
 

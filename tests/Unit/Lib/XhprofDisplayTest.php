@@ -725,6 +725,7 @@ class XhprofDisplayTest extends TestCase
         preg_match('/href="([^"]*)"/', $html, $m);
         self::assertStringContainsString('run=a1a1a1a1a1a1a1a1', $m[1]);
         self::assertStringContainsString('symbol=foo%28%29', $m[1]);
+        self::assertStringStartsWith('/xhprof?', $m[1], 'href 必须由 base_path() 生成，不能用裸查询串');
     }
 
     /** 主区必须渲染在补充区之前——「为什么慢」是头部结论，顺序反转是真实的 UX 回归 */
