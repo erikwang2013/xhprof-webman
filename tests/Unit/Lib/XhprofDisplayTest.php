@@ -657,7 +657,9 @@ class XhprofDisplayTest extends TestCase
         $html = XhprofDisplay::render_diagnosis([], []);
 
         self::assertStringContainsString('未发现明显瓶颈', $html);
-        self::assertStringContainsString('10', $html);   // 自身耗时阈值
+        // 必须带 % 号：'10' 会被紧随其后的 '1000' 满足，
+        // 删掉「自身耗时」子句断言依然成立——空转
+        self::assertStringContainsString('10%', $html);
     }
 
     /**
@@ -702,5 +704,24 @@ class XhprofDisplayTest extends TestCase
 
         self::assertStringContainsString('run=a1a1a1a1a1a1a1a1', $html);
         self::assertStringContainsString('symbol=foo%28%29', $html);
+    }
+
+    /** 主区必须渲染在补充区之前——「为什么慢」是头部结论，顺序反转是真实的 UX 回归 */
+    #[Test]
+    public function renderDiagnosisRendersMainSectionFirst(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R6', Finding::SEVERITY_SUPPLEMENT, 'a()', '补充项', '细节', 1.0),
+                new Finding('R1', Finding::SEVERITY_MAIN, 'b()', '主结论', '细节', 1.0),
+            ],
+            []
+        );
+
+        self::assertLessThan(
+            strpos($html, '其他发现'),
+            strpos($html, '为什么慢'),
+            '主区必须在前'
+        );
     }
 }
