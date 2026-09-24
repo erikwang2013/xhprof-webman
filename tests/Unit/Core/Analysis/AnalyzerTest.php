@@ -238,7 +238,7 @@ class AnalyzerTest extends TestCase
     {
         $tab = [
             'main()' => self::sym(1, 1000, 100),
-            'foo()'  => self::sym(600, 600, 100),   // 自身占 10% ≥ 5%
+            'foo()'  => self::sym(600, 600, 60),    // 自身 6%：过 R3 的 5% 闸门，不触发 R1 的 10%
         ];
         $raw = [
             'main()' => ['ct' => 1, 'wt' => 1000],
@@ -274,7 +274,7 @@ class AnalyzerTest extends TestCase
     #[Test]
     public function r3SurvivesIntegerKeyAmongValidEdges(): void
     {
-        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 100)];
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 60)];
         $raw = [
             0 => ['ct' => 999, 'wt' => 1],              // 坏键：会被转成 int
             'main()==>foo()' => ['ct' => 600, 'wt' => 400],
@@ -296,7 +296,7 @@ class AnalyzerTest extends TestCase
     #[Test]
     public function r3FiresAtExactlyEdgeCountThreshold(): void
     {
-        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(500, 600, 100)];
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(500, 600, 60)];
         $raw = ['main()==>foo()' => ['ct' => 500, 'wt' => 400]];
         $this->assertCount(1, self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
     }
@@ -332,8 +332,8 @@ class AnalyzerTest extends TestCase
     public function r3SortsByEdgeWallTimeDescending(): void
     {
         $tab = ['main()' => self::sym(1, 1000, 100),
-                'a()'    => self::sym(600, 600, 100),
-                'b()'    => self::sym(600, 600, 100)];
+                'a()'    => self::sym(600, 600, 60),
+                'b()'    => self::sym(600, 600, 60)];
         $raw = ['main()==>a()' => ['ct' => 600, 'wt' => 100],
                 'main()==>b()' => ['ct' => 600, 'wt' => 900]];
         $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3');
@@ -539,7 +539,7 @@ class AnalyzerTest extends TestCase
         $tab = [
             'main()' => self::sym(1, 100, 100),      // R1 命中（100/100）
             'hog()'  => self::sym(1, 100, 10, 50),   // R5 命中（50/100）
-            'foo()'  => self::sym(900, 900, 100),    // R3 的被调方
+            'foo()'  => self::sym(900, 900, 6),      // R3 的被调方（6%：只过 R3 的 5% 闸门）
         ];
         $raw = ['main()==>foo()' => ['ct' => 900, 'wt' => 90]];
 
@@ -584,7 +584,7 @@ class AnalyzerTest extends TestCase
             'busy()' => self::sym(1000, 500, 50),                            // R2
             'hot()'  => self::sym(600, 400, 60),                             // R3 的被调方
             'hog()'  => self::sym(1, 100, 10, 80),                           // R5
-            'bad()'  => ['ct' => 1, 'wt' => 100, 'excl_wt' => 300, 'pmu' => 0, 'excl_pmu' => 0],  // R6
+            'bad()'  => ['ct' => 1, 'wt' => 50, 'excl_wt' => 80, 'pmu' => 0, 'excl_pmu' => 0],  // R6（8%：不触发 R1，否则主区被占满会挤掉 R2）
         ];
         $raw = [
             'main()'         => ['ct' => 1, 'wt' => 1000],
@@ -633,5 +633,147 @@ class AnalyzerTest extends TestCase
         $this->assertCount(1, $hits);
         $this->assertSame('real() 自身耗时 139μs 大于其总耗时 137μs，差 2μs', $hits[0]->title);
         $this->assertSame(2.0, $hits[0]->score);
+    }
+
+    /** 主区按 R1 → R3 → R2 填充，不是跨规则按 score 排序（量纲不同不可比） */
+    #[Test]
+    public function mainSectionFillsR1ThenR3ThenR2(): void
+    {
+        $tab = [
+            'slow()' => self::sym(1, 1000, 500),    // R1，自身 50%
+            'loop()' => self::sym(2000, 10, 1),     // R2，调用 2000 次
+        ];
+        $raw = ['main()==>tee()' => ['ct' => 700, 'wt' => 60]];
+        $tab['tee()'] = self::sym(700, 60, 60);     // 自身占 6% ≥ 5% → R3
+
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        // R1 命中 1 条，R3 命中 1 条，R2 命中 1 条，共 3 条
+        $this->assertSame(['R1', 'R3', 'R2'], array_map(fn($f) => $f->rule, $main));
+    }
+
+    /** R1 命中 3 条时就把主区占满，R3/R2 不得挤进来 */
+    #[Test]
+    public function mainSectionIsCappedByR1First(): void
+    {
+        // wt 必须 >= excl_wt：写成 sym(1, 100, 400) 会（正确地）触发 R6，
+        // 审查者实测输出为 [R1],[R1],[R1],[R2],[R6],[R6],[R6] —— 断言虽仍通过
+        // （它们按 severity 过滤），但与本测试文件自己确立的约定矛盾。
+        $tab = [
+            'a()' => self::sym(1, 1000, 400),
+            'b()' => self::sym(1, 1000, 300),
+            'c()' => self::sym(1, 1000, 200),
+            'loop()' => self::sym(5000, 10, 1),
+        ];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        $this->assertCount(Analyzer::MAIN_LIMIT, $main);
+        $this->assertSame(['a()', 'b()', 'c()'], array_map(fn($f) => $f->symbol, $main));
+    }
+
+    #[Test]
+    public function supplementSectionIsCapped(): void
+    {
+        $tab = [];
+        for ($i = 0; $i < 5; $i++) {
+            $tab["hog$i()"] = ['ct' => 1, 'wt' => 10, 'excl_wt' => 1, 'pmu' => 50, 'excl_pmu' => 50];
+        }
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000, 'pmu' => 100]);
+        $supp = array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_SUPPLEMENT);
+
+        $this->assertCount(Analyzer::SUPPLEMENT_LIMIT, $supp);
+    }
+
+    #[Test]
+    public function mainFindingsComeBeforeSupplements(): void
+    {
+        $tab = [
+            'slow()' => self::sym(1, 1000, 500),
+            'hog()'  => ['ct' => 1, 'wt' => 10, 'excl_wt' => 1, 'pmu' => 90, 'excl_pmu' => 90],
+        ];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000, 'pmu' => 100]);
+
+        $this->assertSame(Finding::SEVERITY_MAIN, $found[0]->severity);
+        $this->assertSame(Finding::SEVERITY_SUPPLEMENT, $found[count($found) - 1]->severity);
+    }
+
+    /**
+     * 主区按 symbol 去重。R3 是**逐边**产出的：同一个热点函数被多个父函数调用时
+     * 会产生多条同 symbol 结论，不去重时 MAIN_LIMIT=3 会被同一个函数占满，
+     * 「前三条」退化成「一个函数三遍」，把 R1/R2 的结论全部挤掉。
+     */
+    #[Test]
+    public function mainSectionDedupesRepeatedSymbols(): void
+    {
+        $tab = [
+            'main()' => self::sym(1, 1000, 100),
+            'hot()'  => self::sym(3000, 900, 900),
+        ];
+        $raw = [
+            'main()' => ['ct' => 1, 'wt' => 1000],
+            'a()==>hot()' => ['ct' => 1200, 'wt' => 500],
+            'b()==>hot()' => ['ct' => 1000, 'wt' => 300],
+            'c()==>hot()' => ['ct' => 800, 'wt' => 200],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        $symbols = array_map(fn($f) => $f->symbol, $main);
+        $this->assertSame(array_unique($symbols), $symbols, '主区不得出现重复 symbol');
+        $this->assertCount(1, array_filter($symbols, fn($s) => $s === 'hot()'), '同 symbol 只保留最严重的一条');
+    }
+
+    /**
+     * 同一 symbol 同时命中 R1 与 R3 时只保留先到的 R1——这是合并顺序 R1 → R3 → R2
+     * 加主区去重共同决定的**刻意取舍**：R1 是头部归因，R3 的具体调用方细节不再展示。
+     *
+     * 单独钉住它，是因为其余 R3 用例都把被调方的自身耗时压到 6%（避开 R1 的 10% 闸门）
+     * 来隔离各自关注点，于是"碰撞时谁留下"就无人断言了。
+     */
+    #[Test]
+    public function mainKeepsR1OverR3ForSameSymbol(): void
+    {
+        $tab = [
+            'main()' => self::sym(1, 1000, 100),
+            'foo()'  => self::sym(600, 600, 100),   // 自身恰好 10% → R1 命中；同时是 R3 的被调方
+        ];
+        $raw = [
+            'main()'         => ['ct' => 1, 'wt' => 1000],
+            'main()==>foo()' => ['ct' => 600, 'wt' => 400],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        $this->assertSame(['main()', 'foo()'], array_map(fn($f) => $f->symbol, $main));
+        $this->assertSame([], self::rule($found, 'R3'), 'R3 的 foo() 应与 R1 的同 symbol 结论合并，只留 R1');
+    }
+
+    /**
+     * 去重必须先于切片。R3 逐边产出，同 symbol 结论可能占住前几个位置：
+     * 先切片的话 MAIN_LIMIT 会被重复 symbol 吃掉，把一个与它们不同 symbol、
+     * 排在后面的结论（这里是 R2 的 z()）永久藏起来。
+     *
+     * 这条断言的是**顺序**而不是"去了重"：只按 symbol 去重的用例（上面的
+     * mainSectionDedupesRepeatedSymbols）先行切片也能通过——切片后剩下的三条
+     * 恰好仍无重复 symbol。区别只在这种"队首重复、队尾有别"的形状上可见。
+     */
+    #[Test]
+    public function mainSectionDedupesBeforeSlicingSoLaterSymbolsSurvive(): void
+    {
+        $tab = [
+            'x()' => self::sym(1, 300, 200),      // R1（20%），同时是 R3 的被调方
+            'y()' => self::sym(1, 100, 60),       // 只命中 R3（6%）
+            'z()' => self::sym(2000, 50, 1),      // R2
+        ];
+        $raw = [
+            'a()==>x()' => ['ct' => 600, 'wt' => 500],
+            'a()==>y()' => ['ct' => 600, 'wt' => 300],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        $this->assertSame(['x()', 'y()', 'z()'], array_map(fn($f) => $f->symbol, $main));
     }
 }

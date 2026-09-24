@@ -78,6 +78,22 @@ final class Analyzer
             self::safe(static fn(): array => self::ruleR6($symbol_tab))
         );
 
+        // 先按 symbol 去重再切片：R3 逐边产出，同一个热点函数被多个父函数调用时
+        // 会有多条同 symbol 结论；先切片的话 MAIN_LIMIT 会被一个函数占满。
+        // 各规则内已按 score 降序，故每组保留第一条即最严重的那条。
+        $seen = array();
+        $deduped = array();
+        foreach ($main as $f) {
+            if (isset($seen[$f->symbol])) {
+                continue;
+            }
+            $seen[$f->symbol] = true;
+            $deduped[] = $f;
+        }
+
+        $main       = array_slice($deduped, 0, self::MAIN_LIMIT);
+        $supplement = array_slice($supplement, 0, self::SUPPLEMENT_LIMIT);
+
         return array_merge($main, $supplement);
     }
 
