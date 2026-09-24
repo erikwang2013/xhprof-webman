@@ -1677,6 +1677,34 @@ git commit -m "feat(analysis): render_diagnosis 渲染诊断卡片（转义收�
         self::assertStringNotContainsString('诊断结论', $html);
     }
 
+    /**
+     * 多 run 聚合视图（?run=a,b）走的是 profiler_single_run_report，形态与单 run 一致，
+     * 所以诊断区**会**在那里出现（IR-1 的第三条渲染路径）。这是**可接受**的——占比是
+     * "平均值的占比"，仍有意义——但必须显式接受而非碰巧发生，故钉住它。
+     */
+    #[Test]
+    public function aggregateRunReportContainsDiagnosisSection(): void
+    {
+        $rid1 = 'a1a1a1a1a1a1a1a1';
+        $rid2 = 'b2b2b2b2b2b2b2b2';
+        $this->cache->set('xhprof:xhprof_log:' . $rid1, serialize($this->sampleRunData()));
+        $this->cache->set('xhprof:xhprof_log:' . $rid2, serialize($this->sampleRunData()));
+        $this->useRequest(new FakeRequest(['run' => "$rid1,$rid2", 'all' => 1], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::displayXHProfReport(
+            ['run' => "$rid1,$rid2", 'all' => 1],
+            'xhprof_foo',
+            "$rid1,$rid2",
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+    }
+
     /** 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢" */
     #[Test]
     public function symbolReportHasNoDiagnosisSection(): void
@@ -1710,10 +1738,31 @@ Expected: FAIL —— 单 run 报告里还没有"诊断结论"
     // 诊断只在顶层单 run 视图显示：
     // - diff 模式下差值为负，占比类表述失去意义
     // - 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢"
+    // 传 $base_url_params（:363 定义，已 unset symbol/all），不要传 $url_params：
+    // 1) 它是本页既有的"跳回本报告"标准形状——show_nav():1420 与 full_report():773
+    //    用的都是它，传它让诊断链接与页面上其他链接结构一致，而不是特例；
+    // 2) 它不含 symbol，故 xhprof_array_set(...) 结果恰好一个 symbol 键；传原始
+    //    $url_params 则要靠该助手的**覆盖**语义来保证正确，等于依赖助手行为而非入参形状；
+    // 3) 非 diff 模式下它带 run —— 这正是 render_diagnosis 第二个参数存在的理由。
+    // （传 $url_params 也只是 URL 多一个无用的 all=1：全仓库唯一读 all 的地方是
+    //   full_report():866，符号详情页不读它。故属"不必"而非"错误"。）
     if (!$diff_mode && empty($rep_symbol)) {
       $findings = Analyzer::analyze($symbol_tab, $run1_data, $totals);
-      $echo_page .= XhprofDisplay::render_diagnosis($findings, $url_params);
+      $echo_page .= XhprofDisplay::render_diagnosis($findings, $base_url_params);
     }
+```
+
+- [ ] **Step 3b: 改 `Analyzer` 的类 docblock（IR-1 的另一半）**
+
+`src/Core/Analysis/Analyzer.php:12-13` 现在写的是"入参都是
+`XhprofDisplay::profiler_report()` 里已有的局部变量"——**这句话本身就在为 IR-1 的接线 bug 背书**：
+diff 模式下 `$symbol_tab`/`$totals` 已被改写成增量，而 `$run1_data` 仍是原始边表。
+调用点的 `!$diff_mode` 守卫是唯一防线，docblock 必须改成明确警告：
+
+```
+ * 三份入参必须来自**同一次**运行。注意 diff 模式下 profiler_report() 会改写自己的
+ * 局部变量（$symbol_tab/$totals 变成 run2-run1 的增量，而 $run1_data 仍是单 run 边表），
+ * 那组混合值不可直接传入——调用点必须以 !$diff_mode 守卫。
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
