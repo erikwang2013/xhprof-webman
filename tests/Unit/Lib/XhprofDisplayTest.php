@@ -124,6 +124,24 @@ class XhprofDisplayTest extends TestCase
         ];
     }
 
+    /**
+     * 断言 $first 在 $second 之前，且**两者都必须存在**。
+     *
+     * 不能直接写 assertLessThan(strpos(...), strpos(...))：strpos 在缺失时返回 false，
+     * 而 PHP 里 `false < 任意正数` 为真，于是锚点消失时位置断言会静默通过。
+     * 实测：把 splice 的 `.=` 改成 `=`（卡片覆盖而非追加）会让页面丢掉动作栏、
+     * 搜索框与 run 描述，而 strpos($html,'Run #') 变成 false，整套测试仍然全绿。
+     */
+    private static function assertBefore(string $html, string $first, string $second): void
+    {
+        $posFirst  = strpos($html, $first);
+        $posSecond = strpos($html, $second);
+
+        self::assertNotFalse($posFirst, "锚点缺失：$first");
+        self::assertNotFalse($posSecond, "锚点缺失：$second");
+        self::assertLessThan($posSecond, $posFirst, "$first 必须在 $second 之前");
+    }
+
     #[Test]
     #[DataProvider('countFormatProvider')]
     public function countFormatFormatsNumbers(float|int $num, string $expected): void
@@ -636,11 +654,7 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('检测到 fib() 递归', $html);
 
         // 钉住归属关系，而不只是「这些串都出现了」：主结论必须出现在「其他发现」之前
-        self::assertLessThan(
-            strpos($html, '其他发现'),
-            strpos($html, 'foo() 自身耗时'),
-            '主区结论必须在补充区标题之前'
-        );
+        self::assertBefore($html, 'foo() 自身耗时', '其他发现');
     }
 
     /** R4 的 symbol 是空串（见 Analyzer::ruleR4），此时不该给出指向"未找到"详情页的死链 */
@@ -740,11 +754,7 @@ class XhprofDisplayTest extends TestCase
             []
         );
 
-        self::assertLessThan(
-            strpos($html, '其他发现'),
-            strpos($html, '为什么慢'),
-            '主区必须在前'
-        );
+        self::assertBefore($html, '为什么慢', '其他发现');
     }
 
     /** 只有补充项时不得渲染「为什么慢」——否则会出现一个空的主区标题 */
@@ -784,7 +794,7 @@ class XhprofDisplayTest extends TestCase
             []
         );
 
-        self::assertLessThan(strpos($html, '高分在后'), strpos($html, '低分在前'), '必须保持输入序');
+        self::assertBefore($html, '低分在前', '高分在后');
 
         // 补充区同样不得重排：上一条夹具只有主区结论，故只守住了主区
         $html = XhprofDisplay::render_diagnosis(
@@ -794,11 +804,7 @@ class XhprofDisplayTest extends TestCase
             ],
             []
         );
-        self::assertLessThan(
-            strpos($html, '补充高分在后'),
-            strpos($html, '补充低分在前'),
-            '补充区必须保持输入序'
-        );
+        self::assertBefore($html, '补充低分在前', '补充高分在后');
     }
 
     /** 空态必须列全五个阈值——逐个断言，任何一个被删掉都要能变红 */
@@ -845,7 +851,7 @@ class XhprofDisplayTest extends TestCase
         // 所以前者才区分得出「渲染出真实结论」与「analyze() 拿到错参数返回空」
         self::assertStringContainsString('为什么慢', $html);
         // $echo_page 是逐段拼接的，拼接顺序即 DOM 顺序：卡片必须在 run 描述之后
-        self::assertLessThan(strpos($html, '诊断结论'), strpos($html, 'Run #'), '卡片必须在 run 描述之后');
+        self::assertBefore($html, 'Run #', '诊断结论');
     }
 
     /**
