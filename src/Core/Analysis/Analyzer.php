@@ -10,8 +10,12 @@ use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
 /**
  * 单次运行诊断。
  *
- * 入参都是 XhprofDisplay::profiler_report() 里已有的局部变量，
- * 不新增数据采集、不新增存储、不碰 HTML。
+ * 三份入参必须来自**同一次**运行。注意 diff 模式下 profiler_report() 会改写自己的
+ * 局部变量（$symbol_tab/$totals 变成 run2-run1 的增量，而 $run1_data 仍是单 run 边表），
+ * 那组混合值不可直接传入——调用点必须以 !$diff_mode 守卫。
+ *
+ * 入参取自 XhprofDisplay::profiler_report() 里已有的局部变量，不新增数据采集、
+ * 不新增存储、不碰 HTML。
  *
  * 最重要的一条约定：analyze() 不得抛异常。诊断是旁路，
  * 它出问题只会让报告页多一块内容或没有这块内容，绝不能让整页 500。

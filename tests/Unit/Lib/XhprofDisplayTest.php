@@ -824,4 +824,89 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('诊断结论', $html);
         self::assertStringEndsWith('</div></div>', $html, '卡片必须闭合，否则报告体会被嵌进 .xp-card（其 overflow:hidden 会截断宽表格）');
     }
+
+    #[Test]
+    public function singleRunReportContainsDiagnosisSection(): void
+    {
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $this->useRequest(new FakeRequest(['run' => $runId, 'all' => 1], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1],
+            $this->sampleRunData(),
+            'desc',
+            null,
+            'wt',
+            $runId
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+    }
+
+    /** diff 模式下差值为负，占比类表述失去意义 —— 不显示诊断区 */
+    #[Test]
+    public function diffReportHasNoDiagnosisSection(): void
+    {
+        $data = ['main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100]];
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'all' => 1],
+            $data,
+            'd1',
+            $data,
+            'd2',
+            null,
+            'wt',
+            'r1',
+            'r2'
+        );
+
+        self::assertStringNotContainsString('诊断结论', $html);
+    }
+
+    /**
+     * 多 run 聚合视图（?run=a,b）走的是 profiler_single_run_report，形态与单 run 一致，
+     * 所以诊断区**会**在那里出现（IR-1 的第三条渲染路径）。这是**可接受**的——占比是
+     * "平均值的占比"，仍有意义——但必须显式接受而非碰巧发生，故钉住它。
+     */
+    #[Test]
+    public function aggregateRunReportContainsDiagnosisSection(): void
+    {
+        $rid1 = 'a1a1a1a1a1a1a1a1';
+        $rid2 = 'b2b2b2b2b2b2b2b2';
+        $this->cache->set('xhprof:xhprof_log:' . $rid1, serialize($this->sampleRunData()));
+        $this->cache->set('xhprof:xhprof_log:' . $rid2, serialize($this->sampleRunData()));
+        $this->useRequest(new FakeRequest(['run' => "$rid1,$rid2", 'all' => 1], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::displayXHProfReport(
+            ['run' => "$rid1,$rid2", 'all' => 1],
+            'xhprof_foo',
+            "$rid1,$rid2",
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+    }
+
+    /** 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢" */
+    #[Test]
+    public function symbolReportHasNoDiagnosisSection(): void
+    {
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $this->useRequest(new FakeRequest(['run' => $runId, 'all' => 1, 'symbol' => 'foo()'], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1, 'symbol' => 'foo()'],
+            $this->sampleRunData(),
+            'desc',
+            'foo()',
+            'wt',
+            $runId
+        );
+
+        self::assertStringNotContainsString('诊断结论', $html);
+    }
 }

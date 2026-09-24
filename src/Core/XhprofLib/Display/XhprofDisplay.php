@@ -420,6 +420,21 @@ class XhprofDisplay
       . ($diff_mode ? ' &nbsp;|&nbsp; ' . $run2_txt : '')
       . '</div>';
 
+    // 诊断只在顶层单 run 视图显示：
+    // - diff 模式下差值为负，占比类表述失去意义
+    // - 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢"
+    // 传 $base_url_params（:363 定义，已 unset symbol/all），不要传 $url_params：
+    // 1) 它是本页既有的"跳回本报告"标准形状——show_nav():1420 与 full_report():773
+    //    用的都是它，传它让诊断链接与页面上其他链接结构一致，而不是特例；
+    // 2) 它不含 symbol，故 xhprof_array_set(...) 结果恰好一个 symbol 键；传原始
+    //    $url_params 则要靠该助手的**覆盖**语义来保证正确，等于依赖助手行为而非入参形状；
+    // 3) 非 diff 模式下它带 run —— 这正是 render_diagnosis 第二个参数存在的理由。
+    // （传 $url_params 也只是 URL 多一个无用的 all=1：全仓库唯一读 all 的地方是
+    //   full_report():866，符号详情页不读它。故属"不必"而非"错误"。）
+    if (!$diff_mode && empty($rep_symbol)) {
+      $findings = Analyzer::analyze($symbol_tab, $run1_data, $totals);
+      $echo_page .= XhprofDisplay::render_diagnosis($findings, $base_url_params);
+    }
 
     // data tables
     if (!empty($rep_symbol)) {
