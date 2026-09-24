@@ -367,6 +367,10 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
         $totals   = is_array($totals) ? $totals : array();
         $raw_data = is_array($raw_data) ? $raw_data : array();
 
+        // ↑ 这两行归一化**不要**因为有了 safe() 就去掉：foreach 遍历非数组
+        //   只发 PHP warning，不是 Throwable，safe() 根本不会介入；
+        //   归一化到入口一次，比让 R3/R4 各自守着更稳。
+
         // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
         // 不会连累其他规则，更不会冒泡成报告页 500。
         return array_merge(
@@ -521,6 +525,12 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
 
 Run: `vendor/bin/phpunit --filter AnalyzerTest`
 Expected: PASS
+
+**同时确认入口那两行归一化真的被守护**：临时去掉
+`$raw_data = is_array($raw_data) ? $raw_data : array();`，跑
+`vendor/bin/phpunit --filter analyzeNeverThrowsOnMalformedInput` —— 应该变红
+（`foreach(false)` 发 warning，`failOnWarning="true"` 判红）。看到红色后立刻还原。
+这条用例的标签声称守护归一化，只有在归一化实现之后才可验证，所以放这一步。
 
 - [ ] **Step 5: 提交**
 

@@ -26,7 +26,11 @@ class AnalyzerTest extends TestCase
             '全空数组'        => [[], [], []],
             'null 入参'       => [null, null, null],
             '字符串入参'      => ['x', 'y', 'z'],
-            'raw_data 为 false（get_run 失败的形态）' => [
+            // 人工构造：真实路径不会产生这个组合 —— get_run 失败（false）时
+            // flat_info 返回的是**空** symbol_tab，analyze() 会在入口守卫处就返回。
+            // 保留它是因为它守护 analyze() 入口的归一化：没有归一化时
+            // foreach(false) 会发 warning，在 failOnWarning 下即为红。
+            '人工构造：symbol_tab 非空 + raw_data 为 false（守护入口归一化）' => [
                 ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 0]],
                 false,
                 ['wt' => 100],
