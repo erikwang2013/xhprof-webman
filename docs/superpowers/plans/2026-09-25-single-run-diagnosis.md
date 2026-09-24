@@ -1225,8 +1225,26 @@ Expected: `OK`，无 failure/error/notice/deprecation
 
 ```bash
 for f in $(find src tests -name '*.php'); do php -l "$f" | grep -v "No syntax errors" || true; done
-grep -rn "readonly" src/ --include=*.php || echo "无 8.1+ 语法 ✓"
 ```
+
+`php -l` 在开发机上（PHP 8.3）**抓不到 8.1+ 语法**，只有真正跑 8.0 的 CI lint job 才能。
+本地要用 php-parser 按 8.0 语法解析来补：
+
+```bash
+php -r '
+require "vendor/autoload.php";
+$parser = (new PhpParser\ParserFactory())->createForVersion(PhpParser\PhpVersion::fromString("8.0"));
+$bad = 0;
+foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("src")) as $f) {
+    if ($f->getExtension() !== "php") continue;
+    try { $parser->parse(file_get_contents($f->getPathname())); }
+    catch (PhpParser\Error $e) { $bad++; echo "8.0 语法失败: ", $f->getPathname(), " -> ", $e->getMessage(), "\n"; }
+}
+echo $bad === 0 ? "全部通过 PHP 8.0 语法检查\n" : "$bad 个文件不符合 8.0\n";
+'
+```
+
+（`nikic/php-parser` 是 phpunit 的传递依赖，已在 vendor 里，不需要新增声明。）
 
 - [ ] **Step 5: 把新类加进 CI 的 PHP 8.0/8.1 加载检查**
 
