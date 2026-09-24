@@ -1251,6 +1251,20 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 ```
 
+> **Task 5/6 的集成约束（Task 4 复审）。**
+> - **截断与"该规则没触发"不可区分**：`analyze()` 只返回截断后的列表，
+>   不携带"R2 还有 4 条被省略"。所以「为什么慢」卡片完全可能只有三条 R1 行，
+>   渲染层无从得知 R2/R3 存在过。**刻意如此**，但两条后果要记：
+>   Task 5/6 的文案不得暗示"六条规则总会呈现"；**不要加"本条规则有 N 条结论"这类计数器**
+>   ——它只会低报。若将来要做「还有 N 条被省略」，**Task 4 是最后还持有该信息的地方**。
+> - **同一 symbol 可以同时出现在两个分区**（无主风险 #2），Task 5 会渲染两条指向同一详情页
+>   但标题不同的链接。观感上像 bug，实为正确——渲染层代码里要写注释说明。
+> - **Task 5 不得在分区内重新排序**：`score` 是各规则自己的量纲（微秒 / 次数 / 深度），
+>   重排没有意义。
+> - **Task 6 的链接参数**：计划传的是 `$url_params`，而页面上其他链接用的是
+>   `$base_url_params`（`all`/`symbol` 已 unset）。诊断区的链接会因此带上 `all=1`——
+>   无害但不必，且现有测试抓不到。改用 `$base_url_params` 的形状。
+
 > **两条"无主风险"（Task 4 复审发现，均已处理）。**
 >
 > 1. **"补充区不去重"这条 spec 规则此前只是顺带被守住。** 对已提交测试跑
@@ -1698,7 +1712,7 @@ s.replace('const PMU_SHARE_THRESHOLD = 0.30;', 'const PMU_SHARE_THRESHOLD = 999.
 # R4：把"至少两个深度"放宽成"至少 999 个深度"，等于永不触发
 s.replace('if (count($ds) < 2) {', 'if (count($ds) < 999) {')
 # R6：把比较改成恒不成立
-s.replace('if ($excl <= $incl) {', 'if (true) {')
+s.replace('if ($ex <= $in) {', 'if (true) {')   # 变量名以当前代码为准
 ```
 
 每条改完都要看到 `FAIL (good)`，然后 `cp /tmp/Analyzer.bak src/Core/Analysis/Analyzer.php` 还原后再改下一条。
@@ -1799,6 +1813,12 @@ echo "报告生成成功，长度 ", strlen($html), "\n";
 > 沿用代码库既有写法（`XhprofLibTest.php:35`）：同时设 `Xhprof::$logger` 与
 > `Context::set('xhprof.logger', ...)`，并在 `finally` 里两者都还原。
 > 生产环境不受影响（Hyperf 进程本来就是 Hyperf），故不为此新增 public 重置接口。
+
+**先确认 `xdebug.mode` 是 off。** 本开发环境默认 `xdebug.mode=profile`，实测同一段循环
+开剖析 58.3ms、关掉 6.5ms（**9x**）；审查者另测到相同循环 14x、`preg_match` 4.3x。
+**膨胀系数随操作而异**，所以不仅绝对值失真，**跨操作的比值也会被扭曲**。
+本特性此前那个"逐字拷贝的循环与真实方法相差 1.85x、原因未查明"的悬案，很可能就是它。
+本地计时一律用 `php -d xdebug.mode=off`。
 
 **性能结论只能同进程 A/B，不能跨仪器取绝对值。** 本特性开发中出现过一次错误结论：
 把 `explode` 放进一个没有其他逐边工作的裸循环计时，得出 4.5x；同进程 A/B 复测只有
