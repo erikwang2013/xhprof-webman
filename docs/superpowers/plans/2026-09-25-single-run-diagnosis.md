@@ -269,7 +269,7 @@ git commit -m "feat(analysis): Finding 值对象与 Analyzer 骨架（永不抛�
 
 - [ ] **Step 1: 写失败的测试**
 
-在 `AnalyzerTest` 中追加（`use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;` 需要追加到 import 区）：
+在 `AnalyzerTest` 中追加（`use ErikWang2013\Xhprof\Core\Xhprof;` 与 `use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;` 两条都要追加到 `Analyzer.php` 的 import 区）：
 
 ```php
     /** 造一个 symbol_tab 项：只给关心的键 */
@@ -390,14 +390,77 @@ git commit -m "feat(analysis): Finding 值对象与 Analyzer 骨架（永不抛�
         $this->assertStringContainsString('main() → foo()', $hits[0]->title);
     }
 
-    /** 裸 main() 键没有父，不能当成边来处理 */
+    /** 按规则过滤：只断言自己这条规则，新增规则不会波及本测试 */
+    private static function rule(array $findings, string $rule): array
+    {
+        return array_values(array_filter($findings, fn($f) => $f->rule === $rule));
+    }
+
+    /** 边调用次数恰好 500 → 触发（语义是 >=） */
     #[Test]
-    public function r3SkipsBareMainKey(): void
+    public function r3FiresAtExactlyEdgeCountThreshold(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(500, 600, 100)];
+        $raw = ['main()==>foo()' => ['ct' => 500, 'wt' => 400]];
+        $this->assertCount(1, self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
+    }
+
+    #[Test]
+    public function r3DoesNotFireAt499Calls(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(499, 600, 100)];
+        $raw = ['main()==>foo()' => ['ct' => 499, 'wt' => 400]];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
+    }
+
+    /** 被调方自身耗时恰好占 5% → 触发（50/1000 与字面量 0.05 是同一个 double，边界精确） */
+    #[Test]
+    public function r3FiresAtExactlyShareThreshold(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 50)];
+        $raw = ['main()==>foo()' => ['ct' => 600, 'wt' => 400]];
+        $this->assertCount(1, self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
+    }
+
+    /** 子自身耗时 49/1000 = 4.9% < 5%：即使边调用 600 次也不触发 */
+    #[Test]
+    public function r3DoesNotFireWhenChildShareBelowThreshold(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 49)];
+        $raw = ['main()==>foo()' => ['ct' => 600, 'wt' => 400]];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
+    }
+
+    /** 多条边按边耗时降序——R3 队首决定 Task 4 截断后谁留下，是用户可见行为 */
+    #[Test]
+    public function r3SortsByEdgeWallTimeDescending(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100),
+                'a()'    => self::sym(600, 600, 100),
+                'b()'    => self::sym(600, 600, 100)];
+        $raw = ['main()==>a()' => ['ct' => 600, 'wt' => 100],
+                'main()==>b()' => ['ct' => 600, 'wt' => 900]];
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3');
+
+        $this->assertCount(2, $hits);
+        $this->assertStringContainsString('main() → b()', $hits[0]->title);
+        $this->assertSame(900.0, $hits[0]->score);
+        $this->assertSame(100.0, $hits[1]->score);
+    }
+
+    /** 裸 main() 键没有父；"==>main()" 形式同样没有父（XhprofLib 会归一化成这个形态） */
+    #[Test]
+    #[DataProvider('parentlessKeyProvider')]
+    public function r3SkipsParentlessKeys(string $key): void
     {
         $tab = ['main()' => self::sym(1, 1000, 100)];
-        $raw = ['main()' => ['ct' => 9999, 'wt' => 900]];
-        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
-        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R3'));
+        $raw = [$key => ['ct' => 9999, 'wt' => 900]];
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
+    }
+
+    public static function parentlessKeyProvider(): array
+    {
+        return ['裸 main() 键' => ['main()'], '==>main() 形式' => ['==>main()']];
     }
 ```
 
@@ -585,6 +648,34 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
 
 Run: `vendor/bin/phpunit --filter AnalyzerTest`
 Expected: PASS
+
+- [ ] **Step 3b: 给 `safe()` 加上错误日志**
+
+`safe()` 目前静默吞掉异常：规则坏了却永远无人知晓，报告页只会一直显示"没发现问题"。
+**旁路不等于无信号**——代码库对同类情况的既有写法是
+`src/Core/XhprofProfiler.php:28`：`Xhprof::getLogger()?->error('Xhprof save_run failed: ' . $e->getMessage());`。
+沿用同一写法（logger 未配置时 `?->` 使其成为 no-op）：
+
+```php
+    private static function safe(callable $rule): array
+    {
+        try {
+            return $rule();
+        } catch (\Throwable $e) {
+            // 静默失败 = 规则坏了却永远无人知晓，报告页只会永远显示"没发现问题"。
+            // 旁路不等于无信号：沿用 XhprofProfiler::stop() 对同类情况的既有写法，
+            // logger 未配置时 ?-> 使其成为 no-op。
+            Xhprof::getLogger()?->error(
+                'Analyzer rule failed: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()
+            );
+            return array();
+        }
+    }
+```
+
+验证它不是死代码：用 `FakeLogger` 之外的一个"间谍 logger"（或直接断言 `FakeLogger::$errors`
+非空）喂一条必定抛异常的 callable，确认日志里出现了 `Analyzer rule failed`，而返回值仍是 `[]`。
+`safeIsolatesRuleExceptions` / `safePassesThroughNormalResult` 应当照常通过（无 logger 时是 no-op）。
 
 **关于入口归一化的可验证性（结论：单独去掉不会红，别再试这一种）：** 只去掉
 `$raw_data = is_array($raw_data) ? $raw_data : array();` 时测试**仍然是绿的** ——
