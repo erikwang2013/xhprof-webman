@@ -690,6 +690,28 @@ class AnalyzerTest extends TestCase
         $this->assertCount(Analyzer::SUPPLEMENT_LIMIT, $supp);
     }
 
+    /**
+     * 补充区**不得**按 symbol 去重：R4 的 symbol 是空串，一旦去重，所有递归结论
+     * 会被折叠成一条。这条 spec 规则此前只被 r4SortsByDepthDescending 的夹具顺带守住
+     * ——而那条测试的命名意图是排序方向，改写它就会静默丢掉本规则。
+     */
+    #[Test]
+    public function supplementIsNotDeduped(): void
+    {
+        $raw = [
+            'a@1==>a@2' => ['ct' => 1, 'wt' => 10],
+            'b@1==>b@2' => ['ct' => 1, 'wt' => 10],
+            'b@2==>b@3' => ['ct' => 1, 'wt' => 10],   // b 深度到 3，a 只到 2
+        ];
+        $tab = ['main()' => self::sym(1, 100, 10)];
+        $supp = array_filter(
+            Analyzer::analyze($tab, $raw, ['wt' => 100]),
+            fn($f) => $f->severity === Finding::SEVERITY_SUPPLEMENT
+        );
+
+        $this->assertCount(2, $supp, '补充区不得按 symbol 去重（R4 的 symbol 是空串）');
+    }
+
     #[Test]
     public function mainFindingsComeBeforeSupplements(): void
     {
