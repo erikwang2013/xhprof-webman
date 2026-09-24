@@ -1249,6 +1249,7 @@ Expected: PASS
 ```bash
 git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
+```
 
 > **IR-4：不要再给 R3 加内部上限。****去重只作用于主区。** 补充区**不要**去重：R4 的 `symbol` 刻意是空串，一旦对补充区按
 symbol 去重，所有递归结论会被折叠成一条。主区去重的前提是 R1/R2/R3 的 symbol 都非空。
@@ -1270,7 +1271,6 @@ Task 6 的接入**必须排在 Task 4 之后**——否则报告页会一次刷�
 > **#7（可选，别在 Task 2 做）**：`'R1'`/`'R2'`/`'R3'` 是三处裸字符串字面量，而阈值都是具名常量。
 > 目前没有任何地方 `switch ($f->rule)`（本任务的去重按 `symbol`、截断按顺序），所以暂无风险。
 > 若将来出现按 rule 分支的逻辑，再加 `Finding::RULE_*` 常量，让拼错不至于静默漏掉一条规则。
-```
 
 ---
 
@@ -1558,6 +1558,7 @@ Expected: PASS（全量）
 ```bash
 git add src/Core/XhprofLib/Display/XhprofDisplay.php tests/Unit/Lib/XhprofDisplayTest.php
 git commit -m "feat(analysis): 在单 run 报告页接入诊断区（diff/详情页不显示）"
+```
 
 > **IR-1：diff 模式会把增量喂给 `analyze()`，两条防线都要有。**
 > `profiler_report()` 在 diff 模式下**改写了自己的局部变量**：`$symbol_tab` 与 `$totals`
@@ -1586,7 +1587,6 @@ git commit -m "feat(analysis): 在单 run 报告页接入诊断区（diff/详情
 > 2. **改 `Analyzer` 的类 docblock**：现在写的是"入参都是 `profiler_report()`
 >    里已有的局部变量"，这句正是 IR-1 说要纠正的措辞。改成明确警告：三份入参必须来自
 >    **同一次**运行；diff 模式下 `profiler_report` 的局部变量已被改写为增量，不可直接传入。
-```
 
 ---
 
