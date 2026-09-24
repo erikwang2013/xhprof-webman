@@ -38,7 +38,10 @@ class RequestAdapter implements RequestInterface
 
     public function host(): string
     {
-        return $this->request->host();
+        // workerman 的 host(bool $withoutPort = false): ?string 在无 Host 头时返回 null，
+        // 而本文件是 strict_types=1，直接返回会抛 TypeError。
+        // 调用点 _saveToRedis() 在每个被采样请求上都会取 host。
+        return (string) $this->request->host();
     }
 
     public function uri(): string

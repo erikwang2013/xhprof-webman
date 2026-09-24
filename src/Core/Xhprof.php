@@ -15,7 +15,7 @@ use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
 class Xhprof
 {
     public static $time_limit = 0;
-    public static $ignore_url_arr = ["/test"];
+    public static $ignore_url_arr = ["/xhprof"];
     public static $key_prefix = 'xhprof';
     public static $log_num = 1000;
     public static $log_ttl = 86400 * 7;
@@ -30,6 +30,20 @@ class Xhprof
     public static ?LoggerInterface $logger = null;
 
     private static bool $_hyperf = false;
+
+    /**
+     * 声明当前运行在 Hyperf 协程环境，使 bootstrap() 把适配器写入协程 Context
+     * 而不是共享的静态属性。
+     *
+     * 必须由 Hyperf 中间件在 bootstrap() 之前显式调用：autoDetect() 里那处赋值
+     * 只在无参 bootstrap() 时才会执行，而 Hyperf 中间件始终传参，
+     * 因此旧代码的 $_hyperf 在生产路径上恒为 false——协程隔离从未生效，
+     * 常驻 worker 内并发协程会互相覆盖 request/response/cache 适配器。
+     */
+    public static function markHyperfContext(): void
+    {
+        self::$_hyperf = true;
+    }
 
     public static function getRequest(): ?RequestInterface
     {
@@ -188,7 +202,11 @@ class Xhprof
             self::$logger = new \ErikWang2013\Xhprof\Webman\Adapter\LogAdapter();
         } elseif (class_exists(\Illuminate\Foundation\Application::class)) {
             self::$request = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(app('request'));
-            self::$response = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response());
+            // 必须传 ''，不能无参：Laravel 的 response() 在 func_num_args()===0 时
+            // 返回的是 ResponseFactory 而非响应对象，而适配器里 `$response ?? response('')`
+            // 拦不住它（工厂非 null）。此后 Xhprof::deny() 调 withStatus() 会命中
+            // Macroable::__call 抛 BadMethodCallException —— 403/400 变成 500。
+            self::$response = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
             self::$config = new \ErikWang2013\Xhprof\Laravel\Adapter\ConfigAdapter();
             self::$cache = new \ErikWang2013\Xhprof\Laravel\Adapter\RedisAdapter();
             self::$logger = new \ErikWang2013\Xhprof\Laravel\Adapter\LogAdapter();
@@ -198,7 +216,11 @@ class Xhprof
             self::$config = new \ErikWang2013\Xhprof\Thinkphp\Adapter\ConfigAdapter();
             self::$cache = new \ErikWang2013\Xhprof\Thinkphp\Adapter\RedisAdapter();
             self::$logger = new \ErikWang2013\Xhprof\Thinkphp\Adapter\LogAdapter();
-        } elseif (class_exists(\Hyperf\Framework\ApplicationContext::class)) {
+        // 注意：Hyperf 3.x 没有 \Hyperf\Framework\ApplicationContext（该命名空间下
+        // 只有 ApplicationFactory/Bootstrap/ConfigProvider/Event/Exception/Logger）。
+        // 旧代码探测的是这个不存在的类，导致本分支永不命中，README 里无参
+        // Xhprof::bootstrap() 的用法会直接抛 "Unsupported framework"。
+        } elseif (class_exists(\Hyperf\Context\ApplicationContext::class)) {
             self::$_hyperf = true;
             $container = \Hyperf\Context\ApplicationContext::getContainer();
             self::$request = new \ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter($container->get(\Hyperf\HttpServer\Request::class));

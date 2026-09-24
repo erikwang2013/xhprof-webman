@@ -17,8 +17,16 @@ class XhprofProfiler
 
     public static function stop(): void
     {
+        // xhprof_disable() 始终执行，保证采样状态被清理
         $xhprof_data = xhprof_disable();
-        XHProfRunsDefault::save_run($xhprof_data, "xhprof_foo");
+        try {
+            XHProfRunsDefault::save_run($xhprof_data, "xhprof_foo");
+        } catch (\Throwable $e) {
+            // 落库是尽力而为的旁路。中间件在 finally 里调用本方法，phpredis 在
+            // 连接中断/认证失败/超时时会抛 RedisException——不加这道防线，
+            // 一个本来健康的请求会变成 500，且业务异常会被顶替掉。
+            Xhprof::getLogger()?->error('Xhprof save_run failed: ' . $e->getMessage());
+        }
     }
 
     public static function bootstrap(): void
@@ -29,7 +37,7 @@ class XhprofProfiler
         }
         $pluginConfig = $config->get('xhprof', []);
         self::$config = $pluginConfig;
-        Xhprof::$ignore_url_arr = $pluginConfig['ignore_url_arr'] ?? ['/test'];
+        Xhprof::$ignore_url_arr = $pluginConfig['ignore_url_arr'] ?? ['/xhprof'];
         Xhprof::$time_limit = (int) ($pluginConfig['time_limit'] ?? 0);
         Xhprof::$log_num = (int) ($pluginConfig['log_num'] ?? 1000);
         Xhprof::$view_wtred = (int) ($pluginConfig['view_wtred'] ?? 3);

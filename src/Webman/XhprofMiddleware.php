@@ -35,14 +35,16 @@ class XhprofMiddleware implements MiddlewareInterface
             self::warnMissingExtensions($extension, $redis);
         }
 
-        if ($xhprof && $extension) {
+        // 必须连 redis 一起判断：缺 redis 时上面已经记录"性能采样已跳过"，
+        // 若仍启动采样，既白付采样开销，落库也必然失败——日志与实际行为自相矛盾。
+        if ($xhprof && $extension && $redis) {
             Xhprof::xhprofStart();
         }
 
         try {
             return $handler($request);
         } finally {
-            if ($xhprof && $extension) {
+            if ($xhprof && $extension && $redis) {
                 Xhprof::xhprofStop();
             }
         }

@@ -13,8 +13,11 @@ class XhprofDisplay
 
   public static function base_path()
   {
-    $arr = parse_url(Xhprof::getRequest()->uri());
-    return rtrim($arr['path'], '/\\');
+    // uri 可能无 path 部分（如 "?run=x"），parse_url 返回 false/null。
+    // 返回值全部落在 href="..." 属性中，故统一在此转义：挂到通配路由下时
+    // 路径里可以带引号，不转义会逃逸出属性（反射型 XSS）。
+    $path = parse_url(Xhprof::getRequest()->uri(), PHP_URL_PATH) ?: '';
+    return htmlspecialchars(rtrim($path, '/\\'), ENT_QUOTES, 'UTF-8');
   }
 
   public static $sort_col = "wt";
@@ -292,8 +295,11 @@ class XhprofDisplay
       if ($left == $right) return 0;
       return ($left < $right) ? -1 : 1;
     } else {
-      $left = $a[$sort_col];
-      $right = $b[$sort_col];
+      // 作为 usort 回调不能抛异常：$sort_col 是 public static，任何调用方都可能把它
+      // 设成本次 run 未采集的指标（如 ut/st/samples），此时取值为 null，
+      // abs(null) 在 PHP 8 下抛 TypeError。
+      $left = $a[$sort_col] ?? 0;
+      $right = $b[$sort_col] ?? 0;
       if ($diff_mode) {
         $left = abs($left);
         $right = abs($right);
@@ -309,7 +315,7 @@ class XhprofDisplay
     $descriptions = XhprofDisplay::$descriptions;
     $diff_descriptions = XhprofDisplay::$diff_descriptions;
     $diff_mode = XhprofDisplay::$diff_mode;
-    $result = $descriptions[$stat];;
+    $result = $descriptions[$stat];
     if ($diff_mode) $result = $diff_descriptions[$stat];
     return $result;
   }
@@ -348,8 +354,8 @@ class XhprofDisplay
     }
     $run1_txt = sprintf(
       "<b>Run #%s:</b> %s",
-      $run1,
-      $run1_desc
+      htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8'),
+      htmlspecialchars((string) $run1_desc, ENT_QUOTES, 'UTF-8')
     );
 
     $base_url_params = XhprofLib::xhprof_array_unset(XhprofLib::xhprof_array_unset($url_params, 'symbol'), 'all');
@@ -368,8 +374,8 @@ class XhprofDisplay
       );
       $run2_txt = sprintf(
         "<b>Run #%s:</b> %s",
-        $run2,
-        $run2_desc
+        htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8'),
+        htmlspecialchars((string) $run2_desc, ENT_QUOTES, 'UTF-8')
       );
 
       $run2_link = XhprofDisplay::xhprof_render_link(
@@ -405,20 +411,35 @@ class XhprofDisplay
 
     $links[] = '<div class="xp-search"><input type="text" class="xhprof-search-input" placeholder="查找 函数/方法名..." id="xhprofFuncSearch"><button type="button" id="funcSub">搜索</button></div>';
     $echo_page = XhprofDisplay::xhprof_render_actions($links);
+    // 这两个描述此前只 sprintf 了却从不输出，导致聚合报告的
+    // "Aggregated Report for N runs..." 等说明性文案被静默丢弃。
+    $echo_page .= '<div style="padding:10px 20px 0;color:#555;font-size:13px">'
+      . $run1_txt
+      . ($diff_mode ? ' &nbsp;|&nbsp; ' . $run2_txt : '')
+      . '</div>';
 
 
     // data tables
     if (!empty($rep_symbol)) {
       if (!isset($symbol_tab[$rep_symbol])) {
         $echo_page .= '<div class="xp-main"><div class="xp-card"><p class="xp-card-title">Symbol <b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b> not found in XHProf run.</p></div></div>';
+        // 符号不存在时必须就此返回：继续往下会把 null 传进 symbol_report()，
+        // 在 round()/算术处抛 TypeError，整页 500。
+        return $echo_page;
       }
 
       /* single public static function report with parent/child information */
       if ($diff_mode) {
-        $info1 = isset($symbol_tab1[$rep_symbol]) ?
-          $symbol_tab1[$rep_symbol] : null;
-        $info2 = isset($symbol_tab2[$rep_symbol]) ?
-          $symbol_tab2[$rep_symbol] : null;
+        // 符号可能只存在于其中一个 run（新增/删除的函数，恰是 diff 模式的目标场景）。
+        // 用零值行代替 null：既消除下游海量 "array offset on null" warning，
+        // 又让 diff 语义正确——run1 未出现即 0，差额正是 run2 的实际值。
+        $zero = array('ct' => 0);
+        foreach (XhprofDisplay::$metrics as $metric) {
+          $zero[$metric] = 0;
+          $zero["excl_" . $metric] = 0;
+        }
+        $info1 = $symbol_tab1[$rep_symbol] ?? $zero;
+        $info2 = $symbol_tab2[$rep_symbol] ?? $zero;
         $echo_page .= XhprofDisplay::symbol_report(
           $url_params,
           $run_delta,
@@ -443,17 +464,6 @@ class XhprofDisplay
       $echo_page .= XhprofDisplay::full_report($url_params, $symbol_tab, $run1, $run2);
     }
     return $echo_page;
-  }
-
-  /**
-   * Computes percentage for a pair of values, and returns it
-   * in string format.
-   */
-  public static function pct($a, $b)
-  {
-    $res = "N/A";
-    if ($b != 0) $res = (round(($a * 1000 / $b)) / 10);
-    return $res;
   }
 
   /**
@@ -508,7 +518,11 @@ class XhprofDisplay
   {
     $class = XhprofDisplay::get_print_class($numer, $bold);
     $pct = "N/A%";
-    if ($denom != 0) $pct = XhprofDisplay::xhprof_percent_format($numer / abs($denom));
+    // 调用方会传入 'N/A'（无调用次数的均值）等非数值占位符；
+    // 直接 abs()/除法在 PHP 8 下抛 TypeError，故统一在此收口。
+    if (is_numeric($numer) && is_numeric($denom) && $denom != 0) {
+      $pct = XhprofDisplay::xhprof_percent_format($numer / abs($denom));
+    }
     return "<td $attributes $class>$pct</td>\n";
   }
 
@@ -655,7 +669,6 @@ class XhprofDisplay
   public static function full_report($url_params, $symbol_tab, $run1, $run2)
   {
     $vwbar = XhprofDisplay::$vwbar;
-    $vbar = XhprofDisplay::$vbar;
     $totals = XhprofDisplay::$totals;
     $totals_1 = XhprofDisplay::$totals_1;
     $totals_2 = XhprofDisplay::$totals_2;
@@ -790,7 +803,11 @@ class XhprofDisplay
    */
   public static function get_tooltip_attributes($type, $metric)
   {
-    return "type='$type' metric='$metric'";
+    // onmouseover 是 xhprof_report.js 中 ParentRowToolTip/ChildRowToolTip 的唯一触发点。
+    // 移植时只保留了 data 属性、丢掉了绑定，导致这两个函数（连同 addCommas/
+    // stringAbs/isNegative）永远不会被调用，父/子悬浮提示静默失效。
+    return "type='$type' metric='$metric'"
+      . " onmouseover=\"return {$type}RowToolTip(this, '$metric');\"";
   }
 
   /**
@@ -807,28 +824,30 @@ class XhprofDisplay
     $display_calls = XhprofDisplay::$display_calls;
     $type = "Child";
     if ($parent) $type = "Parent";
+    $echo_page = "";
     if ($display_calls) {
       $mouseoverct = XhprofDisplay::get_tooltip_attributes($type, "ct");
       /* call count */
-      XhprofDisplay::print_td_num($info["ct"], $format_cbk["ct"], ($sort_col == "ct"), $mouseoverct);
-      XhprofDisplay::print_td_pct($info["ct"], $base_ct, ($sort_col == "ct"), $mouseoverct);
+      $echo_page .= XhprofDisplay::print_td_num($info["ct"], $format_cbk["ct"], ($sort_col == "ct"), $mouseoverct);
+      $echo_page .= XhprofDisplay::print_td_pct($info["ct"], $base_ct, ($sort_col == "ct"), $mouseoverct);
     }
 
     /* Inclusive metric values  */
     foreach ($metrics as $metric) {
-      XhprofDisplay::print_td_num(
+      $echo_page .= XhprofDisplay::print_td_num(
         $info[$metric],
         $format_cbk[$metric],
         ($sort_col == $metric),
         XhprofDisplay::get_tooltip_attributes($type, $metric)
       );
-      XhprofDisplay::print_td_pct(
+      $echo_page .= XhprofDisplay::print_td_pct(
         $info[$metric],
         $base_info[$metric],
         ($sort_col == $metric),
         XhprofDisplay::get_tooltip_attributes($type, $metric)
       );
     }
+    return $echo_page;
   }
 
   public static function print_pc_array(
@@ -889,23 +908,6 @@ class XhprofDisplay
     return $echo_page;
   }
 
-
-  public static function print_symbol_summary($symbol_info, $stat, $base)
-  {
-
-    $val = $symbol_info[$stat];
-    $desc = str_replace("<br>", " ", XhprofDisplay::stat_description($stat));
-
-    $echo_page = "$desc: </td>";
-    $echo_page .= number_format($val);
-    $echo_page .= " (" . XhprofDisplay::pct($val, $base) . "% of overall)";
-    if (substr($stat, 0, 4) == "excl") {
-      $func_base = $symbol_info[str_replace("excl_", "", $stat)];
-      $echo_page .= " (" . XhprofDisplay::pct($val, $func_base) . "% of this public static function)";
-    }
-    $echo_page .= "<br>";
-    return $echo_page;
-  }
 
   /**
    * Generates a report for a single public static function/symbol.
@@ -1007,10 +1009,15 @@ class XhprofDisplay
         $avg_info2 = 'N/A';
         if ($symbol_info1['ct'] > 0) $avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
         if ($symbol_info2['ct'] > 0) $avg_info2 = ($symbol_info2[$m] / $symbol_info2['ct']);
+        // 任一侧 ct 为 0 时 avg 保持 'N/A'（字符串），不能直接相减：
+        // PHP 8 下 float - 'N/A' 抛 TypeError。
+        $avg_diff = (is_numeric($avg_info1) && is_numeric($avg_info2))
+          ? ($avg_info2 - $avg_info1)
+          : 'N/A';
         $echo_page .= XhprofDisplay::print_td_num($avg_info1, $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($avg_info2, $format_cbk[$m]);
-        $echo_page .= XhprofDisplay::print_td_num($avg_info2 - $avg_info1, $format_cbk[$m], true);
-        $echo_page .= XhprofDisplay::print_td_pct($avg_info2 - $avg_info1, $avg_info1, true);
+        $echo_page .= XhprofDisplay::print_td_num($avg_diff, $format_cbk[$m], true);
+        $echo_page .= XhprofDisplay::print_td_pct($avg_diff, $avg_info1, true);
         $echo_page .= '</tr>';
 
         // Exclusive stat for metric

@@ -38,7 +38,12 @@ class RequestAdapter implements RequestInterface
 
     public function host(): string
     {
-        return $this->request->getHost();
+        // Hyperf\HttpServer\Request 既没有 getHost()，其 Contract\RequestInterface
+        // 也未声明该方法，且类上没有 __call 兜底——直接调用会抛
+        // "Call to undefined method"。必须走 PSR-7。
+        // 该方法由 XHProfRunsDefault::_saveToRedis() 在每个被采样请求上调用，
+        // 旧实现会让 Hyperf 应用的每个请求都在 finally 里 500。
+        return $this->request->getUri()->getHost();
     }
 
     public function uri(): string

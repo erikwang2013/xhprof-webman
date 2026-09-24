@@ -31,6 +31,10 @@ class Middleware implements MiddlewareInterface
         $req = new RequestAdapter($container->get(HyperfRequestInterface::class));
         $res = new ResponseAdapter($container->get(HyperfResponseInterface::class));
 
+        // 必须先声明协程环境：否则 bootstrap() 会把适配器写进进程共享的静态属性，
+        // 并发协程之间互相覆盖（详见 Xhprof::markHyperfContext() 注释）。
+        Xhprof::markHyperfContext();
+
         Xhprof::bootstrap(
             $req,
             $res,

@@ -55,9 +55,9 @@ class XHProfRunsDefault implements XHProfRuns
         if (Xhprof::$time_limit > 0 && ($xhprof_data['main()']['wt'] ?? 0) < (Xhprof::$time_limit * 1000 * 1000)) return false;
         //根据忽略配置判断是否忽略当前请求
         if (!XhprofLib::isIgnore()) return false;
-        //先写列表再计数，避免 lPush 失败时计数器与实际列表长度漂移
-        $run_id = XHProfRunsDefault::_saveToRedis($xhprof_data);
-        XHProfRunsDefault::_checkLogNum();
+        // 先写列表，再用 lPush 返回的真实长度决定是否裁剪
+        [$run_id, $len] = XHProfRunsDefault::_saveToRedis($xhprof_data);
+        XHProfRunsDefault::_checkLogNum($len);
         return $run_id;
     }
 
@@ -66,18 +66,21 @@ class XHProfRunsDefault implements XHProfRuns
      * 控制日志长度
      * @return bool
      */
-    protected static function _checkLogNum()
+    protected static function _checkLogNum($len)
     {
 
-        $num = Xhprof::getCache()->incr(Xhprof::$key_prefix . ":run_id_num");
-        if ($num > Xhprof::$log_num) {
+        // 以列表实际长度为唯一依据（$len 取自 lPush 的返回值），
+        // 不再维护 run_id_num 计数器。计数器与列表必然漂移——例如手动 DEL
+        // run_id 列表来"清理性能数据"后，计数器仍停在超限值，而旧实现里
+        // rPop 空列表返回 false（不是 null），`!== null` 判真，于是每轮 save
+        // 都会把刚写入的 run 立刻删除：采样永久静默失效，且每请求白付 6 次 Redis 往返。
+        if ($len > Xhprof::$log_num) {
             $old_run_id = Xhprof::getCache()->rPop(Xhprof::$key_prefix . ':run_id');
-            if ($old_run_id !== null) {
+            if (!empty($old_run_id)) {
                 Xhprof::getCache()->del(
                     Xhprof::$key_prefix . ':request_log:' . $old_run_id,
                     Xhprof::$key_prefix . ':xhprof_log:' . $old_run_id
                 );
-                Xhprof::getCache()->decr(Xhprof::$key_prefix . ':run_id_num');  //计数-1
             }
         }
         return true;
@@ -91,7 +94,8 @@ class XHProfRunsDefault implements XHProfRuns
     {
 
         $run_id = bin2hex(random_bytes(8));
-        Xhprof::getCache()->lPush(Xhprof::$key_prefix . ":run_id", $run_id);
+        // lPush 返回推入后的列表长度，这就是列表的真实长度，无需另设计数器
+        $len = Xhprof::getCache()->lPush(Xhprof::$key_prefix . ":run_id", $run_id);
         $wt = 0;   //请求总耗时
         $mu = 0;   //总消耗内存
         if (!empty($xhprof_data['main()']['wt']) && $xhprof_data['main()']['wt'] > 0) {
@@ -115,7 +119,7 @@ class XHProfRunsDefault implements XHProfRuns
         $key = Xhprof::$key_prefix . ':xhprof_log:' . $run_id;   //列表存储log
         $xhprof_data_str = serialize($xhprof_data);
         if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str, Xhprof::$log_ttl);
-        return $run_id;
+        return array($run_id, $len);
     }
 
 
@@ -131,7 +135,11 @@ class XHProfRunsDefault implements XHProfRuns
         $values = array_values(Xhprof::getCache()->mget($keys));
         $http = Xhprof::getRequest()->header('x-forwarded-proto');
         $http = !empty($http) ? $http . ":" : "http:";
-        $path = $http . Xhprof::getRequest()->url();
+        // 不能用 url()：四个框架返回的形态不一致（Webman 是协议相对的 //host/path，
+        // Laravel/Hyperf 是绝对的 https://host/path，ThinkPHP url(true) 还附带 query），
+        // 拼上 $http 后链接在 3/4 框架上是坏的（404 或 query 被第二个 ? 污染）。
+        // host() + uri() 是契约里语义明确、四框架一致的访问器。
+        $path = $http . '//' . Xhprof::getRequest()->host() . Xhprof::getRequest()->uri();
         foreach ($run_id_lists as $i => $run_id) {
             if (!self::xhprof_valid_run_id($run_id)) continue;
             $res = $values[$i] ?? null;

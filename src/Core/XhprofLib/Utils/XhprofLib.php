@@ -46,31 +46,42 @@ class XhprofLib
    */
   public static function init_metrics($xhprof_data, $rep_symbol, $sort, $diff_report = false)
   {
-    $sort_col = XhprofDisplay::$sort_col;
-    $sortable_columns = XhprofDisplay::$sortable_columns;
+    // 先按原始数据算出实际采集到的指标，供排序白名单使用。
+    // $sortable_columns 是固定的 16 列全集，含 ut/st/samples——本扩展的 flags
+    // (NO_BUILTINS|CPU|MEMORY) 永不采集这三项，放行会让 sort_cbk 取到 null。
+    $metrics = array();
+    $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
+    foreach ($possible_metrics as $metric => $desc) {
+      if (isset($xhprof_data["main()"][$metric])) $metrics[] = $metric;
+    }
+
+    $display_calls = isset($xhprof_data["main()"]["wt"]);
+
+    // 初值用字面量而非 XhprofDisplay::$sort_col：常驻 worker（webman/hyperf）下
+    // 静态不随请求结束，读它会把上一请求的排序列继承过来——极端时直接崩在 sort_cbk。
+    $sort_col = "wt";
     if (!empty($sort)) {
-      if (array_key_exists($sort, $sortable_columns)) {
+      $sortable = array("fn" => 1);
+      if ($display_calls) $sortable["ct"] = 1;
+      foreach ($metrics as $metric) {
+        $sortable[$metric] = 1;
+        $sortable["excl_" . $metric] = 1;
+      }
+      if (isset($sortable[$sort])) {
         $sort_col = $sort;
       } else {
         Xhprof::getLogger()->error("Invalid Sort Key $sort specified in URL");
       }
     }
 
-    $display_calls = true;
-    if (!isset($xhprof_data["main()"]["wt"])) {
-      if ($sort_col == "wt") $sort_col = "samples";
-      $display_calls = false;
-    }
+    if (!$display_calls && $sort_col == "wt") $sort_col = "samples";
 
     if (!empty($rep_symbol)) $sort_col = str_replace("excl_", "", $sort_col);
     $stats = array("fn");
     if ($display_calls) $stats = array("fn", "ct", "Calls%");
     $pc_stats = $stats;
-    $metrics = array();
-    $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
-    foreach ($possible_metrics as $metric => $desc) {
-      if (!isset($xhprof_data["main()"][$metric])) continue;
-      $metrics[] = $metric;
+    foreach ($metrics as $metric) {
+      $desc = $possible_metrics[$metric];
       $stats[] = $metric;
       $stats[] = "I" . $desc[0] . "%";
       $stats[] = "excl_" . $metric;
@@ -205,8 +216,11 @@ class XhprofLib
     $run_count = count($runs);
     $wts_count = is_array($wts) ? count($wts) : 0;
 
+    // wts 直接来自查询串，除了个数还必须都是数值：
+    // 否则下面 $wt * $info[$metric] 在 PHP 8 下抛 "string * int" TypeError。
     if (($run_count == 0) ||
-      (($wts_count > 0) && ($run_count != $wts_count))
+      (($wts_count > 0) && ($run_count != $wts_count)) ||
+      (($wts_count > 0) && count(array_filter($wts, 'is_numeric')) != $wts_count)
     ) {
       return array(
         'description' => 'Invalid input..',
@@ -375,7 +389,7 @@ class XhprofLib
       list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
       if ($parent == $child) {
         XhprofLib::xhprof_error("Error in Raw Data: parent & child are both: $parent");
-        return;
+        return array();   // 不能裸 return：调用方会接着对 null 取下标并 foreach
       }
 
       if (!isset($symbol_tab[$child])) {
@@ -393,63 +407,6 @@ class XhprofLib
     }
 
     return $symbol_tab;
-  }
-
-
-  public static function xhprof_prune_run($raw_data, $prune_percent)
-  {
-
-    $main_info = $raw_data["main()"];
-    if (empty($main_info)) {
-      XhprofLib::xhprof_error("XHProf: main() missing in raw data");
-      return false;
-    }
-
-    // raw data should contain either wall time or samples information...
-    if (isset($main_info["wt"])) {
-      $prune_metric = "wt";
-    } else if (isset($main_info["samples"])) {
-      $prune_metric = "samples";
-    } else {
-      XhprofLib::xhprof_error("XHProf: for main() we must have either wt "
-        . "or samples attribute set");
-      return false;
-    }
-
-    // determine the metrics present in the raw data..
-    $metrics = array();
-    foreach ($main_info as $metric => $val) {
-      if (isset($val)) $metrics[] = $metric;
-    }
-
-    $prune_threshold = (($main_info[$prune_metric] * $prune_percent) / 100.0);
-    XhprofLib::init_metrics($raw_data, null, null, false);
-    $flat_info = XhprofLib::xhprof_compute_inclusive_times($raw_data);
-
-    foreach ($raw_data as $parent_child => $info) {
-
-      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
-      if ($flat_info[$child][$prune_metric] < $prune_threshold) {
-        unset($raw_data[$parent_child]); // prune the edge
-      } else if (
-        $parent &&
-        ($parent != "__pruned__()") &&
-        ($flat_info[$parent][$prune_metric] < $prune_threshold)
-      ) {
-        $pruned_edge = XhprofLib::xhprof_build_parent_child_key("__pruned__()", $child);
-        if (isset($raw_data[$pruned_edge])) {
-          foreach ($metrics as $metric) {
-            $raw_data[$pruned_edge][$metric] += $raw_data[$parent_child][$metric];
-          }
-        } else {
-          $raw_data[$pruned_edge] = $raw_data[$parent_child];
-        }
-
-        unset($raw_data[$parent_child]); // prune the edge
-      }
-    }
-
-    return $raw_data;
   }
 
 
@@ -474,90 +431,6 @@ class XhprofLib
     unset($arr[$k]);
     return $arr;
   }
-
-
-  public static function xhprof_get_param_helper($param)
-  {
-    $get_data = Xhprof::getRequest()->all();
-    return isset($get_data[$param]) ? $get_data[$param] : null;
-  }
-
-
-  public static function xhprof_get_string_param($param, $default = '')
-  {
-    $val = XhprofLib::xhprof_get_param_helper($param);
-    if ($val === null) return $default;
-    return $val;
-  }
-
-  public static function xhprof_get_uint_param($param, $default = 0)
-  {
-    $val = XhprofLib::xhprof_get_param_helper($param);
-    if ($val === null) $val = $default;
-    if (!is_string($val)) return $val;  // 缺失参数直接返回默认值，避免 trim(int) 崩溃
-    $val = trim($val);
-    if (ctype_digit($val)) return $val;
-    XhprofLib::xhprof_error("$param is $val. It must be an unsigned integer.");
-    return null;
-  }
-
-
-  public static function xhprof_get_float_param($param, $default = 0)
-  {
-    $val = XhprofLib::xhprof_get_param_helper($param);
-    if ($val === null) $val = $default;
-    if (!is_string($val)) return $val;  // 缺失参数直接返回默认值，避免 trim(int) 崩溃
-    $val = trim($val);
-    return (float)$val;
-  }
-
-
-  public static function xhprof_get_bool_param($param, $default = false)
-  {
-    $val = XhprofLib::xhprof_get_param_helper($param);
-
-    if ($val === null) $val = $default;
-    if (!is_string($val)) return $val;  // 缺失参数直接返回默认值，避免 trim(bool) 崩溃
-    $val = trim($val);
-    switch (strtolower($val)) {
-      case '0':
-      case '1':
-        $val = (bool)$val;
-        break;
-      case 'true':
-      case 'on':
-      case 'yes':
-        $val = true;
-        break;
-      case 'false':
-      case 'off':
-      case 'no':
-        $val = false;
-        break;
-      default:
-        XhprofLib::xhprof_error("$param is $val. It must be a valid boolean string.");
-        return null;
-    }
-
-    return $val;
-  }
-
-
-  public static function xhprof_get_matching_functions($q, $xhprof_data)
-  {
-
-    $matches = array();
-    foreach ($xhprof_data as $parent_child => $info) {
-      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
-      // 裸 main() 键无父函数（parent 为 null），跳过避免 stripos(null) 崩溃
-      if ($parent !== null && stripos($parent, $q) !== false) $matches[$parent] = 1;
-      if (stripos($child, $q) !== false) $matches[$child] = 1;
-    }
-    $res = array_keys($matches);
-    asort($res);
-    return ($res);
-  }
-
 
 
   /**
