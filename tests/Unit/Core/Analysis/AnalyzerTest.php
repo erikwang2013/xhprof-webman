@@ -420,4 +420,70 @@ class AnalyzerTest extends TestCase
         $tab = ['ok()' => ['ct' => 1, 'wt' => 200, 'excl_wt' => 200, 'pmu' => 0, 'excl_pmu' => 0]];
         $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6'));
     }
+
+    /**
+     * 「最大深度」不等于「深度个数」。夹具用**非连续**深度 {1,3} 把两者分开：
+     * 连续深度下 max(array_keys($ds)) 与 count($ds) 数值恰好相同，变异测不出来。
+     */
+    #[Test]
+    public function r4ReportsMaxDepthNotDepthCount(): void
+    {
+        $raw = ['fib@1==>fib@3' => ['ct' => 1, 'wt' => 10]];   // 深度个数 2，最大值 3
+        $tab = ['main()' => self::sym(1, 100, 10)];
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
+
+        $this->assertCount(1, $hits);
+        $this->assertSame('检测到 fib() 递归，最大深度 3', $hits[0]->title);
+    }
+
+    /** R4 按深度降序：队首决定补充区截断后谁留下 */
+    #[Test]
+    public function r4SortsByDepthDescending(): void
+    {
+        $raw = [
+            'a@1==>a@2' => ['ct' => 1, 'wt' => 10],
+            'b@1==>b@2' => ['ct' => 1, 'wt' => 10],
+            'b@2==>b@3' => ['ct' => 1, 'wt' => 10],   // b 深度到 3，a 只到 2
+        ];
+        $tab = ['main()' => self::sym(1, 100, 10)];
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
+
+        $this->assertCount(2, $hits);
+        $this->assertSame([3.0, 2.0], array_map(fn($f) => $f->score, $hits));
+    }
+
+    /** R5 按自身峰值内存降序 */
+    #[Test]
+    public function r5SortsByExclusivePeakMemoryDescending(): void
+    {
+        $tab = [
+            'hogA()' => self::sym(1, 100, 10, 80),
+            'hogB()' => self::sym(1, 100, 10, 50),
+        ];
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 100]), 'R5');
+
+        $this->assertCount(2, $hits);
+        $this->assertSame(['hogA()', 'hogB()'], array_map(fn($f) => $f->symbol, $hits));
+        $this->assertSame([80.0, 50.0], array_map(fn($f) => $f->score, $hits));
+    }
+
+    /** bytes() 的三个分支，含 KB 边界 */
+    #[Test]
+    #[DataProvider('bytesProvider')]
+    public function bytesFormatsUnits(float $bytes, string $expected): void
+    {
+        $m = new \ReflectionMethod(Analyzer::class, 'bytes');
+        $m->setAccessible(true);
+        $this->assertSame($expected, $m->invoke(null, $bytes));
+    }
+
+    public static function bytesProvider(): array
+    {
+        return [
+            '字节'        => [30.0, '30B'],
+            'KB 下界之下' => [1023.0, '1,023B'],
+            'KB 边界'     => [1024.0, '1.0KB'],
+            'MB'          => [3145728.0, '3.0MB'],
+        ];
+    }
 }
