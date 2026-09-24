@@ -634,6 +634,13 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('其他发现', $html);
         self::assertStringContainsString('foo() 自身耗时', $html);
         self::assertStringContainsString('检测到 fib() 递归', $html);
+
+        // 钉住归属关系，而不只是「这些串都出现了」：主结论必须出现在「其他发现」之前
+        self::assertLessThan(
+            strpos($html, '其他发现'),
+            strpos($html, 'foo() 自身耗时'),
+            '主区结论必须在补充区标题之前'
+        );
     }
 
     /** R4 的 symbol 是空串（见 Analyzer::ruleR4），此时不该给出指向"未找到"详情页的死链 */
@@ -702,8 +709,12 @@ class XhprofDisplayTest extends TestCase
             ['run' => 'a1a1a1a1a1a1a1a1']
         );
 
-        self::assertStringContainsString('run=a1a1a1a1a1a1a1a1', $html);
-        self::assertStringContainsString('symbol=foo%28%29', $html);
+        // 只有一个链接，且 run 与 symbol 必须在同一个 URL 里——
+        // 分成两个 href 也能满足「两者都存在」，但用户点到的那个会落到运行列表
+        self::assertSame(1, substr_count($html, 'href="'), '只应有一个链接');
+        preg_match('/href="([^"]*)"/', $html, $m);
+        self::assertStringContainsString('run=a1a1a1a1a1a1a1a1', $m[1]);
+        self::assertStringContainsString('symbol=foo%28%29', $m[1]);
     }
 
     /** 主区必须渲染在补充区之前——「为什么慢」是头部结论，顺序反转是真实的 UX 回归 */
@@ -723,5 +734,68 @@ class XhprofDisplayTest extends TestCase
             strpos($html, '为什么慢'),
             '主区必须在前'
         );
+    }
+
+    /** 只有补充项时不得渲染「为什么慢」——否则会出现一个空的主区标题 */
+    #[Test]
+    public function renderDiagnosisOmitsMainHeadingWhenOnlySupplements(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R4', Finding::SEVERITY_SUPPLEMENT, 'fib', '补充项', '细节', 6.0)],
+            []
+        );
+
+        self::assertStringNotContainsString('为什么慢', $html);
+        self::assertStringContainsString('其他发现', $html);
+    }
+
+    #[Test]
+    public function renderDiagnosisSkipsNonFindingValues(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            ['x', 42, null, [], new Finding('R1', Finding::SEVERITY_MAIN, 'ok()', '有效项', '细节', 1.0)],
+            []
+        );
+
+        self::assertStringContainsString('有效项', $html);
+        self::assertSame(1, substr_count($html, '<li'), '非 Finding 值应被跳过，只渲染有效项');
+    }
+
+    /** 不得按 score 重排：score 是各规则自己的量纲，跨规则不可比 */
+    #[Test]
+    public function renderDiagnosisPreservesInputOrderWithoutSortingByScore(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R1', Finding::SEVERITY_MAIN, 'low()', '低分在前', '细节', 1.0),
+                new Finding('R2', Finding::SEVERITY_MAIN, 'high()', '高分在后', '细节', 999.0),
+            ],
+            []
+        );
+
+        self::assertLessThan(strpos($html, '高分在后'), strpos($html, '低分在前'), '必须保持输入序');
+    }
+
+    /** 空态必须列全五个阈值——逐个断言，任何一个被删掉都要能变红 */
+    #[Test]
+    public function renderDiagnosisEmptyStateListsEveryThreshold(): void
+    {
+        $html = XhprofDisplay::render_diagnosis([], []);
+
+        foreach (['10%', '1000', '500', '5%', '30%'] as $token) {
+            self::assertStringContainsString($token, $html, "空态缺少阈值 $token");
+        }
+    }
+
+    #[Test]
+    public function renderDiagnosisEmitsCardWrapper(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', '标题', '细节', 1.0)],
+            []
+        );
+
+        self::assertStringContainsString('<div class="xp-main"><div class="xp-card">', $html);
+        self::assertStringContainsString('诊断结论', $html);
     }
 }
