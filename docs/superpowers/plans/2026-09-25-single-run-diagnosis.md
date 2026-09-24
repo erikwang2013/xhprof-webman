@@ -1417,7 +1417,10 @@ git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
         $html = XhprofDisplay::render_diagnosis([], []);
 
         self::assertStringContainsString('未发现明显瓶颈', $html);
-        self::assertStringContainsString('10', $html);   // 自身耗时阈值
+        // 必须带 % 号：`'10'` 会被紧随其后的 `'1000'` 满足——删掉「自身耗时」子句后
+        // 断言依然成立，即空转（Task 5 实现者用变异证明，我复核确认）。
+        // `'10%'` 在整个串里恰好出现 1 次，无歧义。
+        self::assertStringContainsString('10%', $html);
     }
 
     /**
