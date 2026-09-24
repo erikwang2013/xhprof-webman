@@ -667,6 +667,8 @@ class XhprofDisplayTest extends TestCase
         // 必须带 % 号：'10' 会被紧随其后的 '1000' 满足，
         // 删掉「自身耗时」子句断言依然成立——空转
         self::assertStringContainsString('10%', $html);
+        // 空态是**另一条 return**，EmitsCardWrapper 只走非空分支，故此处单独钉闭合
+        self::assertStringEndsWith('</div></div>', $html, '空态分支的卡片也必须闭合');
     }
 
     /**
@@ -782,6 +784,20 @@ class XhprofDisplayTest extends TestCase
         );
 
         self::assertLessThan(strpos($html, '高分在后'), strpos($html, '低分在前'), '必须保持输入序');
+
+        // 补充区同样不得重排：上一条夹具只有主区结论，故只守住了主区
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R4', Finding::SEVERITY_SUPPLEMENT, '', '补充低分在前', '细节', 1.0),
+                new Finding('R5', Finding::SEVERITY_SUPPLEMENT, 'b()', '补充高分在后', '细节', 999.0),
+            ],
+            []
+        );
+        self::assertLessThan(
+            strpos($html, '补充高分在后'),
+            strpos($html, '补充低分在前'),
+            '补充区必须保持输入序'
+        );
     }
 
     /** 空态必须列全五个阈值——逐个断言，任何一个被删掉都要能变红 */
@@ -805,5 +821,6 @@ class XhprofDisplayTest extends TestCase
 
         self::assertStringContainsString('<div class="xp-main"><div class="xp-card">', $html);
         self::assertStringContainsString('诊断结论', $html);
+        self::assertStringEndsWith('</div></div>', $html, '卡片必须闭合，否则报告体会被嵌进 .xp-card（其 overflow:hidden 会截断宽表格）');
     }
 }
