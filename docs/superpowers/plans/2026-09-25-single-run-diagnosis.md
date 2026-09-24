@@ -1998,6 +1998,74 @@ git add -A
 git commit -m "test(analysis): 回退验证补齐"
 ```
 
+### Task 7 执行结果（本会话实测，非推测）
+
+**变异 8 条，全部 KILLED。** 计划 Step 1 只列了六条规则阈值，另补测 Task 6 的两道接线守卫：
+
+| 变异 | 探针证据 | 变红用例数 |
+|---|---|---|
+| R1 `SHARE_THRESHOLD` → `999.0` | 探针少 1 条 | 14 |
+| R2 `CALL_COUNT_THRESHOLD` → `99999999` | 探针少 1 条 | 6 |
+| R3 `EDGE_COUNT_THRESHOLD` → `99999999` | 探针少 1 条 | 13 |
+| R4 `count($ds) < 2` → `< 999` | 探针少 1 条 | 6 |
+| R5 `PMU_SHARE_THRESHOLD` → `999.0` | 探针少 1 条 | 7 |
+| R6 `$ex <= $in` → `true` | 探针少 1 条 | 4 |
+| 去掉 `empty($rep_symbol)` | 详情页 无→**有** | 1（`symbolReportHasNoDiagnosisSection`） |
+| 去掉 `!$diff_mode` | diff 报告 无→**有** | 1（`diffReportHasNoDiagnosisSection`） |
+
+每次均确认 `Tests: 345` —— 这是守卫 D：harness 断言**确实执行了用例**，
+挡「`--filter` 打不中 ⇒ 跑 0 条 ⇒ 报绿」这条本仓库栽过的跟头。
+探针夹具 `Analyzer` 侧同时命中六条规则各 1 条（先验证基线为 6 条），
+所以任何一条阈值被改成"永不触发"都必然少一行——这是守卫 C 能成立的前提。
+
+**后两条变异不是冗余，是必要的。** 它们把「详情页 / diff 页不显示诊断」从
+"**没显示**"变成"**删掉守卫就会显示**"。只写单元测试而不断言守卫可删，
+等于用一个可能空转的断言背书——而"判据恰好没覆盖到那条路径"正是本特性的空转史形态。
+
+> **⚠️ 手动验证（Step 6）的两个坑。**
+>
+> 1. **run id 必须匹配 `/^[a-f0-9]{13,32}$/`，否则整页只剩约 441 字节的导航栏。**
+>    `XHProfRunsDefault::get_run()` 的入口白名单直接返回 `false`，
+>    `displayXHProfReport` 于是**完全不渲染报告体**。用自造 id
+>    （如 `realdata12345678`，含 `r`/`l`/`t` 等非十六进制字符）实测页面长度 441，
+>    **任何"不含 XXX"的否定断言都会静默通过**。
+>    本次执行时就先撞上了它：一度得到"详情页无诊断区 ✅"，而那一版是**空转的**
+>    （页面根本没渲染，当然没有诊断区）。换成 `a1b2c3d4e5f60718` 后报告页 18667 字节、
+>    诊断区正常出现，同一条否定断言才有意义。
+>    **做否定断言前，先断言页面确实渲染了**（长度，或 run 描述那一行）。
+> 2. 计划 Step 6 给的脚本传 `$run = null`，那只会渲染**运行列表**，诊断区本就不该出现——
+>    它验证的只是"报告页不 500"。要看诊断区，必须把真实数据写进
+>    `xhprof:xhprof_log:<rid>` 再按该 id 取报告。
+
+**真实数据实测**（`php -d xdebug.mode=off`；负载 = 递归 + 2000 次循环调用 + 5000×256B 分配）：
+
+```
+[R1/main] fib@13 自身耗时 9.3ms，占本次请求 18.6%    ← 递归展开后的单帧自身耗时
+[R4/补充] 检测到 fib() 递归，最大深度 19
+[R5/补充] churn 内存峰值 1.0MB，占全局 100.0%
+```
+
+共 5 条结论，无空表、无噪声。链接形如
+`/xhprof?run=a1b2c3d4e5f60718&symbol=fib%4013` —— **run 参数在**，
+即 Task 5 第二个参数的存在理由已端到端验证。
+
+**Step 3 的期望值需修正**：`--fail-on-warning --fail-on-notice --fail-on-deprecation`
+实测输出是 `OK, but there were issues!` + 1 条 **PHPUnit test runner warning**
+（`XDEBUG_MODE=coverage ... has to be set`），不是裸 `OK`。
+**该警告与本特性无关且先于本特性存在**：在未改动的 `main` 上跑同一配置得到同一条警告
+（临时 worktree 实测；该次运行另有 1 条失败，是我用 `vendor` 软链导致的路径断言假阳性，
+不是 `main` 的问题）。成因是 `phpunit.xml` 声明了 `<coverage>` 而本机 `xdebug.mode=profile`。
+失败 / 错误 / notice / deprecation 均为 0。
+
+**已知瑕疵（未修，与判据无关）**：若某条规则被变异成不产出，`AnalyzerTest` 里有若干用例
+直接取 `$hits[0]->title`（无 empty 守卫），于是报 `Undefined array key 0` +
+`Attempt to read property on null`，而不是干净的断言失败。**检查照样变红**
+（`failOnWarning=true` 下警告本身也是红），只是失败信息不如 `assertCount(1, ...)` 直白。
+按 YAGNI 不改；但将来若有人看到变异输出里的 `Warnings: 4` 以为引入了新问题，根源在此。
+
+**PHP 8.0 底线**：`src/` 全 51 个文件通过 php-parser 按 8.0 语法解析；
+`php -l` 对 `src/` + `tests/` 全量无输出。
+
 ---
 
 ## Self-Review
