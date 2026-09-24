@@ -486,4 +486,48 @@ class AnalyzerTest extends TestCase
             'MB'          => [3145728.0, '3.0MB'],
         ];
     }
+
+    /**
+     * is_finite 守卫是为 **NAN 分支**存在的，用 0 钉不住它。
+     * 删掉守卫后：0 抛 DivisionByZeroError（被 safe() 吞成同样的 []）、负数与 INF
+     * 自然不触发 —— 只有 NAN 会让「NAN < 阈值」为假而**触发**，把「占全局 nan%」
+     * 渲染进报告页，而整套测试仍然全绿。
+     */
+    #[Test]
+    public function isFiniteGuardRejectsNanTotals(): void
+    {
+        $tab = [
+            'main()' => self::sym(1, 100, 100),      // R1 命中（100/100）
+            'hog()'  => self::sym(1, 100, 10, 50),   // R5 命中（50/100）
+            'foo()'  => self::sym(900, 900, 100),    // R3 的被调方
+        ];
+        $raw = ['main()==>foo()' => ['ct' => 900, 'wt' => 90]];
+
+        // 没有这一段，夹具一旦退化本测试就静默变成空转
+        $normal = Analyzer::analyze($tab, $raw, ['wt' => 100, 'pmu' => 100]);
+        $this->assertNotEmpty(self::rule($normal, 'R1'), '夹具必须让 R1 命中');
+        $this->assertNotEmpty(self::rule($normal, 'R3'), '夹具必须让 R3 命中');
+        $this->assertNotEmpty(self::rule($normal, 'R5'), '夹具必须让 R5 命中');
+
+        $this->assertSame(
+            [],
+            Analyzer::analyze($tab, $raw, ['wt' => NAN, 'pmu' => NAN]),
+            'NAN 总耗时必须被 is_finite 拦下，否则报告页出现 nan%'
+        );
+    }
+
+    /** R6 按差值降序：队首决定补充区截断后谁留下（R4/R5 已各有排序用例，R6 此前漏了） */
+    #[Test]
+    public function r6SortsByDifferenceDescending(): void
+    {
+        $tab = [
+            'big()'   => ['ct' => 1, 'wt' => 100, 'excl_wt' => 400, 'pmu' => 0, 'excl_pmu' => 0],  // 差 300
+            'small()' => ['ct' => 1, 'wt' => 200, 'excl_wt' => 250, 'pmu' => 0, 'excl_pmu' => 0],  // 差 50
+        ];
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6');
+
+        $this->assertCount(2, $hits);
+        $this->assertSame(['big()', 'small()'], array_map(fn($f) => $f->symbol, $hits));
+        $this->assertSame([300.0, 50.0], array_map(fn($f) => $f->score, $hits));
+    }
 }
