@@ -290,6 +290,15 @@ git commit -m "feat(analysis): Finding 值对象与 Analyzer 骨架（永不抛�
         $this->assertSame('main()', $found[0]->symbol);
     }
 
+    /** 精确断言整条标题：能一次杀掉「格式化乘错系数」「单位错」两类变异 */
+    #[Test]
+    public function r1TitleIsExact(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100)];
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R1');
+        $this->assertSame('main() 自身耗时 0.1ms，占本次请求 10.0%', $hits[0]->title);
+    }
+
     #[Test]
     public function r1DoesNotFireJustBelowThreshold(): void
     {
@@ -488,6 +497,9 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
         //   空结果（所以测试看不出差别），但那等于把输入契约寄托在"异常被吞掉"上面。
         //   归一化到入口一次，规则就能放心假设入参是数组。
 
+        // 顺序是**刻意**的：R2 排在最后，会被主区组装按 MAIN_LIMIT 从尾部截断丢掉
+        // （R1 是头部归因，R3 给出可操作调用关系，R2 只是兜底信号）。不要"顺手"排成 R1/R2/R3。
+        //
         // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
         // 不会连累其他规则，更不会冒泡成报告页 500。
         return array_merge(
@@ -505,7 +517,9 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
     private static function ruleR1(array $symbol_tab, array $totals): array
     {
         $total = self::num($totals, 'wt');
-        if ($total <= 0) {
+        // is_finite 必须有：is_numeric(NAN) 为真、NAN <= 0 为假，会让每个占比都成 NAN，
+        // 而 NAN < 阈值 恒为假 —— 最终渲染出"占本次请求 nan%"。
+        if (!is_finite($total) || $total <= 0) {
             return array();
         }
 
@@ -529,7 +543,7 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
                 'R1',
                 Finding::SEVERITY_MAIN,
                 $h[1],
-                sprintf('%s 自身耗时 %s，占本次请求 %s%%', $h[1], self::ms($h[0]), self::pct($h[2])),
+                sprintf('%s 自身耗时 %s，占本次请求 %s', $h[1], self::ms($h[0]), self::pct($h[2])),
                 '自身耗时不含子调用，是纯函数体开销',
                 $h[0]
             );
@@ -576,7 +590,9 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
     private static function ruleR3(array $symbol_tab, array $raw_data, array $totals): array
     {
         $total = self::num($totals, 'wt');
-        if ($total <= 0) {
+        // is_finite 必须有：is_numeric(NAN) 为真、NAN <= 0 为假，会让每个占比都成 NAN，
+        // 而 NAN < 阈值 恒为假 —— 最终渲染出"占本次请求 nan%"。
+        if (!is_finite($total) || $total <= 0) {
             return array();
         }
 
@@ -625,7 +641,7 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
         return $out;
     }
 
-    /** 从 totals 取一个非负数值，缺失/非数值一律当 0 */
+    /** 从 totals 取数值：缺失/非数值一律当 0，其余原样返回（含负数） */
     private static function num(array $totals, string $key): float
     {
         return isset($totals[$key]) && is_numeric($totals[$key]) ? (float) $totals[$key] : 0.0;
@@ -637,10 +653,10 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
         return number_format($us / 1000, 1) . 'ms';
     }
 
-    /** 比率 → 百分数，保留 1 位小数 */
+    /** 比率 → 百分数串（含 % 号，与 ms() 一样自带单位） */
     private static function pct(float $ratio): string
     {
-        return number_format($ratio * 100, 1);
+        return number_format($ratio * 100, 1) . '%';
     }
 ```
 
@@ -857,7 +873,7 @@ Expected: FAIL —— R4/R5/R6 用例拿到 0 条
     private static function ruleR5(array $symbol_tab, array $totals): array
     {
         $total = self::num($totals, 'pmu');
-        if ($total <= 0) {
+        if (!is_finite($total) || $total <= 0) {
             return array();
         }
 
@@ -881,7 +897,7 @@ Expected: FAIL —— R4/R5/R6 用例拿到 0 条
                 'R5',
                 Finding::SEVERITY_SUPPLEMENT,
                 $h[1],
-                sprintf('%s 内存峰值 %s，占全局 %s%%', $h[1], self::bytes($h[0]), self::pct($h[2])),
+                sprintf('%s 内存峰值 %s，占全局 %s', $h[1], self::bytes($h[0]), self::pct($h[2])),
                 '峰值内存集中在单个函数，可优先核查其数据结构',
                 $h[0]
             );
@@ -954,6 +970,15 @@ Expected: PASS
 ```bash
 git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计时倒挂探针"
+
+> **IR-2：新规则的两条硬性纪律。** 已实测（不是推测）：
+> - **每个指标读都必须走 `isset()` + `is_numeric()`**。漏掉不会得到"错误的结论"——
+>   `(float) null === 0.0` 过不了任何**正向**闸门，所以结果是"该规则静默产出空"。
+>   但在 Laravel 这类把 `E_WARNING` 提升为 `ErrorException` 的框架里，`safe()` 会捕获它，
+>   于是**整条规则的结论全部消失且无迹可寻**。`safe()` 的日志（见 Task 2 Step 3b）正是
+>   让这种情况可被发现的东西。
+> - **每条规则的闸门必须是"正向阈值"**（要求值大于某个正数）。这是"缺指标 → 无结论"
+>   而非"错结论"的保证；一条无条件产出的规则没有这层保护。
 ```
 
 ---
@@ -1106,6 +1131,16 @@ Expected: PASS
 ```bash
 git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
+
+> **IR-4：不要再给 R3 加内部上限。** 实测 R3 的产出量受**被调方 5% 自身耗时闸门**约束，
+> 而非边数量——真实分布下最多约 20 个不同子函数能过这道闸门，`analyze()` 的分配是
+> 输入规模线性且瞬时的，没有二次型模式。上限就该留在 Task 4 这一层：
+> R3 内部自限会是**行为改变**而非性能微调，且可能把一个排在第 4 位、与前者**不同 symbol**
+> 的热点永久藏起来。
+>
+> **#7（可选，别在 Task 2 做）**：`'R1'`/`'R2'`/`'R3'` 是三处裸字符串字面量，而阈值都是具名常量。
+> 目前没有任何地方 `switch ($f->rule)`（本任务的去重按 `symbol`、截断按顺序），所以暂无风险。
+> 若将来出现按 rule 分支的逻辑，再加 `Finding::RULE_*` 常量，让拼错不至于静默漏掉一条规则。
 ```
 
 ---
@@ -1390,6 +1425,22 @@ Expected: PASS（全量）
 ```bash
 git add src/Core/XhprofLib/Display/XhprofDisplay.php tests/Unit/Lib/XhprofDisplayTest.php
 git commit -m "feat(analysis): 在单 run 报告页接入诊断区（diff/详情页不显示）"
+
+> **IR-1：diff 模式会把增量喂给 `analyze()`，两条防线都要有。**
+> `profiler_report()` 在 diff 模式下**改写了自己的局部变量**：`$symbol_tab` 与 `$totals`
+> 被替换成 run2−run1 的**增量**，而 `$run1_data`（单 run 的原始边表）保持不动。
+> 一个"顺手取那三个局部变量"的实现会拿到「增量总值 + 单 run 边表」的混合，实测输出：
+>
+> ```
+> [R1] a() 自身耗时 0.2ms，占本次请求 20.0%      ← 拿"差值"当分母，任何符号下都无意义
+> [R3] main() → a() 调用 600 次，累计 -0.4ms     ← UI 里出现负耗时
+> ```
+>
+> 全负的情况下 `$total <= 0` 会恰好拦住全部规则，所以这是个**接线陷阱**而不是规则缺陷。
+> 两道防线：
+> 1. 调用点守 `!$diff_mode`（本任务步骤里已有）；
+> 2. `analyze()` 的 docblock 写明：三份入参必须来自**同一次**运行，diff 模式下
+>    `profiler_report` 的局部变量已被改写为增量，不可直接传入。
 ```
 
 ---
