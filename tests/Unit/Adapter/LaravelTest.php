@@ -106,7 +106,8 @@ class LaravelTest extends TestCase
         $adapter = new RedisAdapter();
         $this->assertInstanceOf(CacheInterface::class, $adapter);
 
-        $this->assertSame('v', $adapter->set('k', 'v', 10));
+        // phpredis 的 set() 返回 bool（不是原值）；ThinkphpTest 早就按真实语义断言了
+        $this->assertTrue($adapter->set('k', 'v', 10));
         $this->assertSame('v', $adapter->get('k'));
         $this->assertSame(['v', null], $adapter->mget(['k', 'nope']));
 

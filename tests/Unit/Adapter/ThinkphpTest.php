@@ -355,4 +355,21 @@ class ThinkphpTest extends TestCase
         $this->assertInstanceOf(ConfigAdapter::class, CoreXhprof::getConfig());
         $this->assertTrue(CoreXhprof::getConfig()->get('xhprof.enable'));
     }
+
+    /**
+     * 真实 ThinkPHP 在应用未配置 stores.redis 时 Cache::store('redis') 抛
+     * InvalidArgumentException（Cache::resolveConfig → getStoreConfig）。
+     * 中间件在每个请求上、早于 enable 判断就构造本适配器，
+     * 若在构造函数里解析连接，"Redis 扩展可用但没配 think 的 redis store"
+     * 会让整个应用每个请求都 500。构造必须是无副作用的。
+     */
+    #[Test]
+    public function constructorDoesNotThrowWhenRedisStoreIsUnconfigured(): void
+    {
+        Cache::$throwOnStore = true;
+
+        $adapter = new RedisAdapter();
+
+        $this->assertInstanceOf(CacheInterface::class, $adapter);
+    }
 }

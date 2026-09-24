@@ -123,6 +123,36 @@ class XhprofProfilerTest extends TestCase
         );
     }
 
+    /**
+     * 四个框架的中间件都在 finally 里调用 stop()。phpredis 在连接中断/认证失败/超时时
+     * 会抛 RedisException——不在这里拦住，一个本来健康的请求会变成 500，
+     * 而且原来的业务异常会被这个 Redis 异常顶替掉。
+     */
+    #[Test]
+    public function stopSwallowsStorageFailures(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $throwing = new class extends FakeCache {
+            public function lPush(string $key, mixed $value): int
+            {
+                throw new \RedisException('read error on connection');
+            }
+        };
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $throwing, $this->logger);
+
+        XhprofProfiler::start();
+        XhprofProfiler::stop();   // 不得向外抛出
+
+        $this->assertStringContainsString(
+            'save_run failed',
+            $this->logger->errors[0] ?? '',
+            '落库失败应记日志而不是把异常抛给调用方'
+        );
+    }
+
     #[Test]
     public function startStopWhenTimeLimitExceededSkipsSave(): void
     {
@@ -170,7 +200,7 @@ class XhprofProfilerTest extends TestCase
         $config = new FakeConfig(['xhprof' => ['log_num' => 77]]);
         Xhprof::bootstrap($this->request, $this->response, $config, $this->cache, $this->logger);
 
-        $this->assertSame(['/test'], Xhprof::$ignore_url_arr);
+        $this->assertSame(['/xhprof'], Xhprof::$ignore_url_arr);
         $this->assertSame(0, Xhprof::$time_limit);
         $this->assertSame(77, Xhprof::$log_num);
         $this->assertSame(3, Xhprof::$view_wtred);

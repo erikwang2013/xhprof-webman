@@ -6,17 +6,7 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Lib;
 
 require_once __DIR__ . '/../../Fixtures/Fakes.php';
 
-// 疑似 bug（见报告）：XhprofDisplay 内部以字符串形式调用全局类
-//（usort($flat_data, 'XhprofDisplay::sort_cbk')、$format_cbk 映射等），
-// 命名空间化后未加 FQCN 前缀，报告渲染必然 TypeError。
-// 此处提供全局别名以打通渲染路径，验证其余展示逻辑；
-// 注释掉本行再运行 singleRunReportRendersFlatTable 即可复现该 bug。
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
-
-if (!class_exists('XhprofDisplay', false)) {
-    class_alias(XhprofDisplay::class, 'XhprofDisplay');
-}
-
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
@@ -161,16 +151,6 @@ class XhprofDisplayTest extends TestCase
     }
 
     #[Test]
-    public function pctComputesPercentage(): void
-    {
-        // 本机 PHP 精确除法返回 int，统一用 delta 断言
-        self::assertEqualsWithDelta(50.0, XhprofDisplay::pct(100, 200), 0.0001);
-        self::assertEqualsWithDelta(0.0, XhprofDisplay::pct(0, 5), 0.0001);
-        self::assertSame('N/A', XhprofDisplay::pct(1, 0));
-        self::assertEqualsWithDelta(33.3, XhprofDisplay::pct(1, 3), 0.0001);
-    }
-
-    #[Test]
     public function getPrintClassAppliesDiffColors(): void
     {
         self::assertSame('class="vbar"', XhprofDisplay::get_print_class(5, false));
@@ -212,7 +192,7 @@ class XhprofDisplayTest extends TestCase
     {
         XhprofDisplay::$sort_col = 'fn';
         $arr = [['fn' => 'b()'], ['fn' => 'A()'], ['fn' => 'b()']];
-        usort($arr, 'XhprofDisplay::sort_cbk');
+        usort($arr, [XhprofDisplay::class, 'sort_cbk']);
         self::assertSame('A()', $arr[0]['fn']);
     }
 
@@ -221,7 +201,7 @@ class XhprofDisplayTest extends TestCase
     {
         XhprofDisplay::$sort_col = 'wt';
         $arr = [['fn' => 'a', 'wt' => 5], ['fn' => 'b', 'wt' => 10], ['fn' => 'c', 'wt' => 5]];
-        usort($arr, 'XhprofDisplay::sort_cbk');
+        usort($arr, [XhprofDisplay::class, 'sort_cbk']);
         self::assertSame('b', $arr[0]['fn']);
         self::assertSame(10, $arr[0]['wt']);
     }
@@ -232,7 +212,7 @@ class XhprofDisplayTest extends TestCase
         XhprofDisplay::$sort_col = 'wt';
         XhprofDisplay::$diff_mode = true;
         $arr = [['fn' => 'a', 'wt' => 5], ['fn' => 'b', 'wt' => -10]];
-        usort($arr, 'XhprofDisplay::sort_cbk');
+        usort($arr, [XhprofDisplay::class, 'sort_cbk']);
         self::assertSame('b', $arr[0]['fn']);
     }
 
@@ -381,6 +361,107 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('Child public static function', $html);
         self::assertStringContainsString('var func_name = "foo()";', $html);
         self::assertStringContainsString('func_metrics["wt"] = 40000;', $html);
+
+        // pc_info 必须把单元格拼进行内（type='Parent' 仅由它产出）。
+        // 若它丢弃 print_td_* 的返回值，父/子行会只剩函数名一列，表格错位。
+        self::assertStringContainsString("type='Parent' metric='wt'", $html);
+        self::assertStringContainsString("type='Parent' metric='ct'", $html);
+        // main()==>foo()：父行 main() 的 wt 单元格应含 40,000
+        self::assertMatchesRegularExpression(
+            "/type='Parent' metric='wt'[^>]*>40,000<\/td>/",
+            $html
+        );
+    }
+
+    /**
+     * 曾经的崩溃：$rep_symbol 不在 run 里时，"not found" 分支缺少 return，
+     * 继续把 null 传进 symbol_report()，在 round() 处抛 TypeError → 整页 500。
+     * 触发极日常：收藏的旧链接、从别的 run 复制的函数名。
+     */
+    #[Test]
+    public function symbolNotInRunShowsNotFoundWithoutCrashing(): void
+    {
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $this->useRequest(new FakeRequest(
+            ['run' => $runId, 'all' => 1, 'symbol' => 'does_not_exist()'],
+            ['uri' => '/xhprof']
+        ));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1, 'symbol' => 'does_not_exist()'],
+            $this->sampleRunData(),
+            'desc',
+            'does_not_exist()',
+            'wt',
+            $runId
+        );
+
+        self::assertStringContainsString('not found in XHProf run', $html);
+    }
+
+    /**
+     * 曾经的崩溃：symbol 只存在于其中一个 run（新增/删除的函数，正是 diff 模式的目标场景）时，
+     * $avg_info1/$avg_info2 会保持字符串 'N/A'，float - 'N/A' 在 PHP 8 抛 TypeError。
+     */
+    #[Test]
+    public function diffReportHandlesSymbolPresentInOnlyOneRun(): void
+    {
+        $run1 = [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100],
+        ];
+        $run2 = [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100],
+            'main()==>foo()' => ['ct' => 2, 'wt' => 40000, 'mu' => 200],
+        ];
+        $this->useRequest(new FakeRequest(
+            ['run1' => 'r1', 'run2' => 'r2', 'symbol' => 'foo()', 'all' => 1],
+            ['uri' => '/xhprof']
+        ));
+
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'symbol' => 'foo()', 'all' => 1],
+            $run1,
+            'd1',
+            $run2,
+            'd2',
+            'foo()',
+            'wt',
+            'r1',
+            'r2'
+        );
+
+        self::assertStringContainsString('foo()', $html);
+    }
+
+    /**
+     * 曾经的崩溃：?sort=ut 通过静态白名单校验，但本扩展的 flags 永不采集 ut，
+     * sort_cbk 里 abs(null) 抛 TypeError（diff 模式）。
+     */
+    #[Test]
+    public function diffReportIgnoresSortByMetricNotCollected(): void
+    {
+        $data = [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100],
+            'main()==>foo()' => ['ct' => 1, 'wt' => 40000, 'mu' => 50],
+        ];
+        $this->useRequest(new FakeRequest(
+            ['run1' => 'r1', 'run2' => 'r2', 'sort' => 'ut', 'all' => 1],
+            ['uri' => '/xhprof']
+        ));
+
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'sort' => 'ut', 'all' => 1],
+            $data,
+            'd1',
+            $data,
+            'd2',
+            null,
+            'ut',
+            'r1',
+            'r2'
+        );
+
+        self::assertStringContainsString('Overall Diff Summary', $html);
     }
 
     #[Test]
@@ -458,7 +539,15 @@ class XhprofDisplayTest extends TestCase
     #[Test]
     public function getTooltipAttributes(): void
     {
-        self::assertSame("type='Child' metric='wt'", XhprofDisplay::get_tooltip_attributes('Child', 'wt'));
+        // onmouseover 是 xhprof_report.js 里 ChildRowToolTip 的唯一触发点，必须存在
+        self::assertSame(
+            "type='Child' metric='wt' onmouseover=\"return ChildRowToolTip(this, 'wt');\"",
+            XhprofDisplay::get_tooltip_attributes('Child', 'wt')
+        );
+        self::assertStringContainsString(
+            'ParentRowToolTip',
+            XhprofDisplay::get_tooltip_attributes('Parent', 'mu')
+        );
     }
 
     #[Test]

@@ -29,6 +29,7 @@ class FakeCache implements CacheInterface
         $this->store = [];
         $this->lists = [];
         $this->calls = [];
+        $this->ttls = [];
     }
 
     public function get(string $key): mixed
@@ -37,10 +38,14 @@ class FakeCache implements CacheInterface
         return $this->store[$key] ?? null;
     }
 
+    /** 记录写入时的 TTL，否则 log_ttl 相关行为在测试里完全不可观测 */
+    public array $ttls = [];
+
     public function set(string $key, mixed $value, ?int $ttl = null): mixed
     {
         $this->calls[] = "set:$key";
         $this->store[$key] = $value;
+        $this->ttls[$key] = $ttl;
         return $value;
     }
 

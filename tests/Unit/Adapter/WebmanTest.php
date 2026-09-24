@@ -143,7 +143,8 @@ class WebmanTest extends TestCase
         $adapter = new RedisAdapter();
         $this->assertInstanceOf(CacheInterface::class, $adapter);
 
-        $this->assertSame('v', $adapter->set('k', 'v', 10));
+        // phpredis 的 set() 返回 bool（不是原值）；ThinkphpTest 早就按真实语义断言了
+        $this->assertTrue($adapter->set('k', 'v', 10));
         $this->assertSame('v', $adapter->get('k'));
         $this->assertSame(['v', null], $adapter->mget(['k', 'nope']));
 
@@ -279,7 +280,7 @@ class WebmanTest extends TestCase
         $this->assertTrue(is_subclass_of(Xhprof::class, CoreXhprof::class));
         $this->assertInstanceOf(CoreXhprof::class, new Xhprof());
         $this->assertSame('xhprof', Xhprof::$key_prefix);
-        $this->assertSame(['/test'], Xhprof::$ignore_url_arr);
+        $this->assertSame(['/xhprof'], Xhprof::$ignore_url_arr);
     }
 
     #[Test]
@@ -307,8 +308,7 @@ class WebmanTest extends TestCase
         Install::uninstallByRelation();
 
         $this->assertSame([], Registry::$removed);
-        // 目录不存在时跳过，不报错
-        $this->assertTrue(true);
+        // 目录不存在时应安静跳过而不是抛异常——能执行到这里本身即证明未抛
     }
 
     #[Test]

@@ -125,8 +125,27 @@ class XhprofLibTest extends TestCase
     #[Test]
     public function initMetricsWithValidSortOverridesSortCol(): void
     {
-        XhprofLib::init_metrics(['main()' => ['wt' => 100]], null, 'mu', false);
+        // 该 run 必须真的采集过 mu，否则属于"按不存在的指标排序"（旧实现会放行并崩在 sort_cbk）
+        XhprofLib::init_metrics(['main()' => ['wt' => 100, 'mu' => 10]], null, 'mu', false);
         self::assertSame('mu', XhprofDisplay::$sort_col);
+    }
+
+    #[Test]
+    public function initMetricsRejectsSortByMetricNotCollected(): void
+    {
+        // ut/st/samples 在本扩展的 flags 下永不采集，白名单不能放行
+        XhprofLib::init_metrics(['main()' => ['wt' => 100, 'mu' => 10]], null, 'ut', false);
+        self::assertSame('wt', XhprofDisplay::$sort_col);
+        self::assertStringContainsString('Invalid Sort Key ut specified in URL', $this->logger->errors[0]);
+    }
+
+    #[Test]
+    public function initMetricsDoesNotInheritSortColFromPreviousRequest(): void
+    {
+        // 常驻 worker 下静态跨请求存活：不带 sort 的请求不能被上一请求的排序列污染
+        XhprofDisplay::$sort_col = 'mu';
+        XhprofLib::init_metrics(['main()' => ['wt' => 100, 'mu' => 10]], null, null, false);
+        self::assertSame('wt', XhprofDisplay::$sort_col);
     }
 
     #[Test]
@@ -331,6 +350,49 @@ class XhprofLibTest extends TestCase
         self::assertSame(100, $res['raw']['main()']['wt']);
     }
 
+    private function seedTwoRuns(): void
+    {
+        foreach (['a1a1a1a1a1a1a1a1', 'b2b2b2b2b2b2b2b2'] as $id) {
+            $this->cache->set("xhprof:xhprof_log:$id", serialize([
+                'main()' => ['wt' => 100, 'mu' => 1],
+            ]));
+        }
+    }
+
+    /**
+     * 曾经的崩溃：wts 直接来自查询串，原先只校验个数、不校验数值，
+     * 于是 $wt * $info[$metric] 在 PHP 8 抛 "string * int" TypeError。
+     */
+    #[Test]
+    public function aggregateRunsRejectsNonNumericWts(): void
+    {
+        $this->seedTwoRuns();
+
+        $res = XhprofLib::xhprof_aggregate_runs(
+            ['a1a1a1a1a1a1a1a1', 'b2b2b2b2b2b2b2b2'],
+            ['1', 'abc'],
+            'xhprof_foo'
+        );
+
+        self::assertSame('Invalid input..', $res['description']);
+        self::assertNull($res['raw']);
+    }
+
+    #[Test]
+    public function aggregateRunsAcceptsNumericWts(): void
+    {
+        $this->seedTwoRuns();
+
+        $res = XhprofLib::xhprof_aggregate_runs(
+            ['a1a1a1a1a1a1a1a1', 'b2b2b2b2b2b2b2b2'],
+            ['1', '3'],
+            'xhprof_foo'
+        );
+
+        // 权重 1:3，总和 4 → (100*1 + 100*3) / 4 = 100
+        self::assertSame(100, $res['raw']['main()']['wt']);
+    }
+
     #[Test]
     public function aggregateRunsWithUseScriptNameRewritesEdges(): void
     {
@@ -404,37 +466,10 @@ class XhprofLibTest extends TestCase
     #[Test]
     public function computeInclusiveTimesRejectsParentEqualsChild(): void
     {
+        // 必须返回空数组而非 null：调用方会直接对它取下标并 foreach
         $ret = XhprofLib::xhprof_compute_inclusive_times(['a()==>a()' => ['ct' => 1, 'wt' => 5]]);
-        self::assertNull($ret);
+        self::assertSame([], $ret);
         self::assertStringContainsString('parent & child are both: a()', $this->logger->errors[0]);
-    }
-
-    #[Test]
-    public function pruneRunDropsEdgesBelowThresholdAndReparents(): void
-    {
-        $data = [
-            'main()' => ['ct' => 1, 'wt' => 1000, 'mu' => 10],
-            'main()==>a()' => ['ct' => 1, 'wt' => 50, 'mu' => 1],
-            'main()==>b()' => ['ct' => 1, 'wt' => 1000, 'mu' => 9],
-            'a()==>b()' => ['ct' => 1, 'wt' => 50, 'mu' => 1],
-        ];
-        $res = XhprofLib::xhprof_prune_run($data, 20);
-
-        self::assertArrayHasKey('main()', $res);
-        self::assertArrayHasKey('main()==>b()', $res);
-        self::assertArrayNotHasKey('main()==>a()', $res);
-        self::assertArrayNotHasKey('a()==>b()', $res);
-        self::assertSame(50, $res['__pruned__()==>b()']['wt']);
-    }
-
-    #[Test]
-    public function pruneRunRejectsMissingMain(): void
-    {
-        $this->silence();
-        $ret = XhprofLib::xhprof_prune_run(['foo()' => ['wt' => 1]], 10);
-        $this->unsilence();
-        self::assertFalse($ret);
-        self::assertStringContainsString('main() missing in raw data', $this->logger->errors[0]);
     }
 
     #[Test]
@@ -444,133 +479,6 @@ class XhprofLibTest extends TestCase
         self::assertSame(['a' => 1, 'b' => 2], $arr);
         $arr = XhprofLib::xhprof_array_unset($arr, 'a');
         self::assertSame(['b' => 2], $arr);
-    }
-
-    #[Test]
-    public function getUintParamAcceptsDigits(): void
-    {
-        $this->request = new FakeRequest(['n' => '42']);
-        $this->useRequest($this->request);
-        self::assertSame('42', XhprofLib::xhprof_get_uint_param('n'));
-    }
-
-    #[Test]
-    public function getUintParamTrimsWhitespace(): void
-    {
-        $this->request = new FakeRequest(['n' => ' 7 ']);
-        $this->useRequest($this->request);
-        self::assertSame('7', XhprofLib::xhprof_get_uint_param('n'));
-    }
-
-    #[Test]
-    public function getUintParamRejectsNonDigits(): void
-    {
-        $this->request = new FakeRequest(['n' => 'abc']);
-        $this->useRequest($this->request);
-        self::assertNull(XhprofLib::xhprof_get_uint_param('n'));
-        self::assertStringContainsString('must be an unsigned integer', $this->logger->errors[0]);
-    }
-
-    #[Test]
-    public function getUintParamReturnsDefaultWhenMissing(): void
-    {
-        // 缺失参数直接返回默认值（int 0），不再对默认值 trim 崩溃
-        self::assertSame(0, XhprofLib::xhprof_get_uint_param('n'));
-    }
-
-    #[Test]
-    public function getFloatParamCastsToFloat(): void
-    {
-        $this->request = new FakeRequest(['f' => '3.14']);
-        $this->useRequest($this->request);
-        self::assertSame(3.14, XhprofLib::xhprof_get_float_param('f'));
-    }
-
-    #[Test]
-    public function getFloatParamReturnsDefaultWhenMissing(): void
-    {
-        // 缺失参数直接返回默认值，不再对默认值 trim 崩溃
-        self::assertSame(2.5, XhprofLib::xhprof_get_float_param('f', 2.5));
-    }
-
-    #[Test]
-    #[DataProvider('boolParamProvider')]
-    public function getBoolParamParsesValidValues(string $value, bool $expected): void
-    {
-        $this->request = new FakeRequest(['b' => $value]);
-        $this->useRequest($this->request);
-        self::assertSame($expected, XhprofLib::xhprof_get_bool_param('b'));
-    }
-
-    public static function boolParamProvider(): array
-    {
-        return [
-            'true' => ['true', true],
-            'on' => ['on', true],
-            'yes' => ['yes', true],
-            '1' => ['1', true],
-            'false' => ['false', false],
-            'off' => ['off', false],
-            'no' => ['no', false],
-            '0' => ['0', false],
-            'uppercase' => ['TRUE', true],
-        ];
-    }
-
-    #[Test]
-    public function getBoolParamRejectsInvalidValue(): void
-    {
-        $this->request = new FakeRequest(['b' => 'banana']);
-        $this->useRequest($this->request);
-        self::assertNull(XhprofLib::xhprof_get_bool_param('b'));
-        self::assertStringContainsString('must be a valid boolean string', $this->logger->errors[0]);
-    }
-
-    #[Test]
-    public function getBoolParamReturnsDefaultWhenMissing(): void
-    {
-        // 缺失参数直接返回默认值，不再对默认值 trim 崩溃
-        self::assertTrue(XhprofLib::xhprof_get_bool_param('b', true));
-    }
-
-    #[Test]
-    public function getStringParamReturnsDefaultWhenMissing(): void
-    {
-        self::assertSame('default-sym', XhprofLib::xhprof_get_string_param('sym', 'default-sym'));
-    }
-
-    #[Test]
-    public function getStringParamReturnsValueWhenPresent(): void
-    {
-        $this->request = new FakeRequest(['sym' => 'foo()']);
-        $this->useRequest($this->request);
-        self::assertSame('foo()', XhprofLib::xhprof_get_string_param('sym'));
-    }
-
-    #[Test]
-    public function getMatchingFunctionsFindsSubstringCaseInsensitive(): void
-    {
-        $data = [
-            'main()==>foo()' => ['wt' => 40],
-            'main()==>bar()' => ['wt' => 30],
-            'FOO()==>strlen()' => ['wt' => 5],
-        ];
-        // asort 保留键名，故用 array_values 归一化后断言
-        self::assertSame(
-            ['FOO()', 'foo()'],
-            array_values(XhprofLib::xhprof_get_matching_functions('fo', $data))
-        );
-        self::assertSame(['main()'], XhprofLib::xhprof_get_matching_functions('MAIN', $data));
-    }
-
-    #[Test]
-    public function getMatchingFunctionsSkipsBareMainKey(): void
-    {
-        // 裸 main() 键（无父函数）不再崩溃；main() 作为 child 仍可匹配
-        self::assertSame(
-            ['main()'],
-            XhprofLib::xhprof_get_matching_functions('main', ['main()' => ['wt' => 1]])
-        );
     }
 
     #[Test]

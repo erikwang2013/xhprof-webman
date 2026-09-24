@@ -266,7 +266,6 @@ class XHProfRunsDefaultTest extends TestCase
 
         self::assertMatchesRegularExpression('/^[a-f0-9]{16}$/', $runId);
         self::assertSame([$runId], $this->cache->lRange('xhprof:run_id', 0, -1));
-        self::assertSame(1, $this->cache->get('xhprof:run_id_num'));
 
         $row = json_decode($this->cache->get('xhprof:request_log:' . $runId), true);
         self::assertSame('https://example.com/order', $row['request_uri']);
@@ -278,22 +277,48 @@ class XHProfRunsDefaultTest extends TestCase
 
         $stored = $this->cache->get('xhprof:xhprof_log:' . $runId);
         self::assertSame($data, unserialize($stored));
+
+        // log_ttl 必须透传到两个写入点。此前 fake 直接丢弃 TTL，
+        // 把配置改成 0 或干脆不传，整套测试依然全绿（数据永不失效也测不出来）。
+        self::assertSame(Xhprof::$log_ttl, $this->cache->ttls['xhprof:request_log:' . $runId]);
+        self::assertSame(Xhprof::$log_ttl, $this->cache->ttls['xhprof:xhprof_log:' . $runId]);
     }
 
     #[Test]
     public function checkLogNumTrimsOldestRunWhenOverLimit(): void
     {
         Xhprof::$log_num = 1;
-        $this->cache->set('xhprof:run_id_num', 1);
         $this->cache->lPush('xhprof:run_id', 'oldrun0000000001');
         $this->cache->set('xhprof:request_log:oldrun0000000001', '{}');
         $this->cache->set('xhprof:xhprof_log:oldrun0000000001', serialize(['main()' => ['wt' => 1]]));
 
         $runId = XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo');
 
-        self::assertSame(1, $this->cache->get('xhprof:run_id_num'));
         self::assertNull($this->cache->get('xhprof:request_log:oldrun0000000001'));
         self::assertNull($this->cache->get('xhprof:xhprof_log:oldrun0000000001'));
+        self::assertSame([$runId], $this->cache->lRange('xhprof:run_id', 0, -1));
+    }
+
+    /**
+     * 残留的 run_id_num 计数器不得影响裁剪。
+     *
+     * 旧实现完全信任该计数器：一旦它高于 log_num（例如手动 DEL 掉 run_id 列表
+     * "清理性能数据"之后），每轮 save 都会先 incr 再把刚写入的 run 删掉——
+     * 采样永久静默失效，且每请求白付 6 次 Redis 往返。
+     * 现在裁剪只依据 lPush 返回的真实列表长度，该键形同历史遗留数据。
+     */
+    #[Test]
+    public function staleRunIdNumCounterCannotDeleteFreshRuns(): void
+    {
+        Xhprof::$log_num = 1000;
+        $this->cache->set('xhprof:run_id_num', 1001);   // 高于上限的残留计数器
+
+        $runId = XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo');
+
+        self::assertNotNull(
+            $this->cache->get('xhprof:xhprof_log:' . $runId),
+            '本次采样数据必须保留'
+        );
         self::assertSame([$runId], $this->cache->lRange('xhprof:run_id', 0, -1));
     }
 

@@ -154,13 +154,18 @@ class WiringTest extends TestCase
     /** 断言一次 save_run 完整落库：计数 +1、run_id 入列、两类日志键存在，返回 run_id */
     private function assertRunSaved(array $store): string
     {
-        $this->assertSame(1, $store['xhprof:run_id_num']);
         $this->assertCount(1, $store['xhprof:run_id']);
         $rid = $store['xhprof:run_id'][0];
         $this->assertIsString($rid);
         $this->assertNotEmpty($rid);
         $this->assertArrayHasKey("xhprof:request_log:$rid", $store);
         $this->assertArrayHasKey("xhprof:xhprof_log:$rid", $store);
+
+        // 只断言"键存在"等于没测：把 stop() 改成 save_run([])（采样结果丢弃）
+        // 整个套件照样全绿。必须验证落库的确实是本次采样数据。
+        $data = unserialize($store["xhprof:xhprof_log:$rid"]);
+        $this->assertIsArray($data);
+        $this->assertArrayHasKey('main()', $data, '采样数据缺少 main() 帧 → 报告页会是空的');
         return $rid;
     }
 

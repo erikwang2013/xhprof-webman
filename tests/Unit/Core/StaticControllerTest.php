@@ -61,7 +61,9 @@ class StaticControllerTest extends TestCase
         );
         $this->assertSame('public, max-age=86400', $result->headers['Cache-Control']);
         $this->assertFileExists($result->filePath);
-        $this->assertSame(file_get_contents($result->filePath), (string) file_get_contents($result->filePath));
+        // 原先这里是 file_get_contents(...) 与 (string) 后的自己比较，恒真、无信息量。
+        // 真正值得断言的是：包内那份资源确实存在且非空（静态资源没被打进包就会暴露）。
+        $this->assertNotSame('', (string) file_get_contents($result->filePath), '资源文件不应为空');
     }
 
     #[Test]

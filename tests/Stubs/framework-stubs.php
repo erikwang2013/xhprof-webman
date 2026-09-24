@@ -13,10 +13,13 @@ namespace support {
         public static array $store = [];
         public static array $log = [];
 
+        public static array $ttls = [];
+
         public static function reset(): void
         {
             self::$store = [];
             self::$log = [];
+            self::$ttls = [];
         }
 
         public static function get(string $key): mixed
@@ -25,11 +28,22 @@ namespace support {
             return self::$store[$key] ?? null;
         }
 
+        /** phpredis 的 set() 返回 bool，不是原值 */
         public static function set(string $key, mixed $value, int $ttl = 0): mixed
         {
             self::$log[] = "set:$key";
             self::$store[$key] = $value;
-            return $value;
+            self::$ttls[$key] = $ttl;
+            return true;
+        }
+
+        /** phpredis 签名：setex(key, seconds, value) */
+        public static function setex(string $key, int $ttl, mixed $value): bool
+        {
+            self::$log[] = "set:$key";
+            self::$store[$key] = $value;
+            self::$ttls[$key] = $ttl;
+            return true;
         }
 
         public static function mget(array $keys): array
@@ -76,7 +90,9 @@ namespace support {
         public static function lrange(string $key, int $start, int $end): array
         {
             self::$log[] = "lrange:$key";
-            return array_slice(self::$store[$key] ?? [], $start, $end - $start + 1);
+            $list = self::$store[$key] ?? [];
+            if ($end < 0) $end += count($list);   // 负数下标同真实 Redis
+            return array_slice($list, $start, $end - $start + 1);
         }
 
         public static function del(mixed ...$keys): int
@@ -235,7 +251,11 @@ namespace Illuminate\Support\Facades {
                 'get' => fn ($k) => self::$store[$k] ?? null,
                 'set' => function ($k, $v, $ttl = 0) {
                     self::$store[$k] = $v;
-                    return $v;
+                    return true;   // phpredis 返回 bool
+                },
+                'setex' => function ($k, $ttl, $v) {
+                    self::$store[$k] = $v;
+                    return true;
                 },
                 'mget' => function (array $keys) {
                     $out = [];
@@ -463,13 +483,24 @@ namespace think\facade {
     {
         private static ?\think\CacheStore $store = null;
 
+        /**
+         * 模拟真实 ThinkPHP 6.1 的行为：应用未配置 stores.redis 时，
+         * Cache::store() 会抛 InvalidArgumentException("Store [redis] not found.")。
+         * 见 think\Cache::resolveConfig → getStoreConfig。
+         */
+        public static bool $throwOnStore = false;
+
         public static function reset(): void
         {
             self::$store = null;
+            self::$throwOnStore = false;
         }
 
         public static function store(string $name = 'redis'): \think\CacheStore
         {
+            if (self::$throwOnStore) {
+                throw new \InvalidArgumentException("Store [$name] not found.");
+            }
             return self::$store ??= new \think\CacheStore();
         }
 
@@ -707,7 +738,10 @@ namespace Hyperf\HttpServer\Contract {
         public function all(): array;
         public function getMethod(): string;
         public function header(string $name): ?string;
-        public function getHost(): string;
+        // 真实 Hyperf 的 Contract\RequestInterface 没有 getHost()；
+        // 主机名只能经 PSR-7 的 getUri()->getHost() 取。此处曾伪造 getHost()，
+        // 掩盖了 Hyperf\RequestAdapter 的真实崩溃。
+        public function getUri(): \Hyperf\HttpMessage\Uri\Uri;
         public function getRequestUri(): string;
         public function url(): string;
         public function getServerParams(): array;
@@ -729,6 +763,7 @@ namespace Hyperf\HttpServer {
         private array $server;
         private string $method;
         private string $host;
+        private ?int $port;
         private string $uri;
         private string $url;
 
@@ -739,6 +774,7 @@ namespace Hyperf\HttpServer {
             $this->server = $options['server'] ?? [];
             $this->method = $options['method'] ?? 'GET';
             $this->host = $options['host'] ?? 'localhost';
+            $this->port = $options['port'] ?? null;
             $this->uri = $options['uri'] ?? '/';
             $this->url = $options['url'] ?? 'http://localhost/';
         }
@@ -763,9 +799,9 @@ namespace Hyperf\HttpServer {
             return $this->headers[$name] ?? null;
         }
 
-        public function getHost(): string
+        public function getUri(): \Hyperf\HttpMessage\Uri\Uri
         {
-            return $this->host;
+            return new \Hyperf\HttpMessage\Uri\Uri($this->host, $this->port);
         }
 
         public function getRequestUri(): string
@@ -827,6 +863,36 @@ namespace Hyperf\HttpMessage\Stream {
     }
 }
 
+namespace Hyperf\HttpMessage\Uri {
+    /** PSR-7 URI 的最小实现；真实 Hyperf 的 Request::getUri() 返回它。 */
+    class Uri
+    {
+        private string $host;
+        private ?int $port;
+
+        public function __construct(string $host = 'localhost', ?int $port = null)
+        {
+            $this->host = $host;
+            $this->port = $port;
+        }
+
+        public function getHost(): string
+        {
+            return $this->host;
+        }
+
+        public function getPort(): ?int
+        {
+            return $this->port;
+        }
+
+        public function __toString(): string
+        {
+            return 'http://' . $this->host . ($this->port ? ':' . $this->port : '') . '/';
+        }
+    }
+}
+
 namespace Hyperf\Redis {
     class Redis
     {
@@ -840,7 +906,13 @@ namespace Hyperf\Redis {
         public function set(string $key, mixed $value, int $ttl = 0): mixed
         {
             $this->store[$key] = $value;
-            return $value;
+            return true;   // phpredis 返回 bool
+        }
+
+        public function setex(string $key, int $ttl, mixed $value): bool
+        {
+            $this->store[$key] = $value;
+            return true;
         }
 
         public function mget(array $keys): array
@@ -881,7 +953,9 @@ namespace Hyperf\Redis {
 
         public function lRange(string $key, int $start, int $end): array
         {
-            return array_slice($this->store[$key] ?? [], $start, $end - $start + 1);
+            $list = $this->store[$key] ?? [];
+            if ($end < 0) $end += count($list);   // 负数下标同真实 Redis
+            return array_slice($list, $start, $end - $start + 1);
         }
 
         public function del(mixed ...$keys): int
@@ -953,15 +1027,11 @@ namespace Hyperf\Context {
     }
 }
 
-namespace Hyperf\Framework {
-    class ApplicationContext
-    {
-        public static function getContainer(): \Hyperf\Context\Container
-        {
-            return \Hyperf\Context\ApplicationContext::getContainer();
-        }
-    }
-}
+// 注意：不要在这里补 Hyperf\Framework\ApplicationContext。
+// 真实 Hyperf 3.x 没有这个类（src/framework/src 下只有 ApplicationFactory/
+// Bootstrap/ConfigProvider/Event/Exception/Logger），旧版 src/Core/Xhprof.php
+// 正是在探测它才导致 Hyperf 分支永不命中。此前 stub 伪造了该类，
+// 使"错误探测"与"正确探测"走同一分支，autoDetect 的修复无法被测试区分。
 
 namespace Psr\Log {
     interface LoggerInterface
