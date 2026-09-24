@@ -1,0 +1,53 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ErikWang2013\Xhprof\Core\Analysis;
+
+/**
+ * 单次运行诊断。
+ *
+ * 入参都是 XhprofDisplay::profiler_report() 里已有的局部变量，
+ * 不新增数据采集、不新增存储、不碰 HTML。
+ *
+ * 最重要的一条约定：analyze() 不得抛异常。诊断是旁路，
+ * 它出问题只会让报告页多一块内容或没有这块内容，绝不能让整页 500。
+ */
+final class Analyzer
+{
+    /** R1 自身耗时占请求总耗时 */
+    public const SHARE_THRESHOLD = 0.10;
+
+    /** R2 调用次数 */
+    public const CALL_COUNT_THRESHOLD = 1000;
+
+    /** R3 单条边的调用次数 */
+    public const EDGE_COUNT_THRESHOLD = 500;
+
+    /** R3 被调方自身耗时占比 */
+    public const EDGE_SHARE_THRESHOLD = 0.05;
+
+    /** R5 内存峰值占比 */
+    public const PMU_SHARE_THRESHOLD = 0.30;
+
+    /** 主区（归因）条数上限 */
+    public const MAIN_LIMIT = 3;
+
+    /** 补充区（体检）条数上限 */
+    public const SUPPLEMENT_LIMIT = 3;
+
+    /**
+     * @param mixed $symbol_tab xhprof_compute_flat_info() 的结果
+     * @param mixed $raw_data   原始 xhprof 边表
+     * @param mixed $totals     总计（wt / pmu 等）
+     * @return Finding[]
+     */
+    public static function analyze($symbol_tab, $raw_data, $totals): array
+    {
+        if (!is_array($symbol_tab) || $symbol_tab === array()) {
+            return array();
+        }
+
+        return array();
+    }
+}
