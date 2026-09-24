@@ -1251,6 +1251,22 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 ```
 
+> **"先去重再切片"这个顺序本身需要专测（否则变异可存活）。**
+> 计划原有的去重用例**无法区分两种顺序**：它的夹具产出
+> `[hot(R1), main(R1), hot(R3), hot(R3), hot(R3), hot(R2)]`，先切片的 `[hot, main, hot]`
+> 再去重仍得到 `[hot, main]`——symbol 依然唯一、`hot()` 依然只有一条，两条断言都成立。
+> 要区分，夹具必须**头部有重复且第 4 位是另一个 symbol**：
+> ```
+> 夹具：x()=R1兼R3被调方, y()=仅R3, z()=R2
+> 去重→切片 : ["x()","y()","z()"]            ← 正确
+> 切片→去重 : ["x()","y()"]  ← z() 被静默丢弃  ← 变异
+> ```
+> 用例名 `mainSectionDedupesBeforeSlicingSoLaterSymbolsSurvive`。它同时把 IR-4 的论据
+> （"可能把一个排在第 4 位、不同 symbol 的热点永久藏起来"）从文字变成了断言。
+>
+> 另：对补充区去重的变异**已被既有用例杀掉**（`r4SortsByDepthDescending`，
+> "actual size 1 matches expected size 2"），故"补充区不去重"这条约束无需新增测试。
+
 > **R1/R3 同 symbol 碰撞：R1 胜出，且必须显式钉住。**
 > 去重保留合并顺序里的第一条，而顺序是 R1 → R3 → R2，所以一个函数若同时命中
 > R1（自身耗时占比）与 R3（热点边），只留 R1，R3 的调用方细节被丢弃。
