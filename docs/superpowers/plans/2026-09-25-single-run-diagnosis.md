@@ -1251,16 +1251,16 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 ```
 
-> **IR-4：不要再给 R3 加内部上限。****去重只作用于主区。** 补充区**不要**去重：R4 的 `symbol` 刻意是空串，一旦对补充区按
-symbol 去重，所有递归结论会被折叠成一条。主区去重的前提是 R1/R2/R3 的 symbol 都非空。
+> **去重只作用于主区。** 补充区**不要**去重：R4 的 `symbol` 刻意是空串，一旦对补充区按
+> symbol 去重，所有递归结论会被折叠成一条。主区去重的前提是 R1/R2/R3 的 symbol 都非空。
 
-**`MAIN_LIMIT` / `SUPPLEMENT_LIMIT` 目前声明但未被使用**（`analyze()` 当前不封顶）。
-Task 6 的接入**必须排在 Task 4 之后**——否则报告页会一次刷出几百条结论。
+> **`MAIN_LIMIT` / `SUPPLEMENT_LIMIT` 目前声明但未被使用**（`analyze()` 当前不封顶）。
+> Task 6 的接入**必须排在 Task 4 之后**——否则报告页会一次刷出几百条结论。
 
-**R5 的命中条件（Task 4 若调试"补充区为空"需知）**：需 `$totals['pmu']` 与逐项
-`excl_pmu` **同时**存在。`xhprof_compute_flat_info` 恒会初始化 totals 的 `pmu`，
-但未采集内存指标时逐项没有 `excl_pmu` → R5 静默无结论。这是 IR-2「正向闸门」
-设计的预期行为，不是 bug。
+> **R5 的命中条件（Task 4 若调试"补充区为空"需知）**：需 `$totals['pmu']` 与逐项
+> `excl_pmu` **同时**存在。`xhprof_compute_flat_info` 恒会初始化 totals 的 `pmu`，
+> 但未采集内存指标时逐项没有 `excl_pmu` → R5 静默无结论。这是 IR-2「正向闸门」
+> 设计的预期行为，不是 bug。
 
 > **IR-4：不要再给 R3 加内部上限。** 实测 R3 的产出量受**被调方 5% 自身耗时闸门**约束，
 > 而非边数量——真实分布下最多约 20 个不同子函数能过这道闸门，`analyze()` 的分配是
