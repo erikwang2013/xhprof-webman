@@ -308,7 +308,9 @@ class AnalyzerTest extends TestCase
     #[Test]
     public function r3DoesNotFireAt499Calls(): void
     {
-        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(499, 600, 100)];
+        // child 99/1000 = 9.9%，低于 R1 的 10% 闸门：否则阈值一旦被调低，
+        // R3 会产出 foo() 行、却被 R1 胜出的去重吃掉，断言就改由去重满足而非由闸门满足
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(499, 600, 99)];
         $raw = ['main()==>foo()' => ['ct' => 499, 'wt' => 400]];
         $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
     }
@@ -353,7 +355,9 @@ class AnalyzerTest extends TestCase
     #[DataProvider('parentlessKeyProvider')]
     public function r3SkipsParentlessKeys(string $key): void
     {
-        $tab = ['main()' => self::sym(1, 1000, 100)];
+        // main() 99/1000 = 9.9%：同样是为了不让 R1 命中，否则去掉父守卫后
+        // R3 产出的 main() 行会被去重吃掉，本测试就不再检验那个守卫
+        $tab = ['main()' => self::sym(1, 1000, 99)];
         $raw = [$key => ['ct' => 9999, 'wt' => 900]];
         $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
     }
