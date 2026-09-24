@@ -1041,7 +1041,14 @@ git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计
 > **NAN 不可达**；而 spec 的逐项守卫字面就是 `is_numeric`。给 6 条规则每条都加 `is_finite`
 > 是为不可达输入付真实复杂度。若将来接入聚合（第二步）产生了除法，再统一收紧。
 
-> **IR-2：新规则的两条硬性纪律。** 已实测（不是推测）：**Task 3 质量审查的变异结果：37 个变异中 25 个被杀死**（Task 2 基线是 18 中 10 存活）。
+> **IR-2：新规则的两条硬性纪律。** 已实测（不是推测）：**已记录但不修的性能项（#9）**：R4 是唯一对每条边键都做 `preg_match` 而无前置闸门的规则。
+实测 2 万条边 / 2 万个符号时 R4 单独 63–87ms（同机 R3 有闸门，39ms）；加一个
+`strpos($edge, '@') === false` 前置闸门约 3.1x（68 → 22ms）。
+**不修**：典型 profile 只有几千条边，对应单位数毫秒，不构成瓶颈；而收益同样随
+"含 @ 的边占比"变化。将来若确实要加，两行、可证等价（能匹配该正则的符号必然含 `@`），
+顺带还能去掉一次重复的 `(string)` 转换。
+
+**Task 3 质量审查的变异结果：37 个变异中 25 个被杀死**（Task 2 基线是 18 中 10 存活）。
 存活项里两条已确认为**真实数据可达、用户可见**的夹具缺口：
 
 1. **R4 的正则在下限之外没有夹具**：`/^(.+)@(\d+)$/` 改成 `/^(.+)@(\d)$/` 能存活整套测试，
@@ -1122,10 +1129,13 @@ git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计
     #[Test]
     public function mainSectionIsCappedByR1First(): void
     {
+        // wt 必须 >= excl_wt：写成 sym(1, 100, 400) 会（正确地）触发 R6，
+        // 审查者实测输出为 [R1],[R1],[R1],[R2],[R6],[R6],[R6] —— 断言虽仍通过
+        // （它们按 severity 过滤），但与本测试文件自己确立的约定矛盾。
         $tab = [
-            'a()' => self::sym(1, 100, 400),
-            'b()' => self::sym(1, 100, 300),
-            'c()' => self::sym(1, 100, 200),
+            'a()' => self::sym(1, 1000, 400),
+            'b()' => self::sym(1, 1000, 300),
+            'c()' => self::sym(1, 1000, 200),
             'loop()' => self::sym(5000, 10, 1),
         ];
         $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
@@ -1240,7 +1250,13 @@ Expected: PASS
 git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 
-> **IR-4：不要再给 R3 加内部上限。****R5 的命中条件（Task 4 若调试"补充区为空"需知）**：需 `$totals['pmu']` 与逐项
+> **IR-4：不要再给 R3 加内部上限。****去重只作用于主区。** 补充区**不要**去重：R4 的 `symbol` 刻意是空串，一旦对补充区按
+symbol 去重，所有递归结论会被折叠成一条。主区去重的前提是 R1/R2/R3 的 symbol 都非空。
+
+**`MAIN_LIMIT` / `SUPPLEMENT_LIMIT` 目前声明但未被使用**（`analyze()` 当前不封顶）。
+Task 6 的接入**必须排在 Task 4 之后**——否则报告页会一次刷出几百条结论。
+
+**R5 的命中条件（Task 4 若调试"补充区为空"需知）**：需 `$totals['pmu']` 与逐项
 `excl_pmu` **同时**存在。`xhprof_compute_flat_info` 恒会初始化 totals 的 `pmu`，
 但未采集内存指标时逐项没有 `excl_pmu` → R5 静默无结论。这是 IR-2「正向闸门」
 设计的预期行为，不是 bug。
@@ -1380,9 +1396,13 @@ Expected: FAIL —— `Call to undefined method ...::render_diagnosis()`
 
     if (!$main && !$supplement) {
       // 空白会让人以为功能坏了，所以显式说明并列出阈值
+      // 列全所有规则的阈值：空态的意义就是让用户区分"没超阈值"与"没分析"
       $echo_page .= '<p style="padding:12px 20px;color:#666">未发现明显瓶颈'
         . '（阈值：自身耗时 ≥ ' . (Analyzer::SHARE_THRESHOLD * 100) . '%'
-        . '、调用次数 ≥ ' . Analyzer::CALL_COUNT_THRESHOLD . '）</p>'
+        . '、调用次数 ≥ ' . Analyzer::CALL_COUNT_THRESHOLD
+        . '、边调用 ≥ ' . Analyzer::EDGE_COUNT_THRESHOLD
+        . '、被调方自身耗时 ≥ ' . (Analyzer::EDGE_SHARE_THRESHOLD * 100) . '%'
+        . '、峰值内存 ≥ ' . (Analyzer::PMU_SHARE_THRESHOLD * 100) . '%）</p>'
         . '</div></div>';
       return $echo_page;
     }
@@ -1550,10 +1570,22 @@ git commit -m "feat(analysis): 在单 run 报告页接入诊断区（diff/详情
 > ```
 >
 > 全负的情况下 `$total <= 0` 会恰好拦住全部规则，所以这是个**接线陷阱**而不是规则缺陷。
-> 两道防线：
-> 1. 调用点守 `!$diff_mode`（本任务步骤里已有）；
-> 2. `analyze()` 的 docblock 写明：三份入参必须来自**同一次**运行，diff 模式下
->    `profiler_report` 的局部变量已被改写为增量，不可直接传入。
+>
+> **还有第三条渲染路径（质量审查发现，`!$diff_mode && empty($rep_symbol)` 拦不住）：**
+> 多 run 聚合视图 `?run=a,b` 走的是 `XhprofDisplay.php:1284,1299` —— 它把
+> `xhprof_aggregate_runs(...)['raw']` 的结果喂给 `profiler_single_run_report()`，
+> 形态与单 run 完全一致（`$diff_mode` 为假、`$rep_symbol` 为空），所以诊断**会**在那里运行。
+> 实测聚合后的指标是小数 double（`wt=139.5`），`analyze()` 确实会产出结论。
+>
+> 这是**可接受的**：占比是"平均值的占比"，仍然有意义；R2 的平均次数会被 `number_format`
+> 四舍五入；R4 不受影响。但必须**显式接受**而不是碰巧发生 —— 本任务的测试里要加一条
+> `?run=<id1>,<id2>` 聚合视图的用例，断言诊断区出现且不报错。
+>
+> 两道防线（都要做，第 2 条目前只写在备注里，要落到实现）：
+> 1. 调用点守 `!$diff_mode && empty($rep_symbol)`（本任务步骤里已有）；
+> 2. **改 `Analyzer` 的类 docblock**：现在写的是"入参都是 `profiler_report()`
+>    里已有的局部变量"，这句正是 IR-1 说要纠正的措辞。改成明确警告：三份入参必须来自
+>    **同一次**运行；diff 模式下 `profiler_report` 的局部变量已被改写为增量，不可直接传入。
 ```
 
 ---
