@@ -1228,7 +1228,32 @@ for f in $(find src tests -name '*.php'); do php -l "$f" | grep -v "No syntax er
 grep -rn "readonly" src/ --include=*.php || echo "无 8.1+ 语法 ✓"
 ```
 
-- [ ] **Step 5: 真实数据目视验证**
+- [ ] **Step 5: 把新类加进 CI 的 PHP 8.0/8.1 加载检查**
+
+`.github/workflows/ci.yml` 的 smoke job 里有一份硬编码的类清单，用于在 8.0/8.1 上确认
+交付的类真的能加载。新增的 `Core\Analysis\Analyzer` 与 `Core\Analysis\Finding` 必须补进去，
+否则它们在底线上是否可加载无人验证。
+
+在 smoke job 的 `$classes` 数组里，紧随 `"Core\\StaticController",` 之后插入两行：
+
+```php
+            "Core\\Analysis\\Analyzer",
+            "Core\\Analysis\\Finding",
+```
+
+改完本地跑一遍 smoke 的第三步确认不报 `cannot load`：
+
+```bash
+php -r '
+require "vendor/autoload.php";
+$ns = "ErikWang2013\\Xhprof\\";
+foreach (["Core\\Analysis\\Analyzer","Core\\Analysis\\Finding"] as $c) {
+  if (!class_exists($ns.$c)) { fwrite(STDERR, "cannot load {$ns}{$c}\n"); exit(1); }
+}
+echo "analysis classes load ok\n";'
+```
+
+- [ ] **Step 6: 真实数据目视验证**
 
 用真实扩展跑一次，确认诊断区在真实 profile 上给出合理结论（不是空表也不是满屏噪声）：
 
@@ -1252,7 +1277,7 @@ echo "报告生成成功，长度 ", strlen($html), "\n";
 
 再手动构造一个 symbol_tab 喂给 `Analyzer::analyze()`，打印 findings，确认输出人类可读。
 
-- [ ] **Step 6: 提交（若 Step 1 过程中修了测试）**
+- [ ] **Step 7: 提交（若 Step 1 过程中修了测试，或在 Step 5 动了 ci.yml）**
 
 ```bash
 git add -A
