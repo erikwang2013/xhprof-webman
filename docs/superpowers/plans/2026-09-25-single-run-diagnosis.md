@@ -898,6 +898,32 @@ git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计
         $this->assertSame(Finding::SEVERITY_MAIN, $found[0]->severity);
         $this->assertSame(Finding::SEVERITY_SUPPLEMENT, $found[count($found) - 1]->severity);
     }
+
+    /**
+     * 主区按 symbol 去重。R3 是**逐边**产出的：同一个热点函数被多个父函数调用时
+     * 会产生多条同 symbol 结论，不去重时 MAIN_LIMIT=3 会被同一个函数占满，
+     * 「前三条」退化成「一个函数三遍」，把 R1/R2 的结论全部挤掉。
+     */
+    #[Test]
+    public function mainSectionDedupesRepeatedSymbols(): void
+    {
+        $tab = [
+            'main()' => self::sym(1, 1000, 100),
+            'hot()'  => self::sym(3000, 900, 900),
+        ];
+        $raw = [
+            'main()' => ['ct' => 1, 'wt' => 1000],
+            'a()==>hot()' => ['ct' => 1200, 'wt' => 500],
+            'b()==>hot()' => ['ct' => 1000, 'wt' => 300],
+            'c()==>hot()' => ['ct' => 800, 'wt' => 200],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        $symbols = array_map(fn($f) => $f->symbol, $main);
+        $this->assertSame(array_unique($symbols), $symbols, '主区不得出现重复 symbol');
+        $this->assertCount(1, array_filter($symbols, fn($s) => $s === 'hot()'), '同 symbol 只保留最严重的一条');
+    }
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -910,11 +936,36 @@ Expected: FAIL —— 封顶与顺序断言不成立
 `analyze()` 里组装后切片：
 
 ```php
-        $main       = array_slice($main, 0, self::MAIN_LIMIT);
+        // 先按 symbol 去重再切片：R3 逐边产出，同一个热点函数被多个父函数调用时
+        // 会有多条同 symbol 结论；先切片的话 MAIN_LIMIT 会被一个函数占满。
+        // 各规则内已按 score 降序，故每组保留第一条即最严重的那条。
+        $seen = array();
+        $deduped = array();
+        foreach ($main as $f) {
+            if (isset($seen[$f->symbol])) {
+                continue;
+            }
+            $seen[$f->symbol] = true;
+            $deduped[] = $f;
+        }
+
+        $main       = array_slice($deduped, 0, self::MAIN_LIMIT);
         $supplement = array_slice($supplement, 0, self::SUPPLEMENT_LIMIT);
 
         return array_merge($main, $supplement);
 ```
+
+**为什么去重必须先于切片**：R3 对每条符合条件的边各产出一条结论，热点函数若被 N 个
+父函数调用就有 N 条同 symbol 结论。`MAIN_LIMIT = 3` 时，不去重会让"前三条"变成
+"同一个函数三遍"，同时把 R1/R2 全部挤掉（已用三条指向同一 `hot()` 的边实测：
+R3 单独产出 3 条，主区被它占满）。去重后主区语义是**前 3 个问题函数**。
+
+代价：同一函数若同时命中 R1 与 R3，只保留先到的 R1（"自身耗时占比"信息量更大），
+R3 的具体调用方细节不再展示。这是刻意的取舍。
+
+**另注（刻意设计，不是疏漏）**：合并顺序是 R1 → R3 → R2 且切片从头取，所以
+**R2 是结构上最先被切掉的**。R1 是头部归因，R3 给出可操作的调用关系，
+R2 只是"调用次数偏高"的兜底信号。
 
 - [ ] **Step 4: 运行测试确认通过**
 
