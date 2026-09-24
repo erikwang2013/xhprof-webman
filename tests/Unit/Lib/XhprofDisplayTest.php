@@ -685,6 +685,14 @@ class XhprofDisplayTest extends TestCase
         self::assertStringNotContainsString('<script>', $html);
         self::assertStringContainsString('&quot;', $html);
         self::assertStringContainsString('&amp;', $html);
+
+        // rule 同样走 htmlspecialchars。Analyzer 只会产出 R1..R6，所以真实数据里
+        // 触发不了——但去掉这处转义目前 341 条测试全绿，故显式钉住。
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R<1&"x"', Finding::SEVERITY_MAIN, 'foo()', '标题', '细节', 1.0)],
+            []
+        );
+        self::assertStringContainsString('[R&lt;1&amp;&quot;x&quot;]', $html);
     }
 
     /** symbol 里的引号经 http_build_query 编码成 %22，逃不出 href 属性 */
