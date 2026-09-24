@@ -1745,7 +1745,10 @@ Expected: FAIL —— 单 run 报告里还没有"诊断结论"
     //    $url_params 则要靠该助手的**覆盖**语义来保证正确，等于依赖助手行为而非入参形状；
     // 3) 非 diff 模式下它带 run —— 这正是 render_diagnosis 第二个参数存在的理由。
     // （传 $url_params 也只是 URL 多一个无用的 all=1：全仓库唯一读 all 的地方是
-    //   full_report():866，符号详情页不读它。故属"不必"而非"错误"。）
+    //   full_report() 里那句 `if (!empty($url_params['all']))`，符号详情页不读它。
+    //   故属"不必"而非"错误"。）
+    // 注：此处刻意不写行号——本特性里同一个位置被三个 agent 在三个时刻读成 866/867/882，
+    //     引用代码片段比引用行号稳。
     if (!$diff_mode && empty($rep_symbol)) {
       $findings = Analyzer::analyze($symbol_tab, $run1_data, $totals);
       $echo_page .= XhprofDisplay::render_diagnosis($findings, $base_url_params);
