@@ -786,12 +786,13 @@ git commit -m "feat(analysis): 归因规则 R1 自身耗时 / R2 调用次数 / 
             'fib@2==>fib@3' => ['ct' => 1, 'wt' => 80],
         ];
         $tab = ['main()' => self::sym(1, 100, 10), 'fib@1' => self::sym(1, 90, 5)];
-        $found = Analyzer::analyze($tab, $raw, ['wt' => 100]);
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
 
-        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R4'));
         $this->assertCount(1, $hits);
-        $this->assertSame('fib', $hits[0]->symbol);
-        $this->assertStringContainsString('3', $hits[0]->title);
+        // 精确断言，不用 containsString：'3' 这种短串到处都是，弱断言放过错误实现
+        $this->assertSame('检测到 fib() 递归，最大深度 3', $hits[0]->title);
+        $this->assertSame(3.0, $hits[0]->score, 'score 应是最大深度');
+        $this->assertSame('', $hits[0]->symbol, 'R4 的符号必须为空，否则详情页链接必然死链');
     }
 
     /** 同名只出现在一个深度 → 不是递归 */
@@ -800,8 +801,7 @@ git commit -m "feat(analysis): 归因规则 R1 自身耗时 / R2 调用次数 / 
     {
         $raw = ['main()==>foo@1' => ['ct' => 1, 'wt' => 10]];
         $tab = ['main()' => self::sym(1, 100, 10)];
-        $found = Analyzer::analyze($tab, $raw, ['wt' => 100]);
-        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R4'));
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4'));
     }
 
     /** a@1==>b@2 是两个不同名字，不得判为递归 */
@@ -810,27 +810,27 @@ git commit -m "feat(analysis): 归因规则 R1 自身耗时 / R2 调用次数 / 
     {
         $raw = ['a@1==>b@2' => ['ct' => 1, 'wt' => 10]];
         $tab = ['main()' => self::sym(1, 100, 10)];
-        $found = Analyzer::analyze($tab, $raw, ['wt' => 100]);
-        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R4'));
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4'));
     }
 
     #[Test]
     public function r5FiresAtPmuShare(): void
     {
+        // 30/100 = 30%，恰好等于 PMU_SHARE_THRESHOLD 的边界
         $tab = ['hog()' => self::sym(1, 10, 1, 30)];
-        $found = Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 100]);
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 100]), 'R5');
 
-        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R5'));
         $this->assertCount(1, $hits);
         $this->assertSame('hog()', $hits[0]->symbol);
+        $this->assertSame('hog() 内存峰值 30B，占全局 30.0%', $hits[0]->title);
+        $this->assertSame(30.0, $hits[0]->score);
     }
 
     #[Test]
     public function r5SkippedWhenPmuTotalIsZero(): void
     {
         $tab = ['hog()' => self::sym(1, 10, 1, 30)];
-        $found = Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 0]);
-        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R5'));
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 0]), 'R5'));
     }
 
     /** R6 探针：excl_wt > wt 逻辑上不可能，健康数据下永不触发 */
@@ -838,19 +838,19 @@ git commit -m "feat(analysis): 归因规则 R1 自身耗时 / R2 调用次数 / 
     public function r6FiresWhenExclusiveExceedsInclusive(): void
     {
         $tab = ['bad()' => ['ct' => 1, 'wt' => 180, 'excl_wt' => 210, 'pmu' => 0, 'excl_pmu' => 0]];
-        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6');
 
-        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R6'));
         $this->assertCount(1, $hits);
         $this->assertSame('bad()', $hits[0]->symbol);
+        $this->assertSame('bad() 自身耗时 210μs 大于其总耗时 180μs，差 30μs', $hits[0]->title);
+        $this->assertSame(30.0, $hits[0]->score, 'score 应是差值');
     }
 
     #[Test]
     public function r6DoesNotFireWhenEqual(): void
     {
         $tab = ['ok()' => ['ct' => 1, 'wt' => 200, 'excl_wt' => 200, 'pmu' => 0, 'excl_pmu' => 0]];
-        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
-        $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R6'));
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6'));
     }
 ```
 
@@ -991,7 +991,16 @@ Expected: FAIL —— R4/R5/R6 用例拿到 0 条
                 'R6',
                 Finding::SEVERITY_SUPPLEMENT,
                 $h[1],
-                sprintf('%s 自身耗时 %s 大于其总耗时 %s', $h[1], self::ms($h[2]), self::ms($h[3])),
+                // 必须用微秒而不是 ms()：R6 抓的是亚毫秒级倒挂，
+                // 而 ms() 保留 1 位小数会把 210µs 与 180µs 都变成 0.2ms，
+                // 标题就成了自相矛盾的「0.2ms 大于 0.2ms」。
+                sprintf(
+                    '%s 自身耗时 %s 大于其总耗时 %s，差 %s',
+                    $h[1],
+                    number_format($h[2]) . 'μs',
+                    number_format($h[3]) . 'μs',
+                    number_format($h[0]) . 'μs'
+                ),
                 '自身耗时不应大于总耗时，采样数据或统计计算可能异常',
                 $h[0]
             );
@@ -1022,6 +1031,8 @@ Expected: PASS
 ```bash
 git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计时倒挂探针"
+```
+
 
 > **已知且**有意保留**的不对称**：`totals` 的 `wt`/`pmu` 用 `!is_finite($total) || $total <= 0`，
 > 而**逐项**指标（`symbol_tab`/`raw_data` 里的 `excl_wt`/`ct`/`wt`）只用 `is_numeric`。
@@ -1038,7 +1049,21 @@ git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计
 >   让这种情况可被发现的东西。
 > - **每条规则的闸门必须是"正向阈值"**（要求值大于某个正数）。这是"缺指标 → 无结论"
 >   而非"错结论"的保证；一条无条件产出的规则没有这层保护。
-```
+
+> **已知且**有意保留**的不对称**：`totals` 的 `wt`/`pmu` 用 `!is_finite($total) || $total <= 0`，
+> 而**逐项**指标（`symbol_tab`/`raw_data` 里的 `excl_wt`/`ct`/`wt`）只用 `is_numeric`。
+> 因此 NAN 若出现在逐项数据里（`is_numeric(NAN)` 为真）会渲染出 `nanms`/`nan%`。
+> 不修的理由：xhprof 的逐项指标来自 `microtime` 差值与 `memory_get_usage()` 计数，
+> **NAN 不可达**；而 spec 的逐项守卫字面就是 `is_numeric`。给 6 条规则每条都加 `is_finite`
+> 是为不可达输入付真实复杂度。若将来接入聚合（第二步）产生了除法，再统一收紧。
+> **IR-2：新规则的两条硬性纪律。** 已实测（不是推测）：
+> - **每个指标读都必须走 `isset()` + `is_numeric()`**。漏掉不会得到"错误的结论"——
+>   `(float) null === 0.0` 过不了任何**正向**闸门，所以结果是"该规则静默产出空"。
+>   但在 Laravel 这类把 `E_WARNING` 提升为 `ErrorException` 的框架里，`safe()` 会捕获它，
+>   于是**整条规则的结论全部消失且无迹可寻**。`safe()` 的日志（见 Task 2 Step 3b）正是
+>   让这种情况可被发现的东西。
+> - **每条规则的闸门必须是"正向阈值"**（要求值大于某个正数）。这是"缺指标 → 无结论"
+>   而非"错结论"的保证；一条无条件产出的规则没有这层保护。
 
 ---
 
