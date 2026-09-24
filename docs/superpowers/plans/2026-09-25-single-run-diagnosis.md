@@ -137,8 +137,36 @@ class AnalyzerTest extends TestCase
         $this->assertSame('细节', $f->detail);
         $this->assertSame(123.0, $f->score);
     }
+
+    /** 规则内部抛异常必须被隔离成空结果，不能冒泡到报告页 */
+    #[Test]
+    public function safeIsolatesRuleExceptions(): void
+    {
+        $m = new \ReflectionMethod(Analyzer::class, 'safe');
+        $m->setAccessible(true);
+
+        $result = $m->invoke(null, static function (): array {
+            throw new \RuntimeException('rule blew up');
+        });
+
+        $this->assertSame([], $result);
+    }
+
+    /** 正常返回的规则不受影响 */
+    #[Test]
+    public function safePassesThroughNormalResult(): void
+    {
+        $m = new \ReflectionMethod(Analyzer::class, 'safe');
+        $m->setAccessible(true);
+
+        $f = new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', 't', 'd', 1.0);
+        $this->assertSame([$f], $m->invoke(null, static fn(): array => [$f]));
+    }
 }
 ```
+
+> 这两条用反射调私有方法，脆弱但改名时会显式抛 `ReflectionException`（不是静默通过），
+> 且在规则尚未存在时是唯一能验证 `safe()` 的手段。保留。
 
 - [ ] **Step 2: 运行测试确认失败**
 
@@ -242,8 +270,27 @@ final class Analyzer
 
         return array();
     }
+
+    /**
+     * 单条规则的异常隔离。
+     *
+     * 输入守卫只能覆盖预想到的数据形态；规则内部的 bug（拼错数组键、
+     * 意外的数值类型等）仍会逃逸。诊断是旁路，它的失败模式不该是
+     * 整个报告页 500 —— 所以让规则各自失败，坏掉的那条产出空结果，
+     * 其余规则照常。
+     */
+    private static function safe(callable $rule): array
+    {
+        try {
+            return $rule();
+        } catch (\Throwable $e) {
+            return array();
+        }
+    }
 }
 ```
+
+> `safe()` 的日志版本见 Task 2 的 Step 3b——Task 1 先建立隔离本身。
 
 - [ ] **Step 5: 运行测试确认通过**
 
@@ -603,7 +650,8 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
             }
             // 先过便宜的闸门再解析：explode() 是这条循环的主要开销，
             // 而绝大多数边都会被 ct 阈值滤掉。两个判断相互独立，调换顺序无语义变化。
-            // 实测 5 万条边：parse 在前 47.6ms vs 闸门在前 10.7ms（4.5x）。
+            // 重排后实测约 2.3x（5 万条全被闸门滤掉的边，多轮取最小值，独立复现两轮；
+            // 绝对值随机器与数据分布浮动，方向稳定）。
             $ct = isset($info['ct']) && is_numeric($info['ct']) ? (float) $info['ct'] : 0.0;
             if ($ct < self::EDGE_COUNT_THRESHOLD) {
                 continue;
@@ -1572,7 +1620,15 @@ echo "报告生成成功，长度 ", strlen($html), "\n";
 
 再手动构造一个 symbol_tab 喂给 `Analyzer::analyze()`，打印 findings，确认输出人类可读。
 
-- [ ] **Step 7: 提交（若 Step 1 过程中修了测试，或在 Step 5 动了 ci.yml）**
+- [ ] > **已知测试隔离缺陷（不是本特性引入的，但会影响写测试的人）**：`Xhprof::markHyperfContext()`
+> 把 `private static bool $_hyperf` 置为 true，该静态**进程级且无重置入口**。任何 Hyperf 测试
+> 跑过之后，`Xhprof::getLogger()` 等取用器都会走协程 `Context` 分支而忽略 `Xhprof::$logger`，
+> 于是"只设 `Xhprof::$logger`"的测试会失败——且**只在全量套件里失败**，单独 `--filter` 跑是绿的。
+> 沿用代码库既有写法（`XhprofLibTest.php:35`）：同时设 `Xhprof::$logger` 与
+> `Context::set('xhprof.logger', ...)`，并在 `finally` 里两者都还原。
+> 生产环境不受影响（Hyperf 进程本来就是 Hyperf），故不为此新增 public 重置接口。
+
+**Step 7: 提交（若 Step 1 过程中修了测试，或在 Step 5 动了 ci.yml）**
 
 ```bash
 git add -A
