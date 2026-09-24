@@ -1821,14 +1821,28 @@ git commit -m "feat(analysis): 在单 run 报告页接入诊断区（diff/详情
 
 对每条规则，把阈值改成"永不触发"（例如 `SHARE_THRESHOLD = 999`），运行对应测试确认**失败**，然后还原。命令模板：
 
+**前置：先提交，再回退验证。** `git show HEAD:<path> > <path>` 只在改动**已进 HEAD** 之后
+才抗竞态；在提交之前执行会直接抹掉被测改动。故：确认工作树干净（`git status` 为空）再开始。
+
+**还原一律用 `git show HEAD:<path> > <path>`，不要用 `cp /tmp/xxx.bak`** ——
+`/tmp` 备份**本身可能抓在变异中途**（本特性里发生过两次，留下过 `. ''` 与 `$hrefA/$hrefB`
+这类在任何已提交版本里都不存在的状态）。用已提交 blob 覆盖则天然免疫。
+
+**每次变异前后各查三件事**：（a）锚点在原始文件中**恰好出现一次**；
+（b）变异后源文件**确实与 HEAD 不同**（挡链式 replace 互相抵消）；
+（c）`php -l` 通过，且**渲染/可观测输出确实不同**——0 行差异意味着探针没覆盖该路径
+（报 `PROBE BLIND`），不是变异等价。
+
 ```bash
-cp src/Core/Analysis/Analyzer.php /tmp/Analyzer.bak
+git status --porcelain                       # 必须为空
 python3 -c "
 p='src/Core/Analysis/Analyzer.php'; s=open(p).read()
-s=s.replace('const SHARE_THRESHOLD = 0.10;','const SHARE_THRESHOLD = 999.0;')
-open(p,'w').write(s)"
+assert s.count('const SHARE_THRESHOLD = 0.10;') == 1
+open(p,'w').write(s.replace('const SHARE_THRESHOLD = 0.10;','const SHARE_THRESHOLD = 999.0;',1))"
+php -l src/Core/Analysis/Analyzer.php
+diff <(git show HEAD:src/Core/Analysis/Analyzer.php) src/Core/Analysis/Analyzer.php >/dev/null && echo 'PROBLEM: 未生效' || echo 'ok: 确已变异'
 vendor/bin/phpunit --filter r1 2>&1 | grep -qE '^(FAILURES|ERRORS)!' && echo 'FAIL (good)' || echo 'PASS <<< PROBLEM'
-cp /tmp/Analyzer.bak src/Core/Analysis/Analyzer.php
+git show HEAD:src/Core/Analysis/Analyzer.php > src/Core/Analysis/Analyzer.php
 ```
 
 其余五条同样做法，逐条替换并各自确认转红：
@@ -1846,14 +1860,17 @@ s.replace('if (count($ds) < 2) {', 'if (count($ds) < 999) {')
 s.replace('if ($ex <= $in) {', 'if (true) {')   # 变量名以当前代码为准
 ```
 
-每条改完都要看到 `FAIL (good)`，然后 `cp /tmp/Analyzer.bak src/Core/Analysis/Analyzer.php` 还原后再改下一条。
+每条改完都要看到 `FAIL (good)`，然后 `git show HEAD:src/Core/Analysis/Analyzer.php > src/Core/Analysis/Analyzer.php`
+还原（并 `md5sum` 比对）后再改下一条。
 
 **每条都必须看到 `FAIL (good)`。** 任何一条报 `PASS <<< PROBLEM` 就说明该测试没有真正守住这条规则，要修测试。
 
 - [ ] **Step 2: 确认源码已完全还原**
 
 ```bash
-diff /tmp/Analyzer.bak src/Core/Analysis/Analyzer.php && echo "已还原 ✓"
+md5sum src/Core/Analysis/Analyzer.php
+git show HEAD:src/Core/Analysis/Analyzer.php | md5sum
+git status --porcelain    # 必须为空
 ```
 
 - [ ] **Step 3: 全量测试 + 最高诊断级别**
@@ -1937,7 +1954,7 @@ echo "报告生成成功，长度 ", strlen($html), "\n";
 
 再手动构造一个 symbol_tab 喂给 `Analyzer::analyze()`，打印 findings，确认输出人类可读。
 
-- [ ] > **已知测试隔离缺陷（不是本特性引入的，但会影响写测试的人）**：`Xhprof::markHyperfContext()`
+> **已知测试隔离缺陷（不是本特性引入的，但会影响写测试的人）**：`Xhprof::markHyperfContext()`
 > 把 `private static bool $_hyperf` 置为 true，该静态**进程级且无重置入口**。任何 Hyperf 测试
 > 跑过之后，`Xhprof::getLogger()` 等取用器都会走协程 `Context` 分支而忽略 `Xhprof::$logger`，
 > 于是"只设 `Xhprof::$logger`"的测试会失败——且**只在全量套件里失败**，单独 `--filter` 跑是绿的。
@@ -1945,7 +1962,7 @@ echo "报告生成成功，长度 ", strlen($html), "\n";
 > `Context::set('xhprof.logger', ...)`，并在 `finally` 里两者都还原。
 > 生产环境不受影响（Hyperf 进程本来就是 Hyperf），故不为此新增 public 重置接口。
 
-**先确认 `xdebug.mode` 是 off。** 本开发环境默认 `xdebug.mode=profile`，实测同一段循环
+> **先确认 `xdebug.mode` 是 off。** 本开发环境默认 `xdebug.mode=profile`，实测同一段循环
 开剖析 58.3ms、关掉 6.5ms（**9x**）；审查者另测到相同循环 14x、`preg_match` 4.3x。
 **膨胀系数随操作而异**，所以不仅绝对值失真，**跨操作的比值也会被扭曲**。
 本特性此前那个"逐字拷贝的循环与真实方法相差 1.85x、原因未查明"的悬案，很可能就是它。
