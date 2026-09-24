@@ -1251,6 +1251,24 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 ```
 
+> **Task 6 的两条布局事项（Task 5 实现者提出，我已核实）。**
+>
+> 1. **`.xp-main` 不会嵌套——无需处理。** 实现者担心卡片自带 `<div class="xp-main">`
+>    而报告体也有一个（`full_report` 在 `XhprofDisplay.php:766` 开、末尾闭），
+>    叠起来会让内边距翻倍。**但我核实后不成立**：本计划的拼接点在 `profiler_report`
+>    内部（run 描述之后），而 `full_report` 是在 `:466` 被 **追加**到同一个 `$echo_page`——
+>    两者的 `.xp-main` 是**兄弟关系**，各拿各自的 24px。
+>    （`.xp-main` 本身是 `padding:24px; max-width:1280px; margin:0 auto`，
+>    `xhprof.css:129`。）**不要为此改渲染结构**；但 Task 6 完成后值得目视一次间距。
+> 2. **一个卡片里有三条 `.xp-card-title` 会看起来像三张卡的页眉。**
+>    `.xp-card-title` 带 `border-bottom` + 条纹底色（`xhprof.css:143-149`），
+>    所以「诊断结论」「为什么慢」「其他发现」会渲染成三条相同的横条。
+>    可以接受，但值得**刻意决定**，而不是让它就这样发生。
+>
+> **另注**：Task 5 的顺序测试只钉住**分区之间**的顺序（主区在前），
+> **分区内**的顺序仍无人守——不过渲染层不重排，所以分区内顺序就是 `Analyzer` 给序，
+> 而那个顺序由 Task 4 的测试守着。
+
 > **Task 5/6 的集成约束（Task 4 复审）。**
 > - **截断与"该规则没触发"不可区分**：`analyze()` 只返回截断后的列表，
 >   不携带"R2 还有 4 条被省略"。所以「为什么慢」卡片完全可能只有三条 R1 行，
