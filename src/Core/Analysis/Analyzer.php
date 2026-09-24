@@ -166,9 +166,14 @@ final class Analyzer
             if (!is_array($info)) {
                 continue;
             }
-            // 先过便宜的闸门再解析：explode() 是这条循环的主要开销，
-            // 而绝大多数边都会被 ct 阈值滤掉。两个判断相互独立，调换顺序无语义变化。
-            // 实测 5 万条边：parse 在前 47.6ms vs 闸门在前 10.7ms（4.5x）。
+            // 先过闸门再解析：被闸门滤掉的边就不必解析键。两个判断相互独立，无语义变化。
+            //
+            // 收益来自闸门**有选择性**，不是来自它"便宜"——实测闸门
+            // (isset+is_numeric+(float)) 与 explode 花费相当（0.84-0.96x）。
+            // 记每条边闸门 g、解析 p、被滤比例 f，比值 = (p+g) / (g + p·(1-f))：
+            //   f→1（边基本都被滤掉）时上限 1 + p/g ≈ 2x
+            //   f→0（边大多能过闸门）时趋近 1x，等于白重排
+            // 所以不要为这条优化预算 2x 以上的收益。
             $ct = isset($info['ct']) && is_numeric($info['ct']) ? (float) $info['ct'] : 0.0;
             if ($ct < self::EDGE_COUNT_THRESHOLD) {
                 continue;
