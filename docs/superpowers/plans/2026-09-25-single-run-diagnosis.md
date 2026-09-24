@@ -337,6 +337,26 @@ git commit -m "feat(analysis): Finding 值对象与 Analyzer 骨架（永不抛�
         }
     }
 
+    /**
+     * 逐项粒度：一个坏键不能连带丢掉 R3 的其他有效结论。
+     * 整型数组键（PHP 会把 "123" 这类键转成 int）会让边解析抛 TypeError，
+     * 而 safe() 的兜底粒度是**整条规则**——所以 R3 必须自己把键转成 string。
+     */
+    #[Test]
+    public function r3SurvivesIntegerKeyAmongValidEdges(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 100)];
+        $raw = [
+            0 => ['ct' => 999, 'wt' => 1],              // 坏键：会被转成 int
+            'main()==>foo()' => ['ct' => 600, 'wt' => 400],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+
+        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R3'));
+        $this->assertCount(1, $hits, '坏键不得吞掉同一条规则里其他有效边的结论');
+        $this->assertStringContainsString('main() → foo()', $hits[0]->title);
+    }
+
     /** 裸 main() 键没有父，不能当成边来处理 */
     #[Test]
     public function r3SkipsBareMainKey(): void
@@ -367,9 +387,10 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
         $totals   = is_array($totals) ? $totals : array();
         $raw_data = is_array($raw_data) ? $raw_data : array();
 
-        // ↑ 这两行归一化**不要**因为有了 safe() 就去掉：foreach 遍历非数组
-        //   只发 PHP warning，不是 Throwable，safe() 根本不会介入；
-        //   归一化到入口一次，比让 R3/R4 各自守着更稳。
+        // ↑ 这两行归一化**不要**因为有了 safe() 就去掉。规则签名是 `array $raw_data`，
+        //   在 strict_types 下传 false 会在调用边界抛 TypeError；safe() 虽然会把它兜成
+        //   空结果（所以测试看不出差别），但那等于把输入契约寄托在"异常被吞掉"上面。
+        //   归一化到入口一次，规则就能放心假设入参是数组。
 
         // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
         // 不会连累其他规则，更不会冒泡成报告页 500。
@@ -468,7 +489,10 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
             if (!is_array($info)) {
                 continue;
             }
-            list($parent, $child) = \ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib::xhprof_parse_parent_child($edge);
+            // 必须 (string)：PHP 会把 "123" 这类数组键转成 int，整型传给
+            // xhprof_parse_parent_child 内部的 explode() 会抛 TypeError。
+            // safe() 的粒度是整条规则，一个坏键会连带丢掉 R3 的全部有效结论。
+            list($parent, $child) = XhprofLib::xhprof_parse_parent_child((string) $edge);
             if ($parent === null || $parent === '') {
                 continue;   // 裸 main() 键没有父，不是边
             }
@@ -526,11 +550,12 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
 Run: `vendor/bin/phpunit --filter AnalyzerTest`
 Expected: PASS
 
-**同时确认入口那两行归一化真的被守护**：临时去掉
-`$raw_data = is_array($raw_data) ? $raw_data : array();`，跑
-`vendor/bin/phpunit --filter analyzeNeverThrowsOnMalformedInput` —— 应该变红
-（`foreach(false)` 发 warning，`failOnWarning="true"` 判红）。看到红色后立刻还原。
-这条用例的标签声称守护归一化，只有在归一化实现之后才可验证，所以放这一步。
+**关于入口归一化的可验证性（结论：观察不到，别再试）：** 去掉
+`$raw_data = is_array($raw_data) ? $raw_data : array();` 后测试**仍然是绿的** ——
+规则签名是 `array $raw_data`，strict_types 下传 false 会在调用边界抛 TypeError，
+被 `safe()` 兜成空结果，于是归一化在 `analyze()` 的公共面上不可观测。
+保留这两行是因为它们把输入契约定在入口、而不是寄托于异常吞没；
+但不要为它写"回退验证"，也不要声称有测试守护它。
 
 - [ ] **Step 5: 提交**
 
