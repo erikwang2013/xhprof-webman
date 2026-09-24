@@ -648,10 +648,14 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
             if (!is_array($info)) {
                 continue;
             }
-            // 先过便宜的闸门再解析：explode() 是这条循环的主要开销，
-            // 而绝大多数边都会被 ct 阈值滤掉。两个判断相互独立，调换顺序无语义变化。
-            // 重排后实测约 2.3x（5 万条全被闸门滤掉的边，多轮取最小值，独立复现两轮；
-            // 绝对值随机器与数据分布浮动，方向稳定）。
+            // 先过闸门再解析：被闸门滤掉的边就不必解析键。两个判断相互独立，无语义变化。
+            //
+            // 收益来自闸门**有选择性**，不是来自它"便宜"——实测闸门
+            // (isset+is_numeric+(float)) 与 explode 花费相当（0.84-0.96x）。
+            // 记每条边闸门 g、解析 p、被滤比例 f，比值 = (p+g) / (g + p·(1-f))：
+            //   f→1（边基本都被滤掉）时上限 1 + p/g ≈ 2x
+            //   f→0（边大多能过闸门）时趋近 1x，等于白重排
+            // 所以不要为这条优化预算 2x 以上的收益。
             $ct = isset($info['ct']) && is_numeric($info['ct']) ? (float) $info['ct'] : 0.0;
             if ($ct < self::EDGE_COUNT_THRESHOLD) {
                 continue;
@@ -1018,6 +1022,13 @@ Expected: PASS
 ```bash
 git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计时倒挂探针"
+
+> **已知且**有意保留**的不对称**：`totals` 的 `wt`/`pmu` 用 `!is_finite($total) || $total <= 0`，
+> 而**逐项**指标（`symbol_tab`/`raw_data` 里的 `excl_wt`/`ct`/`wt`）只用 `is_numeric`。
+> 因此 NAN 若出现在逐项数据里（`is_numeric(NAN)` 为真）会渲染出 `nanms`/`nan%`。
+> 不修的理由：xhprof 的逐项指标来自 `microtime` 差值与 `memory_get_usage()` 计数，
+> **NAN 不可达**；而 spec 的逐项守卫字面就是 `is_numeric`。给 6 条规则每条都加 `is_finite`
+> 是为不可达输入付真实复杂度。若将来接入聚合（第二步）产生了除法，再统一收紧。
 
 > **IR-2：新规则的两条硬性纪律。** 已实测（不是推测）：
 > - **每个指标读都必须走 `isset()` + `is_numeric()`**。漏掉不会得到"错误的结论"——
@@ -1627,6 +1638,12 @@ echo "报告生成成功，长度 ", strlen($html), "\n";
 > 沿用代码库既有写法（`XhprofLibTest.php:35`）：同时设 `Xhprof::$logger` 与
 > `Context::set('xhprof.logger', ...)`，并在 `finally` 里两者都还原。
 > 生产环境不受影响（Hyperf 进程本来就是 Hyperf），故不为此新增 public 重置接口。
+
+**性能结论只能同进程 A/B，不能跨仪器取绝对值。** 本特性开发中出现过一次错误结论：
+把 `explode` 放进一个没有其他逐边工作的裸循环计时，得出 4.5x；同进程 A/B 复测只有
+约 2.3x。同一台机器上，同一段循环写成"逐字拷贝"与"真实方法"都能差 1.85x（原因未查明，
+但它在比值里约掉了）。因此**任何性能论断都必须是同进程内的 A/B 比值**，绝不用不同脚本、
+不同负载下的绝对耗时相比。
 
 **Step 7: 提交（若 Step 1 过程中修了测试，或在 Step 5 动了 ci.yml）**
 
