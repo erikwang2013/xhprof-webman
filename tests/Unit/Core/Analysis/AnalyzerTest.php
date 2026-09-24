@@ -44,6 +44,31 @@ class AnalyzerTest extends TestCase
         ];
     }
 
+    /** 规则内部抛异常必须被隔离成空结果，不能冒泡到报告页 */
+    #[Test]
+    public function safeIsolatesRuleExceptions(): void
+    {
+        $m = new \ReflectionMethod(Analyzer::class, 'safe');
+        $m->setAccessible(true);
+
+        $result = $m->invoke(null, static function (): array {
+            throw new \RuntimeException('rule blew up');
+        });
+
+        $this->assertSame([], $result);
+    }
+
+    /** 正常返回的规则不受影响 */
+    #[Test]
+    public function safePassesThroughNormalResult(): void
+    {
+        $m = new \ReflectionMethod(Analyzer::class, 'safe');
+        $m->setAccessible(true);
+
+        $f = new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', 't', 'd', 1.0);
+        $this->assertSame([$f], $m->invoke(null, static fn(): array => [$f]));
+    }
+
     #[Test]
     public function findingHoldsValues(): void
     {

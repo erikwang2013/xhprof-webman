@@ -50,4 +50,21 @@ final class Analyzer
 
         return array();
     }
+
+    /**
+     * 单条规则的异常隔离。
+     *
+     * 输入守卫只能覆盖预想到的数据形态；规则内部的 bug（拼错数组键、
+     * 意外的数值类型等）仍会逃逸。诊断是旁路，它的失败模式不该是
+     * 整个报告页 500 —— 所以让规则各自失败，坏掉的那条产出空结果，
+     * 其余规则照常。
+     */
+    private static function safe(callable $rule): array
+    {
+        try {
+            return $rule();
+        } catch (\Throwable $e) {
+            return array();
+        }
+    }
 }
