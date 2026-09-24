@@ -841,6 +841,9 @@ class XhprofDisplayTest extends TestCase
         );
 
         self::assertStringContainsString('诊断结论', $html);
+        // 断言「为什么慢」而不是「诊断结论」：空态同样渲染「诊断结论」，
+        // 所以前者才区分得出「渲染出真实结论」与「analyze() 拿到错参数返回空」
+        self::assertStringContainsString('为什么慢', $html);
         // $echo_page 是逐段拼接的，拼接顺序即 DOM 顺序：卡片必须在 run 描述之后
         self::assertLessThan(strpos($html, '诊断结论'), strpos($html, 'Run #'), '卡片必须在 run 描述之后');
     }
@@ -900,6 +903,9 @@ class XhprofDisplayTest extends TestCase
         );
 
         self::assertStringContainsString('诊断结论', $html);
+        // 断言「为什么慢」而不是「诊断结论」：空态同样渲染「诊断结论」，
+        // 所以前者才区分得出「渲染出真实结论」与「analyze() 拿到错参数返回空」
+        self::assertStringContainsString('为什么慢', $html);
     }
 
     /** 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢" */
