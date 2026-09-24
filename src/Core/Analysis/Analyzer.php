@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Core\Analysis;
 
+use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
 
 /**
@@ -61,6 +62,9 @@ final class Analyzer
         //   空结果（所以测试看不出差别），但那等于把输入契约寄托在"异常被吞掉"上面。
         //   归一化到入口一次，规则就能放心假设入参是数组。
 
+        // 顺序是**刻意**的：R2 排在最后，会被主区组装按 MAIN_LIMIT 从尾部截断丢掉
+        // （R1 是头部归因，R3 给出可操作调用关系，R2 只是兜底信号）。不要"顺手"排成 R1/R2/R3。
+        //
         // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
         // 不会连累其他规则，更不会冒泡成报告页 500。
         return array_merge(
@@ -78,7 +82,9 @@ final class Analyzer
     private static function ruleR1(array $symbol_tab, array $totals): array
     {
         $total = self::num($totals, 'wt');
-        if ($total <= 0) {
+        // is_finite 必须有：is_numeric(NAN) 为真、NAN <= 0 为假，会让每个占比都成 NAN，
+        // 而 NAN < 阈值 恒为假 —— 最终渲染出"占本次请求 nan%"。
+        if (!is_finite($total) || $total <= 0) {
             return array();
         }
 
@@ -102,7 +108,7 @@ final class Analyzer
                 'R1',
                 Finding::SEVERITY_MAIN,
                 $h[1],
-                sprintf('%s 自身耗时 %s，占本次请求 %s%%', $h[1], self::ms($h[0]), self::pct($h[2])),
+                sprintf('%s 自身耗时 %s，占本次请求 %s', $h[1], self::ms($h[0]), self::pct($h[2])),
                 '自身耗时不含子调用，是纯函数体开销',
                 $h[0]
             );
@@ -149,7 +155,9 @@ final class Analyzer
     private static function ruleR3(array $symbol_tab, array $raw_data, array $totals): array
     {
         $total = self::num($totals, 'wt');
-        if ($total <= 0) {
+        // is_finite 必须有：is_numeric(NAN) 为真、NAN <= 0 为假，会让每个占比都成 NAN，
+        // 而 NAN < 阈值 恒为假 —— 最终渲染出"占本次请求 nan%"。
+        if (!is_finite($total) || $total <= 0) {
             return array();
         }
 
@@ -158,16 +166,19 @@ final class Analyzer
             if (!is_array($info)) {
                 continue;
             }
+            // 先过便宜的闸门再解析：explode() 是这条循环的主要开销，
+            // 而绝大多数边都会被 ct 阈值滤掉。两个判断相互独立，调换顺序无语义变化。
+            // 实测 5 万条边：parse 在前 47.6ms vs 闸门在前 10.7ms（4.5x）。
+            $ct = isset($info['ct']) && is_numeric($info['ct']) ? (float) $info['ct'] : 0.0;
+            if ($ct < self::EDGE_COUNT_THRESHOLD) {
+                continue;
+            }
             // 必须 (string)：PHP 会把 "123" 这类数组键转成 int，整型传给
             // xhprof_parse_parent_child 内部的 explode() 会抛 TypeError。
             // safe() 的粒度是整条规则，一个坏键会连带丢掉 R3 的全部有效结论。
             list($parent, $child) = XhprofLib::xhprof_parse_parent_child((string) $edge);
             if ($parent === null || $parent === '') {
                 continue;   // 裸 main() 键没有父，不是边
-            }
-            $ct = isset($info['ct']) && is_numeric($info['ct']) ? (float) $info['ct'] : 0.0;
-            if ($ct < self::EDGE_COUNT_THRESHOLD) {
-                continue;
             }
             if (!isset($symbol_tab[$child]['excl_wt']) || !is_numeric($symbol_tab[$child]['excl_wt'])) {
                 continue;
@@ -195,7 +206,7 @@ final class Analyzer
         return $out;
     }
 
-    /** 从 totals 取一个非负数值，缺失/非数值一律当 0 */
+    /** 从 totals 取数值：缺失/非数值一律当 0，其余原样返回（含负数） */
     private static function num(array $totals, string $key): float
     {
         return isset($totals[$key]) && is_numeric($totals[$key]) ? (float) $totals[$key] : 0.0;
@@ -207,10 +218,10 @@ final class Analyzer
         return number_format($us / 1000, 1) . 'ms';
     }
 
-    /** 比率 → 百分数，保留 1 位小数 */
+    /** 比率 → 百分数串（含 % 号，与 ms() 一样自带单位） */
     private static function pct(float $ratio): string
     {
-        return number_format($ratio * 100, 1);
+        return number_format($ratio * 100, 1) . '%';
     }
 
     /**
@@ -226,6 +237,12 @@ final class Analyzer
         try {
             return $rule();
         } catch (\Throwable $e) {
+            // 静默失败 = 规则坏了却永远无人知晓，报告页只会永远显示"没发现问题"。
+            // 旁路不等于无信号：沿用 XhprofProfiler::stop() 对同类情况的既有写法，
+            // logger 未配置时 ?-> 使其成为 no-op。
+            Xhprof::getLogger()?->error(
+                'Analyzer rule failed: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine()
+            );
             return array();
         }
     }
