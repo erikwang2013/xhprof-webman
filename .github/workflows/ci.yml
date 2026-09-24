@@ -65,6 +65,8 @@ jobs:
             "Core\\Xhprof",
             "Core\\XhprofProfiler",
             "Core\\StaticController",
+            "Core\\Analysis\\Analyzer",
+            "Core\\Analysis\\Finding",
             "Core\\XhprofLib\\Utils\\XhprofLib",
             "Core\\XhprofLib\\Utils\\XHProfRunsDefault",
             "Core\\XhprofLib\\Display\\XhprofDisplay",
