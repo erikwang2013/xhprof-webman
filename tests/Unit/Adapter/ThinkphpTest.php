@@ -28,19 +28,24 @@ use ErikWang2013\Xhprof\Thinkphp\Middleware;
 
 /**
  * phpredis 可用时声明内存版 \Redis 子类，用于直连路径测试。
- * 签名与 phpredis 5.x 保持一致（参数无类型、del 为 $key + 变参）。
+ *
+ * 签名必须同时兼容 phpredis 5.x 与 6.x，否则子类声明直接 fatal。规则（已实测）：
+ *  - 参数可以放宽（省略类型 = 最宽），但必须补齐父类的**全部**参数
+ *  - 父类声明了返回类型时，子类**必须**也声明，且只能是其子集
+ * 6.x 的 decr/incr 是 decr(string $key, int $by = 1): Redis|int|false，
+ * 5.x 则是 decr($key) 且无返回类型。
  */
 if (extension_loaded('redis')) {
     class FakeRedis extends \Redis
     {
         public array $store = [];
 
-        public function get($key)
+        public function get($key): mixed
         {
             return $this->store[$key] ?? null;
         }
 
-        public function set($key, $value, $ttl = 0): bool
+        public function set($key, $value, $options = null): bool
         {
             $this->store[$key] = $value;
             return true;
@@ -55,35 +60,38 @@ if (extension_loaded('redis')) {
             return $out;
         }
 
-        public function incr($key): int
+        public function incr($key, $by = 1): int
         {
-            $this->store[$key] = (int) ($this->store[$key] ?? 0) + 1;
+            $this->store[$key] = (int) ($this->store[$key] ?? 0) + $by;
             return $this->store[$key];
         }
 
-        public function decr($key): int
+        public function decr($key, $by = 1): int
         {
-            $this->store[$key] = (int) ($this->store[$key] ?? 0) - 1;
+            $this->store[$key] = (int) ($this->store[$key] ?? 0) - $by;
             return $this->store[$key];
         }
 
-        public function lPush($key, $value): int
+        public function lPush($key, ...$elements): int
         {
             $list = $this->store[$key] ?? [];
-            array_unshift($list, $value);
+            foreach ($elements as $el) {
+                array_unshift($list, $el);
+            }
             $this->store[$key] = $list;
             return count($list);
         }
 
-        public function rPop($key)
+        public function rPop($key, $count = 0): string|bool
         {
+            // 空列表返回 false —— 与真实 phpredis 一致（不是 null）
             if (empty($this->store[$key])) {
-                return null;
+                return false;
             }
             $list = $this->store[$key];
             $value = array_pop($list);
             $this->store[$key] = $list;
-            return $value;
+            return (string) $value;
         }
 
         public function lRange($key, $start, $end): array

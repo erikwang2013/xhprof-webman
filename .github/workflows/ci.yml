@@ -43,10 +43,13 @@ jobs:
       - name: Required extensions are really loaded
         run: |
           php -r 'foreach (["xhprof", "redis"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing extension: $e\n"); exit(1); } } echo "extensions ok\n";'
-      # 不加 --ignore-platform-reqs：此处的 composer install 本身就是
-      # "php >= 8.0 + ext-xhprof + ext-redis 在本版本上确实可满足"的证明。
-      - name: Install runtime dependencies only
-        run: composer install --no-dev --no-interaction --prefer-dist
+      # 只生成 autoloader。不能写 composer install --no-dev：--no-dev 并不会让
+      # composer 跳过 require-dev 的依赖求解（官方原话：no-dev 只代表不安装），
+      # 而 phpunit/phpunit ^11.5 要求 php >= 8.2，在 8.0/8.1 上解析阶段就直接失败。
+      # 本项目 require 里没有任何包（仅 php + 两个扩展），故只需 autoloader；
+      # dump-autoload 不做依赖求解，正合此处所需。
+      - name: Generate autoloader
+        run: composer dump-autoload --no-interaction
       - name: No post-8.0 functions in src
         run: |
           if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ --include='*.php'; then
