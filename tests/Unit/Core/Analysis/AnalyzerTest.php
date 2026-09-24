@@ -367,6 +367,31 @@ class AnalyzerTest extends TestCase
         return ['裸 main() 键' => ['main()'], '==>main() 形式' => ['==>main()']];
     }
 
+    /**
+     * R3 内部**不得**加封顶（plan IR-4）。R3 逐边产出，同一热点的多条同 symbol
+     * 结论最终会被主区去重折叠，所以内部封顶丢弃的是**本可保留下来的不同 symbol**
+     * ——本例中 d() → cold() 这条热点边会整个消失。
+     */
+    #[Test]
+    public function r3IsNotCappedInternally(): void
+    {
+        $tab = [
+            'hot()'  => self::sym(1, 1000, 200),   // R1（20%）且是 R3 的被调方
+            'cold()' => self::sym(600, 100, 60),   // R3 的被调方（6%）
+            'z()'    => self::sym(2000, 50, 1),    // R2
+        ];
+        $raw = [
+            'a()==>hot()'  => ['ct' => 900, 'wt' => 500],
+            'b()==>hot()'  => ['ct' => 900, 'wt' => 400],
+            'c()==>hot()'  => ['ct' => 900, 'wt' => 300],
+            'd()==>cold()' => ['ct' => 600, 'wt' => 100],   // wt 最低 → 会被内部封顶切掉
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+        $main = array_values(array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_MAIN));
+
+        $this->assertSame(['hot()', 'cold()', 'z()'], array_map(fn($f) => $f->symbol, $main));
+    }
+
     #[Test]
     public function r4DetectsRecursionAndReportsMaxDepth(): void
     {
@@ -691,7 +716,13 @@ class AnalyzerTest extends TestCase
         $found = Analyzer::analyze($tab, [], ['wt' => 1000, 'pmu' => 100]);
         $supp = array_filter($found, fn($f) => $f->severity === Finding::SEVERITY_SUPPLEMENT);
 
-        $this->assertCount(Analyzer::SUPPLEMENT_LIMIT, $supp);
+        // 断言字面量 3 而不是常量：用同一个常量断言会随它一起漂移而恒真
+        $this->assertCount(3, $supp, '补充区上限是 spec 值 3');
+        $this->assertSame(
+            ['hog0()', 'hog1()', 'hog2()'],
+            array_map(fn($f) => $f->symbol, array_values($supp)),
+            'usort 在 PHP 8 稳定、五个 hog 同分，故顺序确定'
+        );
     }
 
     /**

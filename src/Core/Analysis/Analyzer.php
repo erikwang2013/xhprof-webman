@@ -80,7 +80,8 @@ final class Analyzer
 
         // 先按 symbol 去重再切片：R3 逐边产出，同一个热点函数被多个父函数调用时
         // 会有多条同 symbol 结论；先切片的话 MAIN_LIMIT 会被一个函数占满。
-        // 各规则内已按 score 降序，故每组保留第一条即最严重的那条。
+        // 各规则内已按 score 降序，故每组保留第一条即该规则内最严重的那条；
+        // 跨规则碰撞（同一 symbol 同时命中 R1 与 R3）时由合并顺序决定，R1 优先。
         $seen = array();
         $deduped = array();
         foreach ($main as $f) {
