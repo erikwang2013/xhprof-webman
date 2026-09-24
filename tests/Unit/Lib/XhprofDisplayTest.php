@@ -841,9 +841,20 @@ class XhprofDisplayTest extends TestCase
         );
 
         self::assertStringContainsString('诊断结论', $html);
+        // $echo_page 是逐段拼接的，拼接顺序即 DOM 顺序：卡片必须在 run 描述之后
+        self::assertLessThan(strpos($html, '诊断结论'), strpos($html, 'Run #'), '卡片必须在 run 描述之后');
     }
 
-    /** diff 模式下差值为负，占比类表述失去意义 —— 不显示诊断区 */
+    /**
+     * 这条测试的真正职责是**数据完整性**，不是"文案上不想在 diff 里显示卡片"。
+     *
+     * 单 run 路径上 $symbol_tab/$totals 都由 $run1_data 派生（:346 附近），没有任何东西
+     * 改写它们——所以那里的接线错误是**不可达**的。`if ($diff_mode)` 是**唯一**会把这两个
+     * 局部变量换成增量的地方。因此这条测试是**唯一**能抓住"喂错数据"的测试。
+     *
+     * 若把它读成文案问题，最自然的"改进"就是去掉守卫、让卡片也出现在 diff 模式——
+     * 而那正是静默损坏路径：增量做分母、原始 $run1_data 做边表，R3 标题里出现负耗时。
+     */
     #[Test]
     public function diffReportHasNoDiagnosisSection(): void
     {
