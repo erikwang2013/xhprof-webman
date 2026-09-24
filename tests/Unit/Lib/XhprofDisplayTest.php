@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Lib;
 
 require_once __DIR__ . '/../../Fixtures/Fakes.php';
 
+use ErikWang2013\Xhprof\Core\Analysis\Finding;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
@@ -615,5 +616,91 @@ class XhprofDisplayTest extends TestCase
 
         self::assertStringContainsString('main()', $html);
         self::assertStringContainsString('运行报告', $html);
+    }
+
+    #[Test]
+    public function renderDiagnosisShowsFindings(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', 'foo() 自身耗时 780.0ms，占本次请求 43.0%', '自身耗时不含子调用', 780.0),
+                new Finding('R4', Finding::SEVERITY_SUPPLEMENT, 'fib', '检测到 fib() 递归，最大深度 6', '递归深度过大', 6.0),
+            ],
+            ['run' => 'a1a1a1a1a1a1a1a1']
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+        self::assertStringContainsString('为什么慢', $html);
+        self::assertStringContainsString('其他发现', $html);
+        self::assertStringContainsString('foo() 自身耗时', $html);
+        self::assertStringContainsString('检测到 fib() 递归', $html);
+    }
+
+    /** R4 的 symbol 是空串（见 Analyzer::ruleR4），此时不该给出指向"未找到"详情页的死链 */
+    #[Test]
+    public function renderDiagnosisOmitsLinkWhenSymbolIsEmpty(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R4', Finding::SEVERITY_SUPPLEMENT, '', '检测到 fib() 递归，最大深度 6', '递归深度过大', 6.0)],
+            ['run' => 'a1a1a1a1a1a1a1a1']
+        );
+
+        self::assertStringContainsString('检测到 fib() 递归', $html);
+        self::assertStringNotContainsString('symbol=', $html);
+        self::assertStringNotContainsString('<a href', $html);
+    }
+
+    /** 空结果必须显式说明，否则用户会以为功能坏了 */
+    #[Test]
+    public function renderDiagnosisShowsEmptyStateWithThresholds(): void
+    {
+        $html = XhprofDisplay::render_diagnosis([], []);
+
+        self::assertStringContainsString('未发现明显瓶颈', $html);
+        self::assertStringContainsString('10', $html);   // 自身耗时阈值
+    }
+
+    /**
+     * 标题/细节由 Analyzer 以纯文本产出，渲染时必须 htmlspecialchars。
+     * 注意：$f->symbol 本身**只用于拼链接**（走 http_build_query 百分号编码），
+     * 不会作为文本渲染，所以转义断言要打在 title 上而不是 symbol 上。
+     */
+    #[Test]
+    public function renderDiagnosisEscapesTitleAndDetail(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', '标题 "<script>"', '细节 & 更多', 1.0)],
+            []
+        );
+
+        self::assertStringNotContainsString('<script>', $html);
+        self::assertStringContainsString('&quot;', $html);
+        self::assertStringContainsString('&amp;', $html);
+    }
+
+    /** symbol 里的引号经 http_build_query 编码成 %22，逃不出 href 属性 */
+    #[Test]
+    public function renderDiagnosisEncodesSymbolInLink(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'x"onmouseover="alert(1)', '标题', '细节', 1.0)],
+            []
+        );
+
+        self::assertStringContainsString('symbol=x%22onmouseover', $html);
+        self::assertStringNotContainsString('"onmouseover="', $html);
+    }
+
+    /** 链接必须带上当前 run，否则点进去只看到运行列表 */
+    #[Test]
+    public function renderDiagnosisLinkKeepsRunParam(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', '标题', '细节', 1.0)],
+            ['run' => 'a1a1a1a1a1a1a1a1']
+        );
+
+        self::assertStringContainsString('run=a1a1a1a1a1a1a1a1', $html);
+        self::assertStringContainsString('symbol=foo%28%29', $html);
     }
 }

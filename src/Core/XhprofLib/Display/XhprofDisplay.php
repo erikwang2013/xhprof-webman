@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Core\XhprofLib\Display;
 
+use ErikWang2013\Xhprof\Core\Analysis\Analyzer;
+use ErikWang2013\Xhprof\Core\Analysis\Finding;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
 use ErikWang2013\Xhprof\Core\Xhprof;
@@ -590,6 +592,87 @@ class XhprofDisplay
 
     $echo_page .= "</tr>\n";
     return $echo_page;
+  }
+
+  /**
+   * 渲染诊断结论卡片。
+   *
+   * $title / $detail 由 Analyzer 以纯文本产出，HTML 转义**只在这里做一次**——
+   * 符号名来自 profile 数据，动态调用（call_user_func、$obj->$method()）
+   * 可以让请求影响它，不转义就是反射型 XSS。
+   *
+   * 顺序即 Analyzer 给出的顺序，**不要重排**：$score 是各规则自己的量纲
+   * （微秒 / 次数 / 深度 / 字节），跨规则不可比。
+   *
+   * @param Finding[] $findings
+   * @param array     $url_params 当前查询参数，用于生成带 run 的详情页链接
+   */
+  public static function render_diagnosis(array $findings, array $url_params): string
+  {
+    $main = array();
+    $supplement = array();
+    foreach ($findings as $f) {
+      if (!$f instanceof Finding) continue;
+      if ($f->severity === Finding::SEVERITY_MAIN) {
+        $main[] = $f;
+      } else {
+        $supplement[] = $f;
+      }
+    }
+
+    $echo_page = '<div class="xp-main"><div class="xp-card">'
+      . '<div class="xp-card-title">诊断结论</div>';
+
+    if (!$main && !$supplement) {
+      // 空白会让人以为功能坏了，所以显式说明并列出阈值
+      // 列全所有规则的阈值：空态的意义就是让用户区分"没超阈值"与"没分析"
+      $echo_page .= '<p style="padding:12px 20px;color:#666">未发现明显瓶颈'
+        . '（阈值：自身耗时 ≥ ' . (Analyzer::SHARE_THRESHOLD * 100) . '%'
+        . '、调用次数 ≥ ' . Analyzer::CALL_COUNT_THRESHOLD
+        . '、边调用 ≥ ' . Analyzer::EDGE_COUNT_THRESHOLD
+        . '、被调方自身耗时 ≥ ' . (Analyzer::EDGE_SHARE_THRESHOLD * 100) . '%'
+        . '、峰值内存 ≥ ' . (Analyzer::PMU_SHARE_THRESHOLD * 100) . '%）</p>'
+        . '</div></div>';
+      return $echo_page;
+    }
+
+    if ($main) {
+      $echo_page .= '<div class="xp-card-title">为什么慢</div>'
+        . '<ul style="list-style:none;margin:0;padding:0">';
+      foreach ($main as $f) $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      $echo_page .= '</ul>';
+    }
+
+    // 同一个 symbol 可能同时出现在两个区，**这不是 bug**，别去"修"：
+    // 主区按 symbol 去重，补充区故意不去重——R4 的 symbol 是空串，
+    // 对补充区去重会把所有递归结论折叠成一条。
+    // 于是一个函数可以既是"为什么慢"里的 R1、又是"其他发现"里的 R6，
+    // 页面上就是两条标题不同、却指向同一详情页的链接——这两条结论本来就各说各话。
+    if ($supplement) {
+      $echo_page .= '<div class="xp-card-title">其他发现</div>'
+        . '<ul style="list-style:none;margin:0;padding:0">';
+      foreach ($supplement as $f) $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      $echo_page .= '</ul>';
+    }
+
+    return $echo_page . '</div></div>';
+  }
+
+  private static function diagnosis_item(Finding $f, array $url_params): string
+  {
+    $title = htmlspecialchars($f->title, ENT_QUOTES, 'UTF-8');
+    $detail = htmlspecialchars($f->detail, ENT_QUOTES, 'UTF-8');
+    $rule = htmlspecialchars($f->rule, ENT_QUOTES, 'UTF-8');
+
+    $link = '';
+    if ($f->symbol !== '') {
+      $href = XhprofDisplay::base_path() . '?'
+        . http_build_query(XhprofLib::xhprof_array_set($url_params, 'symbol', $f->symbol));
+      $link = ' ' . XhprofDisplay::xhprof_render_link('查看', $href);
+    }
+
+    return '<li style="padding:6px 20px"><b>[' . $rule . ']</b> ' . $title . $link
+      . '<br><span style="color:#666;font-size:12px">' . $detail . '</span></li>';
   }
 
   /**
