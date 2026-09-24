@@ -125,6 +125,29 @@ class XhprofDisplayTest extends TestCase
     }
 
     /**
+     * 单 run 夹具 + 一条必须产出 R3 结论的边（main()==>hot()）。
+     *
+     * 不往 sampleRunData() 里加边，是因为它有约十个调用方带着精确数值钉子
+     * （如 `>5</td>`、`>30,000`）；加一条边会改动总调用次数与 main() 的自身耗时。
+     *
+     * 数字不是随手取的，两个窗口都要满足：
+     * 1) hot() 自身占比 7%（7000/100000）必须落在 **[5%, 10%)** —— 低于 5% 触发不了
+     *    R3 自己的闸门；高于 10% 会被 R1 先认领，同 symbol 时 R1 优先（去重），R3 被吞掉。
+     * 2) R1 的命中数必须 ≤ 2 —— analyze() 把 R1++R3++R2 合并后按 MAIN_LIMIT=3 切片，
+     *    而 R1 整组排在 R3 之前。本夹具里 R1 只有 main()(53%) 与 foo()(40%) 两条，
+     *    故 R3 恰好卡在第三位活下来。若 R1 命中三条，R3 会被切片丢掉，
+     *    测 `[R3]` 的断言就成了永远为假的盲探针。
+     */
+    private function sampleRunDataWithHotEdge(): array
+    {
+        return [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 2048],
+            'main()==>foo()' => ['ct' => 1, 'wt' => 40000, 'mu' => 512],
+            'main()==>hot()' => ['ct' => 600, 'wt' => 7000, 'mu' => 64],
+        ];
+    }
+
+    /**
      * 断言 $first 在 $second 之前，且**两者都必须存在**。
      *
      * 不能直接写 assertLessThan(strpos(...), strpos(...))：strpos 在缺失时返回 false，
@@ -839,7 +862,7 @@ class XhprofDisplayTest extends TestCase
 
         $html = XhprofDisplay::profiler_single_run_report(
             ['run' => $runId, 'all' => 1],
-            $this->sampleRunData(),
+            $this->sampleRunDataWithHotEdge(),
             'desc',
             null,
             'wt',
@@ -852,14 +875,28 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('为什么慢', $html);
         // $echo_page 是逐段拼接的，拼接顺序即 DOM 顺序：卡片必须在 run 描述之后
         self::assertBefore($html, 'Run #', '诊断结论');
+        // 上界同理——只钉下界会放过"把卡片挪到报告末尾（数据表之后）"这种变异
+        self::assertBefore($html, '诊断结论', '函数/方法调用总次数');
+
+        // 以下两条必须**限定在卡片内**断言：整页到处都是 run= 链接，
+        // 对整页断言会连「卡片自己丢光了 run」都发现不了（盲探针）。
+        $cardStart = strpos($html, '诊断结论');
+        $cardEnd   = strpos($html, '</div></div>', $cardStart);
+        self::assertNotFalse($cardEnd, '卡片必须闭合');
+        $card = substr($html, $cardStart, $cardEnd - $cardStart);
+        // $run1_data 是 R3 唯一的来源：传进去空数组，[R3] 与整块为什么慢都会消失
+        self::assertStringContainsString('[R3]', $card, '$run1_data 必须真的喂进 analyze()');
+        // $base_url_params 携带 run：传 array() 则诊断链接退化成 ?symbol=...
+        self::assertStringContainsString('run=' . $runId, $card, '$base_url_params 必须真的喂进 render_diagnosis()');
     }
 
     /**
      * 这条测试的真正职责是**数据完整性**，不是"文案上不想在 diff 里显示卡片"。
      *
-     * 单 run 路径上 $symbol_tab/$totals 都由 $run1_data 派生（:346 附近），没有任何东西
-     * 改写它们——所以那里的接线错误是**不可达**的。`if ($diff_mode)` 是**唯一**会把这两个
-     * 局部变量换成增量的地方。因此这条测试是**唯一**能抓住"喂错数据"的测试。
+     * 单 run 路径上 $symbol_tab/$totals 都由 $run1_data 派生，没有任何东西改写它们——
+     * 所以那里的接线错误是**不可达**的。`if ($diff_mode)` 是**唯一**会把这两个局部变量
+     * 换成增量的地方。因此这条测试**唯一**要守的是"守卫被摘掉"：去掉 !$diff_mode 只会让
+     * 它一条变红，别的测试都抓不住（喂错数据已被其他用例钉住，不再是它的独有能力）。
      *
      * 若把它读成文案问题，最自然的"改进"就是去掉守卫、让卡片也出现在 diff 模式——
      * 而那正是静默损坏路径：增量做分母、原始 $run1_data 做边表，R3 标题里出现负耗时。

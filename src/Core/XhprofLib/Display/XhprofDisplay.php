@@ -421,8 +421,9 @@ class XhprofDisplay
       . '</div>';
 
     // 诊断只在顶层单 run 视图显示。
-    // 守卫不是"限制"，它是让四个入参**同时**正确的那个条件：在 !$diff_mode 下，
-    // $symbol_tab/$totals 是单 run 值、$run1_data 未被改写、$base_url_params 仍带着 run。
+    // 守卫不是"限制"，它是让四个入参**同时**正确的那个条件：在 !$diff_mode && empty($rep_symbol) 下，
+    // $symbol_tab/$totals 是单 run 值；$run1_data 未被改写（xhprof_trim_run 只发生在
+    // !empty($rep_symbol) 那一半分支里）；$base_url_params 仍带着 run。
     // 去掉守卫，四个里三个静默变错——diff 模式把 $symbol_tab/$totals 换成 run2-run1 的
     // 增量，而 $run1_data 仍是单 run 边表，于是增量做分母、原始边表做分子，R3 标题里
     // 会出现负耗时。两个数据参数是**无声**错的、不是响亮错的：Analyzer 里
@@ -433,7 +434,7 @@ class XhprofDisplay
     // $run1 是 id，它该待在 $url_params['run'] 里（当参数数组传会拼出 `?<runid>=…`）。
     //
     // - 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢"，故守 $rep_symbol。
-    // 传 $base_url_params（:363 定义，已 unset symbol/all），不要传 $url_params：
+    // 传 $base_url_params（已 unset symbol/all），不要传 $url_params：
     // 1) 它是本页既有的"跳回本报告"标准形状——show_nav() 与 full_report() 里
     //    那句 $base_url_params 用的都是它，传它让诊断链接与页面上其他链接结构一致，而不是特例；
     // 2) 它不含 symbol，故 xhprof_array_set(...) 结果恰好一个 symbol 键；传原始
