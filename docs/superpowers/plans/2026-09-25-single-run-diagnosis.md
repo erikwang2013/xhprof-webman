@@ -1251,6 +1251,19 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 ```
 
+> **`r3NeverClaimsLoop` 曾被改空转（已修）。**
+> 它的夹具子函数停在 10%，于是 R1 也在该子函数上命中，R1 胜出的去重把 R3 行移除了。
+> 实测该夹具现在只产出 **2 条 R1 行、0 条 R3 行**——`foreach` 只在 R1 行上跑，
+> "标题/细节不得含『循环』"这个断言**从未检视过任何 R3 标题**。Task 4 之前它确实会
+> 产出 R3 行（无去重的变异可恢复），所以这是一次静默的覆盖丢失。
+>
+> 修法：夹具子函数 `excl_wt` 100 → 60，**并**补一条 R3 专属守卫
+> `assertNotEmpty(self::rule($found, 'R3'), '夹具必须让 R3 命中')`。
+>
+> **这里有个值得记的教训**：当初为防空转加的 `assertNotEmpty($found, '夹具必须产出…')`
+> **被那 2 条 R1 行满足了**，所以没能守住。"夹具产出了东西"不等于
+> "夹具产出了这个测试所关心的东西"。写这类守卫时要断言**具体那条规则**，而不是"有产出"。
+
 > **待修：`isFiniteGuardRejectsNanTotals` 的夹具正好卡在封顶线上。**
 > 该夹具现状：`main()` 10%、`hog()` 10%（两者都命中 R1）、`foo()` 6%（R3 被调方），
 > 实测主区为 `["main()","hog()","foo()"]` —— **3/3 正好卡满 `MAIN_LIMIT`**。
