@@ -315,12 +315,15 @@ final class Analyzer
             if (!is_numeric($info['excl_wt']) || !is_numeric($info['wt'])) {
                 continue;
             }
-            $excl = (float) $info['excl_wt'];
-            $incl = (float) $info['wt'];
-            if ($excl <= $incl) {
+            // 三个微秒数必须来自**同一次舍入**：各自取整会让 excl=138.4 / wt=137.6
+            // 渲染成「138μs 大于 138μs，差 1μs」，与当初弃用 ms() 是同一类自相矛盾。
+            // 代价是亚 0.5μs 的倒挂被四舍五入抹平——有意忽略，这不该是探针报的量级。
+            $ex = (int) round((float) $info['excl_wt']);
+            $in = (int) round((float) $info['wt']);
+            if ($ex <= $in) {
                 continue;
             }
-            $hits[] = array($excl - $incl, (string) $fn, $excl, $incl);
+            $hits[] = array((float) ($ex - $in), (string) $fn, (float) $ex, (float) $in);
         }
         usort($hits, static fn($a, $b) => $b[0] <=> $a[0]);
 

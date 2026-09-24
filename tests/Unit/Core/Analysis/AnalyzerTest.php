@@ -17,14 +17,20 @@ class AnalyzerTest extends TestCase
     /** 入口守卫保证：symbol_tab 不可用时返回空数组 */
     #[Test]
     #[DataProvider('unusableSymbolTabProvider')]
-    public function analyzeReturnsEmptyWhenSymbolTabUnusable(mixed $symbolTab): void
+    public function analyzeReturnsEmptyWhenSymbolTabUnusable(mixed $symbolTab, array $rawData): void
     {
-        $this->assertSame([], Analyzer::analyze($symbolTab, [], []));
+        $this->assertSame([], Analyzer::analyze($symbolTab, $rawData, []));
     }
 
     public static function unusableSymbolTabProvider(): array
     {
-        return ['全空数组' => [[]], 'null 入参' => [null], '字符串入参' => ['x']];
+        // 第一行故意给 R4 形状的 raw_data：R4 只读 raw_data，若去掉入口守卫里的
+        // `|| $symbol_tab === array()` 子句，它会照常产出结论——这条子句才可被观测。
+        return [
+            '全空数组'   => [[], ['fib@1==>fib@2' => ['ct' => 1, 'wt' => 10]]],
+            'null 入参'  => [null, []],
+            '字符串入参' => ['x', []],
+        ];
     }
 
     /**
@@ -105,6 +111,11 @@ class AnalyzerTest extends TestCase
             $result = $m->invoke(null, static function (): array {
                 throw new \RuntimeException('rule blew up');
             });
+            // 必须是 \Throwable 而不是 \Exception：本文件 :60-63 / :188-190 的注释都
+            // 依赖它兜住 TypeError（\Error 的子类，不继承 \Exception）。
+            $typeError = $m->invoke(null, static function (): array {
+                throw new \TypeError('bad edge key');
+            });
         } finally {
             // 不把 logger 泄漏给其他测试
             Xhprof::$logger = $prev;
@@ -114,9 +125,11 @@ class AnalyzerTest extends TestCase
         }
 
         $this->assertSame([], $result);
-        $this->assertCount(1, $logger->errors, '规则异常必须写日志，否则坏了没人知道');
+        $this->assertSame([], $typeError, 'Error（如 TypeError）也必须被兜住，否则会冒泡成报告页 500');
+        $this->assertCount(2, $logger->errors, '规则异常必须写日志，否则坏了没人知道');
         $this->assertStringContainsString('Analyzer rule failed', $logger->errors[0]);
         $this->assertStringContainsString('rule blew up', $logger->errors[0]);
+        $this->assertStringContainsString('bad edge key', $logger->errors[1]);
     }
 
     /** 正常返回的规则不受影响 */
@@ -247,6 +260,7 @@ class AnalyzerTest extends TestCase
         $raw = ['main()==>foo()' => ['ct' => 600, 'wt' => 400]];
         $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
 
+        $this->assertNotEmpty($found, '夹具必须产出，否则本测试形同虚设');
         foreach ($found as $f) {
             $this->assertStringNotContainsString('循环', $f->title . $f->detail);
         }
@@ -352,14 +366,17 @@ class AnalyzerTest extends TestCase
             'main()==>fib' => ['ct' => 1, 'wt' => 100],
             'fib@1==>fib@2' => ['ct' => 1, 'wt' => 90],
             'fib@2==>fib@3' => ['ct' => 1, 'wt' => 80],
+            // 两位数深度是真实数据（fib(16) 会产生深度 1..15），
+            // 正则写成 (\d) 时这里会静默退化成「最大深度 9」。
+            'fib@9==>fib@10' => ['ct' => 1, 'wt' => 70],
         ];
         $tab = ['main()' => self::sym(1, 100, 10), 'fib@1' => self::sym(1, 90, 5)];
         $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
 
         $this->assertCount(1, $hits);
         // 精确断言，不用 containsString：'3' 这种短串到处都是，弱断言放过错误实现
-        $this->assertSame('检测到 fib() 递归，最大深度 3', $hits[0]->title);
-        $this->assertSame(3.0, $hits[0]->score, 'score 应是最大深度');
+        $this->assertSame('检测到 fib() 递归，最大深度 10', $hits[0]->title);
+        $this->assertSame(10.0, $hits[0]->score, 'score 应是最大深度');
         $this->assertSame('', $hits[0]->symbol, 'R4 的符号必须为空，否则详情页链接必然死链');
     }
 
@@ -381,6 +398,20 @@ class AnalyzerTest extends TestCase
         $this->assertSame([], self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4'));
     }
 
+    /** 与 R3 对称：R4 的唯一防护同样是键转换，坏键不得吞掉同一条规则的其他结论 */
+    #[Test]
+    public function r4SurvivesIntegerKeyAmongValidEdges(): void
+    {
+        $raw = [
+            0 => ['ct' => 999, 'wt' => 1],             // 坏键：PHP 会把 "0" 这类键转成 int
+            'fib@1==>fib@2' => ['ct' => 1, 'wt' => 90],
+        ];
+        $tab = ['main()' => self::sym(1, 100, 10)];
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
+
+        $this->assertCount(1, $hits, '坏键不得吞掉 R4 的其他有效结论');
+    }
+
     #[Test]
     public function r5FiresAtPmuShare(): void
     {
@@ -399,6 +430,14 @@ class AnalyzerTest extends TestCase
     {
         $tab = ['hog()' => self::sym(1, 10, 1, 30)];
         $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 0]), 'R5'));
+    }
+
+    /** 低于阈值不触发——R1/R3 都有这条，R5 此前缺 */
+    #[Test]
+    public function r5DoesNotFireBelowThreshold(): void
+    {
+        $tab = ['hog()' => self::sym(1, 10, 1, 29)];   // 29/100 = 29% < 30%
+        $this->assertSame([], self::rule(Analyzer::analyze($tab, [], ['wt' => 100, 'pmu' => 100]), 'R5'));
     }
 
     /** R6 探针：excl_wt > wt 逻辑上不可能，健康数据下永不触发 */
@@ -483,6 +522,7 @@ class AnalyzerTest extends TestCase
             '字节'        => [30.0, '30B'],
             'KB 下界之下' => [1023.0, '1,023B'],
             'KB 边界'     => [1024.0, '1.0KB'],
+            'MB 边界'     => [1048576.0, '1.0MB'],
             'MB'          => [3145728.0, '3.0MB'],
         ];
     }
@@ -529,5 +569,69 @@ class AnalyzerTest extends TestCase
         $this->assertCount(2, $hits);
         $this->assertSame(['big()', 'small()'], array_map(fn($f) => $f->symbol, $hits));
         $this->assertSame([300.0, 50.0], array_map(fn($f) => $f->score, $hits));
+    }
+
+    /**
+     * severity 必须与规则所属分区一致。analyze() 按**构造**分区（$main/$supplement），
+     * 而 Task 4 的封顶与 Task 5 的渲染按**字段**分区——两者必须一致，
+     * 否则一条结论会以补充项身份被截断、却渲染在「为什么慢」下面。
+     */
+    #[Test]
+    public function severityMatchesRuleSection(): void
+    {
+        $tab = [
+            'main()' => self::sym(1, 1000, 100),                              // R1
+            'busy()' => self::sym(1000, 500, 50),                            // R2
+            'hot()'  => self::sym(600, 400, 60),                             // R3 的被调方
+            'hog()'  => self::sym(1, 100, 10, 80),                           // R5
+            'bad()'  => ['ct' => 1, 'wt' => 100, 'excl_wt' => 300, 'pmu' => 0, 'excl_pmu' => 0],  // R6
+        ];
+        $raw = [
+            'main()'         => ['ct' => 1, 'wt' => 1000],
+            'main()==>hot()' => ['ct' => 600, 'wt' => 300],                  // R3
+            'fib@1==>fib@2'  => ['ct' => 1, 'wt' => 50],                     // R4
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000, 'pmu' => 100]);
+
+        $this->assertCount(6, array_unique(array_map(fn($f) => $f->rule, $found)), '夹具必须触发全部六条规则');
+        foreach ($found as $f) {
+            $expected = in_array($f->rule, ['R1', 'R3', 'R2'], true)
+                ? Finding::SEVERITY_MAIN
+                : Finding::SEVERITY_SUPPLEMENT;
+            $this->assertSame($expected, $f->severity, $f->rule . ' 的 severity 与所属分区不一致');
+        }
+    }
+
+    /** 逐项 is_numeric 承重：垃圾指标值不得（a）产出结论（b）连累有效项 */
+    #[Test]
+    public function nonNumericMetricsAreSkippedPerItem(): void
+    {
+        $tab = [
+            'good()' => self::sym(1, 1000, 500),
+            'junk()' => ['ct' => 'x', 'wt' => [], 'excl_wt' => '500abc'],
+        ];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+
+        $this->assertSame(['good()'], array_map(fn($f) => $f->symbol, self::rule($found, 'R1')));
+    }
+
+    /**
+     * 三个微秒数必须在**同一次舍入之后**自洽：各自取整会让 138.4/137.6 渲染成
+     * 「138μs 大于 138μs，差 1μs」——与当初弃用 ms() 是同一类自相矛盾。
+     * 取整后 138 不大于 138 → 不产出结论（亚 0.5μs 的倒挂有意忽略）；
+     * 真倒挂（139 vs 137）仍照常产出，且标题里的三个数互相自洽。
+     */
+    #[Test]
+    public function r6RoundsBeforeComparingSoTitleStaysCoherent(): void
+    {
+        $tab = [
+            'squash()' => ['ct' => 1, 'wt' => 137.6, 'excl_wt' => 138.4, 'pmu' => 0, 'excl_pmu' => 0],
+            'real()'   => ['ct' => 1, 'wt' => 137.4, 'excl_wt' => 138.6, 'pmu' => 0, 'excl_pmu' => 0],
+        ];
+        $hits = self::rule(Analyzer::analyze($tab, [], ['wt' => 1000]), 'R6');
+
+        $this->assertCount(1, $hits);
+        $this->assertSame('real() 自身耗时 139μs 大于其总耗时 137μs，差 2μs', $hits[0]->title);
+        $this->assertSame(2.0, $hits[0]->score);
     }
 }
