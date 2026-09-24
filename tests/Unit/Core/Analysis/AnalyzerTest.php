@@ -256,11 +256,15 @@ class AnalyzerTest extends TestCase
     #[Test]
     public function r3NeverClaimsLoop(): void
     {
-        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 100)];
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 60)];
         $raw = ['main()==>foo()' => ['ct' => 600, 'wt' => 400]];
         $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
 
+        // 夹具必须产出，否则本测试形同虚设
         $this->assertNotEmpty($found, '夹具必须产出，否则本测试形同虚设');
+        // 但"产出了东西"不等于"产出的是本测试关心的东西"：foo() 自身耗时若压到 10%（本例原为 100），
+        // R1 也会命中它，主区去重会把 R3 那行吃掉 —— foreach 就只在两条 R1 行上空转。
+        $this->assertNotEmpty(self::rule($found, 'R3'), '夹具必须让 R3 命中');
         foreach ($found as $f) {
             $this->assertStringNotContainsString('循环', $f->title . $f->detail);
         }
