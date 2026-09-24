@@ -72,8 +72,10 @@ class AnalyzerTest extends TestCase
             '全空数组'        => [[], [], []],
             'null 入参'       => [null, null, null],
             '字符串入参'      => ['x', 'y', 'z'],
+            // 注意 excl_wt 必须是 0：这行要测的是"raw_data 为 false 不会搞崩 R3/R4"，
+            // 若给它 100，R1 会在 100/100=100% 处命中，断言就变成 1 条而非空数组。
             'raw_data 为 false（get_run 失败的形态）' => [
-                ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 100]],
+                ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 0]],
                 false,
                 ['wt' => 100],
             ],
@@ -365,10 +367,12 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
         $totals   = is_array($totals) ? $totals : array();
         $raw_data = is_array($raw_data) ? $raw_data : array();
 
+        // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
+        // 不会连累其他规则，更不会冒泡成报告页 500。
         return array_merge(
-            self::ruleR1($symbol_tab, $totals),
-            self::ruleR3($symbol_tab, $raw_data, $totals),
-            self::ruleR2($symbol_tab)
+            self::safe(static fn(): array => self::ruleR1($symbol_tab, $totals)),
+            self::safe(static fn(): array => self::ruleR3($symbol_tab, $raw_data, $totals)),
+            self::safe(static fn(): array => self::ruleR2($symbol_tab))
         );
     }
 
@@ -525,6 +529,11 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 归因规则 R1 自身耗时 / R2 调用次数 / R3 边重复调用"
 ```
 
+> **别把 `safe()` 当成逐项守卫的替代品。** `safe()` 的隔离粒度是**整条规则**：规则中途抛异常，
+> 该规则已经产出的结论会全部丢掉。spec 承诺的是**逐项**粒度（单项缺 `excl_wt` → 该项跳过，
+> 不影响其他项），那靠的是规则内部每个字段前的 `is_array` / `is_numeric` 守卫与 `continue`。
+> 两者是不同层面的防线，都要有。
+
 ---
 
 ## Task 3: 体检规则 R4 递归 / R5 内存峰值 / R6 计时倒挂
@@ -624,14 +633,14 @@ Expected: FAIL —— R4/R5/R6 用例拿到 0 条
 
 ```php
         $main = array_merge(
-            self::ruleR1($symbol_tab, $totals),
-            self::ruleR3($symbol_tab, $raw_data, $totals),
-            self::ruleR2($symbol_tab)
+            self::safe(static fn(): array => self::ruleR1($symbol_tab, $totals)),
+            self::safe(static fn(): array => self::ruleR3($symbol_tab, $raw_data, $totals)),
+            self::safe(static fn(): array => self::ruleR2($symbol_tab))
         );
         $supplement = array_merge(
-            self::ruleR4($raw_data),
-            self::ruleR5($symbol_tab, $totals),
-            self::ruleR6($symbol_tab)
+            self::safe(static fn(): array => self::ruleR4($raw_data)),
+            self::safe(static fn(): array => self::ruleR5($symbol_tab, $totals)),
+            self::safe(static fn(): array => self::ruleR6($symbol_tab))
         );
 
         return array_merge($main, $supplement);
@@ -669,7 +678,9 @@ Expected: FAIL —— R4/R5/R6 用例拿到 0 条
             $out[] = new Finding(
                 'R4',
                 Finding::SEVERITY_SUPPLEMENT,
-                $h[1],
+                // 符号置空：递归在 symbol_tab 里的键是 fib@1/fib@2，而详情页按 symbol=fib 查，
+                // 必然"未找到"。spec 允许 symbol 为空（渲染层会跳过链接），这里就该为空。
+                '',
                 sprintf('检测到 %s() 递归，最大深度 %d', $h[1], $h[0]),
                 '递归深度过大可能导致栈溢出或耗时呈指数增长',
                 (float) $h[0]
