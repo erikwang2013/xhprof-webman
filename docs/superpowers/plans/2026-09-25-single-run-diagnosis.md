@@ -1251,6 +1251,19 @@ git add src/Core/Analysis/Analyzer.php tests/Unit/Core/Analysis/AnalyzerTest.php
 git commit -m "feat(analysis): 主区 R1→R3→R2 组装与两区封顶"
 ```
 
+> **待修：`isFiniteGuardRejectsNanTotals` 的夹具正好卡在封顶线上。**
+> 该夹具现状：`main()` 10%、`hog()` 10%（两者都命中 R1）、`foo()` 6%（R3 被调方），
+> 实测主区为 `["main()","hog()","foo()"]` —— **3/3 正好卡满 `MAIN_LIMIT`**。
+> 后果：将来谁给这个夹具再加一条 R1 命中，R3 就会被挤出，而失败信息会指向
+> `assertNotEmpty(self::rule($normal,'R3'))`，**原因却与 is_finite 守卫毫无关系**。
+> 修法（实测）：把 `hog()` 的 `excl_wt` 从 10 降到 6 → 主区变 2/3，
+> 三条 `assertNotEmpty` 仍全部满足（R1 由 `main()` 提供、R3 由 `foo()`、R5 由 `hog()` 的 pmu）。
+>
+> **Task 5/6 需要注意的语义**：因为 R2 结构上最先被截断，一个有三条 R1 命中的 run
+> **完全不会渲染调用次数的结论**；而碰撞规则意味着"既是最大自身耗时、又是热点边目标"的
+> 函数只显示自身耗时那一行、丢失调用方细节。两者都是刻意的、现在都有测试守着——
+> 但若 Task 5 的渲染或 Task 6 的文案暗示"六条规则的结果总是都能呈现"，那个假设是错的。
+
 > **"先去重再切片"这个顺序本身需要专测（否则变异可存活）。**
 > 计划原有的去重用例**无法区分两种顺序**：它的夹具产出
 > `[hot(R1), main(R1), hot(R3), hot(R3), hot(R3), hot(R2)]`，先切片的 `[hot, main, hot]`
