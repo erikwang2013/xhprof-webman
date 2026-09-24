@@ -58,38 +58,71 @@ use PHPUnit\Framework\TestCase;
 
 class AnalyzerTest extends TestCase
 {
-    /** 诊断是旁路：任何畸形输入都必须返回数组而不是抛异常 */
+    /** 入口守卫保证：symbol_tab 不可用时返回空数组 */
     #[Test]
-    #[DataProvider('malformedInputProvider')]
-    public function analyzeNeverThrowsOnMalformedInput(mixed $symbolTab, mixed $rawData, mixed $totals): void
+    #[DataProvider('unusableSymbolTabProvider')]
+    public function analyzeReturnsEmptyWhenSymbolTabUnusable(mixed $symbolTab): void
     {
-        $this->assertSame([], Analyzer::analyze($symbolTab, $rawData, $totals));
+        $this->assertSame([], Analyzer::analyze($symbolTab, [], []));
     }
 
-    public static function malformedInputProvider(): array
+    public static function unusableSymbolTabProvider(): array
+    {
+        return ['全空数组' => [[]], 'null 入参' => [null], '字符串入参' => ['x']];
+    }
+
+    /**
+     * 契约是"永不抛异常 / 返回值是数组"，**不是**"返回空数组"。
+     *
+     * 这三行的 symbol_tab 是合法的，只有 raw_data/totals 畸形。断言"空"就等于在断言
+     * "没有其他规则命中"——Task 3 的 R4/R5/R6 只要有一条能从 symbol_tab 单独出结论，
+     * 这里就会无故变红，而最顺手的应对是把断言改弱，等于废掉整条契约测试。
+     */
+    #[Test]
+    #[DataProvider('malformedOtherInputProvider')]
+    public function analyzeNeverThrowsWhenOtherInputMalformed(mixed $rawData, mixed $totals): void
+    {
+        $tab = ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 0]];
+        $this->assertIsArray(Analyzer::analyze($tab, $rawData, $totals));
+    }
+
+    public static function malformedOtherInputProvider(): array
     {
         return [
-            '全空数组'        => [[], [], []],
-            'null 入参'       => [null, null, null],
-            '字符串入参'      => ['x', 'y', 'z'],
-            // 注意 excl_wt 必须是 0：这行要测的是"raw_data 为 false 不会搞崩 R3/R4"，
-            // 若给它 100，R1 会在 100/100=100% 处命中，断言就变成 1 条而非空数组。
-            'raw_data 为 false（get_run 失败的形态）' => [
-                ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 0]],
-                false,
-                ['wt' => 100],
-            ],
-            'totals 缺 wt'    => [
-                ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 100]],
-                [],
-                [],
-            ],
-            'totals wt 为 0'  => [
-                ['main()' => ['ct' => 1, 'wt' => 0, 'excl_wt' => 0]],
-                [],
-                ['wt' => 0],
-            ],
+            // 人工构造：真实路径不会产生这个组合 —— get_run 失败（false）时
+            // flat_info 返回的是**空** symbol_tab，analyze() 会在入口守卫处就返回。
+            // 保留它是因为它守护"归一化 + safe() 这层兜底仍然存在"：
+            // 单独去掉归一化测试**仍是绿的**（TypeError 被 safe() 吞掉），
+            // 两者同时去掉才会红 —— 所以不要为它写"只去归一化"的回退验证。
+            '人工构造：symbol_tab 非空 + raw_data 为 false' => [false, ['wt' => 100]],
+            'totals 缺 wt'    => [[], []],
+            'totals wt 为 0'  => [[], ['wt' => 0]],
         ];
+    }
+
+    /**
+     * analyze() 的公共契约是返回 **Finding 列表**。规则体里一句 `$out[] = $h;`
+     * 就能满足自身的 `: array` 返回类型，而 analyze() 只有 docblock 声明 Finding[]，
+     * 于是错误要等到渲染层去读属性时才爆——必须在这里钉住。
+     */
+    #[Test]
+    public function analyzeReturnsOnlyFindings(): void
+    {
+        $tab = [
+            'main()' => self::sym(1000, 1000, 900),   // R1(90%) + R2(1000 次)
+            'foo()'  => self::sym(600, 600, 900),     // R3 的被调方(90%)
+        ];
+        $raw = [
+            'main()'         => ['ct' => 1, 'wt' => 1000],
+            'main()==>foo()' => ['ct' => 600, 'wt' => 400],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000, 'pmu' => 500]);
+
+        // 没有这一句，空结果会让本测试静默通过、什么也没钉住
+        $this->assertNotEmpty($found, '夹具必须让现有规则都产出，否则本测试形同虚设');
+        foreach ($found as $f) {
+            $this->assertInstanceOf(Finding::class, $f);
+        }
     }
 
     #[Test]
@@ -553,12 +586,14 @@ Expected: FAIL —— 各 R1/R2/R3 用例断言 `count` 时拿到 0
 Run: `vendor/bin/phpunit --filter AnalyzerTest`
 Expected: PASS
 
-**关于入口归一化的可验证性（结论：观察不到，别再试）：** 去掉
-`$raw_data = is_array($raw_data) ? $raw_data : array();` 后测试**仍然是绿的** ——
-规则签名是 `array $raw_data`，strict_types 下传 false 会在调用边界抛 TypeError，
-被 `safe()` 兜成空结果，于是归一化在 `analyze()` 的公共面上不可观测。
+**关于入口归一化的可验证性（结论：单独去掉不会红，别再试这一种）：** 只去掉
+`$raw_data = is_array($raw_data) ? $raw_data : array();` 时测试**仍然是绿的** ——
+规则签名是 `array $raw_data`，strict_types 下传 false 在调用边界抛 TypeError，
+被 `safe()` 兜成空结果。**归一化与 safe() 是同一层兜底的两半，冗余但不重复**：
+只有把两者**同时**去掉才会红（`Tests: 3, Errors: 1`，
+`TypeError: ruleR3(): Argument #2 ($raw_data) must be of type array, false given`）。
 保留这两行是因为它们把输入契约定在入口、而不是寄托于异常吞没；
-但不要为它写"回退验证"，也不要声称有测试守护它。
+但不要写"只去归一化"的回退验证，也不要声称有测试单独守护它。
 
 - [ ] **Step 5: 提交**
 
