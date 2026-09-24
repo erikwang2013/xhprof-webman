@@ -56,9 +56,10 @@ final class Analyzer
         $totals   = is_array($totals) ? $totals : array();
         $raw_data = is_array($raw_data) ? $raw_data : array();
 
-        // ↑ 这两行归一化**不要**因为有了 safe() 就去掉：foreach 遍历非数组
-        //   只发 PHP warning，不是 Throwable，safe() 根本不会介入；
-        //   归一化到入口一次，比让 R3/R4 各自守着更稳。
+        // ↑ 这两行归一化**不要**因为有了 safe() 就去掉。规则签名是 `array $raw_data`，
+        //   在 strict_types 下传 false 会在调用边界抛 TypeError；safe() 虽然会把它兜成
+        //   空结果（所以测试看不出差别），但那等于把输入契约寄托在"异常被吞掉"上面。
+        //   归一化到入口一次，规则就能放心假设入参是数组。
 
         // 每条规则各自过 safe()：某条规则内部出错只让它自己产出空结果，
         // 不会连累其他规则，更不会冒泡成报告页 500。
@@ -157,7 +158,10 @@ final class Analyzer
             if (!is_array($info)) {
                 continue;
             }
-            list($parent, $child) = XhprofLib::xhprof_parse_parent_child($edge);
+            // 必须 (string)：PHP 会把 "123" 这类数组键转成 int，整型传给
+            // xhprof_parse_parent_child 内部的 explode() 会抛 TypeError。
+            // safe() 的粒度是整条规则，一个坏键会连带丢掉 R3 的全部有效结论。
+            list($parent, $child) = XhprofLib::xhprof_parse_parent_child((string) $edge);
             if ($parent === null || $parent === '') {
                 continue;   // 裸 main() 键没有父，不是边
             }

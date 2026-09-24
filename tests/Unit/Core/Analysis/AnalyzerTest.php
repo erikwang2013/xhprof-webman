@@ -28,9 +28,11 @@ class AnalyzerTest extends TestCase
             '字符串入参'      => ['x', 'y', 'z'],
             // 人工构造：真实路径不会产生这个组合 —— get_run 失败（false）时
             // flat_info 返回的是**空** symbol_tab，analyze() 会在入口守卫处就返回。
-            // 保留它是因为它守护 analyze() 入口的归一化：没有归一化时
-            // foreach(false) 会发 warning，在 failOnWarning 下即为红。
-            '人工构造：symbol_tab 非空 + raw_data 为 false（守护入口归一化）' => [
+            // 保留它是因为它守护"analyze() 对非数组 raw_data/totals 永不抛异常"
+            // 这条契约（经参数类型声明 + safe() 兜底）。
+            // 注意：该契约在公共面上不可观测——去掉入口归一化后测试**仍是绿的**，
+            // 因为 TypeError 被 safe() 吞掉。不要为它写回退验证。
+            '人工构造：symbol_tab 非空 + raw_data 为 false（守护非数组入参契约）' => [
                 ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 0]],
                 false,
                 ['wt' => 100],
@@ -192,5 +194,25 @@ class AnalyzerTest extends TestCase
         $raw = ['main()' => ['ct' => 9999, 'wt' => 900]];
         $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
         $this->assertSame([], array_filter($found, fn($f) => $f->rule === 'R3'));
+    }
+
+    /**
+     * 逐项粒度：一个坏键不能连带丢掉 R3 的其他有效结论。
+     * 整型数组键（PHP 会把 "123" 这类键转成 int）会让边解析抛 TypeError，
+     * 而 safe() 的兜底粒度是**整条规则**——所以 R3 必须自己把键转成 string。
+     */
+    #[Test]
+    public function r3SurvivesIntegerKeyAmongValidEdges(): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 100)];
+        $raw = [
+            0 => ['ct' => 999, 'wt' => 1],              // 坏键：会被转成 int
+            'main()==>foo()' => ['ct' => 600, 'wt' => 400],
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+
+        $hits = array_values(array_filter($found, fn($f) => $f->rule === 'R3'));
+        $this->assertCount(1, $hits, '坏键不得吞掉同一条规则里其他有效边的结论');
+        $this->assertStringContainsString('main() → foo()', $hits[0]->title);
     }
 }
