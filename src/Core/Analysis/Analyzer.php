@@ -12,6 +12,9 @@ namespace ErikWang2013\Xhprof\Core\Analysis;
  *
  * 最重要的一条约定：analyze() 不得抛异常。诊断是旁路，
  * 它出问题只会让报告页多一块内容或没有这块内容，绝不能让整页 500。
+ *
+ * 组装时**不要跨规则按 score 排序**：各规则的 score 量纲不同
+ * （微秒 / 调用次数 / 深度），混排没有意义。跨规则顺序见主区组装规则。
  */
 final class Analyzer
 {

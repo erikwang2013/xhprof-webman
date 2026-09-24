@@ -27,7 +27,7 @@ class AnalyzerTest extends TestCase
             'null 入参'       => [null, null, null],
             '字符串入参'      => ['x', 'y', 'z'],
             'raw_data 为 false（get_run 失败的形态）' => [
-                ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 100]],
+                ['main()' => ['ct' => 1, 'wt' => 100, 'excl_wt' => 0]],
                 false,
                 ['wt' => 100],
             ],
