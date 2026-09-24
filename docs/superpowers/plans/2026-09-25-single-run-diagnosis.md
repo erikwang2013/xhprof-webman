@@ -1061,6 +1061,23 @@ git commit -m "feat(analysis): 体检规则 R4 递归 / R5 内存峰值 / R6 计
    被 `safe()` 吞掉后 **R4 返回 0 条**（原本 1 条）外加一条日志。修法：给 R4 夹具加一个
    `0 => [...]` 坏键，断言有效结论不丢——与 R3 的 `r3SurvivesIntegerKeyAmongValidEdges` 对称。
 
+> **更正：早先对 F6 的"已加固"结论只对了一半（本会话自查发现）。**
+>
+> 早先我把 `xhprof_compute_inclusive_times` 的 `return;` 改成 `return array();` 记为
+> "一个字符的防御性加固，当前不可达"。**实测证明它没有达成表面目的**：
+> 该函数确实返回 `array()` 了，但下游 `xhprof_compute_flat_info` 立刻在
+> `$symbol_tab["main()"][$metric]` 上取到 null，于是 `totals['wt'] = NULL`，
+> `full_report()` 死于：
+> ```
+> TypeError: number_format(): Argument #1 ($num) must be of type int|float, null given
+> ```
+> **同一个输入仍然 500，只是晚了一行。** 也就是说那处改动改变了失败形态、没有消除失败。
+>
+> **输入仍不可达**（xhprof 2.3.10 把递归编码为 `fib@1==>fib@2`，永不产生 `foo()==>foo()`，
+> 已用真实扩展验证），故**不修**：这是 Task 6 之前的既有行为、与本特性无关、
+> 且要真修需在 `xhprof_compute_flat_info` 里加一行 `?? []` 并单独验证一遍。
+> 记录在此以免后来人以为"已经加固过了"。
+
 **Task 3 实测补充（实现者验证，非推测）：**
 - **IR-2 的守卫纪律已用探针证实**：6 条规则 × 恶意输入（缺键、null、bool、数组当值、
   `'x'`、整型键、字符串项）→ **0 warning / 2 findings**。即"框架把 warning 提升为异常
