@@ -265,9 +265,9 @@ class ThinkphpTest extends TestCase
         $request = new Request(['a' => 1], [
             'headers' => ['x-fwd' => 'yes'],
             'method' => 'POST',
-            'host' => 'example.com',
+            'host' => 'example.com:8080',
             'uri' => '/path',
-            'url' => 'http://example.com/path',
+            'url' => 'http://example.com:8080/path',
             'ip' => '10.0.0.1',
         ]);
         $adapter = new RequestAdapter($request);
@@ -280,8 +280,28 @@ class ThinkphpTest extends TestCase
         $this->assertSame('yes', $adapter->header('x-fwd'));
         $this->assertSame('example.com', $adapter->host());
         $this->assertSame('/path', $adapter->uri());
-        $this->assertSame('http://example.com/path', $adapter->url());
+        $this->assertSame('http://example.com:8080/path', $adapter->url());
         $this->assertSame('10.0.0.1', $adapter->getRealIp());
+    }
+
+    /**
+     * 契约 R-2：host() 不含端口 —— 而 think 的 `host()` **默认就带端口**。
+     *
+     * 真包实测（topthink/framework 8.1.4，/tmp 有装好的包）：`host()` 给 'example.com:8080'、
+     * `host(true)` 给 'example.com'。桩照抄真包末行（见 framework-stubs.php），所以
+     * 「忘了传 true」在这里会红。**夹具必须带端口**：不带端口时两种调用同值，那样的夹具
+     * 对这条契约永远绿 —— 这个 bug 之前就是这么漏掉的。
+     */
+    #[Test]
+    public function requestAdapterHostDropsThePortThatTheRealRequestKeeps(): void
+    {
+        $request = new Request([], ['host' => 'example.com:8080']);
+
+        // 桩的两半（判别力来源，不是产品断言）：真包给什么，桩就得给什么
+        $this->assertSame('example.com:8080', $request->host(), '默认原样返回 Host 头，端口还在');
+        $this->assertSame('example.com', $request->host(true), 'true 才剥端口');
+
+        $this->assertSame('example.com', (new RequestAdapter($request))->host(), '适配器必须走剥端口的那次调用');
     }
 
     #[Test]
@@ -293,11 +313,14 @@ class ThinkphpTest extends TestCase
         $adapter->withBody('hello')->withHeaders(['X-A' => '1']);
         $res = $adapter->send();
         $this->assertInstanceOf(Response::class, $res);
-        $this->assertSame('hello', $res->body);
-        $this->assertSame('1', $res->headers['X-A']);
+        // 真名是 $data/$content/$code/$header，且全是 protected（topthink/framework 8.1.4
+        // src/think/Response.php:27/45/63/69）——`$res->headers['X-A']` 在真包上是
+        // Error: Cannot access protected property。取用走 getContent()/getHeader()/getCode()。
+        $this->assertSame('hello', $res->getContent());
+        $this->assertSame('1', $res->getHeader('X-A'));
 
         $adapter->withStatus(404);
-        $this->assertSame(404, $adapter->send()->status);
+        $this->assertSame(404, $adapter->send()->getCode());
     }
 
     /**
@@ -317,9 +340,9 @@ class ThinkphpTest extends TestCase
             ->withBody('403 Forbidden');
 
         $res = $adapter->send();
-        $this->assertSame('no-cache, private', $res->headers['Cache-Control'], '先设的头被 withBody 冲掉了');
-        $this->assertSame('403 Forbidden', $res->body);
-        $this->assertSame(403, $res->status);
+        $this->assertSame('no-cache, private', $res->getHeader('Cache-Control'), '先设的头被 withBody 冲掉了');
+        $this->assertSame('403 Forbidden', $res->getContent());
+        $this->assertSame(403, $res->getCode());
     }
 
     /**
@@ -347,9 +370,9 @@ class ThinkphpTest extends TestCase
         $adapter = new ResponseAdapter();
         $adapter->file($path);
         $res = $adapter->send();
-        $this->assertSame(200, $res->status);
-        $this->assertSame($expectedType, $res->headers['Content-Type']);
-        $this->assertSame('content', $res->body);
+        $this->assertSame(200, $res->getCode());
+        $this->assertSame($expectedType, $res->getHeader('Content-Type'));
+        $this->assertSame('content', $res->getContent());
     }
 
     #[Test]
@@ -358,8 +381,8 @@ class ThinkphpTest extends TestCase
         $adapter = new ResponseAdapter();
         $adapter->file('/no/such/file.css');
         $res = $adapter->send();
-        $this->assertSame(404, $res->status);
-        $this->assertSame('', $res->body);
+        $this->assertSame(404, $res->getCode());
+        $this->assertSame('', $res->getContent());
     }
 
     #[Test]
@@ -380,7 +403,7 @@ class ThinkphpTest extends TestCase
         });
 
         $this->assertInstanceOf(Response::class, $res);
-        $this->assertSame('ok', $res->body);
+        $this->assertSame('ok', $res->getContent());
         $this->assertInstanceOf(CacheInterface::class, CoreXhprof::getCache());
         $this->assertInstanceOf(ConfigAdapter::class, CoreXhprof::getConfig());
         $this->assertTrue(CoreXhprof::getConfig()->get('xhprof.enable'));

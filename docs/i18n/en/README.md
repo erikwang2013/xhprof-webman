@@ -328,7 +328,7 @@ XhprofMiddleware::class => [
 ],
 ```
 
-The `redis` sub-array is Yii3-specific: when no `CacheInterface` is injected, the middleware uses it to talk to phpredis directly. Keep `assets_url` at its default — any other prefix only yields a 200 with an empty body (it is a hardcoded constant in Core; see [Verification and Known Limitations](#verification-and-known-limitations)).
+The `redis` sub-array is Yii3-specific: when no `CacheInterface` is injected, the middleware uses it to talk to phpredis directly. `assets_url` may be any prefix: the report page's CSS/JS links and `StaticController` read the same option (default `/xhprof-assets`). The remaining limitations under a subdirectory deployment are in [Verification and Known Limitations](#verification-and-known-limitations).
 
 **4. Version requirement** — the `yiisoft/*` components Yii3 relies on require PHP >= 8.1. Although this package declares `php >= 8.0`, the Yii3 integration cannot be used on PHP 8.0.
 
@@ -468,6 +468,23 @@ All frameworks share these configuration options:
 
 Known limitations of these options on each framework are listed in [Verification and Known Limitations](#verification-and-known-limitations).
 
+**Language switcher on the report page**
+
+The dropdown on the right of the navigation bar lists the 13 languages by their **own names** (the `_meta.name` of each catalog, e.g. 한국어, 日本語). Each option's link is built from **the current page's query string** (`XhprofLib::report_url()`), so `?token=`, the sort order, `run` and every other parameter travel with it; switching language **never leaves the current view** — changing it on a run report keeps you on that same run.
+
+**Diagnosis card on the report page**
+
+The topmost card in the report body is "Diagnosis" (below the action bar and the run description): first "Why it is slow" (at most 3 attribution findings), then "Other findings" (at most 3 health checks). The "view" link after each finding opens that method's detail page; recursion (R4) carries a link only when the bare name really is in the symbol table — xhprof expands recursion into `fib@1`/`fib@2`, and if only the expanded names exist, looking `fib` up would miss. The six rules and their thresholds:
+
+- **R1** exclusive time ≥ 10% of the request total;
+- **R2** call count ≥ 1000;
+- **R3** a single edge is called ≥ 500 times **and** the callee's exclusive time ≥ 5% of the request total;
+- **R4** the same symbol appears at ≥ 2 different depths (recursion);
+- **R5** exclusive peak memory ≥ 30% of the global peak;
+- **R6** exclusive time > inclusive time (`excl_wt > wt`, logically impossible) — a data-integrity probe that never fires on healthy data.
+
+The thresholds are constants in `src/Core/Analysis/Analyzer.php`, and **no configuration option** can change or disable the card today (with `enable` off nothing is sampled, so there is nothing to diagnose). It appears **only on the top-level single-run view**: neither the diff view nor the function detail page renders it — the `$symbol_tab`/`$totals` passed there are not single-run values (in diff mode they are the run2 − run1 deltas), so an analysis built on them would be meaningless.
+
 ---
 
 ## Manual Initialization
@@ -593,7 +610,7 @@ src/<Fw>/
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
 | All ten frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
-| The methods the adapters call really exist | `tools/contracts/` verification loop (its own CI job): installs real framework packages and asserts via reflection that every method / constant / global function exists **for the six frameworks in the loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf are not in the loop — see below |
+| The methods the adapters call really exist | `tools/contracts/` verification loop (its own CI job): installs real framework packages and asserts via reflection that every method / constant / global function exists **for the eight frameworks in the loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf are not in the loop — see below |
 | Adapter semantics | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()` |
 
 
@@ -607,8 +624,8 @@ src/<Fw>/
 | Whether Drupal's priority really lands outside the page cache | Requires a booted Drupal kernel |
 | Symfony's `kernel.event_subscriber` auto-configuration | Requires a real container compile |
 | Static-state crosstalk in long-running processes | Inherited from the existing architecture (the same is true of Webman / Hyperf); unchanged here |
-| Real Redis I/O, browser rendering, profiling overhead under real load | Outside the scope of unit tests and the verification loop |
-| Adapter signatures and semantics for Webman / Laravel / ThinkPHP / Hyperf | these four are not in the verification loop (it covers six frameworks); their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
+| Real Redis I/O, browser rendering, profiling overhead under real load | Real Redis I/O is **in the loop** (`cases/Redis.php`: real phpredis + a real Slim request end to end — hit → persist → list page → report page); browser rendering and profiling overhead under real load stay outside the scope of unit tests and the loop |
+| Adapter signatures and semantics for ThinkPHP / Hyperf | these two are not in the verification loop (it covers eight frameworks); their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
 
 **Manual smoke checklist (three steps per framework)**
 
@@ -618,17 +635,17 @@ src/<Fw>/
 | 2 | Hit any application URL | The length of the `xhprof:run_id` key in Redis goes up by 1 |
 | 3 | Open `/xhprof` | The report page renders with its styles; `/xhprof-assets/js/xhprof_report.js` returns 200 |
 
-**Known limitation: `host()` has no port**
+**Known limitation: the `request_uri` shown in the list has no port**
 
-The `host()` contract means "host only, no port", but the links in the report list are built as `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`). So **on a non-standard port (e.g. `:8080`) the list links lose the port and lead nowhere**. This is a latent problem in the existing implementation (it affects webman / Laravel / ThinkPHP / Hyperf equally), is not fixed here, and is recorded as a known limitation.
+The `host()` contract means "host only, no port" (R-2), and all ten frameworks honour it — only the implementation differs: PSR-7's `getHost()` never carries the port, Joomla / WordPress `parse_url` it out by hand, and Webman / ThinkPHP need the strict argument `host(true)` (the default returns the `Host` header verbatim, port and all). The `request_uri` shown in the list is built as `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), so on a non-standard port (e.g. `:8080`) that URL **text** does not show the port. **The links themselves are unaffected**: the links in the list and in the report are all built by `XhprofLib::report_url()` as relative URLs (path + query only), so they open the right page and do not depend on `host()`.
 
-**Known limitation: `assets_url` only works when it is `/xhprof-assets`**
+**`assets_url` now supports a custom prefix**
 
-The asset prefix is a hardcoded constant in `src/Core/StaticController.php` (`private const URI_PREFIX = '/xhprof-assets'`), while the report page's CSS/JS links read the `assets_url` config option (`src/Core/Xhprof.php`). Once the two disagree, `getPathFromRequest()` returns `null` and `serve()` returns `withBody('')->withHeaders([])` — **a 200 empty response, not a 404**. The consequence: set `assets_url` to anything else and the CSS/JS silently go empty, leaving the report page unstyled with no error of any kind. In other words, `assets_url` is currently a fake option that only works when left at its default. This is a pre-existing problem and is not fixed here.
+The asset prefix is no longer a hardcoded constant: `src/Core/StaticController.php` matches asset paths against the `assets_url` option (default `/xhprof-assets`, trailing slash optional). The remaining limitation under a subdirectory deployment is the Drupal one below. **Boundary**: a custom prefix works out of the box on the five frameworks where a middleware or entry class short-circuits the asset path (Yii3, Symfony, Slim, WordPress, Joomla); on Laravel, Hyperf, Webman and ThinkPHP the asset route path, and on Drupal `xhprof.routing.yml`, are registered by **you** — change them together with `assets_url`, or the asset requests never reach `StaticController` and the report page loses its styles and scripts.
 
 **Known limitation: the path guard fails when Drupal lives in a subdirectory**
 
-When Drupal is installed under a subdirectory (e.g. `/sites/app/xhprof`), the path guard cannot match a URI that carries the base path, so behaviour falls back to "profiled but not saved" (with the default config, `ignore_url_arr` catches it). This is the same class of limitation as the hardcoded `assets_url` prefix.
+When Drupal is installed under a subdirectory (e.g. `/sites/app/xhprof`), the path guard cannot match a URI that carries the base path, so behaviour falls back to "profiled but not saved" (with the default config, `ignore_url_arr` catches it).
 
 **Symfony 6.4 compatibility**
 
@@ -639,6 +656,8 @@ Symfony 6.4 compatibility has been measured (which is how two over-fits invisibl
 ## Author
 
 [erik](https://erik.xyz)
+
+This package is released under the MIT license (see `LICENSE`); `src/Core/XhprofLib/**`, `src/html/js/xhprof_report.js` and `src/html/css/xhprof.css` are derived from [phacility/xhprof](https://github.com/phacility/xhprof) (Apache-2.0) and keep its terms; the third-party front-end libraries are listed in `NOTICE`.
 
 ## Support Open Source
 

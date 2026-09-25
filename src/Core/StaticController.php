@@ -10,6 +10,8 @@ use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
 class StaticController
 {
     private const ASSETS_DIR = 'src/html';
+
+    /** `xhprof.assets_url` 的默认值，与各框架配置文件里的默认值一致（见 uriPrefix()）。 */
     private const URI_PREFIX = '/xhprof-assets';
 
     private const MIME_TYPES = [
@@ -72,9 +74,10 @@ class StaticController
 
         // Content-Type 必须显式钉住，不能交给 file() 的实现去猜：Laravel 的
         // response()->file() 返回 Symfony BinaryFileResponse，它的 prepare() 在
-        // **缺** Content-Type 时用 finfo 按**内容**嗅探——实测本包 src/html 的 18 个文件里
-        // 14 个被猜错（xhprof_report.js / 三个 css 全被猜成 text/plain 或 text/html，
-        // dataTables.bootstrap.js 猜成 text/html），浏览器会拒收 text/plain 的 script、
+        // **缺** Content-Type 时用 finfo 按**内容**嗅探——实测本包 src/html 的 11 个文件里
+        // 8 个被猜错（三个 css 全被猜成 text/plain；四个 js 里 xhprof_report.js /
+        // jquery.dataTables.min.js / bootstrap.min.js 猜成 text/plain，dataTables.bootstrap.js
+        // 猜成 text/html；png/gif 两个猜对了），浏览器会拒收 text/plain 的 script、
         // 不套用 text/plain 的样式表 → 报告页在 Laravel 上无 JS 无 CSS。
         // 其余六个适配器的 file() 自己钉了同一个类型（都取自本文件的 MIME_TYPES），
         // 这里补上后十家输出一致；类型表复用 readFile() 那张，不新造第二张。
@@ -84,6 +87,30 @@ class StaticController
             'Cache-Control' => 'public, max-age=86400',
             'Content-Type' => self::contentType($realFile),
         ]);
+    }
+
+    /**
+     * 资源 URL 前缀（带尾斜杠），取自 `xhprof.assets_url`——**与各家入口类同一口径**：
+     * Slim/Symfony/WordPress/Joomla/Yii3 的短路前缀与 Drupal 的守卫都从这一个配置项
+     * 归一化出来（同一套归一化：先取原串再 rtrim，空串 = 不启用）。
+     * 四个路由型框架（Laravel/Hyperf/Webman/ThinkPHP）的资源**路由 path 不跟配置走**：
+     * 那条路由由用户在各自的路由文件里写死，改了配置只会让 Core 不再服务这条路径。
+     * 这是既有的已知边界，README 不声称自定义前缀在它们身上生效。
+     * 这里曾经硬编码 `/xhprof-assets`，于是配成别的值时入口类按配置把请求交给
+     * serve()，而 serve() 只认老前缀 → 返回**空 body 的 200**，静态资源静默消失。
+     *
+     * 归一化先取原始串、再 rtrim：先 rtrim 再判空会把 `/` 归成空串而落到默认值，
+     * 与入口类对 `/` 的判定分叉。空串/非字符串 = 不启用资源短路（入口类就不接管这类
+     * 请求，Core 也就一个都不认）。未 bootstrap 时 getConfig() 为 null，用默认值。
+     */
+    private static function uriPrefix(): string
+    {
+        $cfg = Xhprof::getConfig();
+        $assetsUrl = $cfg !== null ? $cfg->get('xhprof.assets_url', self::URI_PREFIX) : self::URI_PREFIX;
+        if (!is_string($assetsUrl) || $assetsUrl === '') {
+            return '';
+        }
+        return rtrim($assetsUrl, '/') . '/';
     }
 
     private static function getPathFromRequest(RequestInterface $request): ?string
@@ -96,8 +123,8 @@ class StaticController
         if ($pathOnly === null || $pathOnly === '') {
             return null;
         }
-        $prefix = self::URI_PREFIX . '/';
-        if (!str_starts_with($pathOnly, $prefix)) {
+        $prefix = self::uriPrefix();
+        if ($prefix === '' || !str_starts_with($pathOnly, $prefix)) {
             return null;
         }
         $path = substr($pathOnly, strlen($prefix));

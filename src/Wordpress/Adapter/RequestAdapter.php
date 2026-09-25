@@ -90,8 +90,10 @@ class RequestAdapter implements RequestInterface
             return '';
         }
 
-        // 契约要求只返回主机名、不含端口（R-2）。已知代价：:8080 部署下列表页链接会坏，
-        // 这是既有问题，十个框架一致，本次不修。
+        // 契约要求只返回主机名、不含端口（R-2）。已知代价只有一处：列表页那行
+        // request_uri 的**显示文本**不体现端口（它由 `host() . uri()` 拼成，
+        // 见 XHProfRunsDefault 的 request_uri）。页面里的链接不受影响——列表页与报告页
+        // 的链接统一由 XhprofLib::report_url() 生成相对 URL（只含 path+query）。十家一致。
         $parsed = parse_url('http://' . $host, PHP_URL_HOST);
 
         return is_string($parsed) && $parsed !== '' ? $parsed : $host;
@@ -128,7 +130,16 @@ class RequestAdapter implements RequestInterface
         return is_string($value) && $value !== '' ? $value : '127.0.0.1';
     }
 
-    /** is_ssl() 走 WordPress 自己的判断，反代下由站点配置（HTTPS 常量 / X-Forwarded-Proto）决定。 */
+    /**
+     * url() 的 scheme 由 WordPress 自己的 is_ssl() 决定，本包不猜。
+     *
+     * 它只看两个来源（真源码核对：roots/wordpress-no-content 6.9.9 `wp-includes/load.php`
+     * 的 `is_ssl()`）：`$_SERVER['HTTPS']` 为 `'on'`/`'1'`，**或者** `HTTPS` 未设置时
+     * `SERVER_PORT === '443'`。注意它**完全不看 `X-Forwarded-Proto`**，而且 `HTTPS` 一旦
+     * 被设置（哪怕值是 `'off'`）就不会再走端口那条分支 —— 反代终止 TLS 的部署要在站点侧把
+     * `HTTPS` 配好，否则报告页链接会是 http。九种 `$_SERVER` 组合已钉在
+     * `tools/contracts/cases/Wordpress.php`（环里跑的是真 WP 核心源码，不是桩）。
+     */
     private function scheme(): string
     {
         return is_ssl() ? 'https' : 'http';

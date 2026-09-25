@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Core\I18n;
 
 use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
+use ErikWang2013\Xhprof\Core\Xhprof;
 
 /**
  * 报告页文案的语言层。词表在 src/Core/I18n/lang/<locale>.php，键集必须与
@@ -51,19 +52,31 @@ class I18n
     ];
 
     /**
-     * 当前语言 + 已载入的词表。
+     * 当前语言。**Hyperf 协程下存进 \Hyperf\Context\Context**（由 Hyperf 中间件
+     * markHyperfContext() 置位），其余框架存这个静态属性——那些框架的进程模型本来就是
+     * 一请求一进程或已有自己的隔离。
      *
-     * ponytail: 静态而非协程隔离。同一进程内两个并发请求（Hyperf 协程）会互相
-     * 覆盖语言，最坏结果是「这一页显示成了隔壁请求的语言」——影响的是文案，不是
-     * 数据。真要修：照 Xhprof::getRequest() 的做法塞进 \Hyperf\Context\Context。
+     * 为什么语言非要隔离：`Xhprof::index()` 在**页首**读一次 htmlLang()/dir() 拼
+     * `<html>`，而正文的 t() 要在 Redis I/O **之后**才读；Hyperf 常驻 worker 里中间
+     * 一让出协程，另一个请求就把语言改掉了 —— 同一页能出 `<html lang="en">` 配阿拉伯语
+     * 正文、`bodyDir=ltr`。文案错位不影响数据，但它是最刺眼的一种错，而且可复现。
+     *
+     * **这是部分隔离，不是「协程问题解决了」**：XhprofDisplay 的
+     * `$stats`/`$pc_stats`/`$totals`/`$sort_col` 那批渲染静态量仍在共享区，两个协程并发
+     * 渲染同一进程时照样互相覆盖。隔离的只有语言这一份状态。
      */
     private static string $locale = self::FALLBACK;
 
-    /** @var array<string, mixed>|null 当前语言的词表，null = 还没载入 */
-    private static ?array $catalog = null;
+    /** 协程 Context 里语言占的键（与 Xhprof 的 'xhprof.request' 等同一个命名空间）。 */
+    private const LOCALE_KEY = 'xhprof.locale';
 
-    /** @var array<string, mixed>|null 源语言（zh_CN）词表，只载入一次 */
-    private static ?array $source = null;
+    /**
+     * 语言码 => 词表，每份只载入一次。
+     *
+     * 按语言键的**不可变缓存**：载进来就不再改，所以协程之间共享是安全的（原先记的是
+     * 「当前语言的词表」，那份状态天生属于某一个请求，setLocale() 得把它清掉重载）。
+     */
+    private static array $catalogs = [];
 
     /**
      * 按四级优先级定出本次请求的语言。任何一级的取值不认识就跳过，绝不抛异常。
@@ -125,13 +138,28 @@ class I18n
     /** 设定当前语言。未知码回落到 zh_CN，不抛异常。 */
     public static function setLocale(mixed $locale): void
     {
-        self::$locale = self::normalize($locale) ?? self::FALLBACK;
-        self::$catalog = null;
+        $code = self::normalize($locale) ?? self::FALLBACK;
+        if (self::inCoroutineContext()) {
+            \Hyperf\Context\Context::set(self::LOCALE_KEY, $code);
+            return;
+        }
+        self::$locale = $code;
     }
 
     public static function locale(): string
     {
+        if (self::inCoroutineContext()) {
+            // 再归一化一次：这个键只有 setLocale() 会写，但读到什么就返回什么的话，
+            // 一旦有别人往同名键里塞了字符串，`<html lang="…">` 与切换器就会印出它。
+            return self::normalize(\Hyperf\Context\Context::get(self::LOCALE_KEY)) ?? self::FALLBACK;
+        }
         return self::$locale;
+    }
+
+    /** Hyperf 协程环境且 Context 类真的在（与 Xhprof::getRequest() 同一套判定）。 */
+    private static function inCoroutineContext(): bool
+    {
+        return Xhprof::isHyperfContext() && class_exists(\Hyperf\Context\Context::class);
     }
 
     /** `<html lang="…">` 用的 BCP-47 标签：`zh_CN` → `zh-CN`。 */
@@ -211,7 +239,8 @@ class I18n
     /** 某个词表码对应的词表；给自检与 parity 测试读全量用。 */
     public static function catalogOf(string $locale): array
     {
-        return self::load(self::normalize($locale) ?? self::FALLBACK);
+        $code = self::normalize($locale) ?? self::FALLBACK;
+        return self::$catalogs[$code] ??= self::load($code);
     }
 
     /**
@@ -272,22 +301,16 @@ class I18n
         return null;
     }
 
-    /** @return array<string, mixed> */
+    /** 当前语言的词表——**每次现读** locale()，不再有「换语言要清缓存」这一步。 @return array<string, mixed> */
     private static function catalog(): array
     {
-        if (self::$catalog === null) {
-            self::$catalog = self::load(self::$locale);
-        }
-        return self::$catalog;
+        return self::catalogOf(self::locale());
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<string, mixed> 源语言（zh_CN）词表 —— t()/has() 的最后一级兜底 */
     private static function source(): array
     {
-        if (self::$source === null) {
-            self::$source = self::load(self::FALLBACK);
-        }
-        return self::$source;
+        return self::catalogOf(self::FALLBACK);
     }
 
     /** 读某语言的词表；文件缺失或内容不合法一律当空词表，由 t() 回落到中文源。 */

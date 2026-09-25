@@ -371,9 +371,11 @@ return static function (): array {
     // 流式响应没有 content —— 控制器里 (string) 转换与 instanceof 判断的前提
     $expect('L2 R-5 真实 BinaryFileResponse::getContent() 恒为 false（流式发送）', $fileSent->getContent(), false);
 
-    // Content-Type 必须由 Core 的 MIME 表钉住：交给真实 prepare() 会按**内容**嗅探，
-    // 本包的 css/js 会被猜成 text/plain / text/x-Algol68，浏览器直接丢弃样式表与脚本。
-    // 未钉时的猜测值只作为观测写进 detail，不冻结成期望（那是 symfony/mime 的行为，会随它升级变）。
+    // Content-Type 必须由 Core 的 MIME 表钉住：交给真实 prepare() 会按**内容**嗅探，本机实测
+    // src/html 的 11 个资源里 8 个被猜错，最好复现的例子是 js/dataTables.bootstrap.js → text/html
+    // （js 被当成 HTML，浏览器直接拒收脚本；3 个 css 则全被猜成 text/plain）。
+    // 未钉时的猜测值只作为观测写进 detail，不冻结成期望（那是 symfony/mime 与**运行环境
+    // libmagic 数据库**的行为，换台机器会变）。
     $expect('L2 R-5 css 钉成 Core MIME 表的 text/css（prepare 前）', $fileSent->headers->get('Content-Type'), 'text/css');
     // 真实链路上 HttpKernel::filterResponse() 会调 prepare()：它给 text/* 追加 charset，
     // 但**不会**改写类型本身 —— 所以钉住的值一路活到浏览器

@@ -1,4 +1,4 @@
-/vendor/
+vendor
 /composer.lock
 # 契约验证环是独立的嵌套 composer 项目（前面两条带 / 前缀只匹配仓库根，
 # 否则 tools/contracts/vendor 会被 git add tools 一并扫进仓库）

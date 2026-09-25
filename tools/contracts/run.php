@@ -23,11 +23,24 @@ require_once __DIR__ . '/lib/proc.php';
  * 这正是重点 —— SKIP 是一次需要签字的决定，不是一句注释。
  *
  * ---------------------------------------------------------------------------
- * 2026-09-25 签字：9（Drupal 3 + Joomla 5 + WordPress 1），逐条审核如下。
+ * 2026-09-25 签字：8（Drupal 3 + Joomla 5），逐条审核如下。
+ * 同日变更：WordPress 的 1 个 SKIP **解冻**，见下面那条留档。
  * ---------------------------------------------------------------------------
- * WordPress 1 ｜ L2 适配器语义 —— 已**亲自复核理由本身成立**：本机实测
- *   `wp_unslash('x')` 与 `is_ssl()` 都返回 NULL、函数体只有 3 行（php-stubs 是空壳），
- *   故加载它跑适配器得到的是 null 而非真实 WP 语义。真 WP 需完整安装 + DB + 引导。
+ * WordPress 0 ｜ L2 适配器语义 —— 2026-09-25 **解冻（9 → 8）**。原理由是「php-stubs 的函数体
+ *   是空的，加载它跑适配器只能得到 null；真 WP 需完整安装 + DB + wp-settings.php 引导」。
+ *   前半句实测成立（`wordpress-stubs.php:131565` 的 `function wp_unslash($value) {}`、
+ *   `:143461` 的 `function is_ssl() {}`），但**结论推错了**：要用真语义不必装站 —— 真
+ *   `wp-includes/{plugin,load,formatting,functions}.php` 只要定义 `ABSPATH`/`WPINC` 就能
+ *   独立包含，无 DB、无 wp-config.php、无引导（本机实测 WordPress 6.9.9：4 个文件 15ms）。
+ *   里面的语义是真的：`wp_unslash()` 走 `stripslashes_deep()`（递归 + 非字符串透传）、
+ *   `is_ssl()` 是真分支表（且**完全不看** X-Forwarded-Proto），`status_header()` 过真
+ *   `apply_filters('status_header', ...)`，`add_action()` 背后是真的 `WP_Hook`（PHP_INT_MIN
+ *   优先级被原样保留）。故该卡改为 **L2-lite：真 WP 核心源码 + 真适配器**，39 项断言、0 SKIP；
+ *   依赖 `roots/wordpress-no-content`（composer，`^6.9`，实测 6.9.9），缺包时 FAIL 不 SKIP。
+ *   诚实边界（不是 SKIP，是另一层已有覆盖）：CLI 下 `header()` 是 no-op、`headers_list()` 恒空，
+ *   「头真的发出去了吗」在契约环里不可观测；那一半由 `tests/Unit/Adapter/WordpressTest.php`
+ *   的真 `php -S` 往返覆盖（含 `default_mimetype`/`default_charset` 扰动）。本卡只钉可观测的
+ *   那一半：真 `status_header()` 收到的状态码与状态行字面量（经真过滤器）、`send()` 的 echo 体。
  * Drupal 3 ｜ ① ConfigAdapter 的真实 config.factory/ImmutableConfig 要 booted kernel +
  *   配置存储；② 服务串接（http_middleware 标签 / priority 是否真最外 / 内层 kernel 注入）
  *   要编译容器；③ Drupal\Core\* 的桩忠实性无法自证。②的替代证据是该卡**跨 13 个版本
@@ -40,7 +53,7 @@ require_once __DIR__ . '/lib/proc.php';
  * 采样断言计入 SKIP（诚实做法，好过静默通过），总数会变成 13。故 contracts.yml
  * **必须装 xhprof** —— 否则这个常量随环境漂移，这道签字闸门就失去意义。
  */
-const EXPECTED_SKIPS = 9;
+const EXPECTED_SKIPS = 8;
 
 $cases = glob(__DIR__ . '/cases/*.php') ?: [];
 sort($cases);

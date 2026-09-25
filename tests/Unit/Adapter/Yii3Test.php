@@ -840,18 +840,16 @@ class Yii3Test extends TestCase
     }
 
     /**
-     * 特征化测试（characterization test）：**钉住现状，不是在声明这是对的**。
+     * 配了自定义（非 CDN）本地前缀时，本中间件短路到的资源真能读到文件内容。
      *
-     * 根因在只读的 Core\StaticController 里：`serve()` 把 URI 前缀硬编码成
-     * `/xhprof-assets`，而本中间件按**配置的** assets_url 决定是否短路。两者不一致时，
-     * 配置前缀下的请求会被本中间件吞掉、再由 serve() 返回一个**空 body 的 200**
-     * （业务路由也因此拿不到这些路径）。
-     *
-     * 若将来把 StaticController 的前缀改成可配置（或本中间件改为自行解析文件），
-     * 请删掉本用例，换成断言真能读到 css 内容。
+     * 曾用名 `characterizationCustomLocalAssetsPrefixYieldsEmpty200`：Core 把 URI 前缀
+     * 硬编码成 `/xhprof-assets`，而本中间件按**配置的** assets_url 决定是否短路，两者
+     * 不一致时配置前缀下的请求被本中间件吞掉、再由 serve() 返回**空 body 的 200**
+     * （业务路由也因此拿不到这些路径）。StaticController 改成读配置后本条翻转成
+     * 正向断言——`characterization` 这个名字与新行为相反，必须一起改掉。
      */
     #[Test]
-    public function characterizationCustomLocalAssetsPrefixYieldsEmpty200(): void
+    public function customLocalAssetsPrefixServesTheAssetFile(): void
     {
         $cache = new FakeCache();
         $middleware = $this->middleware(['enable' => true, 'assets_url' => '/static/xhprof'], $cache);
@@ -861,8 +859,68 @@ class Yii3Test extends TestCase
 
         $this->assertFalse($handler->called, '配置前缀下的请求被本中间件接管');
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertSame('', (string) $response->getBody(), 'StaticController 不认 /static/xhprof，读不到文件');
-        $this->assertSame('', $response->getHeaderLine('Content-Type'));
+        $this->assertSame('text/css', $response->getHeaderLine('Content-Type'), 'Content-Type 由 Core 按扩展名钉住');
+        $this->assertStringContainsString(
+            '--xp-bg: #f6f8fa',
+            (string) $response->getBody(),
+            '配置前缀下的请求必须真的读到 src/html/css/xhprof.css 的内容'
+        );
+    }
+
+    /** 与 DrupalTest::assetsUrlGuardProvider 同一组边界（那边把两票写在一条用例里） */
+    public static function assetsUrlBoundaries(): iterable
+    {
+        yield '没有配置' => [null, '/xhprof-assets/css/xhprof.css', true];
+        yield '配置 = 默认值' => ['/xhprof-assets', '/xhprof-assets/css/xhprof.css', true];
+        yield '配置带尾斜杠' => ['/xhprof-assets/', '/xhprof-assets/css/xhprof.css', true];
+        yield '自定义前缀' => ['/static/xhprof', '/static/xhprof/css/xhprof.css', true];
+        yield '自定义前缀 + 尾斜杠' => ['/static/xhprof/', '/static/xhprof/css/xhprof.css', true];
+        // 判别力来源：配了自定义前缀后**老路径不再被认**（否则同一份文件有两个 URL）
+        yield '自定义前缀 + 老路径' => ['/static/xhprof', '/xhprof-assets/css/xhprof.css', false];
+        yield 'CDN 绝对 URL' => ['https://cdn.test/xhprof-assets', '/xhprof-assets/css/xhprof.css', false];
+        // 这一格以前两边分叉：本中间件把空串回落成默认前缀（认下 /xhprof-assets/），
+        // Core 对空串是「一个都不认」→ serve() 返回空 body 的 200，资源静默消失。
+        yield '配置成空串' => ['', '/xhprof-assets/css/xhprof.css', false];
+        yield '配置成 /' => ['/', '/css/xhprof.css', true];
+    }
+
+    /**
+     * 中间件的短路判定与 Core 的 `serve()` 判定必须同源（两票制）。
+     *
+     * 分叉的后果不是报错而是**静默**：报告页 CSS/JS 全空、业务路由也拿不到那些路径。
+     * 单跑 `serve()` 或单跑 `process()` 都看不出来，只有同一条路径问两次才成立。
+     */
+    #[Test]
+    #[DataProvider('assetsUrlBoundaries')]
+    public function guardAndServeAgreeOnWhichPathsAreAssets(?string $assetsUrl, string $path, bool $isAsset): void
+    {
+        $config = ['enable' => true];
+        if ($assetsUrl !== null) {
+            $config['assets_url'] = $assetsUrl;
+        }
+        $cache = new FakeCache();
+        $middleware = $this->middleware($config, $cache);
+
+        // 第 1 票：本中间件短路 —— 业务路由没被调用 ⇔ 认作资源
+        $handler = $this->requestHandler();
+        $middleware->process(new FakeServerRequest('GET', $path), $handler);
+        $this->assertSame(
+            $isAsset,
+            !$handler->called,
+            "中间件对 $path 的判定（assets_url = " . var_export($assetsUrl, true) . '）'
+        );
+
+        // 第 2 票：Core 自己的判定 —— 真读出包内 css ⇔ 认作资源。放在 process() 之后，
+        // 因为 serve() 读的是 bootstrap 写进去的那份配置。
+        $served = StaticController::serve(
+            new RequestAdapter(new FakeServerRequest('GET', $path)),
+            new ResponseAdapter(new FakeResponseFactory())
+        )->send();
+        $this->assertSame(
+            $isAsset,
+            str_contains((string) $served->getBody(), '--xp-bg: #f6f8fa'),
+            "Core serve() 对 $path 的判定（assets_url = " . var_export($assetsUrl, true) . '）'
+        );
     }
 
     #[Test]

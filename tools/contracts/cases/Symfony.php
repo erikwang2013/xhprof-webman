@@ -29,9 +29,13 @@ declare(strict_types=1);
  *      → 'max-age=86400, public'）、getContent() 恒为 false（流式发送）、
  *      Response::prepare() 只给 text/* 补 charset；
  *   g2) **MIME 陷阱（实测）**：prepare()（真实应用里 ResponseListener@0 会调）靠 Mime 组件的
- *      **内容**嗅探猜类型 —— 本包的 css/js 全被猜成 text/plain（jquery.autocomplete.js 甚至是
- *      text/x-Algol68）；缺 symfony/mime 时更是直接 LogicException。适配器因此从 Core 的
- *      MIME 表自己钉类型，并逐个断言 src/html 里**每个真实资源**的最终 Content-Type；
+ *      **内容**嗅探猜类型 —— 本机实测 src/html 的 11 个资源里 8 个被猜错：3 个 css 全是
+ *      text/plain，5 个 js 里 4 个 text/plain 而 `js/dataTables.bootstrap.js` 是 **text/html**
+ *      （只有 2 个 png 与 1 个 gif 猜对）；缺 symfony/mime 时更是直接 LogicException。
+ *      注意嗅探结果来自**运行环境的 libmagic 数据库**，不是稳定期望值：所以反面证据写成
+ *      判别式（`!= text/css`）+ 一条前提守卫，实测字面量只进 detail 不进 $expect。
+ *      适配器因此从 Core 的 MIME 表自己钉类型，并逐个断言 src/html 里**每个真实资源**的
+ *      最终 Content-Type；
  *   g3) **报告页 Cache-Control 的掩体（实测）**：真实 ResponseHeaderBag 对**没设过**
  *      Cache-Control 的响应会自己**计算**一个默认值，恰好等于 'no-cache, private' ——
  *      所以直接断言这个字面量在真包路径上恒真（实测：去掉入口类的显式设，照样绿）。
@@ -371,9 +375,14 @@ return static function (): array {
     // prepare() 由 ResponseListener@0（FrameworkBundle 注册）在每个响应上调用，它会补
     // Content-Type。我们的适配器**已经自己钉了**类型，所以：
     //  - 无论有没有 symfony/mime，prepare() 都不该改动我们钉的类型（下面第一条断言）；
-    //  - 反面证据（为什么必须自己钉）：不钉的话 prepare() 会走 Mime 组件的**内容**嗅探，
-    //    实测本包的 css/js 全被猜成 text/plain（一个 js 是 text/x-Algol68）；没有 mime 时
-    //    更是直接抛 LogicException。这两种环境各有一条真断言，都不是 skip。
+    //  - 反面证据（为什么必须自己钉）：不钉的话 prepare() 会走 Mime 组件的**内容**嗅探。
+    //    实测本机：src/html 的 11 个资源里 8 个被猜错，最好复现的例子是
+    //    `js/dataTables.bootstrap.js` → **text/html**（js 被当成 HTML，浏览器直接拒收脚本）
+    //    ——这个文件就在仓库里，永远可复现，换台机器也一样。
+    //    但"猜错成什么"是**运行环境 libmagic 数据库**的事（别的机器可能真猜对 text/css），
+    //    所以这里钉判别式（`!= text/css`）+ 一条前提守卫（prepare() 确实给出了非空
+    //    Content-Type，否则判别式在"什么都没给"上空转），实测字面量进 detail 不进 $expect。
+    //    没有 mime 时更是直接抛 LogicException。这两种环境各有一条真断言，都不是 skip。
     $assetsRequest = Symfony\Component\HttpFoundation\Request::create('/xhprof-assets/css/xhprof.css');
     $fileSent->prepare($assetsRequest);
     // charset 的**大小写不比**：prepare() 6.4 补 'UTF-8'、7.x 补 'utf-8'（实测），而 charset 参数
@@ -390,13 +399,24 @@ return static function (): array {
     if (class_exists(Symfony\Component\Mime\MimeTypes::class)) {
         $bare = new Symfony\Component\HttpFoundation\BinaryFileResponse($css);
         $bare->prepare($assetsRequest);
+        $bareType = $bare->headers->get('Content-Type');
+        // 前提守卫：少了这一条，"猜错了"在 prepare() 什么都没给（null）时也成立——空转。
         $expect(
-            'L2 反面证据：不钉类型时 prepare() 用内容嗅探，把这个 css 猜成 text/plain',
-            $bare->headers->get('Content-Type'),
-            'text/plain; charset=utf-8'
+            'L2 反面证据的前提：不钉类型时 prepare() 确实给出了非空 Content-Type（否则下面的判别式空转）',
+            is_string($bareType) && $bareType !== '',
+            true
         );
-        $mimeNote = 'symfony/mime 已装：不钉 Content-Type 时 prepare() 会把本包 css/js 猜成 text/plain'
-            . '（jquery.autocomplete.js 实测 text/x-Algol68），故适配器改用 Core 的 MIME 表';
+        // 判别式而不是字面量：嗅探值是运行环境 libmagic 的结论，冻成期望等于让环的红绿
+        // 取决于换没换机器。这条只在「嗅探恰好猜对」时红 —— 那正是值得停下来看的时刻：
+        // 猜对了，适配器显式钉类型这件事就需要重新论证，而不是继续被当作理所当然。
+        $expect(
+            'L2 反面证据：不钉类型时 prepare() 用内容嗅探，给出的不是该文件该有的 text/css（实测值见失败输出/detail）',
+            str_starts_with(strtolower((string) $bareType), 'text/css'),
+            false
+        );
+        $mimeNote = 'symfony/mime 已装：不钉 Content-Type 时 prepare() 按内容嗅探，本机实测 '
+            . var_export($bareType, true) . '（src/html 11 个资源里 8 个被猜错；最好复现的例子是'
+            . ' js/dataTables.bootstrap.js → text/html），故适配器改用 Core 的 MIME 表';
     } else {
         $bareThrown = null;
         $bare = new Symfony\Component\HttpFoundation\BinaryFileResponse($css);
@@ -425,11 +445,13 @@ return static function (): array {
         'gif' => 'image/gif',
     ];
     $shipped = 0;
+    $shippedDirs = [];
     foreach ((array) glob($repoRoot . '/src/html/*/*') as $assetPath) {
         if (!is_file((string) $assetPath)) {
             continue;
         }
         $shipped++;
+        $shippedDirs[basename(dirname((string) $assetPath))] = true;
         $ext = pathinfo((string) $assetPath, PATHINFO_EXTENSION);
         $expect("L2 资源类型：src/html 里出现的是已登记扩展名（{$ext}）", array_key_exists($ext, $assetTypes), true);
         $srv = (new \ErikWang2013\Xhprof\Symfony\Adapter\ResponseAdapter())->file((string) $assetPath)->send();
@@ -440,7 +462,14 @@ return static function (): array {
             strtolower($assetTypes[$ext] ?? '（未登记）')
         );
     }
-    $expect('L2 资源类型：包内资源确实被遍历到（不是空目录）', $shipped >= 15, true);
+    // 地板只用来证明 glob 真扫到了文件（不是空目录），不是「资源配额」：
+    // 2026-09-25 删掉 7 个零引用文件后 src/html 是 11 个（18→11），地板跟着降到 11，
+    // 此后任何一次删除都会在这里显式红一次 —— 想降就得连带改这行。
+    // 光看总数看不出「某个子目录被清空」，所以四个子目录也必须各自贡献至少一个文件。
+    $expect('L2 资源类型：包内资源确实被遍历到（不是空目录）', $shipped >= 11, true);
+    foreach (['css', 'js', 'images', 'jquery'] as $assetDir) {
+        $expect("L2 资源类型：src/html/{$assetDir} 至少一个资源（子目录没被清空）", isset($shippedDirs[$assetDir]), true);
+    }
 
     // ---- f) ConfigAdapter：R-6 两种取法 + R-7 非递归合并 ----
     $defaults = new \ErikWang2013\Xhprof\Symfony\Adapter\ConfigAdapter();

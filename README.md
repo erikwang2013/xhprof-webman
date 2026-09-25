@@ -326,7 +326,7 @@ XhprofMiddleware::class => [
 ],
 ```
 
-`redis` 子数组是 Yii3 独有的：不注入 `CacheInterface` 时，中间件用它直连 phpredis。`assets_url` 请保持默认值——改成别的前缀只会得到 200 空响应（Core 里是硬编码常量，见[验证与已知限制](#验证与已知限制)）。
+`redis` 子数组是 Yii3 独有的：不注入 `CacheInterface` 时，中间件用它直连 phpredis。`assets_url` 可以改成任意前缀：报告页的 CSS/JS 链接与 `StaticController` 读的是同一个配置项（默认 `/xhprof-assets`）。目录/子路径部署下的剩余限制见[验证与已知限制](#验证与已知限制)。
 
 **4. 版本要求** — Yii3 依赖的 `yiisoft/*` 组件要求 PHP >= 8.1，本包虽然声明 `php >= 8.0`，但在 PHP 8.0 上无法使用 Yii3 接入。
 
@@ -466,6 +466,23 @@ services:
 
 各配置项在不同框架上的已知限制见[验证与已知限制](#验证与已知限制)。
 
+**报告页的语言切换器**
+
+导航右侧的下拉列出 13 种语言的**自称**（取自各词表里的 `_meta.name`，如「한국어」「日本語」）。每个选项的链接由**当前页面的查询串**生成（`XhprofLib::report_url()`），所以 `?token=`、排序、`run` 等参数都会跟着走；切换语言**不会离开当前视图**——在 run 报告页换语言仍停在同一个 run 上。
+
+**报告页的诊断区**
+
+报告页正文最上面那块卡片就是「诊断结论」（在操作栏与 run 说明之下）：先列「为什么慢」（最多 3 条归因），再列「其他发现」（最多 3 条体检项）。每条结论后的「查看」链接跳到该方法详情页；递归（R4）只在裸名确实在符号表里时才给链接——xhprof 把递归展开成 `fib@1`/`fib@2`，若符号表里只剩展开后的名字，按 `fib` 去查就会落空。六条规则与阈值：
+
+- **R1** 自身耗时 ≥ 请求总耗时的 10%；
+- **R2** 调用次数 ≥ 1000；
+- **R3** 单条边的调用次数 ≥ 500，且被调方自身耗时 ≥ 请求总耗时的 5%；
+- **R4** 同名符号出现在 ≥ 2 个不同深度（递归）；
+- **R5** 自身内存峰值 ≥ 全局内存峰值的 30%；
+- **R6** 自身耗时 > 总耗时（`excl_wt > wt`，逻辑上不可能）——数据完整性探针，健康数据下不触发。
+
+阈值写死在 `src/Core/Analysis/Analyzer.php` 的常量里，目前**没有配置项**能调整或关闭诊断区（`enable` 关掉后没有采样数据，自然也没有诊断）。它**只在顶层单 run 视图**出现：diff 对比视图与函数详情页都不渲染——那两处传入的 `$symbol_tab`/`$totals` 不是单 run 的值（diff 模式下是 run2 − run1 的增量），据此分析没有意义。
+
 ---
 
 ## 手动初始化
@@ -591,7 +608,7 @@ src/<Fw>/
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
 | 十个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job）：装真实框架包，对**已入环的 6 个框架**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal）用反射断言每个方法 / 常量 / 全局函数存在；Webman / Laravel / ThinkPHP / Hyperf 未入环，见下 |
+| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job）：装真实框架包，对**已入环的 8 个框架**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；ThinkPHP / Hyperf 未入环，见下 |
 | 适配器语义正确 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效 |
 
 
@@ -605,8 +622,8 @@ src/<Fw>/
 | Drupal 的 priority 是否真落在页面缓存之外 | 需要 booted 的 Drupal 内核 |
 | Symfony 的 `kernel.event_subscriber` 自动配置 | 需要真实容器编译 |
 | 长驻进程下的静态状态串扰 | 继承自既有架构（Webman / Hyperf 同样如此），本次未改 |
-| 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 超出单测与验证环的范围 |
-| Webman / Laravel / ThinkPHP / Hyperf 的适配器签名与语义 | 这四家未装入验证环（环只覆盖 6 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
+| 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 真实 Redis 读写**已进验证环**（`cases/Redis.php`：真 phpredis + 真 Slim 端到端——业务请求 → 落库 → 列表页 → 报告页）；浏览器渲染与真实负载下的采样开销仍超出单测与验证环的范围 |
+| ThinkPHP / Hyperf 的适配器签名与语义 | 这两家未装入验证环（环覆盖 8 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
 
 **手工冒烟清单（每个框架三步）**
 
@@ -616,17 +633,17 @@ src/<Fw>/
 | 2 | 访问任意业务 URL | Redis 里 `xhprof:run_id` 的长度 +1 |
 | 3 | 访问 `/xhprof` | 报告页与样式正常显示；`/xhprof-assets/js/xhprof_report.js` 返回 200 |
 
-**已知限制：`host()` 不含端口**
+**已知限制：列表页显示的 `request_uri` 不含端口**
 
-`host()` 契约的语义是「仅 host，不含端口」，而报告页列表里的链接由 `host() . uri()` 拼成（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`）。因此**在非标准端口（如 `:8080`）部署时，列表页链接会丢掉端口，点进去是错的**。这是既有实现的潜在问题（webman / Laravel / ThinkPHP / Hyperf 上同样存在），本次不修，记为已知限制。
+`host()` 契约的语义是「仅 host，不含端口」（R-2），十个框架都遵守，只是实现方式不同：PSR-7 的 `getHost()` 天然不含端口，Joomla / WordPress 手工 `parse_url` 一次，Webman 与 ThinkPHP 要传严格参数 `host(true)`（默认参数会把 `Host` 头连同端口原样返回）。列表页显示的 `request_uri` 由 `host() . uri()` 拼成（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`），所以非标准端口（如 `:8080`）部署时，列表里那行 URL **文本**不体现端口。**链接本身不受影响**：列表页与报告页内的链接统一由 `XhprofLib::report_url()` 生成相对 URL（只含 path + query），点进去是正确的页面，不依赖 host。
 
-**已知限制：`assets_url` 只有填成 `/xhprof-assets` 才有效**
+**`assets_url` 已支持自定义前缀**
 
-静态资源前缀在 `src/Core/StaticController.php` 里是硬编码常量（`private const URI_PREFIX = '/xhprof-assets'`），而报告页的 CSS/JS 链接读的是配置项 `assets_url`（`src/Core/Xhprof.php`）。两者一旦不一致，`getPathFromRequest()` 返回 `null`，`serve()` 返回的是 `withBody('')->withHeaders([])`——**200 空响应，不是 404**。后果：把 `assets_url` 改成任何其它值，CSS/JS 会静默变空，报告页没有样式且没有任何报错。也就是说 `assets_url` 目前实际上是「只有保持默认值才有效」的假配置项。既有问题，本次不修。
+静态资源前缀不再是硬编码常量：`src/Core/StaticController.php` 按配置项 `assets_url` 匹配资源路径（默认 `/xhprof-assets`，尾斜杠可有可无）。目录/子路径部署下的剩余限制见下一条 Drupal。 **边界**：资源前缀在「中间件/入口类自行短路」的五家（Yii3、Symfony、Slim、WordPress、Joomla）上开箱即用；Laravel、Hyperf、Webman、ThinkPHP 的资源路由 path 与 Drupal 的 `xhprof.routing.yml` 都由**你**注册，改 `assets_url` 时要一起改，否则资源请求落不到 `StaticController`，报告页会丢样式与脚本。
 
 **已知限制：Drupal 装在子目录时路径守卫失效**
 
-Drupal 装在子目录（如 `/sites/app/xhprof`）时，路径守卫匹配不上带 base path 的 URI，于是回到「采样但不落库」的行为（默认配置下由 `ignore_url_arr` 兜住）。与 `assets_url` 硬编码前缀属同一类限制。
+Drupal 装在子目录（如 `/sites/app/xhprof`）时，路径守卫匹配不上带 base path 的 URI，于是回到「采样但不落库」的行为（默认配置下由 `ignore_url_arr` 兜住）。
 
 **Symfony 6.4 兼容性**
 
@@ -637,6 +654,8 @@ Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看
 ## 作者
 
 [艾瑞可 erik](https://erik.xyz)
+
+本包以 MIT 授权发布（见 `LICENSE`）；`src/Core/XhprofLib/**`、`src/html/js/xhprof_report.js`、`src/html/css/xhprof.css` 派生自 [phacility/xhprof](https://github.com/phacility/xhprof)（Apache-2.0），沿用其条款；第三方前端库清单见 `NOTICE`。
 
 ## 开源不易，欢迎支持
 

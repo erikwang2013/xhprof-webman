@@ -324,6 +324,58 @@ namespace Symfony\Component\HttpFoundation {
             return (string) $this->server->get('REQUEST_URI', '/');
         }
 
+        /**
+         * 路由匹配用的 base path。真实 prepareBaseUrl() 有五个分支（还要比对
+         * SCRIPT_FILENAME / PHP_SELF / ORIG_SCRIPT_NAME，并按 URL 编码比前缀），
+         * 本包只用得到两种形态 —— 已对 symfony/http-foundation v7.4.19 逐个实测：
+         *   SCRIPT_NAME=''                   → ''
+         *   SCRIPT_NAME='/subdir/index.php' 且 REQUEST_URI 以它开头 → '/subdir'
+         *   SCRIPT_NAME='/index.php' 且 REQUEST_URI 以它开头       → '/index.php'
+         */
+        public function getBaseUrl(): string
+        {
+            $script = (string) $this->server->get('SCRIPT_NAME', '');
+            if ($script === '') {
+                return '';
+            }
+            $requestUri = $this->pathOnly();
+            if (str_starts_with($requestUri, $script)) {
+                return $script;
+            }
+            $dir = rtrim(str_replace('\\', '/', dirname($script)), '/');
+
+            return ($dir !== '' && str_starts_with($requestUri, $dir . '/')) ? $dir : '';
+        }
+
+        /**
+         * 真实签名 getPathInfo(): string —— REQUEST_URI 丢掉 query 与 baseUrl 之后剩下的那段。
+         * 这就是 Drupal 路由**实际匹配**的路径（RequestContext::fromRequest() 用的它），
+         * 所以子目录安装（baseUrl='/subdir'）时它与 getRequestUri() 不同。
+         */
+        public function getPathInfo(): string
+        {
+            $requestUri = $this->pathOnly();
+            $baseUrl = $this->getBaseUrl();
+            if ($baseUrl === '') {
+                return $requestUri;
+            }
+            $pathInfo = substr($requestUri, strlen($baseUrl));
+
+            // 真实实现：substr() 给 false 或空串时是 '/'
+            return ($pathInfo === false || $pathInfo === '') ? '/' : $pathInfo;
+        }
+
+        /** REQUEST_URI 里 query 之前那段，且保证以 '/' 开头（真实 preparePathInfo 的前两步）。 */
+        private function pathOnly(): string
+        {
+            $requestUri = $this->getRequestUri();
+            if (false !== $pos = strpos($requestUri, '?')) {
+                $requestUri = substr($requestUri, 0, $pos);
+            }
+
+            return ($requestUri !== '' && $requestUri[0] !== '/') ? '/' . $requestUri : $requestUri;
+        }
+
         public function getUri(): string
         {
             // 真实实现是 schemeAndHttpHost + baseUrl + pathInfo + '?' + queryString，

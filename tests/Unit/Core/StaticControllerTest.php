@@ -6,7 +6,10 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Core;
 
 require_once __DIR__ . '/../../Fixtures/Fakes.php';
 
+use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\StaticController;
+use ErikWang2013\Xhprof\Core\Xhprof;
+use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -17,9 +20,49 @@ class StaticControllerTest extends TestCase
 {
     private FakeResponse $response;
 
+    private ?ConfigInterface $savedConfig;
+
+    private bool $savedHyperfFlag;
+
     protected function setUp(): void
     {
         $this->response = new FakeResponse();
+        // Xhprof::$config 是进程级静态量：别的测试类（十家适配器）会临时换上自己的
+        // FakeConfig，虽然它们都在 tearDown 里还原，本类自己改了也必须还原——否则
+        // 「哪些资源请求被认」这件事会随测试顺序变化。
+        $this->savedConfig = Xhprof::$config;
+        $this->useConfig(null);
+
+        // `$_hyperf` 也是私有静态量，且**进程内一旦置位就不复位**：
+        // XhprofProfiler::isHyperf() 置位后没有任何地方复位它，而 HyperfTest /
+        // MissingExtensionParityTest 排在 Core 前面、tearDown 还会 Context::reset()
+        // ——此后 `Xhprof::getConfig()` 短路去读 Context，
+        // 拿到 null，本类读写 `Xhprof::$config` 的行就全部失去判别力。
+        // 钉死为 false：本类只测「静态属性这条通道」，Context 通道由 HyperfTest 测。
+        // 先例见 tests/Unit/Core/I18nTest.php 里对同一闩的存/复原。
+        $this->savedHyperfFlag = (bool) self::hyperfFlag()->getValue();
+        self::hyperfFlag()->setValue(null, false);
+    }
+
+    protected function tearDown(): void
+    {
+        self::hyperfFlag()->setValue(null, $this->savedHyperfFlag);
+        $this->useConfig($this->savedConfig);
+    }
+
+    private static function hyperfFlag(): \ReflectionProperty
+    {
+        return new \ReflectionProperty(Xhprof::class, '_hyperf');
+    }
+
+    private function useConfig(?ConfigInterface $config): void
+    {
+        Xhprof::$config = $config;
+    }
+
+    private function useAssetsUrl(string $assetsUrl): void
+    {
+        $this->useConfig(new FakeConfig(['xhprof' => ['assets_url' => $assetsUrl]]));
     }
 
     #[Test]
@@ -106,8 +149,8 @@ class StaticControllerTest extends TestCase
      * file() 之后的 withHeaders() 必须显式钉住 Content-Type。
      *
      * 不钉的话，Laravel 的 response()->file() 会把它交给 Symfony BinaryFileResponse::prepare()，
-     * 那里在**缺** Content-Type 时用 finfo 按内容嗅探——实测本包 18 个资源里 14 个被猜错
-     * （js/css 猜成 text/plain、dataTables.bootstrap.js 猜成 text/html），
+     * 那里在**缺** Content-Type 时用 finfo 按内容嗅探——实测本包 11 个资源里 8 个被猜错
+     * （js/css 猜成 text/plain、dataTables.bootstrap.js 猜成 text/html；png/gif 正常），
      * 浏览器会拒收 text/plain 的脚本、不套用 text/plain 的样式表。
      *
      * @return iterable<string, array{string, string}>
@@ -279,6 +322,75 @@ class StaticControllerTest extends TestCase
 
         $this->assertSame('', $result->body);
         $this->assertNull($result->filePath);
+    }
+
+    /**
+     * 资源前缀必须跟着 `xhprof.assets_url` 走，且归一化口径与 **10 个入口类**一致
+     * （Slim/Symfony/WordPress/Joomla/Yii3 的短路前缀、四个路由型入口的路由 path）。
+     *
+     * 这条路径此前是坏的：前缀硬编码在 StaticController 里，入口类按**配置的**
+     * 前缀决定要不要接管，于是「配了非默认值」= 入口类把请求交给 serve()，
+     * serve() 只认老前缀 → **空 body 的 200**，静态资源静默消失（Css/Js 全丢，
+     * 报告页没有样式和脚本）。Slim/Yii3 各有一条特征化用例曾把这个缺陷钉住。
+     *
+     * @return iterable<string, array{?string, string, bool}>
+     */
+    public static function assetsUrlProvider(): iterable
+    {
+        // 未 bootstrap（getConfig() 为 null）时用默认前缀——契约兜底，不能炸
+        yield '没有配置' => [null, '/xhprof-assets/js/xhprof_report.js', true];
+        yield '配置 = 默认值' => ['/xhprof-assets', '/xhprof-assets/js/xhprof_report.js', true];
+        yield '配置带尾斜杠' => ['/xhprof-assets/', '/xhprof-assets/js/xhprof_report.js', true];
+        yield '自定义前缀' => ['/static/xhprof', '/static/xhprof/js/xhprof_report.js', true];
+        yield '自定义前缀 + 尾斜杠' => ['/static/xhprof/', '/static/xhprof/js/xhprof_report.js', true];
+        // 绝对 URL（CDN）：入口类的短路前缀也变成绝对 URL、永远匹配不上 path-only
+        // 的 uri —— 资源归 CDN，本地一个都不服务。Core 必须同样一个都不认。
+        yield 'CDN 绝对 URL' => ['https://cdn.test/xhprof-assets', '/xhprof-assets/js/xhprof_report.js', false];
+        // 空串 = 不启用资源短路（WordPress/Joomla 的注释口径）：入口类不接管，Core 也不认
+        yield '配置成空串' => ['', '/xhprof-assets/js/xhprof_report.js', false];
+        // '/' 不是空串，归一化后前缀就是 '/'（先 rtrim 再判空会把它归成空串、
+        // 落到默认值上 → 与入口类的判定分叉）：于是任何路径都算资源路径。
+        yield '配置成 /' => ['/', '/js/xhprof_report.js', true];
+    }
+
+    #[Test]
+    #[DataProvider('assetsUrlProvider')]
+    public function serveFollowsTheConfiguredAssetsUrl(?string $assetsUrl, string $uri, bool $serves): void
+    {
+        if ($assetsUrl !== null) {
+            $this->useAssetsUrl($assetsUrl);
+        }
+
+        $result = StaticController::serve(new FakeRequest([], ['uri' => $uri]), $this->response);
+
+        if (!$serves) {
+            $this->assertNull($result->filePath, "不该把 $uri 当资源");
+            $this->assertSame('', $result->body);
+            return;
+        }
+
+        $this->assertNotNull($result->filePath, "配了 $assetsUrl 后 $uri 应当能读到文件");
+        $this->assertFileExists($result->filePath);
+        $this->assertNotSame('', (string) file_get_contents($result->filePath), '资源文件不应为空');
+        $this->assertSame('public, max-age=86400', $result->headers['Cache-Control']);
+    }
+
+    /**
+     * 换前缀后**老前缀不再被认**：否则「同一份文件有两个 URL」，
+     * 缓存与 CDN 的键都会分裂。
+     */
+    #[Test]
+    public function serveStopsMatchingTheDefaultPrefixWhenConfiguredOtherwise(): void
+    {
+        $this->useAssetsUrl('/static/xhprof');
+
+        $result = StaticController::serve(
+            new FakeRequest([], ['uri' => '/xhprof-assets/js/xhprof_report.js']),
+            $this->response
+        );
+
+        $this->assertNull($result->filePath);
+        $this->assertSame('', $result->body);
     }
 
     #[Test]

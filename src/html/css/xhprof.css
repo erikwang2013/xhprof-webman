@@ -167,6 +167,15 @@ body {
   color: var(--xp-text-muted);
 }
 
+/* 诊断条目（XhprofDisplay::diagnosis_item 的 <li>）。
+   全限定名/生成式命名在 CSS 默认断行规则下没有断点（`\`、`::`、`{}` 之间才有），
+   窄视口里会溢出 .xp-card 的 overflow:hidden —— 卡片没有滚动条，于是函数名被静默裁掉。
+   overflow-wrap:anywhere 允许在任意字符间断行；不用 word-break:break-all，那会连带
+   拆开 CJK 标点与 URL，断行更粗暴。属性无方向性，RTL 下同样成立。 */
+.xp-diag-item {
+  overflow-wrap: anywhere;
+}
+
 /* ========== 表格 ========== */
 .xp-table-wrap {
   overflow-x: auto;

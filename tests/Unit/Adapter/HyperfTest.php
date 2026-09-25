@@ -220,11 +220,15 @@ class HyperfTest extends TestCase
 
         $adapter->withBody('hello')->withHeaders(['X-A' => '1']);
         $res = $adapter->send();
-        $this->assertSame('hello', (string) $res->body);
-        $this->assertSame('1', $res->headers['X-A']);
+        // 真包没有任何 public 属性（hyperf/http-server v3.2.0 src/Response.php:55），
+        // 状态/头/正文都只能走 PSR-7 访问器：getHeader() 给**数组**、getHeaderLine() 给串。
+        $this->assertSame('hello', (string) $res->getBody());
+        $this->assertSame('1', $res->getHeaderLine('X-A'));
+        $this->assertSame(['1'], $res->getHeader('X-A'), 'PSR-7 的头值是数组');
+        $this->assertSame(['X-A' => ['1']], $res->getHeaders(), 'PSR-7：名字 → 值数组');
 
         $adapter->withStatus(404);
-        $this->assertSame(404, $adapter->send()->status);
+        $this->assertSame(404, $adapter->send()->getStatusCode());
     }
 
     /**
@@ -252,9 +256,9 @@ class HyperfTest extends TestCase
         $adapter = new ResponseAdapter(new Response());
         $adapter->file($path);
         $res = $adapter->send();
-        $this->assertSame(200, $res->status);
-        $this->assertSame($expectedType, $res->headers['Content-Type']);
-        $this->assertSame('content', (string) $res->body);
+        $this->assertSame(200, $res->getStatusCode());
+        $this->assertSame($expectedType, $res->getHeaderLine('Content-Type'));
+        $this->assertSame('content', (string) $res->getBody());
     }
 
     #[Test]
@@ -262,7 +266,7 @@ class HyperfTest extends TestCase
     {
         $adapter = new ResponseAdapter(new Response());
         $adapter->file('/no/such/file.css');
-        $this->assertSame(404, $adapter->send()->status);
+        $this->assertSame(404, $adapter->send()->getStatusCode());
     }
 
     #[Test]

@@ -321,7 +321,8 @@ class WiringTest extends TestCase
         );
 
         $this->assertNull($e);
-        $this->assertSame('ok', $captured->body);
+        // webman 的 $body 是 protected（workerman 5.2.2 :270），读正文走 rawBody()
+        $this->assertSame('ok', $captured->rawBody());
         $this->assertRunSaved(SupportRedis::$store);
         $this->assertSame([], SupportLog::$errors);
     }
@@ -335,7 +336,7 @@ class WiringTest extends TestCase
         $handler = fn (WebmanRequest $r): WebmanResponse => new WebmanResponse(200, [], 'ok');
         $res = (new XhprofMiddleware())->process(new WebmanRequest([], ['uri' => '/index']), $handler);
 
-        $this->assertSame('ok', $res->body);
+        $this->assertSame('ok', $res->rawBody());
         $this->assertSame([], SupportRedis::$store);
         $this->assertSame([], SupportLog::$errors);
     }
@@ -378,7 +379,7 @@ class WiringTest extends TestCase
         );
 
         $this->assertNull($e);
-        $this->assertSame('ok', $captured->body);
+        $this->assertSame('ok', $captured->getContent());
         $this->assertRunSaved(IlluminateRedis::$store);
     }
 
@@ -389,7 +390,7 @@ class WiringTest extends TestCase
         $handler = fn (IlluminateRequest $r): IlluminateResponse => new IlluminateResponse('ok');
         $res = (new LaravelMiddleware())->handle(new IlluminateRequest([], ['uri' => '/index']), $handler);
 
-        $this->assertSame('ok', $res->body);
+        $this->assertSame('ok', $res->getContent());
         $this->assertSame([], IlluminateRedis::$store);
     }
 
@@ -429,7 +430,8 @@ class WiringTest extends TestCase
         );
 
         $this->assertNull($e);
-        $this->assertSame('ok', $captured->body);
+        // think 的 $content 是 protected（topthink/framework 8.1.4 :69），读内容走 getContent()
+        $this->assertSame('ok', $captured->getContent());
         $store = ThinkCache::store('redis');
         $this->assertRunSaved($store->data + $store->handler()->data);
     }
@@ -441,7 +443,7 @@ class WiringTest extends TestCase
         $handler = fn (ThinkRequest $r): ThinkResponse => new ThinkResponse('ok');
         $res = (new ThinkphpMiddleware())->handle(new ThinkRequest([], ['uri' => '/index']), $handler);
 
-        $this->assertSame('ok', $res->body);
+        $this->assertSame('ok', $res->getContent());
         $store = ThinkCache::store('redis');
         $this->assertSame([], $store->data);
         $this->assertSame([], $store->handler()->data);

@@ -328,7 +328,7 @@ XhprofMiddleware::class => [
 ],
 ```
 
-O subarray `redis` é específico do Yii3: quando nenhum `CacheInterface` é injetado, o middleware o usa para falar diretamente com o phpredis. Deixe `assets_url` no valor padrão — qualquer outro prefixo só produz um 200 com corpo vazio (é uma constante fixa no Core; veja [Verificação e limitações conhecidas](#verificação-e-limitações-conhecidas)).
+O subarray `redis` é específico do Yii3: quando nenhum `CacheInterface` é injetado, o middleware o usa para falar diretamente com o phpredis. Deixe `assets_url` pode ser qualquer prefixo: os links de CSS/JS da página de relatório e o `StaticController` leem a mesma opção (padrão `/xhprof-assets`). As limitações restantes em implantação num subdiretório estão em [Verificação e limitações conhecidas](#verificação-e-limitações-conhecidas).
 
 **4. Requisito de versão** — os componentes `yiisoft/*` dos quais o Yii3 depende exigem PHP >= 8.1. Apesar de este pacote declarar `php >= 8.0`, a integração com o Yii3 não pode ser usada no PHP 8.0.
 
@@ -468,6 +468,23 @@ Todos os frameworks compartilham estas opções de configuração:
 
 As limitações conhecidas dessas opções em cada framework estão em [Verificação e limitações conhecidas](#verificação-e-limitações-conhecidas).
 
+**Seletor de idioma da página de relatório**
+
+A lista suspensa à direita da navegação enumera os 13 idiomas pelo **próprio nome** (o `_meta.name` de cada catálogo, por exemplo 한국어, 日本語). O link de cada opção é montado a partir da **string de consulta da página atual** (`XhprofLib::report_url()`), então `?token=`, a ordenação, `run` e todos os demais parâmetros seguem junto; trocar de idioma **não sai da visualização atual** — em um relatório de execução você continua na mesma execução.
+
+**Diagnóstico na página de relatório**
+
+O cartão mais alto do corpo do relatório é o de Diagnóstico (logo abaixo da descrição da execução): primeiro Por que está lento (no máximo 3 causas) e depois Outras descobertas (no máximo 3 verificações). O link ver após cada conclusão abre a página de detalhes do método; a recursão (R4) só tem link quando o nome simples está realmente na tabela de símbolos — o xhprof expande a recursão em `fib@1`/`fib@2`, e se só existirem os nomes expandidos, a página de detalhes não encontra `fib`. As seis regras e seus limites:
+
+- **R1** tempo exclusivo ≥ 10% do tempo total da requisição;
+- **R2** número de chamadas ≥ 1000;
+- **R3** chamadas de uma mesma aresta ≥ 500 **e** tempo exclusivo da função chamada ≥ 5% do tempo total da requisição;
+- **R4** um mesmo símbolo aparece em ≥ 2 profundidades diferentes (recursão);
+- **R5** pico de memória próprio ≥ 30% do pico global;
+- **R6** tempo exclusivo > tempo inclusivo (`excl_wt > wt`, logicamente impossível) — uma sonda de integridade dos dados, que nunca dispara com dados saudáveis.
+
+Os limites são constantes em `src/Core/Analysis/Analyzer.php` e hoje **nenhuma opção de configuração** consegue alterá-los ou desativar o cartão (com `enable` desligado nada é amostrado, logo não há o que diagnosticar). Ele aparece **apenas na visualização de execução única de nível superior**: nem a visualização diff nem a página de detalhes de um método o renderizam — os `$symbol_tab`/`$totals` que recebem não são valores de uma única execução (no modo diff são os incrementos run2 − run1).
+
 ---
 
 ## Inicialização manual
@@ -593,7 +610,7 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | Comportamento dos adaptadores e do wiring das entradas | `tests/Unit/Adapter/*Test.php`: habilitado → salvo / desabilitado → não salvo / exceção de negócio → ainda assim salvo via `finally` |
 | Os dez frameworks compartilham um mesmo conjunto de chaves de configuração | teste de paridade de config (conjuntos de chaves, não byte a byte; os comentários podem diferir) |
 | Os dois READMEs espelham um ao outro | teste de paridade do README: compara a sequência de títulos `##` / `###` e o número de blocos de código |
-| Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI): instala os pacotes reais dos frameworks e verifica por reflection que cada método / constante / função global existe **para os seis frameworks do ciclo** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf não estão no ciclo — veja abaixo |
+| Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI): instala os pacotes reais dos frameworks e verifica por reflection que cada método / constante / função global existe **para os oito frameworks do ciclo** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf não estão no ciclo — veja abaixo |
 | Semântica dos adaptadores | O mesmo ciclo instancia objetos reais de request e response e executa os adaptadores, incluindo dois invariantes: `uri()` não carrega scheme/host, e `withHeaders()` continua valendo depois de `file()` |
 
 
@@ -607,8 +624,8 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | Se a prioridade do Drupal cai mesmo fora do cache de página | Exige um kernel Drupal inicializado |
 | A autoconfiguração de `kernel.event_subscriber` do Symfony | Exige uma compilação real do container |
 | Vazamento de estado estático em processos de longa duração | Herdado da arquitetura existente (o mesmo vale para Webman / Hyperf); inalterado aqui |
-| I/O real no Redis, renderização no navegador, overhead de profiling sob carga real | Fora do escopo dos testes unitários e do ciclo de verificação |
-| Assinaturas e semântica dos adaptadores de Webman / Laravel / ThinkPHP / Hyperf | esses quatro não estão no ciclo de verificação (que cobre seis frameworks); seus stubs são escritos à mão em `tests/Stubs/framework-stubs.php`, sem comparação com os pacotes reais |
+| I/O real no Redis, renderização no navegador, overhead de profiling sob carga real | O I/O real no Redis **agora está no ciclo** (`cases/Redis.php`: phpredis real + uma requisição Slim real de ponta a ponta — requisição → persistência → lista → página do relatório); a renderização no navegador e o overhead sob carga real continuam fora do escopo dos testes unitários e do ciclo |
+| Assinaturas e semântica dos adaptadores de ThinkPHP / Hyperf | esses dois não estão no ciclo de verificação (que cobre oito frameworks); seus stubs são escritos à mão em `tests/Stubs/framework-stubs.php`, sem comparação com os pacotes reais |
 
 **Checklist manual de smoke (três passos por framework)**
 
@@ -618,17 +635,17 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | 2 | Acesse qualquer URL da aplicação | O tamanho da chave `xhprof:run_id` no Redis aumenta em 1 |
 | 3 | Abra `/xhprof` | A página de relatório renderiza com os estilos; `/xhprof-assets/js/xhprof_report.js` retorna 200 |
 
-**Limitação conhecida: `host()` não tem porta**
+**Limitação conhecida: o `request_uri` exibido na lista não tem porta**
 
-O contrato `host()` significa "só o host, sem porta", mas os links da lista do relatório são montados como `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`). Então **em uma porta fora do padrão (por exemplo `:8080`) os links da lista perdem a porta e não levam a lugar nenhum**. É um problema latente da implementação existente (afeta webman / Laravel / ThinkPHP / Hyperf igualmente), não é corrigido aqui e fica registrado como limitação conhecida.
+O contrato `host()` significa "só o host, sem porta" (R-2), e os dez frameworks o cumprem — só a implementação difere: o `getHost()` do PSR-7 nunca carrega a porta, Joomla / WordPress a cortam à mão com `parse_url`, e Webman / ThinkPHP precisam do argumento estrito `host(true)` (o padrão devolve o cabeçalho `Host` como está, porta incluída). O `request_uri` exibido na lista é montado como `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), então numa porta fora do padrão (por exemplo `:8080`) o **texto** dessa linha não mostra a porta. **Os links em si não são afetados**: os da lista e os do relatório são todos montados por `XhprofLib::report_url()` como URLs relativas (só caminho + query), abrem a página certa e não dependem de `host()`.
 
-**Limitação conhecida: `assets_url` só funciona quando vale `/xhprof-assets`**
+**O `assets_url` agora aceita um prefixo personalizado**
 
-O prefixo de assets é uma constante fixa em `src/Core/StaticController.php` (`private const URI_PREFIX = '/xhprof-assets'`), enquanto os links de CSS/JS da página de relatório leem a opção de configuração `assets_url` (`src/Core/Xhprof.php`). Quando os dois discordam, o `getPathFromRequest()` retorna `null` e o `serve()` retorna `withBody('')->withHeaders([])` — **uma resposta 200 vazia, não um 404**. A consequência: defina `assets_url` com qualquer outro valor e o CSS/JS ficam vazios em silêncio, deixando a página de relatório sem estilo e sem nenhum tipo de erro. Em outras palavras, o `assets_url` hoje é uma opção falsa, que só funciona se ficar no valor padrão. É um problema pré-existente e não é corrigido aqui.
+O prefixo de assets não é mais uma constante fixa: `src/Core/StaticController.php` casa os caminhos de assets com a opção `assets_url` (padrão `/xhprof-assets`, barra final opcional). A limitação restante em implantação num subdiretório é a do Drupal, abaixo. **Limite**: um prefixo próprio funciona de imediato nos cinco frameworks em que um middleware ou uma classe de entrada faz curto-circuito no caminho dos recursos (Yii3, Symfony, Slim, WordPress, Joomla); no Laravel, Hyperf, Webman e ThinkPHP a rota dos recursos, e no Drupal `xhprof.routing.yml`, são registrados por **você** — mude-os junto com `assets_url`, senão os pedidos de recursos nunca chegam ao `StaticController` e o relatório perde os estilos e os scripts.
 
 **Limitação conhecida: a guarda de caminho falha quando o Drupal fica em um subdiretório**
 
-Quando o Drupal é instalado sob um subdiretório (por exemplo `/sites/app/xhprof`), a guarda de caminho não consegue casar uma URI que carrega o caminho base, então o comportamento cai para "perfilado mas não salvo" (com a configuração padrão, o `ignore_url_arr` pega esse caso). É a mesma classe de limitação do prefixo fixo de `assets_url`.
+Quando o Drupal é instalado sob um subdiretório (por exemplo `/sites/app/xhprof`), a guarda de caminho não consegue casar uma URI que carrega o caminho base, então o comportamento cai para "perfilado mas não salvo" (com a configuração padrão, o `ignore_url_arr` pega esse caso).
 
 **Compatibilidade com o Symfony 6.4**
 
@@ -639,6 +656,8 @@ A compatibilidade com o Symfony 6.4 foi medida (foi assim que dois over-fits inv
 ## Autor
 
 [erik](https://erik.xyz)
+
+Este pacote é distribuído sob a licença MIT (ver `LICENSE`); `src/Core/XhprofLib/**`, `src/html/js/xhprof_report.js` e `src/html/css/xhprof.css` derivam do [phacility/xhprof](https://github.com/phacility/xhprof) (Apache-2.0) e permanecem sob esses termos; a lista das bibliotecas front-end de terceiros está em `NOTICE`.
 
 ## Apoie o código aberto
 

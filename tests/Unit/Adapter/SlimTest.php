@@ -761,16 +761,15 @@ class SlimTest extends TestCase
     }
 
     /**
-     * 已知缺陷（**不是本卡的期望行为**，src/Core 只读、不改）：
-     * `StaticController::URI_PREFIX` 是硬编码的 '/xhprof-assets'，与配置项
-     * `assets_url` 完全无关。所以一旦把 assets_url 改成别的值，本中间件会按配置
-     * 短路，而 Core 只认老前缀、直接返回空体 —— 静态资源静默 404。
+     * 配了自定义 `assets_url` 时，本中间件短路到的资源真能读到文件内容。
      *
-     * 这条测试把该缺陷**钉住**：它红了说明 Core 修好了（那时删掉本条即可），
-     * 它绿着就是提醒没人以为这条路径在工作。已写进交付报告。
+     * 曾用名 `assetsUrlOverrideIsBrokenByCoreHardcodedPrefix`：Core 把前缀硬编码成
+     * '/xhprof-assets'，与配置无关，于是这条路径返回**空 body 的 200**（静态资源
+     * 静默消失）。Core 侧改成读配置后，本用例翻转成断言正向行为——名字里的
+     * Broken 必须一起消失，否则名字与行为相反。
      */
     #[Test]
-    public function assetsUrlOverrideIsBrokenByCoreHardcodedPrefix(): void
+    public function assetsUrlOverrideServesTheAssetFromTheConfiguredPrefix(): void
     {
         $middleware = $this->middleware(new FakeCache(), ['enable' => false, 'assets_url' => '/static/xhprof']);
 
@@ -780,8 +779,12 @@ class SlimTest extends TestCase
         );
 
         $this->assertSame(200, $result->getStatusCode());
-        $this->assertSame('', (string) $result->getBody(), '空体 = Core 不认这个前缀，资源拿不到');
-        $this->assertSame('', $result->getHeaderLine('content-type'));
+        $this->assertSame('text/css', $result->getHeaderLine('content-type'), 'Content-Type 由 Core 按扩展名钉住');
+        $this->assertStringContainsString(
+            '--xp-bg: #f6f8fa',
+            (string) $result->getBody(),
+            '配置前缀下的请求必须真的读到 src/html/css/xhprof.css 的内容'
+        );
     }
 
     #[Test]

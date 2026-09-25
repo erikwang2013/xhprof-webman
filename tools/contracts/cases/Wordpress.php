@@ -17,10 +17,24 @@ declare(strict_types=1);
  * 另外用同一个桩做一次**桩保真**对比（L0 同类）：`tests/Stubs/Framework/Wordpress.php`
  * 的签名 vs 真实 WP。单测全靠那份桩，桩签名漂了会让单测证明不了任何事。
  *
- * L2（adapters 的语义）：**结构上做不到，诚实标 SKIP**——WordPress 的适配器不使用任何
- * 框架对象，只读超全局（$_GET/$_POST/$_SERVER）与全局函数；`php-stubs` 的函数体全是空的，
- * 加载它跑适配器只会拿到一堆 null，那是「用自造桩冒充真实框架」，不是 L2。
- * 真实 WordPress 需要完整安装 + 数据库 + `wp-settings.php` 引导，本环没有（也不该有）。
+ * L2-lite（adapters 的语义）：**跑真 WordPress 核心源码**，不装站、不连数据库、不引导
+ * `wp-settings.php`。本卡 2026-09-25 之前标 SKIP，理由是「php-stubs 的函数体是空的，加载它
+ * 只能得到 null」——那半句是真的（桩确实空），但结论推错了：**要用真语义不必装站**。真
+ * `wp-includes/{plugin,load,formatting,functions}.php` 只需 `ABSPATH`/`WPINC` 两个常量就能
+ * 独立包含（实测 6.9.9 下 4 个文件 15ms，无 DB、无引导），里面是真实现：
+ * `wp_unslash()` 走 `stripslashes_deep()`（递归 + 非字符串透传）、`is_ssl()` 是真分支表、
+ * `status_header()` 会过真 `apply_filters('status_header', ...)`、`add_action()` 背后是真的
+ * `WP_Hook`。所以这张卡现在是 L2-lite：**真 WP 核心 + 真适配器**，只有缓存是假的
+ * （采样链路本身由 Redis 卡用真服务器覆盖）。
+ *
+ * 仍在进程外跑：本 case 进程要加载 php-stubs 与 `tests/Stubs` 两份同名函数声明，与真 WP 核心
+ * 撞函数名是加载期 fatal（不可 catch）。探针脚本写在临时文件里、由子进程执行，输出一份
+ * 观测快照，断言留在本文件里——与其余 case 的子进程分工一致。
+ *
+ * 已知边界（诚实记，不是 SKIP）：CLI 下 `header()` 是 no-op、`headers_list()` 恒空，
+ * 「头真的发出去了吗」在这里不可观测。本卡退一步钉**可观测的那一半**：真
+ * `status_header()` 收到的状态码与状态行字面量（经真过滤器）、`send()` 的 echo 体、返回值。
+ * 头与状态码在真 SAPI 下的行为由 `tests/Unit/Adapter/WordpressTest.php` 的真 `php -S` 往返覆盖。
  */
 
 /**
@@ -212,38 +226,351 @@ PHP;
         ];
     }
 
-    // ---- 4) L2 的 SKIP 不是嘴上说的：把「真实包没有可执行语义」钉成可复核的事实 ----
-    // php-stubs 是给 IDE 用的桩，四个函数的函数体都是空的（源码里就是 `{}`）。
-    // 探针挑两个「真实 WP 一定有返回值」的：wp_unslash('x') 该返回 'x'、is_ssl() 该返回 bool。
-    // 实测都是 null → 加载真实包跑适配器只会得到一堆 null：这是 SKIP 的理由，不是借口。
-    // 反过来也成立：哪天它们不再是 null（换了包/换了版本），本 case 会 FAIL 要求重新评估 L2，
-    // 而不是继续拿一句可能已经过期的理由标 SKIP。
-    $probe = contracts_run_php([
+    // ---- 4) php-stubs 是**桩**：这一点钉住，免得再有人拿它跑适配器然后得到一堆 null ----
+    // 桩的函数体是空的（本包 vendor 里 wordpress-stubs.php:131565 `function wp_unslash($value) {}`、
+    // :143461 `function is_ssl() {}`），所以它只配当 L1/桩保真的对象。探针挑两个「真实现一定有
+    // 返回值」的输入：桩回 null、真源码回真值 —— 这条**对比**就是 L2-lite 必须换真源码的理由，
+    // 现在它可机器复核，而不是一句注释。
+    // 实测（把下面第 5 段探针的四个 require 换成 wordpress-stubs.php 即复现）：拿桩跑适配器
+    // 不是「得到一堆 null」，而是**加载就跑不动**——`wp_unslash($_GET)` 回 null 后
+    // `array_key_exists($key, null)` 直接抛 TypeError。桩连「跑一遍」都撑不住，谈语义是多余的。
+    $hollow = contracts_run_php([
         '-r',
         "require " . var_export($realStubs, true) . ";\n"
         . "echo json_encode([wp_unslash('x'), is_ssl()]), \"\\n\";",
     ]);
-    $probeValues = json_decode(trim($probe['stdout']), true);
-    if ($probeValues !== [null, null]) {
+    $hollowValues = json_decode(trim($hollow['stdout']), true);
+    if ($hollowValues !== [null, null]) {
         return [
             'status' => 'FAIL',
-            'detail' => 'php-stubs 的函数已经不再是空体（实测 wp_unslash/is_ssl → ' . json_encode($probeValues)
-                . '），L2 标 SKIP 的前提失效，请重新评估 WordPress 卡能否升级到 L2',
+            'detail' => 'php-stubs 的函数不再是空体（实测 wp_unslash/is_ssl → ' . json_encode($hollowValues)
+                . '）：L1 的桩保真对比与「桩没有可执行语义」的前提都要重新评估（桩里出现真实现了？）。'
+                . 'L2-lite 不受影响——它跑的是真 WP 源码。',
             'skips' => 0,
         ];
     }
 
-    // ---- 5) L2：结构上做不到，诚实标 SKIP ----
+    // ---- 5) L2-lite：真 WordPress 核心源码（不是桩、不装站、不连库）----
+    $wpRoot = contracts_dir() . '/vendor/roots/wordpress-no-content';
+    if (!is_file($wpRoot . '/wp-includes/formatting.php')) {
+        // 缺包 FAIL 不 SKIP：与 php-stubs 同一条理由——装不上真源码就证明不了任何事。
+        return [
+            'status' => 'FAIL',
+            'detail' => 'tools/contracts/vendor 里没有 roots/wordpress-no-content（真 WP 核心源码），'
+                . '先跑 composer install -d tools/contracts',
+            'skips' => 0,
+        ];
+    }
+
+    $probeBase = sys_get_temp_dir() . '/xhprof-contract-wordpress-' . getmypid();
+    $probeFile = $probeBase . '/probe.php';
+    @mkdir($probeBase, 0777, true);
+    file_put_contents($probeFile, <<<'PROBE'
+<?php
+
+declare(strict_types=1);
+
+// 本文件由 tools/contracts/cases/Wordpress.php 生成并删除。argv: 1=仓库根 2=真 WordPress 根
+$repoRoot = $argv[1];
+$wpRoot = $argv[2];
+
+// 真 WP 核心的四个文件独立包含：只要 ABSPATH/WPINC，不要数据库、不要 wp-config.php、
+// 不要 wp-settings.php 引导。functions.php 会 require option.php、plugin.php 会 require
+// class-wp-hook.php（都在同目录），plugin.php 顺带初始化 $wp_filter 等全局。
+define('ABSPATH', $wpRoot . '/');
+define('WPINC', 'wp-includes');
+foreach (['plugin', 'load', 'formatting', 'functions'] as $core) {
+    require ABSPATH . WPINC . '/' . $core . '.php';
+}
+
+// 本包 src/ 的 PSR-4 自注册要在这里重来一遍：独立进程不继承父进程的 autoloader。
+spl_autoload_register(static function (string $class) use ($repoRoot): void {
+    $prefix = 'ErikWang2013\\Xhprof\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = $repoRoot . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
+$out = [];
+
+// ---- (a) 真 wp_unslash()：RequestAdapter 的三个调用点（get/all/uri）----
+// 夹具就是 wp_magic_quotes() 的形态（等价于 addslashes），其中 `server_uri_raw` 是本探针
+// 的自证：输入**确实**带上了反斜杠，否则下面的「剥掉了」是空转。
+$_GET = [
+    'run' => addslashes("a'b"),
+    'page' => 3,                                  // 非字符串：stripslashes_deep 原样透传
+    'flag' => false,
+    'nested' => ['q' => addslashes('x\\y'), 'n' => 7], // 数组：map_deep 递归
+    'nullv' => null,
+    'plain' => '/plain-path',                     // 无引号：unslash 不该改动它
+];
+$_POST = [
+    'run' => addslashes('POST-value'),            // GET 同名：被 GET 覆盖
+    'only_post' => addslashes("p'q"),
+];
+$_SERVER['REQUEST_URI'] = addslashes("/xhprof?run=a'b&x=1");
+$_SERVER['HTTP_HOST'] = 'wp.example.com';
+$_SERVER['REQUEST_METHOD'] = 'post';
+
+$request = new \ErikWang2013\Xhprof\Wordpress\Adapter\RequestAdapter();
+$out['request'] = [
+    'server_uri_raw' => $_SERVER['REQUEST_URI'],
+    'get_string' => $request->get('run'),
+    'get_int' => $request->get('page'),
+    'get_bool' => $request->get('flag'),
+    'get_nested' => $request->get('nested'),
+    'get_null' => $request->get('nullv', 'DEFAULT'),   // 键在、值为 null → 不落默认值
+    'get_missing' => $request->get('nope', 'DEFAULT'),
+    'get_plain' => $request->get('plain'),
+    'get_from_post' => $request->get('only_post'),
+    'all' => $request->all(),                          // GET 在前、POST 独有键在后
+    'uri' => $request->uri(),
+    'method' => $request->method(),
+];
+
+// ---- (b) 真 is_ssl()：url() 的 scheme。逐条钉真分支表，不钉"我以为的"分支表 ----
+$base = ['REQUEST_URI' => '/xhprof?run=1', 'HTTP_HOST' => 'wp.example.com'];
+$urlWith = static function (array $server) use ($request, $base): string {
+    $_SERVER = $server + $base;
+
+    return $request->url();
+};
+$out['is_ssl'] = [
+    'bare' => $urlWith([]),
+    'https_on' => $urlWith(['HTTPS' => 'on']),
+    'https_ON' => $urlWith(['HTTPS' => 'ON']),        // strtolower：大小写不敏感
+    'https_1' => $urlWith(['HTTPS' => '1']),
+    'https_off' => $urlWith(['HTTPS' => 'off']),
+    // `elseif`：HTTPS 存在时 SERVER_PORT 根本不看 —— 天真实现（两者取 ||）在这里会红
+    'https_off_443' => $urlWith(['HTTPS' => 'off', 'SERVER_PORT' => 443]),
+    'port_443' => $urlWith(['SERVER_PORT' => 443]),
+    'port_80' => $urlWith(['SERVER_PORT' => 80]),
+    // 真 is_ssl() **不认** X-Forwarded-Proto（实测 6.9.9 与 6.6.2 一致）
+    'xfp_https' => $urlWith(['HTTP_X_FORWARDED_PROTO' => 'https']),
+];
+
+// ---- (c) 真 status_header()：经真 apply_filters('status_header', ...) 观察状态行 ----
+$lines = [];
+$headersSent = [];
+add_filter('status_header', static function ($line, $code, $description, $protocol) use (&$lines): string {
+    $lines[] = ['line' => $line, 'code' => $code, 'description' => $description, 'protocol' => $protocol];
+
+    return $line;
+}, 10, 4);
+
+$snapshot = static function () use (&$lines, &$headersSent): array {
+    $captured = $lines;
+    $lines = [];
+    $headersSent[] = headers_sent();
+
+    return ['filter' => $captured, 'body' => (string) ob_get_clean()];
+};
+$send = static function (\ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter $response) use (&$headersSent): mixed {
+    ob_start();
+    $headersSent[] = headers_sent();
+
+    return $response->send();
+};
+
+$_SERVER['SERVER_PROTOCOL'] = 'HTTP/1.1';
+$returned = $send(
+    (new \ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter())
+        ->withStatus(404)
+        ->withHeaders(['Content-Type' => 'text/plain; charset=UTF-8'])
+        ->withBody('body-404')
+);
+$out['send']['status_404'] = $snapshot() + ['returned' => $returned];
+
+$send((new \ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter())->withStatus(200)->withBody('<html>report</html>'));
+$out['send']['status_200'] = $snapshot();
+
+// file() 读不出文件 → 404 空体，走的是同一条真 status_header
+$send((new \ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter())->file('/nonexistent-contract-file.css'));
+$out['send']['file_missing'] = $snapshot();
+
+// 真 wp_get_server_protocol() 只认 HTTP/1.1|HTTP/2|HTTP/2.0|HTTP/3，其余一律回落 HTTP/1.0
+$_SERVER['SERVER_PROTOCOL'] = 'HTTP/9.9';
+$send((new \ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter())->withStatus(404));
+$out['send']['bogus_protocol'] = $snapshot();
+
+unset($_SERVER['SERVER_PROTOCOL']);   // CLI 下就是这样：没有 SERVER_PROTOCOL
+$send((new \ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter())->withStatus(404));
+$out['send']['no_protocol'] = $snapshot();
+$_SERVER['SERVER_PROTOCOL'] = 'HTTP/1.1';
+
+// 守卫自证：整个过程 headers_sent() 必须是 false，否则 send() 里的 `if (!headers_sent())`
+// 会把 status_header 整段跳过、上面 5 条断言全部空转（本探针全程在 ob_ 缓冲里输出）。
+$out['send']['headers_sent_observed'] = array_values(array_unique($headersSent));
+
+// ---- (d) 真 add_action()/do_action()/WP_Hook ----
+$_SERVER = [
+    'REQUEST_URI' => '/wp-json/wp/v2/posts?per_page=5',
+    'HTTP_HOST' => 'wp.example.com',
+    'REQUEST_METHOD' => 'GET',
+    'REMOTE_ADDR' => '10.0.0.1',
+    'SERVER_PROTOCOL' => 'HTTP/1.1',
+    'HTTPS' => 'on',
+];
+$plugin = new \ErikWang2013\Xhprof\Wordpress\XhprofPlugin([
+    'enable' => true,
+    'key_prefix' => 'xhprof-wpcontract',
+    'ignore_url_arr' => ['/xhprof', '/wp-json'],
+    'log_ttl' => 60,
+]);
+$hooks = [
+    'ext_xhprof' => extension_loaded('xhprof'),
+    'ext_redis' => extension_loaded('redis'),
+    // 初始态：证明下面 registered/shutdown 不是"本来就有"
+    'plugins_loaded_before' => has_action('plugins_loaded'),
+    'shutdown_before' => has_action('shutdown'),
+    'php_int_min' => PHP_INT_MIN,
+    'php_int_max' => PHP_INT_MAX,
+];
+
+// 旁观者必须**先**挂、优先级取默认的 10：同优先级按注册序，所以它一旦看到适配器，
+// 就证明「本包的处理器靠 PHP_INT_MIN 抢在默认优先级之前**真跑过**」——只证明注册上了是不够的。
+$witness = [];
+add_action('plugins_loaded', static function () use (&$witness): void {
+    $request = \ErikWang2013\Xhprof\Core\Xhprof::$request;
+    $witness['request_class'] = $request === null ? null : get_class($request);
+    $witness['key_prefix'] = \ErikWang2013\Xhprof\Core\Xhprof::$key_prefix;
+}, 10);
+
+$plugin->register();
+$hooks['registered_priority'] = has_action('plugins_loaded', [$plugin, 'onPluginsLoaded']);
+
+// enable=true + 非报告页路径 → 真 xhprof_enable() + 注册 shutdown 止点。**不** do_action('shutdown')：
+// 止点一跑就会落库（那是 Redis 卡的事），本卡只钉「注册上了、且优先级真的是 PHP_INT_MAX」。
+do_action('plugins_loaded');
+
+$hooks['witness'] = $witness;
+$hooks['shutdown_after'] = has_action('shutdown');
+$hooks['shutdown_priorities'] = array_keys($GLOBALS['wp_filter']['shutdown']->callbacks ?? []);
+$hooks['shutdown_callback_count'] = count($GLOBALS['wp_filter']['shutdown']->callbacks[PHP_INT_MAX] ?? []);
+$out['hooks'] = $hooks;
+
+echo json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+PROBE);
+    $probe = contracts_run_php([$probeFile, $repoRoot, $wpRoot]);
+    @unlink($probeFile);
+    @rmdir($probeBase);
+
+    if ($probe['code'] !== 0) {
+        return [
+            'status' => 'FAIL',
+            'detail' => '真 WP 探针子进程 exit ' . $probe['code'] . '：' . trim($probe['stderr']),
+            'skips' => 0,
+        ];
+    }
+    $obs = json_decode(trim($probe['stdout']), true);
+    if (!is_array($obs)) {
+        return [
+            'status' => 'FAIL',
+            'detail' => '真 WP 探针没吐出可解析的 JSON：' . var_export(trim($probe['stdout']), true)
+                . '；stderr=' . trim($probe['stderr']),
+            'skips' => 0,
+        ];
+    }
+
+    $checks = 0;
+    $failures = [];
+    $expect = static function (string $label, mixed $actual, mixed $expected) use (&$checks, &$failures): void {
+        $checks++;
+        if ($actual !== $expected) {
+            $failures[] = $label . '：得到 ' . var_export($actual, true) . '，期望 ' . var_export($expected, true);
+        }
+    };
+
+    // 采样断言的前置：真调度那一段要 SamplingGuard 放行（缺扩展时插件自己会 return）。
+    // 缺扩展 → FAIL 不 SKIP：理由与 Redis 卡相同（EXPECTED_SKIPS 是签字常量，不许随环境漂移），
+    // 而且这张卡要的 redis 扩展本来就被 Redis 卡强制着，没有新增环境要求。
+    if (!$obs['hooks']['ext_xhprof'] || !$obs['hooks']['ext_redis']) {
+        return [
+            'status' => 'FAIL',
+            'detail' => '真 WP 的采样/调度断言需要 ext-xhprof 与 ext-redis（SamplingGuard 前置）：实测 '
+                . 'xhprof=' . var_export($obs['hooks']['ext_xhprof'], true)
+                . ' redis=' . var_export($obs['hooks']['ext_redis'], true)
+                . '。contracts.yml 的 setup-php 里已声明 extensions: xhprof, redis。',
+            'skips' => 0,
+        ];
+    }
+
+    // 真 wp_unslash()：递归、非字符串透传、三个调用点都过它
+    $expect('uri() 剥掉 REQUEST_URI 上的反斜杠（夹具确实带反斜杠）', $obs['request']['server_uri_raw'], "/xhprof?run=a\\'b&x=1");
+    $expect('uri() = 剥掉反斜杠后的 path+query', $obs['request']['uri'], "/xhprof?run=a'b&x=1");
+    $expect('get() 剥掉字符串上的反斜杠', $obs['request']['get_string'], "a'b");
+    $expect('get() 的 POST 值同样剥反斜杠', $obs['request']['get_from_post'], "p'q");
+    $expect('get() 不动无引号的路径（unslash 不是"改字符串"）', $obs['request']['get_plain'], '/plain-path');
+    $expect('get() 递归剥数组里的字符串（stripslashes_deep/map_deep）', $obs['request']['get_nested'], ['q' => 'x\y', 'n' => 7]);
+    $expect('get() 对非字符串原样透传（int）', $obs['request']['get_int'], 3);
+    $expect('get() 对非字符串原样透传（false 不是空串）', $obs['request']['get_bool'], false);
+    $expect('get() 键存在而值为 null 时返回 null（不是默认值）', $obs['request']['get_null'], null);
+    $expect('get() 键不存在才回默认值', $obs['request']['get_missing'], 'DEFAULT');
+    $expect('all() = GET 覆盖 POST 且 GET 在前（顺序也钉住）', $obs['request']['all'], [
+        'run' => "a'b", 'page' => 3, 'flag' => false, 'nested' => ['q' => 'x\y', 'n' => 7],
+        'nullv' => null, 'plain' => '/plain-path', 'only_post' => "p'q",
+    ]);
+    $expect('method() 大写化（is_ssl 无关，走同一适配器）', $obs['request']['method'], 'POST');
+
+    // 真 is_ssl()：五条分支 + 一条「它不认什么」
+    $baseUrl = 'wp.example.com/xhprof?run=1';
+    $expect('url() 裸环境 = http（真 is_ssl 无 HTTPS/443）', $obs['is_ssl']['bare'], 'http://' . $baseUrl);
+    $expect('url() HTTPS=on → https', $obs['is_ssl']['https_on'], 'https://' . $baseUrl);
+    $expect('url() HTTPS=ON → https（strtolower）', $obs['is_ssl']['https_ON'], 'https://' . $baseUrl);
+    $expect('url() HTTPS=1 → https', $obs['is_ssl']['https_1'], 'https://' . $baseUrl);
+    $expect('url() HTTPS=off → http', $obs['is_ssl']['https_off'], 'http://' . $baseUrl);
+    $expect('url() HTTPS=off + SERVER_PORT=443 → http（真实现是 elseif，不看端口）', $obs['is_ssl']['https_off_443'], 'http://' . $baseUrl);
+    $expect('url() SERVER_PORT=443 → https', $obs['is_ssl']['port_443'], 'https://' . $baseUrl);
+    $expect('url() SERVER_PORT=80 → http', $obs['is_ssl']['port_80'], 'http://' . $baseUrl);
+    $expect('url() X-Forwarded-Proto=https 不算 https（真 is_ssl 不看它）', $obs['is_ssl']['xfp_https'], 'http://' . $baseUrl);
+
+    // 真 status_header()：状态行字面量 + 状态码进了真过滤器 + send() 的 echo 体
+    $expect('send() 全程 headers_sent() 为 false（否则状态行断言空转）', $obs['send']['headers_sent_observed'], [false]);
+    $expect('404 的状态行经真 apply_filters(status_header)', $obs['send']['status_404']['filter'][0]['line'] ?? null, 'HTTP/1.1 404 Not Found');
+    $expect('404 的状态码原样进真过滤器（不是只拼了个字符串）', $obs['send']['status_404']['filter'][0]['code'] ?? null, 404);
+    $expect('send() echo 出 body', $obs['send']['status_404']['body'], 'body-404');
+    $expect('send() 返回 null（已自行输出的标记，调用方据此不重复输出）', $obs['send']['status_404']['returned'], null);
+    $expect('200 的状态行是 OK', $obs['send']['status_200']['filter'][0]['line'] ?? null, 'HTTP/1.1 200 OK');
+    $expect('file() 读不出 → 404（同上真 status_header）', $obs['send']['file_missing']['filter'][0]['line'] ?? null, 'HTTP/1.1 404 Not Found');
+    $expect('file() 读不出 → 空体', $obs['send']['file_missing']['body'], '');
+    $expect('协议不在白名单（HTTP/9.9）→ 回落 HTTP/1.0', $obs['send']['bogus_protocol']['filter'][0]['line'] ?? null, 'HTTP/1.0 404 Not Found');
+    $expect('CLI 下没有 SERVER_PROTOCOL → 同样回落 HTTP/1.0', $obs['send']['no_protocol']['filter'][0]['line'] ?? null, 'HTTP/1.0 404 Not Found');
+
+    // 真 add_action()/do_action()/WP_Hook
+    $expect('探针起手时 plugins_loaded 上没有任何钩子', $obs['hooks']['plugins_loaded_before'], false);
+    $expect('探针起手时 shutdown 上没有任何钩子', $obs['hooks']['shutdown_before'], false);
+    $expect('register() 的优先级真的是 PHP_INT_MIN（真 WP_Hook 原样保留，不夹取）', $obs['hooks']['registered_priority'], $obs['hooks']['php_int_min']);
+    $expect('do_action(plugins_loaded) 真跑到了本包处理器：旁观者看到 RequestAdapter', $obs['hooks']['witness']['request_class'] ?? null, 'ErikWang2013\\Xhprof\\Wordpress\\Adapter\\RequestAdapter');
+    $expect('处理器跑完了 bootstrap：配置经真链路进 Xhprof::$key_prefix', $obs['hooks']['witness']['key_prefix'] ?? null, 'xhprof-wpcontract');
+    $expect('采样已开：shutdown 止点注册上了', $obs['hooks']['shutdown_after'], true);
+    $expect('止点的优先级是 PHP_INT_MAX（WP_Hook 里真的落在最高一档）', $obs['hooks']['shutdown_priorities'], [$obs['hooks']['php_int_max']]);
+    $expect('shutdown 上恰好一个回调（不会重复注册）', $obs['hooks']['shutdown_callback_count'], 1);
+
+    if ($failures !== []) {
+        return [
+            'status' => 'FAIL',
+            'detail' => count($failures) . '/' . $checks . " 项 L2-lite 断言失败（真 WP 核心源码，WordPress "
+                . basename(dirname($wpRoot)) . '）：' . "\n  - " . implode("\n  - ", $failures),
+            'skips' => 0,
+        ];
+    }
+
     return [
         'status' => 'PASS',
         'detail' => count($sources) . ' 个源文件语法通过；源码里的 '
             . count(WORDPRESS_EXPECTED_FUNCTIONS) . ' 个 WP 全局函数（'
             . implode('、', WORDPRESS_EXPECTED_FUNCTIONS) . '）在真实 wordpress-stubs 中逐一存在，'
-            . '参数名/可选性/默认值/返回类型与 tests/Stubs/Framework/Wordpress.php 逐字段一致。'
-            . ' [SKIP 1] L2（适配器语义）：WP 适配器不使用任何框架对象，只读超全局与全局函数；'
-            . 'php-stubs 的函数体是空的，加载它跑适配器得到的是 null 而非真实 WP 语义，'
-            . '真实 WordPress 需要完整安装 + 数据库 + wp-settings.php 引导，本环结构上无法提供。',
-        'skips' => 1,
+            . '参数名/可选性/默认值/返回类型与 tests/Stubs/Framework/Wordpress.php 逐字段一致；'
+            . 'php-stubs 的函数体是空壳（实测 wp_unslash/is_ssl → null），故 L2 不拿它跑。'
+            . ' L2-lite：' . $checks . ' 项断言跑在真 WordPress 核心源码上（'
+            . 'wp_unslash 的递归/透传经 get()/all()/uri() 三个调用点、is_ssl 的九种 $_SERVER 组合经 url()、'
+            . 'status_header 的状态行经真过滤器、add_action/do_action/WP_Hook 的真调度与优先级），'
+            . '缓存外的链路无假件。',
+        'skips' => 0,
     ];
 };
 

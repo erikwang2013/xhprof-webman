@@ -42,8 +42,8 @@ class ResponseAdapter implements ResponseInterface
     public function file(string $path): self
     {
         // Content-Type 必须自己钉，不能交给 BinaryFileResponse::prepare() 猜：它走 Mime 组件
-        // 的**内容**嗅探，实测本包的 css/js 全被猜成 text/plain（jquery.autocomplete.js 甚至
-        // 是 text/x-Algol68），浏览器就会丢弃样式表/脚本。类型统一取 StaticController 的表
+        // 的**内容**嗅探，实测本包的 css/js 全被猜成 text/plain（js/dataTables.bootstrap.js
+        // 甚至是 text/html），浏览器就会丢弃样式表/脚本。类型统一取 StaticController 的表
         // —— 与 Slim/Yii3/Wordpress 三个适配器同源，四家输出一致。
         // （readFile() 会把内容读出来只用它的类型，多一次读；换来的是不复制 Core 的 MIME 表。）
         $file = StaticController::readFile($path);

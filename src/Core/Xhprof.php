@@ -46,6 +46,17 @@ class Xhprof
         self::$_hyperf = true;
     }
 
+    /**
+     * 当前进程有没有被声明成 Hyperf 协程环境（markHyperfContext() 或 autoDetect 置位）。
+     *
+     * Core 里凡是要决定「写静态属性还是写协程 Context」的地方都问这一句，别各自去读
+     * 那个私有标志：本进程一旦置位就不可逆（常驻 worker 里本来也该一直是 true）。
+     */
+    public static function isHyperfContext(): bool
+    {
+        return self::$_hyperf;
+    }
+
     public static function getRequest(): ?RequestInterface
     {
         if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
@@ -78,6 +89,21 @@ class Xhprof
         return self::$logger;
     }
 
+    /**
+     * 取配置适配器。**Hyperf 分支下 Context 缺键就是 null，刻意不回落 `self::$config`。**
+     *
+     * 常驻 worker 里 `self::$config` 是跨协程共享量（哪个协程最后 bootstrap() 就写谁的），
+     * 回落等于让「没 bootstrap 的执行路径」静默用上别的请求配置（assets_url / auth_token /
+     * log_ttl / view_wtred 都是按请求来的），而且没人能从页面上看出来。缺键只有一个含义：
+     * 这条路径没走 bootstrap()，调用方按 null 走默认值即可（Xhprof::index()、
+     * StaticController::uriPrefix() 都是这么写的）。另外四个 getter 同形同义
+     * ——「闩开了以后 Context 是唯一来源」是共同契约，不给任何一个是例外。
+     *
+     * 曾考虑「缺键就回落 `self::$config`」被否：① 救不了场——同一次 bootstrap() 才写这五个
+     * 键，缺 config 时 request 也缺，鉴权那里 `$req->get('token')` 照样炸；② 会诱导后来人
+     * 把另外四个**请求级** getter 一起统一（拿别的协程的 request/response 比 null 更坏）。
+     * 缺 request 那种状态由 index() 开头的显式 500 守卫负责说清楚，不在这里补救。
+     */
     public static function getConfig(): ?ConfigInterface
     {
         if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
@@ -97,6 +123,14 @@ class Xhprof
         }
 
         $req = self::getRequest();
+        // 「读不出来」不能长得跟「不用读」一样：闩开了的进程里，若这个协程没 bootstrap()，
+        // Context 里就没有 xhprof.request，`getRequest()` 返回 null。此前这里会静默跳过
+        // 下面的 403 判定（`$cfg` 同样是 null），再在 `$req->get('run')` 处变成
+        // "Call to a member function get() on null"——同样是 500、同样不吐数据，但读不出成因，
+        // 而且「没配 auth_token」与「根本读不到配置」在日志里长得一模一样。显式拒绝并说清原因。
+        if ($req === null) {
+            return self::deny('500 xhprof: no request adapter in this coroutine\'s Hyperf Context — bootstrap() did not run here, so the request and its auth token cannot be verified. Refusing to render the report page.', 500);
+        }
         $cfg = self::getConfig();
         // 鉴权：配置了 auth_token 后，报告页必须带 ?token=xxx 才能访问
         $authToken = $cfg !== null ? $cfg->get('xhprof.auth_token', null) : null;

@@ -168,9 +168,9 @@ class WebmanTest extends TestCase
         $request = new Request(['a' => 1, 'b' => 2], [
             'headers' => ['x-fwd' => 'yes'],
             'method' => 'POST',
-            'host' => 'example.com',
+            'host' => 'example.com:8080',
             'uri' => '/path',
-            'url' => 'http://example.com/path',
+            'url' => 'http://example.com:8080/path',
             'ip' => '10.0.0.1',
         ]);
         $adapter = new RequestAdapter($request);
@@ -183,8 +183,30 @@ class WebmanTest extends TestCase
         $this->assertSame('yes', $adapter->header('x-fwd'));
         $this->assertSame('example.com', $adapter->host());
         $this->assertSame('/path', $adapter->uri());
-        $this->assertSame('http://example.com/path', $adapter->url());
+        $this->assertSame('http://example.com:8080/path', $adapter->url());
         $this->assertSame('10.0.0.1', $adapter->getRealIp());
+    }
+
+    /**
+     * 契约 R-2：host() 不含端口 —— 而 webman 的 `host()` **默认就带端口**。
+     *
+     * 真包实测（workerman 5.2.2，/tmp 有装好的包）：`host()` 给 'example.com:8080'、
+     * `host(true)` 给 'example.com'。桩按同一语义实现（见 framework-stubs.php），
+     * 所以「忘了传 true」在这里会红。**夹具必须带端口**：不带端口时两种调用同值，
+     * 那样的夹具对这条契约永远绿 —— 这个 bug 之前就是这么漏掉的。
+     */
+    #[Test]
+    public function requestAdapterHostDropsThePortThatTheRealRequestKeeps(): void
+    {
+        $request = new Request([], ['host' => 'example.com:8080']);
+
+        // 桩的两半（判别力来源，不是产品断言）：真包给什么，桩就得给什么
+        $this->assertSame('example.com:8080', $request->host(), '默认原样返回 Host 头，端口还在');
+        $this->assertSame('example.com', $request->host(true), 'true 才剥端口');
+        // 剥的是**尾部数字端口**（真包正则 /:\d{1,5}$/）：冒号后不是数字就原样给
+        $this->assertSame('example.com:', (new Request([], ['host' => 'example.com:']))->host(true));
+
+        $this->assertSame('example.com', (new RequestAdapter($request))->host(), '适配器必须走剥端口的那次调用');
     }
 
     /**
@@ -219,16 +241,20 @@ class WebmanTest extends TestCase
 
         $adapter->withBody('hello')->withHeaders(['X-A' => '1', 'X-B' => '2']);
         $res = $adapter->send();
-        $this->assertSame('hello', $res->body);
-        $this->assertSame('1', $res->headers['X-A']);
-        $this->assertSame('2', $res->headers['X-B']);
+        // 真包上 $status/$headers/$body 都是 **protected**（workerman 5.2.2
+        // src/Protocols/Http/Response.php:268-270），只能走访问器读：
+        // `$res->headers['X-A']` 在真包上是 Error: Cannot access protected property，
+        // 桩此前把它们开成 public，把这行写法的错误掩盖了。
+        $this->assertSame('hello', $res->rawBody());
+        $this->assertSame('1', $res->getHeader('X-A'));
+        $this->assertSame('2', $res->getHeader('X-B'));
 
         // withStatus 就地改同一个响应（workerman 的 Response 是可变的）
         $adapter->withStatus(404);
         $res2 = $adapter->send();
         $this->assertSame($res, $res2, '就地改，不是重建');
-        $this->assertSame(404, $res2->status);
-        $this->assertSame('hello', $res2->body, '先设的正文不能因为改状态而丢');
+        $this->assertSame(404, $res2->getStatusCode());
+        $this->assertSame('hello', $res2->rawBody(), '先设的正文不能因为改状态而丢');
     }
 
     /**
@@ -248,9 +274,9 @@ class WebmanTest extends TestCase
             ->withStatus(404);
 
         $res = $adapter->send();
-        $this->assertSame('public, max-age=86400', $res->headers['Cache-Control'], '先设的头被 withBody/withStatus 冲掉了');
-        $this->assertSame('hello', $res->body);
-        $this->assertSame(404, $res->status);
+        $this->assertSame('public, max-age=86400', $res->getHeader('Cache-Control'), '先设的头被 withBody/withStatus 冲掉了');
+        $this->assertSame('hello', $res->rawBody());
+        $this->assertSame(404, $res->getStatusCode());
     }
 
     #[Test]
@@ -260,14 +286,20 @@ class WebmanTest extends TestCase
         $adapter = new ResponseAdapter(new Response(200));
         $adapter->file($path);
         $res = $adapter->send();
-        $this->assertSame($path, $res->filePath);
-        $this->assertSame('.a{}', $res->body);
+        // 真包唯一的 public 属性是 `?array $file`（workerman 5.2.2 :56），
+        // 形状 ['file'=>路径,'offset'=>int,'length'=>int]（:434）；`$res->filePath` 真包上没有。
+        // 旧断言里的 `$res->body === '.a{}'` 也不成立：文件内容由 __toString()/ResponseEmitter
+        // 在发送时从磁盘流出，**不进**响应对象 —— 这条在真包声明面上无法表达，已删（见报告）。
+        $this->assertSame(['file' => $path, 'offset' => 0, 'length' => 0], $res->file);
+        $this->assertSame(200, $res->getStatusCode());
+        $this->assertSame('', $res->rawBody(), '文件响应的正文不落进对象');
 
-        // 不存在时仍返回携带路径的 Response（webman 语义），body 为空
+        // 文件不存在：真包 withFile() 不记路径，而是改 404 并把固定正文塞进 body（:430-438）
         $adapter->file('/no/such/file.css');
         $res = $adapter->send();
-        $this->assertSame('/no/such/file.css', $res->filePath);
-        $this->assertSame('', $res->body);
+        $this->assertNull($res->file, '不存在的文件不会进 $file');
+        $this->assertSame(404, $res->getStatusCode());
+        $this->assertSame('<h3>404 Not Found</h3>', $res->rawBody());
     }
 
     #[Test]
@@ -289,7 +321,7 @@ class WebmanTest extends TestCase
         $res = $middleware->process($request, $handler);
 
         $this->assertInstanceOf(Response::class, $res);
-        $this->assertSame('ok', $res->body);
+        $this->assertSame('ok', $res->rawBody());
         $this->assertInstanceOf(CacheInterface::class, CoreXhprof::getCache());
         $this->assertInstanceOf(ConfigAdapter::class, CoreXhprof::getConfig());
         $this->assertTrue(CoreXhprof::getConfig()->get('xhprof.enable'));
@@ -304,9 +336,9 @@ class WebmanTest extends TestCase
         $request = new Request([], ['uri' => '/xhprof-assets/js/xhprof_report.js']);
         $res = $adapter->serve($request);
         $this->assertInstanceOf(Response::class, $res);
-        $this->assertNotNull($res->filePath);
-        $this->assertStringContainsString('src/html/js/xhprof_report.js', $res->filePath);
-        $this->assertSame('public, max-age=86400', $res->headers['Cache-Control']);
+        $this->assertNotNull($res->file);
+        $this->assertStringContainsString('src/html/js/xhprof_report.js', $res->file['file']);
+        $this->assertSame('public, max-age=86400', $res->getHeader('Cache-Control'));
     }
 
     #[Test]
@@ -315,8 +347,8 @@ class WebmanTest extends TestCase
         $adapter = new StaticController();
         foreach (['/other', '/xhprof-assets/../etc/passwd', '/xhprof-assets/nope.css'] as $uri) {
             $res = $adapter->serve(new Request([], ['uri' => $uri]));
-            $this->assertSame('', $res->body, "uri=$uri 应返回空 body");
-            $this->assertNull($res->filePath);
+            $this->assertSame('', $res->rawBody(), "uri=$uri 应返回空 body");
+            $this->assertNull($res->file);
         }
     }
 

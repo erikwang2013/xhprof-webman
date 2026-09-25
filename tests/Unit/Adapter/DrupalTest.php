@@ -11,12 +11,14 @@ use ErikWang2013\Xhprof\Core\Contract\LoggerInterface as CoreLoggerInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
 use ErikWang2013\Xhprof\Core\RedisAdapterTrait;
+use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof as CoreXhprof;
 use ErikWang2013\Xhprof\Drupal\Adapter\ConfigAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\LogAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\RedisAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\ResponseAdapter;
+use ErikWang2013\Xhprof\Drupal\Adapter\RoutedPathRequestAdapter;
 use ErikWang2013\Xhprof\Drupal\Controller\XhprofController;
 use ErikWang2013\Xhprof\Drupal\XhprofMiddleware;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
@@ -102,6 +104,21 @@ class DrupalTest extends TestCase
         // 真实的 config.factory->get('xhprof.settings') 读的就是
         // drupal/xhprof/config/install/xhprof.settings.yml 装出来的那块配置
         return new FakeConfigFactory(['xhprof.settings' => $config]);
+    }
+
+    /**
+     * 站点装在子目录时的请求：文档根 = /sites/app、站点在 /sites/app/sub，
+     * front controller 是 /sub/index.php（base path 由 SCRIPT_NAME/SCRIPT_FILENAME 决定）。
+     *
+     * 实测 symfony/http-foundation v7.4.19（/tmp 真包，11 个语料与桩逐个比对过）：
+     * getRequestUri() 带 '/sub'，getPathInfo() 剥掉它 —— 而 Drupal 路由匹配的是后者。
+     */
+    private function subdirectoryRequest(string $path): Request
+    {
+        return Request::create($path, 'GET', [], [], [], [
+            'SCRIPT_NAME' => '/sub/index.php',
+            'SCRIPT_FILENAME' => '/var/www/html/sub/index.php',
+        ]);
     }
 
     /**
@@ -252,6 +269,29 @@ class DrupalTest extends TestCase
         $this->assertSame('GET', (new RequestAdapter(Request::create('/a', 'get')))->method());
     }
 
+    #[Test]
+    public function routedPathAdapterDiffersFromItsParentOnUriOnly(): void
+    {
+        // 静态资源路由专用：uri() 换成了路由匹配用的 pathInfo（子目录安装下两者不同），
+        // 其余方法必须一个不差地沿用父类 —— 只覆盖了 uri() 才敢让它只服务资源路由。
+        $request = $this->subdirectoryRequest('/sub/xhprof-assets/css/xhprof.css?x=1');
+        $plain = new RequestAdapter($request);
+        $routed = new RoutedPathRequestAdapter($request);
+
+        $this->assertInstanceOf(RequestInterface::class, $routed);
+        $this->assertSame('/sub/xhprof-assets/css/xhprof.css?x=1', $plain->uri(), '父类给原始请求 URI（带 base path）');
+        $this->assertSame('/xhprof-assets/css/xhprof.css', $routed->uri(), '子类给路由匹配到的路径（不带查询串）');
+
+        $this->assertSame('1', $routed->get('x'));
+        $this->assertSame($plain->get('x'), $routed->get('x'));
+        $this->assertSame($plain->all(), $routed->all());
+        $this->assertSame($plain->method(), $routed->method());
+        $this->assertSame($plain->header('x-none'), $routed->header('x-none'));
+        $this->assertSame($plain->host(), $routed->host());
+        $this->assertSame($plain->url(), $routed->url());
+        $this->assertSame($plain->getRealIp(), $routed->getRealIp());
+    }
+
     // ---------- ResponseAdapter ----------
 
     #[Test]
@@ -302,7 +342,7 @@ class DrupalTest extends TestCase
     public function responseAdapterFilePinsContentTypeFromCoreMap(): void
     {
         // 不钉类型的话 BinaryFileResponse::prepare() 会按**文件内容**猜（走 Mime 组件的内容嗅探）：
-        // 实测本包的 css/js 全被猜成 text/plain（jquery.autocomplete.js 甚至是 text/x-Algol68），
+        // 实测本包的 css/js 全被猜成 text/plain（js/dataTables.bootstrap.js 甚至是 text/html），
         // 浏览器会直接丢弃样式表和脚本 → 报告页裸奔。这里断言的是包内真实资源，不是临时文件。
         foreach ([
             'src/html/css/xhprof.css' => 'text/css',
@@ -651,6 +691,85 @@ class DrupalTest extends TestCase
     }
 
     #[Test]
+    public function reportAndAssetsAreNotSampledWhenDrupalLivesInASubdirectory(): void
+    {
+        // 中间件是最外层（priority 1000），跑在路由之前，只能自己算路径 —— 而路由算的
+        // 是剥掉 base path 的 pathInfo。用原始 URI 匹配的话子目录安装下全部失配：
+        // 报告页与资源请求照常采样，ignore_url_arr 被清空（「什么都不过滤」）时每次刷新
+        // 报告都多一条 run，正是那份配置想避免的事。
+        $cache = new FakeCache();
+        $middleware = $this->middleware($this->kernel(), $cache, ['enable' => true, 'ignore_url_arr' => []]);
+
+        $middleware->handle($this->subdirectoryRequest('/sub/xhprof'));
+        $middleware->handle($this->subdirectoryRequest('/sub/xhprof-assets/css/xhprof.css'));
+        $this->assertSame([], $this->runs($cache), '报告页与资源请求不得落库');
+
+        // 正对照：同一份配置下普通页面照样被采样并落库（没有它，这条在「什么都没跑」时也绿）
+        $middleware->handle($this->subdirectoryRequest('/sub/node/1'));
+        $this->latestRun($cache);
+    }
+
+    /**
+     * 资源前缀的口径必须与 Core\StaticController 同一个：**守卫认的路径 = serve() 认的路径**。
+     *
+     * 这里此前只覆盖默认前缀，而那正是缺陷的藏身处：守卫镜像了 Core 的私有常量
+     * '/xhprof-assets'，Core 改成读 `xhprof.assets_url` 之后两处分叉 —— 配了自定义前缀时
+     * 守卫认不出资源请求（照常采样），serve() 那边也不服务它们，两边一起错所以两边都不报。
+     *
+     * 判据一次问两票（守卫是否跳过采样、serve() 是否给出文件），不一致就红：只看任何一边
+     * 都能被「两边一起错」骗过。数据组与 Core\StaticControllerTest::assetsUrlProvider 同一批
+     * 边界（默认/自定义/尾斜杠/CDN 绝对 URL/空串/'/'）。
+     *
+     * @return iterable<string, array{?string, string, bool}>
+     */
+    public static function assetsUrlGuardProvider(): iterable
+    {
+        yield '没有配置' => [null, '/xhprof-assets/css/xhprof.css', true];
+        yield '配置 = 默认值' => ['/xhprof-assets', '/xhprof-assets/css/xhprof.css', true];
+        yield '配置带尾斜杠' => ['/xhprof-assets/', '/xhprof-assets/css/xhprof.css', true];
+        yield '自定义前缀' => ['/static/xhprof', '/static/xhprof/css/xhprof.css', true];
+        yield '自定义前缀 + 尾斜杠' => ['/static/xhprof/', '/static/xhprof/css/xhprof.css', true];
+        // 这两格是判别力来源：配了自定义前缀后**老路径不再被认**（否则同一份文件有两个 URL）。
+        // Drupal 资源路由写死在 xhprof.routing.yml 里不跟配置走，所以「老路径 + 自定义前缀」
+        // 正是这种部署下资源请求的真实形态：采样跳过与资源服务必须一起失效，不能只失效一半。
+        yield '自定义前缀 + 老路径' => ['/static/xhprof', '/xhprof-assets/css/xhprof.css', false];
+        yield 'CDN 绝对 URL' => ['https://cdn.test/xhprof-assets', '/xhprof-assets/css/xhprof.css', false];
+        yield '配置成空串' => ['', '/xhprof-assets/css/xhprof.css', false];
+        yield '配置成 /' => ['/', '/css/xhprof.css', true];
+    }
+
+    #[Test]
+    #[\PHPUnit\Framework\Attributes\DataProvider('assetsUrlGuardProvider')]
+    public function assetsGuardAndServeAgreeOnWhichPathsAreAssets(?string $assetsUrl, string $path, bool $isAsset): void
+    {
+        $config = ['enable' => true, 'ignore_url_arr' => []];
+        if ($assetsUrl !== null) {
+            $config['assets_url'] = $assetsUrl;
+        }
+        $cache = new FakeCache();
+        $middleware = $this->middleware($this->kernel(), $cache, $config);
+
+        // 第 1 票：中间件守卫（跳过采样 ⇔ 认作报告页/资源）
+        $middleware->handle($this->subdirectoryRequest('/sub' . $path));
+
+        // 第 2 票：Core 自己的判定（serve() 给出包内文件 ⇔ 认作资源）
+        $served = StaticController::serve(
+            new RoutedPathRequestAdapter($this->subdirectoryRequest($path)),
+            new ResponseAdapter(new Response())
+        )->send();
+        $isServed = $served instanceof BinaryFileResponse
+            && $served->getFile()->getPathname() === $this->cssFile();
+
+        $this->assertSame($isAsset, $isServed, "serve() 对 $path 的判定（前缀 " . var_export($assetsUrl, true) . '）');
+
+        if ($isAsset) {
+            $this->assertSame([], $this->runs($cache), "认作资源的 $path 不得被采样落库");
+        } else {
+            $this->latestRun($cache);   // 非资源请求照常采样并落库
+        }
+    }
+
+    #[Test]
     public function subRequestAloneSamplesNothing(): void
     {
         $cache = new FakeCache();
@@ -776,6 +895,26 @@ class DrupalTest extends TestCase
         $this->assertSame($this->cssFile(), $response->getFile()->getPathname(), '必须落在包内 src/html 下');
         $this->assertStringContainsString('max-age=86400', (string) $response->headers->get('Cache-Control'));
         $this->assertSame('text/css', $response->headers->get('Content-Type'), 'Drupal 报告页的样式表必须带对 MIME');
+    }
+
+    #[Test]
+    public function assetsRouteServesBundledCssWhenDrupalLivesInASubdirectory(): void
+    {
+        // 路由是在**剥掉 base path 的 pathInfo** 上匹配的（RequestContext::fromRequest()），
+        // 所以资源能路由到本控制器；但 StaticController 是拿 uri() 反推资源相对路径的。
+        // 若这里交给它的是原始请求 URI（带 /sub），反推前缀对不上 → 空 body 的 200：
+        // 报告页没样式没 JS，且**不报任何错**（README 只记了守卫失配那一半，这半边更重）。
+        $request = $this->subdirectoryRequest('/sub/xhprof-assets/css/xhprof.css');
+
+        // 前提：两种路径确实不同（桩与真包在同一语料上逐字比对过）
+        $this->assertSame('/sub/xhprof-assets/css/xhprof.css', $request->getRequestUri(), '原始 URI 带 base path');
+        $this->assertSame('/xhprof-assets/css/xhprof.css', $request->getPathInfo(), '路由匹配用的路径剥掉了它');
+
+        $response = (new XhprofController())->assets($request);
+
+        $this->assertInstanceOf(BinaryFileResponse::class, $response, '子目录安装下也必须命中包内资源');
+        $this->assertSame($this->cssFile(), $response->getFile()->getPathname());
+        $this->assertSame('text/css', $response->headers->get('Content-Type'));
     }
 
     /**

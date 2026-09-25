@@ -855,7 +855,7 @@ class XhprofDisplayTest extends TestCase
         self::assertBefore($html, 'foo() 自身耗时', '其他发现');
     }
 
-    /** R4 的 symbol 是空串（见 Analyzer::ruleR4），此时不该给出指向"未找到"详情页的死链 */
+    /** R4 在裸名不在 symbol_tab 时 symbol 是空串（见 Analyzer::ruleR4），此时不该给出指向"未找到"详情页的死链 */
     #[Test]
     public function renderDiagnosisOmitsLinkWhenSymbolIsEmpty(): void
     {
@@ -867,6 +867,42 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('检测到 fib() 递归', $html);
         self::assertStringNotContainsString('symbol=', $html);
         self::assertStringNotContainsString('<a href', $html);
+    }
+
+    /**
+     * 诊断条目必须带上断行 class，且样式表里**针对这个 class** 有 overflow-wrap。
+     *
+     * 缺陷形态：全限定名/生成式命名（`Illuminate\…\{closure}`）在 CSS 默认断行规则下
+     * 没有断点，窄视口里溢出 .xp-card 的 overflow:hidden —— 卡片没有滚动条，函数名被
+     * 静默裁掉（实测 485px 视口下越出卡片 413px，见报告）。
+     *
+     * class 名从**渲染结果**里读出来再去找同名 CSS 规则：写死 '.xp-diag-item' 的话，
+     * 改 class 名而漏改样式表（或反过来）两种单边改动都会漏网。
+     */
+    #[Test]
+    public function diagnosisItemCarriesTheWrapClassAndCssWrapsIt(): void
+    {
+        $sym = 'Illuminate\Database\Eloquent\Builder::Illuminate\Database\Eloquent\{closure}';
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, $sym, $sym . ' 自身耗时 780.0ms', '细节', 780.0)],
+            []
+        );
+
+        // 前提：渲染层不截断符号名，裁切完全发生在 CSS 层——否则样式表里做什么都没用
+        self::assertStringContainsString($sym, $html);
+
+        preg_match('/<li class="([^"]*)"/', $html, $m);
+        self::assertNotEmpty($m, '诊断条目的 <li> 必须带 class（断行规则由样式表提供）');
+        $class = trim($m[1]);
+        self::assertNotSame('', $class);
+
+        $css = (string) file_get_contents(dirname(__DIR__, 3) . '/src/html/css/xhprof.css');
+        preg_match('/\.' . preg_quote($class, '/') . '\s*\{([^}]*)\}/', $css, $rule);
+        self::assertNotEmpty($rule, "样式表里缺少 .{$class} 的规则");
+        self::assertStringContainsString('overflow-wrap', $rule[1]);
+        self::assertStringContainsString('anywhere', $rule[1]);
+        // break-all 会连带拆开 CJK 标点与 URL；本条钉住别退化成它
+        self::assertStringNotContainsString('word-break', $rule[1]);
     }
 
     /** 空结果必须显式说明，否则用户会以为功能坏了 */

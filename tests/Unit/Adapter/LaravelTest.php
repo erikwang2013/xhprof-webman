@@ -24,6 +24,7 @@ use ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Laravel\Middleware;
 use ErikWang2013\Xhprof\Laravel\XhprofServiceProvider;
 use ErikWang2013\Xhprof\Tests\Stubs\Registry;
+use Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException;
 
 class LaravelTest extends TestCase
 {
@@ -183,11 +184,16 @@ class LaravelTest extends TestCase
         $adapter->withBody('hello')->withHeaders(['X-A' => '1']);
         $res = $adapter->send();
         $this->assertInstanceOf(Response::class, $res);
-        $this->assertSame('hello', $res->body);
-        $this->assertSame('1', $res->headers['X-A']);
+        // 正文/状态只能走真访问器：真包的 $content/$statusCode 是 protected
+        // （symfony/http-foundation v7.4.19 Response.php:110/:112，声明在父类）；
+        // `$res->body` 在真包上是 Undefined property 读成 null，不是什么都能读的公开属性。
+        $this->assertSame('hello', $res->getContent());
+        // Illuminate\Http\Response::$headers 是 ResponseHeaderBag（对象），真包上
+        // `$res->headers['X-A']` 是致命错误；桩此前是数组，把这行写法的错误掩盖了。
+        $this->assertSame('1', $res->headers->get('X-A'));
 
         $adapter->withStatus(404);
-        $this->assertSame(404, $adapter->send()->status);
+        $this->assertSame(404, $adapter->send()->getStatusCode());
     }
 
     /**
@@ -207,25 +213,33 @@ class LaravelTest extends TestCase
             ->withBody('403 Forbidden');
 
         $res = $adapter->send();
-        $this->assertSame('no-cache, private', $res->headers['Cache-Control'], '先设的头被 withBody 冲掉了');
-        $this->assertSame('403 Forbidden', $res->body);
-        $this->assertSame(403, $res->status);
+        $this->assertSame('no-cache, private', $res->headers->get('Cache-Control'), '先设的头被 withBody 冲掉了');
+        $this->assertSame('403 Forbidden', $res->getContent());
+        $this->assertSame(403, $res->getStatusCode());
     }
 
+    /**
+     * Laravel 适配器把 MIME/404 委托给框架 `ResponseFactory::file()`：真包返回的是
+     * Symfony 的 `BinaryFileResponse`（构造时就校验文件存在，没有 `withHeaders()`），
+     * 路径从 `getFile()` 读——不是 `$res->filePath`，那个属性真包上没有。
+     * 这条同时钉住 StaticController 那条链 `file($p)->withHeaders([...])`：
+     * 适配器改用 HeaderBag 之后它才不炸（真包上原本是
+     * `Error: Call to undefined method ...BinaryFileResponse::withHeaders()`）。
+     */
     #[Test]
     public function responseAdapterFile(): void
     {
-        // Laravel 适配器将 MIME/404 委托给框架 Response::file()，stub 仅记录路径
         $path = sys_get_temp_dir() . '/xhprof-laravel.css';
         file_put_contents($path, '.a{}');
         try {
             $adapter = new ResponseAdapter();
-            $adapter->file($path);
-            $res = $adapter->send();
-            $this->assertSame($path, $res->filePath);
+            $res = $adapter->file($path)->withHeaders(['Content-Type' => 'text/css'])->send();
+            $this->assertSame($path, $res->getFile()->getPathname());
+            $this->assertSame('text/css', $res->headers->get('Content-Type'));
 
+            // 文件不存在时真包在**构造** BinaryFileResponse 时就抛，不是延迟到 send()
+            $this->expectException(FileNotFoundException::class);
             $adapter->file('/no/such/file.css');
-            $this->assertSame('/no/such/file.css', $adapter->send()->filePath);
         } finally {
             if (is_file($path)) {
                 unlink($path);
@@ -251,7 +265,7 @@ class LaravelTest extends TestCase
         });
 
         $this->assertInstanceOf(Response::class, $res);
-        $this->assertSame('ok', $res->body);
+        $this->assertSame('ok', $res->getContent());
         $this->assertInstanceOf(CacheInterface::class, CoreXhprof::getCache());
         $this->assertInstanceOf(ConfigAdapter::class, CoreXhprof::getConfig());
         $this->assertTrue(CoreXhprof::getConfig()->get('xhprof.enable'));

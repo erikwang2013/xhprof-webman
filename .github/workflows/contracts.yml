@@ -14,6 +14,20 @@ jobs:
   contracts:
     name: 契约验证环（桩 vs 真实包）
     runs-on: ubuntu-latest
+    # cases/Redis.php 是**真 Redis 端到端**（业务请求 → 落库 → 报告页读回），前置就是
+    # 127.0.0.1:6379 上有一个真服务器。用 service container 而不是 step 里现装：
+    # 生命周期跟着 job 走，且 health-cmd 保证跑 case 时它**已经在监听**——那个 case
+    # 连不上时是 FAIL 不是 SKIP（SKIP 数是冻结常量，不许随环境漂移）。
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2

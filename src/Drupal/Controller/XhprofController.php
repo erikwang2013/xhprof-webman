@@ -7,7 +7,7 @@ namespace ErikWang2013\Xhprof\Drupal\Controller;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
 use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof;
-use ErikWang2013\Xhprof\Drupal\Adapter\RequestAdapter;
+use ErikWang2013\Xhprof\Drupal\Adapter\RoutedPathRequestAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\ResponseAdapter;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -52,7 +52,10 @@ class XhprofController
 
     public function assets(Request $request): Response
     {
-        $sent = StaticController::serve(new RequestAdapter($request), new ResponseAdapter(new Response()))->send();
+        // 用 RoutedPathRequestAdapter（uri() = 路由匹配到的 pathInfo），不用 RequestAdapter：
+        // 站点装在子目录时 getRequestUri() 带 base path，StaticController 反推资源相对路径
+        // 时前缀对不上，会把每个资源请求都判成未命中 → 空 200，报告页无 CSS 无 JS。
+        $sent = StaticController::serve(new RoutedPathRequestAdapter($request), new ResponseAdapter(new Response()))->send();
 
         // 未命中/非法路径时 StaticController 返回空 body（不抛异常），
         // BinaryFileResponse 由适配器 file() 在命中时给出。

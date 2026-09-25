@@ -189,8 +189,25 @@ namespace Webman\Http {
             return $this->headers[$name] ?? null;
         }
 
-        public function host(): string
+        /**
+         * 真实签名 host(bool $withoutPort = false): ?string（workerman 5.2.2
+         * src/Protocols/Http/Request.php:291）：
+         *   $host = $this->header('host');
+         *   if ($host && $withoutPort) { return preg_replace('/:\d{1,5}$/', '', $host); }
+         *   return $host;
+         * 桩照抄这段：默认原样给 Host 头（**带端口**），$withoutPort=true 才剥，且只剥
+         * 尾部 1-5 位纯数字端口 —— 实测 'example.com:8080'→'example.com'，而
+         * 'example.com:'（冒号后非数字）原样返回。
+         *
+         * 桩不模拟「无 Host 头 → null」那一态（$options 缺省给 'localhost'），所以
+         * Webman\RequestAdapter 里那句 `(string)` 兜底在单测里跑不到；要覆盖它得先让桩
+         * 能表达「没有 Host 头」（显式传 'host' => null 的语义）。
+         */
+        public function host(bool $withoutPort = false): ?string
         {
+            if ($this->host && $withoutPort) {
+                return preg_replace('/:\d{1,5}$/', '', $this->host);
+            }
             return $this->host;
         }
 
@@ -210,12 +227,35 @@ namespace Webman\Http {
         }
     }
 
+    /**
+     * 真包是两层：webman-framework v2.2.4 src/Http/Response.php:26
+     * `class Response extends \Workerman\Protocols\Http\Response`，只加了 file()/download()/
+     * exception() 和 $exception；下面这些成员全在父类
+     * workerman 5.2.2 src/Protocols/Http/Response.php 里，照它的**声明**搬：
+     *
+     *   - 构造参数顺序 (int $status, array $headers, string $body)（:267-271）
+     *   - 唯一的 public 属性是 `?array $file`（:56），形状见 withFile()（:434）
+     *   - $status / $headers / $body / $reason 都是 **protected**（:42、:268-270），
+     *     取用只能走 getHeader()/getHeaders()/getStatusCode()/rawBody()
+     *
+     * 所以 `$res->headers['X-A']` 在真包上是 `Error: Cannot access protected property`，
+     * 而 `$res->filePath` 这个属性真包上**根本不存在**（文件路径记在 `$file['file']` 里）。
+     * 桩此前把 status/headers/body 开成 public 并自带一个 $filePath，两种写法在桩上都绿 ——
+     * 桩比真包宽松，红不了就等于没检查（详见 memory: prove-the-check-fails-when-it-should）。
+     *
+     * 真包的 header()/withHeader()/withoutHeader()/getMimeType()/cookie()/__toString() 没搬：
+     * 本包适配器与测试都不调它们。
+     */
     class Response
     {
-        public int $status;
-        public array $headers;
-        public string $body;
-        public ?string $filePath = null;
+        /** 真包唯一的 public 属性（workerman 5.2.2 src/Protocols/Http/Response.php:56） */
+        public ?array $file = null;
+
+        protected int $status = 200;
+        protected array $headers = [];
+        protected string $body = '';
+        /** 真名就是 $reason（:42 `protected ?string $reason = null;`） */
+        protected ?string $reason = null;
 
         public function __construct(int $status = 200, array $headers = [], string $body = '')
         {
@@ -224,7 +264,8 @@ namespace Webman\Http {
             $this->body = $body;
         }
 
-        public function withBody(string $body): self
+        /** workerman :406-410 —— 就地改并返回 $this */
+        public function withBody(string $body): static
         {
             $this->body = $body;
             return $this;
@@ -235,26 +276,75 @@ namespace Webman\Http {
          * （workerman 5.2.2 src/Protocols/Http/Response.php:361），改的是 $this 并返回它。
          * 响应对象是**可变**的 —— 这正是本包 Webman 适配器能用「先设头后设状态」而不丢头
          * 的前提；少了它，适配器就只能 new 一个新响应，先设的头与正文全丢。
+         * （对照：Hyperf 的同名方法走 PSR-7，返回**新**实例。）
          */
-        public function withStatus(int $status): self
+        public function withStatus(int $code, ?string $reasonPhrase = null): static
         {
-            $this->status = $status;
+            $this->status = $code;
+            $this->reason = $reasonPhrase !== null ? str_replace(["\r", "\n"], '', $reasonPhrase) : null;
             return $this;
         }
 
-        public function withHeaders(array $headers): self
+        /**
+         * workerman :304-308。注意真包用的是 array_merge_recursive（**不是** array_merge）：
+         * 同名头再来一次会并成数组。think 那边正好相反（单数数组 + array_merge），两边别抄串。
+         */
+        public function withHeaders(array $headers): static
         {
-            $this->headers = array_merge($this->headers, $headers);
+            $this->headers = array_merge_recursive($this->headers, $headers);
             return $this;
         }
 
-        public function file(string $path): self
+        /** workerman :328-331 —— 大小写敏感，没有这个头给 null（不是空串） */
+        public function getHeader(string $name): array|string|null
         {
-            $this->filePath = $path;
-            if (is_file($path)) {
-                $this->body = (string) file_get_contents($path);
+            return $this->headers[$name] ?? null;
+        }
+
+        /** workerman :338-341 */
+        public function getHeaders(): array
+        {
+            return $this->headers;
+        }
+
+        /** workerman :373-376 */
+        public function getStatusCode(): int
+        {
+            return $this->status;
+        }
+
+        /** workerman :417-420 */
+        public function rawBody(): string
+        {
+            return $this->body;
+        }
+
+        /**
+         * workerman :430-438，逐字照抄判别逻辑：
+         *   文件不存在 → withStatus(404)->withBody('<h3>404 Not Found</h3>')，**不记路径**；
+         *   存在       → $this->file = ['file'=>路径,'offset'=>0,'length'=>0]，正文**仍为空**
+         *                （内容由 __toString()/ResponseEmitter 直接从磁盘流出去，不进对象）。
+         * 旧桩两半都反着来（缺文件也记路径、正文塞文件内容），于是
+         * WebmanTest::responseAdapterFile 断言的是桩的臆造行为，真包上两条都不成立。
+         */
+        public function withFile(string $file, int $offset = 0, int $length = 0): static
+        {
+            if (!is_file($file)) {
+                return $this->withStatus(404)->withBody('<h3>404 Not Found</h3>');
             }
+            $this->file = ['file' => $file, 'offset' => $offset, 'length' => $length];
             return $this;
+        }
+
+        /**
+         * 真实 file()（webman-framework v2.2.4 src/Http/Response.php:38-44）先问
+         * notModifiedSince($file)，命中就 withStatus(304)；那个判断读
+         * `App::request()->header('if-modified-since')`（:68-78），单测里没有 App，
+         * 桩直接走 withFile() —— 即「请求不带 If-Modified-Since」那条分支。
+         */
+        public function file(string $file): static
+        {
+            return $this->withFile($file);
         }
     }
 }
@@ -427,52 +517,107 @@ namespace Illuminate\Http {
         }
     }
 
+    /**
+     * 保真度（2026-09-25 修）：真实类 `Illuminate\Http\Response extends
+     * Symfony\Component\HttpFoundation\Response`，`$headers` 就是 Symfony 的
+     * **ResponseHeaderBag（对象，不是数组）**，`$res->headers['X-A']` 在真包上是致命错误；
+     * `withHeaders()` 来自 ResponseTrait，内部同样是 `$this->headers->set($k, $v)`。
+     * 桩此前把 headers 做成数组，于是「数组下标访问」这种真包不支持的写法在单测里恒绿。
+     *
+     * 另：`file()` **不在这个类上**（真实的 Response 没有它），它属于 ResponseFactory ——
+     * 见同文件 Illuminate\Routing\ResponseFactory。桩此前把 file() 塞在这里，正是
+     * 「桩比真包宽松」掩盖 `file($path)->withHeaders([...])` 会 500 的直接原因。
+     *
+     * 可见性收尾（2026-09-25，同批第三处的第四家）：存储的真名是 `$content` / `$statusCode`，
+     * 两者都 **protected**，且声明在父类 Symfony 的 Response 上（symfony/http-foundation
+     * v7.4.19 Response.php:110 / :112；父类 :108 的 `$headers` 才是 public）。取用只能走
+     * `getContent()` / `getStatusCode()`。桩此前把 `$body` / `$status` 做成 public，
+     * `$res->body` 于是恒绿 —— 实测真包（illuminate/http v13.33.0）给的是
+     * `Warning: Undefined property: Illuminate\Http\Response::$body` 读成 null，
+     * 断言随即 `Failed asserting that null is identical to 'hello'`。
+     */
     class Response
     {
-        public string $body;
-        public array $headers = [];
-        public int $status = 200;
-        public ?string $filePath = null;
+        public \Symfony\Component\HttpFoundation\ResponseHeaderBag $headers;
+        protected string $content;
+        protected int $statusCode;
 
-        public function __construct(string $body = '', int $status = 200, array $headers = [])
+        /**
+         * 参数照真包（illuminate/http v13.33.0 src/Response.php:30 无类型），
+         * 三步照父类 Symfony v7.4.19 Response.php:202 的顺序，省掉协议版本那步。
+         */
+        public function __construct($content = '', $status = 200, array $headers = [])
         {
-            $this->body = $body;
-            $this->status = $status;
-            $this->headers = $headers;
+            $this->headers = new \Symfony\Component\HttpFoundation\ResponseHeaderBag($headers);
+            $this->setStatusCode($status);
+            $this->setContent($content);
         }
 
+        /** Symfony Response::getStatusCode(): int（v7.4.19 :500）。 */
         public function getStatusCode(): int
         {
-            return $this->status;
+            return $this->statusCode;
+        }
+
+        /** 真包覆写 getContent(): string|false（illuminate/http v13.33.0 src/Response.php:47，transform 兜成 ''）。 */
+        public function getContent(): string|false
+        {
+            return $this->content;
         }
 
         /**
-         * 真实签名 setContent(mixed $content): static（illuminate/http v11
-         * src/Response.php:58 覆写 Symfony 的 setContent(?string)，就地改内容并返回 $this）。
-         * 桩把它落在 $body 上。
+         * 真实签名 setContent(mixed $content): static（illuminate/http v13.33.0
+         * src/Response.php:61 覆写 Symfony 的 setContent(?string)，就地改内容并返回 $this）。
          */
         public function setContent(mixed $content): self
         {
-            $this->body = (string) $content;
+            $this->content = (string) $content;
             return $this;
         }
 
+        /** 真实 ResponseTrait::withHeaders()：逐个 set() 进 bag（不是 array_merge） */
         public function withHeaders(array $headers): self
         {
-            $this->headers = array_merge($this->headers, $headers);
+            foreach ($headers as $name => $value) {
+                $this->headers->set((string) $name, (string) $value);
+            }
             return $this;
         }
 
-        public function setStatusCode(int $status): self
+        /** Symfony Response::setStatusCode(int $code, ?string $text = null): static（v7.4.19 :477）；省掉理由短语那个可选参数。 */
+        public function setStatusCode(int $code): self
         {
-            $this->status = $status;
+            $this->statusCode = $code;
             return $this;
         }
+    }
+}
 
-        public function file(string $path): self
+namespace Illuminate\Routing {
+    /**
+     * `response()` **不带参数**时返回的就是它（真实 helper：`return app(ResponseFactory::class)`，
+     * 带参数才 `->make(...)`）。契约签名见 illuminate/contracts
+     * Routing/ResponseFactory.php:123 `file($file, array $headers = [])`。
+     *
+     * `file()` 返回的是 `new Symfony\Component\HttpFoundation\BinaryFileResponse($file, 200, $headers)`
+     * —— 一个**纯 Symfony 类**（illuminate/routing ResponseFactory::file()），
+     * `method_exists(..., 'withHeaders') === false`：`withHeaders()` 是 Illuminate\ResponseTrait
+     * 给的，只挂在 Illuminate\Http\Response 上。桩此前把 file() 放在那个也有 withHeaders()
+     * 的类上，物理上表达不了这个差别，于是 Core\StaticController::serve() 里那句
+     * `$response->file($path)->withHeaders([...])` 在单测里恒绿，在真 Laravel 上是
+     * `Error: Call to undefined method`（资源请求 500、报告页无 CSS/JS）。
+     */
+    class ResponseFactory
+    {
+        public function make(string $content = '', int $status = 200, array $headers = []): \Illuminate\Http\Response
         {
-            $this->filePath = $path;
-            return $this;
+            return new \Illuminate\Http\Response($content, $status, $headers);
+        }
+
+        /** 签名照契约；返回类型照实现 —— Symfony 的 BinaryFileResponse，没有 withHeaders()。 */
+        public function file(string $file, array $headers = []): \Symfony\Component\HttpFoundation\BinaryFileResponse
+        {
+            return new \Symfony\Component\HttpFoundation\BinaryFileResponse($file, 200, $headers);
         }
     }
 }
@@ -706,9 +851,19 @@ namespace think {
             return $this->headers[$name] ?? $default;
         }
 
-        public function host(): string
+        /**
+         * 真实签名 host(bool $strict = false): string（topthink/framework 8.1.4
+         * src/think/Request.php:1706），末行逐字照抄：
+         *   return true === $strict && str_contains($host, ':') ? strstr($host, ':', true) : $host;
+         * —— 默认原样给 Host 头（**带端口**），$strict=true 且含冒号时取冒号前那段。
+         * 实测 'example.com:8080' → host() 给 'example.com:8080'、host(true) 给 'example.com'。
+         * 真实实现还会先看 HTTP_X_FORWARDED_HOST 再退回 HTTP_HOST，桩不做这层。
+         */
+        public function host(bool $strict = false): string
         {
-            return $this->host;
+            $host = $this->host;
+
+            return true === $strict && str_contains($host, ':') ? strstr($host, ':', true) : $host;
         }
 
         public function url(bool $full = false): string
@@ -722,44 +877,101 @@ namespace think {
         }
     }
 
+    /**
+     * 真包：topthink/framework 8.1.4 src/think/Response.php。**没有任何 public 属性**，
+     * 真名与可见性是 $data(:27) / $contentType(:33) / $charset(:39) / $code(:45) /
+     * $header(:63) / $content(:69)，取用走 getHeader()/getContent()/getCode()。
+     * 桩此前开的是 `public $headers/$body/$status` —— 可见性错，名字也不对
+     * （真包是单数 $header、$content、$code），于是 `$res->headers['X-A']` 这种写法在桩上绿、
+     * 在真包上是 `Undefined property`（实测 8.1.4：warning + `Trying to access array offset on null`）。
+     *
+     * 已知比真包**宽**的一处：真包第 21 行是 `abstract class Response`（不能直接 new，
+     * 实测 `Cannot instantiate abstract class think\Response`），应用拿到的是
+     * `think\response\Html`。桩做成可实例化的具体类 —— 否则本目录的 `response()` shim
+     * 与各测试的 `new Response('ok')` 都得改成造 Html，而 shim 不在本次围栏内。
+     * 只放宽了「构造」，所有断言走的面仍是真面。
+     *
+     * 构造：真包基类**没有构造器**，应用侧是 `Response::create($data,$type,$code)`（:105-108）
+     * 经容器实例化 `think\response\Html`，而 Html 的构造器收一个 DI 出来的 Cookie 再调
+     * init($data,$code)（src/think/response/Html.php:29-33）。桩省掉 Cookie 那一层，
+     * 把 init() 直接挂在 `__construct($data = '', int $code = 200)` 上 —— 与真实构造路径
+     * 共用同一个 init($data,$code)，参数顺序也一致。
+     *
+     * 没搬的真实成员：contentType()/lastModified()/expires()/eTag()/cacheControl()/data() 之外的
+     * 取数器与 send()。注意 init() 的第三步是 contentType()，真包因此**天生带一个
+     * `Content-Type: text/html; charset=utf-8` 头**，桩的头表初始为空 —— 本包适配器在
+     * file()/报告页两条链上都显式钉 Content-Type，所以这个初值差异观察不到，但别据此写断言。
+     */
     class Response
     {
-        public string $body;
-        public int $status;
-        public array $headers = [];
+        protected mixed $data = null;
+        protected mixed $content = null;
+        protected int $code = 200;
+        protected array $header = [];
 
-        public function __construct(string $body = '', int $status = 200, array $headers = [])
+        /** 真实路径 Response::create() → Html::__construct(Cookie,$data,$code) → init($data,$code) */
+        public function __construct($data = '', int $code = 200)
         {
-            $this->body = $body;
-            $this->status = $status;
-            $this->headers = $headers;
+            $this->init($data, $code);
         }
 
-        public function header(array $headers): self
+        /** 真实 init()（:89-96）的三步里，超类这条只搬前两步（第三步 contentType() 见类注释） */
+        protected function init($data = '', int $code = 200): void
         {
-            $this->headers = array_merge($this->headers, $headers);
+            $this->data = $data;
+            $this->code = $code;
+        }
+
+        /** ：254-259 —— 真包是单数 $header 且用 array_merge（workerman 那边是 array_merge_recursive） */
+        public function header(array $header = [])
+        {
+            $this->header = array_merge($this->header, $header);
+            return $this;
+        }
+
+        /** ：368-376 —— 给了名字取一个（没有这个头给 null），不给名字返回整张表 */
+        public function getHeader(string $name = '')
+        {
+            if (!empty($name)) {
+                return $this->header[$name] ?? null;
+            }
+            return $this->header;
+        }
+
+        /**
+         * 真实签名 content($content)（topthink/framework 8.1.4 src/think/Response.php:267），
+         * 就地设内容并返回 $this。真包对非字符串/不可转字符串的输入抛 InvalidArgumentException，
+         * 桩不模拟那层校验。
+         */
+        public function content($content)
+        {
+            $this->content = (string) $content;
             return $this;
         }
 
         /**
-         * 真实签名 content($content)（topthink/framework 6.1.5 src/think/Response.php:261），
-         * 就地设内容并返回 $this；桩把它落在 $body 上。
+         * ：392-407 —— $content 为 null 时才由 $data 推导（真包走 output()，Html 的 output()
+         * 就是原样返回 $this->data）；推出来之后缓存进 $content。
          */
-        public function content(string $content): self
+        public function getContent(): string
         {
-            $this->body = $content;
+            if (null === $this->content) {
+                $this->content = (string) $this->data;
+            }
+            return $this->content;
+        }
+
+        /** ：289-294 */
+        public function code(int $code)
+        {
+            $this->code = $code;
             return $this;
         }
 
-        public function code(int $status): self
-        {
-            $this->status = $status;
-            return $this;
-        }
-
+        /** ：417-420 */
         public function getCode(): int
         {
-            return $this->status;
+            return $this->code;
         }
     }
 }
@@ -885,28 +1097,88 @@ namespace Hyperf\HttpServer {
         }
     }
 
+    /**
+     * 真包：hyperf/http-server v3.2.0 src/Response.php —— **没有任何 public 属性**，
+     * 状态/头/正文都在 `protected ?ResponsePlusInterface $response`（:55）里，
+     * 取用一律走 PSR-7 访问器：getHeaders()(:252)、getHeader()(:282)、getHeaderLine()(:303)、
+     * getBody()(:365)、getStatusCode()(:393)。所以 `$res->headers['X-A']` / `$res->status`
+     * 在真包上是未定义属性；桩此前把它们开成 public，两种写法在桩上都绿。
+     *
+     * 另一处形状差异：**PSR-7 的 with*() 返回新实例，不改原对象**。真包这三个方法都是
+     * `return $this->call(__FUNCTION__, func_get_args());`（:321/:381/:415），而
+     * call() 是 `new static($response->{$name}(...$arguments))`（:447-456）—— 换壳不换底。
+     * 桩照这个语义用 clone 实现：丢掉返回值就等于丢掉这次修改（本包 Hyperf 适配器每一处
+     * 都写了 `$this->response = $this->response->with...`，所以单测仍绿）。
+     * 对照：workerman/think 的 with*() 是就地改，那两家的桩必须可变。
+     *
+     * 放宽的两处（真包签名 vs 桩）：
+     *   - withBody(StreamInterface $body): MessageInterface（:381）→ 桩收 mixed：
+     *     桩的 SwooleStream 只实现了 __toString()，没有实现 Psr7.php 里那个 13 个方法的
+     *     StreamInterface，标不出这个类型。
+     *   - getBody(): StreamInterface（:365）→ 桩返回原样存进去的对象（测试用 (string) 取内容）。
+     *
+     * 桩把状态/头/正文放在 private $status/$headerValues/$body 里：真包这三个属性一个都不存在
+     * （真包里只有一个 protected ?ResponsePlusInterface $response）。私有字段故意不叫 $headers ——
+     * 这样 `$res->headers[...]` 在桩上和在真包上得到的是同一种失败（Undefined property），
+     * 而不是桩自己造一个「Cannot access private property」出来。
+     */
     class Response implements \Hyperf\HttpServer\Contract\ResponseInterface
     {
-        public mixed $body = null;
-        public array $headers = [];
-        public int $status = 200;
+        /** PSR-7：头一律是「名字 → 值数组」，getHeader() 缺省给空数组而不是 null */
+        private array $headerValues = [];
+        private int $status = 200;
+        private mixed $body = null;
 
         public function withBody(mixed $body): self
         {
-            $this->body = $body;
-            return $this;
+            $new = clone $this;
+            $new->body = $body;
+            return $new;
         }
 
+        /** 真包 withHeader($name, $value) 是**替换**该头的值（追加用 withAddedHeader()） */
         public function withHeader(string $key, mixed $value): self
         {
-            $this->headers[$key] = $value;
-            return $this;
+            $new = clone $this;
+            $new->headerValues[$key] = is_array($value) ? array_values($value) : [(string) $value];
+            return $new;
         }
 
         public function withStatus(int $status): self
         {
-            $this->status = $status;
-            return $this;
+            $new = clone $this;
+            $new->status = $status;
+            return $new;
+        }
+
+        /** ：252 */
+        public function getHeaders(): array
+        {
+            return $this->headerValues;
+        }
+
+        /** ：282 —— PSR-7 规定：没有这个头返回**空数组** */
+        public function getHeader(string $name): array
+        {
+            return $this->headerValues[$name] ?? [];
+        }
+
+        /** ：303 —— 多个值用 ', ' 连接 */
+        public function getHeaderLine(string $name): string
+        {
+            return implode(', ', $this->headerValues[$name] ?? []);
+        }
+
+        /** ：365 */
+        public function getBody(): mixed
+        {
+            return $this->body;
+        }
+
+        /** ：393 */
+        public function getStatusCode(): int
+        {
+            return $this->status;
         }
     }
 }
@@ -1179,15 +1451,27 @@ namespace ErikWang2013\Xhprof\Webman\Adapter {
 }
 
 namespace ErikWang2013\Xhprof\Laravel {
-    function response(string $content = '', int $status = 200): \Illuminate\Http\Response
+    /**
+     * 真实 helper `response()`：**无参**返回 ResponseFactory（`file()` 这类工厂方法挂在它上面），
+     * 带参返回 `$factory->make($content, $status)`。桩此前两种形态都返回 Response，
+     * 于是把 `response()->file()` 与 `response('')->file()` 表达成同一件事。
+     */
+    function response(string $content = '', int $status = 200): \Illuminate\Http\Response|\Illuminate\Routing\ResponseFactory
     {
+        if (func_num_args() === 0) {
+            return new \Illuminate\Routing\ResponseFactory();
+        }
         return new \Illuminate\Http\Response($content, $status);
     }
 }
 
 namespace ErikWang2013\Xhprof\Laravel\Adapter {
-    function response(string $content = '', int $status = 200): \Illuminate\Http\Response
+    /** 同 ErikWang2013\Xhprof\Laravel\response()：无参 → ResponseFactory，带参 → Response。 */
+    function response(string $content = '', int $status = 200): \Illuminate\Http\Response|\Illuminate\Routing\ResponseFactory
     {
+        if (func_num_args() === 0) {
+            return new \Illuminate\Routing\ResponseFactory();
+        }
         return new \Illuminate\Http\Response($content, $status);
     }
 

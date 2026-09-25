@@ -88,7 +88,8 @@ class XhprofMiddleware implements MiddlewareInterface
         if ($path === self::REPORT_PATH) {
             return $this->report($res);
         }
-        if (str_starts_with($path, $this->assetsUrl() . '/')) {
+        $assetsUrl = $this->assetsUrl();
+        if ($assetsUrl !== '' && str_starts_with($path, $assetsUrl)) {
             return $this->serveAssets($req, $res);
         }
 
@@ -136,11 +137,23 @@ class XhprofMiddleware implements MiddlewareInterface
         return StaticController::serve($req, $res)->send();
     }
 
+    /**
+     * assets_url 归一化成**带尾斜杠**的前缀；配成空串 = 不启用资源短路（返回空串，调用方必须判空）。
+     *
+     * 口径与 `Core\StaticController::uriPrefix()` 及另外 5 家入口类一致，也包括空串这一格：
+     * 以前这里把「配置成空串」也回落成 DEFAULT_ASSETS_URL，于是本中间件认下 `/xhprof-assets/...`
+     * 交给 serve()，而 Core 对空串是「一个都不认」→ 返回**空 body 的 200**，报告页静默丢样式与脚本。
+     * 单点用 `assets_url: ''` 的部署（资源交给 nginx/CDN 自服务）在两处判定上分叉，正是
+     * guard 与 serve 必须同源的理由。
+     */
     private function assetsUrl(): string
     {
-        $assetsUrl = rtrim((string) $this->config->get('xhprof.assets_url', ''), '/');
+        $assetsUrl = $this->config->get('xhprof.assets_url', self::DEFAULT_ASSETS_URL);
+        if (!is_string($assetsUrl) || $assetsUrl === '') {
+            return '';
+        }
 
-        return $assetsUrl === '' ? self::DEFAULT_ASSETS_URL : $assetsUrl;
+        return rtrim($assetsUrl, '/') . '/';
     }
 
     /**

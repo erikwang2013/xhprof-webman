@@ -20,6 +20,18 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # 与 contracts.yml 同一个 service：cases/Redis.php 是真 Redis 端到端（连不上就 FAIL）。
+    # 两份 workflow 各自触发、各自跑环，缺一份就等于那条路必然红。
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,6 +63,9 @@ jobs:
         # 故意不加 --ignore-platform-reqs（与 contracts.yml 一致）：PHP 或扩展不满足时
         # 这里就该炸，而不是装出一套残缺依赖让环在下面假装通过。本 job 的 PHP 8.3 与
         # xhprof/redis 已满足 tools/contracts/composer.json 的 php >= 8.2 与扩展要求。
+        # cases/Redis.php 是真 Redis 端到端，前置就是 127.0.0.1:6379 上有个真服务器；
+        # 它连不上时是 FAIL 不是 SKIP（SKIP 数是冻结常量）。所以这里必须与 contracts.yml
+        # 用同一个 service 容器 —— 少这一块，环会在 tag 之前必然失败、Release 永远发不出去。
         run: |
           composer install -d tools/contracts --no-interaction --prefer-dist
           php tools/contracts/run.php

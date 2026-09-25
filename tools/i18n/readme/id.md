@@ -324,7 +324,7 @@ XhprofMiddleware::class => [
 ],
 ```
 
-Sub-array `redis` khusus untuk Yii3: kalau tidak ada `CacheInterface` yang disuntikkan, middleware memakainya untuk berbicara langsung dengan phpredis. Biarkan `assets_url` pada nilai defaultnya — prefiks lain hanya menghasilkan 200 dengan body kosong (nilai itu konstanta yang di-hardcode di Core; lihat [Verifikasi dan Keterbatasan yang Diketahui](#verifikasi-dan-keterbatasan-yang-diketahui)).
+Sub-array `redis` khusus untuk Yii3: kalau tidak ada `CacheInterface` yang disuntikkan, middleware memakainya untuk berbicara langsung dengan phpredis. Biarkan `assets_url` boleh prefiks apa pun: tautan CSS/JS halaman report dan `StaticController` membaca opsi yang sama (default `/xhprof-assets`). Keterbatasan yang tersisa saat deployment di subdirektori ada di [Verifikasi dan Keterbatasan yang Diketahui](#verifikasi-dan-keterbatasan-yang-diketahui).
 
 **4. Syarat versi** — komponen `yiisoft/*` yang diandalkan Yii3 mensyaratkan PHP >= 8.1. Walaupun paket ini mendeklarasikan `php >= 8.0`, integrasi Yii3 tidak bisa dipakai di PHP 8.0.
 
@@ -464,6 +464,23 @@ Semua framework berbagi opsi konfigurasi berikut:
 
 Keterbatasan yang diketahui dari opsi-opsi ini pada tiap framework tercantum di [Verifikasi dan Keterbatasan yang Diketahui](#verifikasi-dan-keterbatasan-yang-diketahui).
 
+**Pengalih bahasa halaman report**
+
+Dropdown di kanan navigasi mencantumkan 13 bahasa dengan **nama masing-masing** (`_meta.name` tiap katalog, misalnya 한국어, 日本語). Tautan setiap opsi dibuat dari **string kueri halaman saat ini** (`XhprofLib::report_url()`), jadi `?token=`, urutan, `run`, dan parameter lain ikut terbawa; mengganti bahasa **tidak meninggalkan tampilan saat ini** — di laporan eksekusi Anda tetap berada di eksekusi yang sama.
+
+**Area diagnosis halaman report**
+
+Kartu paling atas di badan laporan adalah "Kesimpulan Diagnosis" (tepat di bawah keterangan eksekusi): pertama "Mengapa lambat" (maksimal 3 penyebab), lalu "Temuan lain" (maksimal 3 pemeriksaan). Tautan "lihat" setelah tiap kesimpulan membuka halaman detail metode tersebut; rekursi (R4) punya tautan hanya bila nama polos benar-benar ada di tabel simbol — xhprof menjabarkan rekursi menjadi `fib@1`/`fib@2`, dan bila hanya nama terjabar yang tersisa, halaman detail tidak menemukan `fib`. Enam aturan dan ambangnya:
+
+- **R1** waktu sendiri ≥ 10% dari total waktu request;
+- **R2** jumlah panggilan ≥ 1000;
+- **R3** panggilan satu relasi ≥ 500 **dan** waktu sendiri fungsi yang dipanggil ≥ 5% dari total waktu request;
+- **R4** simbol yang sama muncul pada ≥ 2 kedalaman berbeda (rekursi);
+- **R5** memori puncak sendiri ≥ 30% dari puncak global;
+- **R6** waktu sendiri > waktu total (`excl_wt > wt`, mustahil secara logika) — probe integritas data yang tidak pernah menyala pada data yang sehat.
+
+Ambangnya dipatok sebagai konstanta di `src/Core/Analysis/Analyzer.php`, dan saat ini **tidak ada opsi konfigurasi** yang bisa mengubahnya atau mematikan area ini (`enable` dimatikan berarti tidak ada sampling, jadi tidak ada yang bisa didiagnosis). Area ini **hanya muncul di tampilan eksekusi tunggal tingkat atas**: baik tampilan diff maupun halaman detail metode tidak merendernya — `$symbol_tab`/`$totals` yang dikirim ke sana bukan nilai satu eksekusi (dalam mode diff nilainya adalah selisih run2 − run1).
+
 ---
 
 ## Inisialisasi Manual
@@ -589,7 +606,7 @@ src/<Fw>/
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
 | Kesepuluh framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
-| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri): memasang paket framework asli dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk enam framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
+| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri): memasang paket framework asli dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk delapan framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
 | Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, termasuk dua invarian: `uri()` tidak membawa skema/host, dan `withHeaders()` tetap berlaku setelah `file()` |
 
 
@@ -603,8 +620,8 @@ src/<Fw>/
 | Apakah prioritas Drupal benar-benar mendarat di luar page cache | Membutuhkan kernel Drupal yang sudah di-boot |
 | Konfigurasi otomatis `kernel.event_subscriber` Symfony | Membutuhkan kompilasi container asli |
 | Cakap-silang state statis di proses berjalan lama | Diwarisi dari arsitektur yang ada (hal yang sama juga berlaku untuk Webman / Hyperf); tidak diubah di sini |
-| I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | Di luar cakupan unit test dan loop verifikasi |
-| Signature dan semantik adapter untuk Webman / Laravel / ThinkPHP / Hyperf | keempatnya tidak masuk loop verifikasi (loop hanya mencakup enam framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
+| I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | I/O Redis asli **kini ada di dalam loop** (`cases/Redis.php`: phpredis asli + permintaan Slim asli dari awal sampai akhir — permintaan → penyimpanan → halaman daftar → halaman laporan); rendering browser dan overhead di bawah beban nyata tetap di luar cakupan unit test dan loop |
+| Signature dan semantik adapter untuk ThinkPHP / Hyperf | keduanya tidak masuk loop verifikasi (loop mencakup delapan framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
 
 **Daftar periksa smoke manual (tiga langkah per framework)**
 
@@ -614,17 +631,17 @@ src/<Fw>/
 | 2 | Buka URL aplikasi mana pun | Panjang key `xhprof:run_id` di Redis naik 1 |
 | 3 | Buka `/xhprof` | Halaman report ter-render dengan gayanya; `/xhprof-assets/js/xhprof_report.js` mengembalikan 200 |
 
-**Keterbatasan yang diketahui: `host()` tidak punya port**
+**Keterbatasan yang diketahui: `request_uri` yang ditampilkan di daftar tidak punya port**
 
-Kontrak `host()` berarti "hanya host, tanpa port", tetapi tautan di daftar laporan disusun sebagai `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`). Jadi **pada port non-standar (misalnya `:8080`) tautan daftarnya kehilangan port dan tidak menuju ke mana-mana**. Ini masalah laten pada implementasi yang ada (menimpa webman / Laravel / ThinkPHP / Hyperf secara setara), tidak diperbaiki di sini, dan dicatat sebagai keterbatasan yang diketahui.
+Kontrak `host()` berarti "hanya host, tanpa port" (R-2), dan kesepuluh framework mematuhinya — hanya implementasinya yang berbeda: `getHost()` dari PSR-7 tidak pernah membawa port, Joomla / WordPress memotongnya sendiri dengan `parse_url`, dan Webman / ThinkPHP butuh argumen ketat `host(true)` (nilai default mengembalikan header `Host` apa adanya, termasuk port). `request_uri` yang ditampilkan di daftar disusun sebagai `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), jadi pada port non-standar (misalnya `:8080`) **teks** baris itu tidak menampilkan port. **Tautannya sendiri tidak terpengaruh**: tautan di daftar dan di laporan semuanya dibuat `XhprofLib::report_url()` sebagai URL relatif (hanya path + query), membuka halaman yang benar, dan tidak bergantung pada `host()`.
 
-**Keterbatasan yang diketahui: `assets_url` hanya bekerja kalau nilainya `/xhprof-assets`**
+**`assets_url` kini mendukung prefiks khusus**
 
-Prefiks aset adalah konstanta yang di-hardcode di `src/Core/StaticController.php` (`private const URI_PREFIX = '/xhprof-assets'`), sedangkan tautan CSS/JS halaman report membaca opsi konfigurasi `assets_url` (`src/Core/Xhprof.php`). Begitu keduanya tidak cocok, `getPathFromRequest()` mengembalikan `null` dan `serve()` mengembalikan `withBody('')->withHeaders([])` — **respons 200 yang kosong, bukan 404**. Akibatnya: isi `assets_url` dengan apa pun selain nilai default dan CSS/JS-nya diam-diam jadi kosong, sehingga halaman report tampil tanpa gaya tanpa error apa pun. Dengan kata lain, `assets_url` saat ini adalah opsi palsu yang hanya bekerja bila dibiarkan pada nilai defaultnya. Ini masalah yang sudah ada sebelumnya dan tidak diperbaiki di sini.
+Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Batas**: prefiks kustom langsung berfungsi pada lima framework yang memintas jalur aset di middleware/kelas entri (Yii3, Symfony, Slim, WordPress, Joomla); pada Laravel, Hyperf, Webman, dan ThinkPHP jalur rute aset, dan pada Drupal `xhprof.routing.yml`, didaftarkan oleh **Anda** — ubah bersama `assets_url`, jika tidak permintaan aset tidak sampai ke `StaticController` dan halaman laporan kehilangan gaya serta skrip.
 
 **Keterbatasan yang diketahui: penjaga path gagal kalau Drupal berada di subdirektori**
 
-Kalau Drupal dipasang di bawah subdirektori (misalnya `/sites/app/xhprof`), penjaga path tidak bisa mencocokkan URI yang membawa base path, sehingga perilakunya jatuh kembali ke "diprofilkan tetapi tidak disimpan" (dengan konfigurasi default, `ignore_url_arr` yang menangkapnya). Ini kelas keterbatasan yang sama dengan prefiks `assets_url` yang di-hardcode.
+Kalau Drupal dipasang di bawah subdirektori (misalnya `/sites/app/xhprof`), penjaga path tidak bisa mencocokkan URI yang membawa base path, sehingga perilakunya jatuh kembali ke "diprofilkan tetapi tidak disimpan" (dengan konfigurasi default, `ignore_url_arr` yang menangkapnya).
 
 **Kompatibilitas Symfony 6.4**
 
@@ -635,6 +652,8 @@ Kompatibilitas Symfony 6.4 sudah diukur (dari situlah dua over-fit yang tak terl
 ## Penulis
 
 [erik](https://erik.xyz)
+
+Paket ini dirilis dengan lisensi MIT (lihat `LICENSE`); `src/Core/XhprofLib/**`, `src/html/js/xhprof_report.js`, dan `src/html/css/xhprof.css` berasal dari [phacility/xhprof](https://github.com/phacility/xhprof) (Apache-2.0) dan tetap tunduk pada ketentuannya; daftar pustaka front-end pihak ketiga ada di `NOTICE`.
 
 ## Dukung Open Source
 

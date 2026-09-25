@@ -782,8 +782,8 @@ class XhprofDisplay
     }
 
     // 同一个 symbol 可能同时出现在两个区，**这不是 bug**，别去"修"：
-    // 主区按 symbol 去重，补充区故意不去重——R4 的 symbol 是空串，
-    // 对补充区去重会把所有递归结论折叠成一条。
+    // 主区按 symbol 去重，补充区故意不去重——R4 在没有裸名可指时 symbol 是空串，
+    // 对补充区去重会把这类递归结论折叠成一条。
     // 于是一个函数可以既是"为什么慢"里的 R1、又是"其他发现"里的 R6，
     // 页面上就是两条标题不同、却指向同一详情页的链接——这两条结论本来就各说各话。
     if ($supplement) {
@@ -811,7 +811,10 @@ class XhprofDisplay
       $link = ' ' . XhprofDisplay::xhprof_render_link(I18n::plain('diag.view'), $href);
     }
 
-    return '<li style="padding:6px 20px"><b>[' . $rule . ']</b> ' . $title . $link
+    // class 不是装饰：全限定名/生成式命名（Illuminate\…\{closure}）在 CSS 默认断行规则下
+    // 整段没有断点，窄视口里会溢出 .xp-card 的 overflow:hidden 被静默裁掉（无滚动条），
+    // 用户看到的是被截断的函数名。断行规则写在样式表里，不在行内——见 .xp-diag-item。
+    return '<li class="xp-diag-item" style="padding:6px 20px"><b>[' . $rule . ']</b> ' . $title . $link
       . '<br><span style="color:#666;font-size:12px">' . $detail . '</span></li>';
   }
 

@@ -38,7 +38,10 @@ class RequestAdapter implements RequestInterface
 
     public function host(): string
     {
-        return $this->request->host();
+        // 契约 R-2：host() 不含端口。think 的 host(bool $strict = false) 默认原样返回
+        // Host 头——实测 topthink/framework 8.1.4：'example.com:8080'，而 host(true) 给
+        // 'example.com'（Request.php:1706 的 `str_contains($host, ':') ? strstr(...)`）。
+        return $this->request->host(true);
     }
 
     public function uri(): string

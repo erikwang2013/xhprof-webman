@@ -410,7 +410,9 @@ class AnalyzerTest extends TestCase
         // 精确断言，不用 containsString：'3' 这种短串到处都是，弱断言放过错误实现
         $this->assertSame('检测到 fib() 递归，最大深度 10', $hits[0]->title);
         $this->assertSame(10.0, $hits[0]->score, 'score 应是最大深度');
-        $this->assertSame('', $hits[0]->symbol, 'R4 的符号必须为空，否则详情页链接必然死链');
+        // 本夹具的 symbol_tab 里只有 fib@1、没有裸名 fib → 给不出可指向的详情页
+        // （有裸名时会给链接，见 r4GivesSymbolOnlyWhenBareNameExists）
+        $this->assertSame('', $hits[0]->symbol);
     }
 
     /** 同名只出现在一个深度 → 不是递归 */
@@ -443,6 +445,55 @@ class AnalyzerTest extends TestCase
         $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
 
         $this->assertCount(1, $hits, '坏键不得吞掉 R4 的其他有效结论');
+    }
+
+    /**
+     * 深度量程守卫：`(int)` 对超长数字串**静默饱和**成 PHP_INT_MAX，
+     * 审计实测 `q@1==>q@99999999999999999999` 会印出「最大深度 9223372036854775807」。
+     * 丢掉那个 token 后 q 只剩一个深度 → 连"递归"都不成立（不产生结论）。
+     *
+     * 同时钉住它不是"大的就丢"：@999999（仍在量程内）必须照常报出该深度。
+     */
+    #[Test]
+    public function r4RejectsDepthTokensBeyondRange(): void
+    {
+        $tab = ['main()' => self::sym(1, 100, 10)];
+
+        $inRange = self::rule(Analyzer::analyze($tab, ['q@1==>q@999999' => ['ct' => 1, 'wt' => 10]], ['wt' => 100]), 'R4');
+        $this->assertCount(1, $inRange, '量程内的深度必须照常报出');
+        $this->assertSame('检测到 q() 递归，最大深度 999999', $inRange[0]->title);
+
+        $tooBig = self::rule(Analyzer::analyze($tab, ['q@1==>q@99999999999999999999' => ['ct' => 1, 'wt' => 10]], ['wt' => 100]), 'R4');
+        $this->assertSame([], $tooBig, '越界 token 是坏数据，不得印成 9223372036854775807');
+    }
+
+    /**
+     * R4 的详情页链接只在 symbol_tab 里**真有裸名**时才给。
+     *
+     * 旧注释断言"symbol=fib 必然未找到"，已被实测推翻：真实递归数据
+     * （main()==>fib, fib==>fib@1, …）的 symbol_tab 里同时有裸名 fib，该详情页正常渲染。
+     * 没有裸名时才是死链，那时才置空。判据（要不要算递归）始终只看边表。
+     */
+    #[Test]
+    public function r4GivesSymbolOnlyWhenBareNameExists(): void
+    {
+        $raw = [
+            'main()==>fib'  => ['ct' => 1, 'wt' => 100],
+            'fib==>fib@1'   => ['ct' => 1, 'wt' => 90],
+            'fib@1==>fib@2' => ['ct' => 1, 'wt' => 80],
+            'fib@2==>fib@3' => ['ct' => 1, 'wt' => 70],
+        ];
+        $tab = ['main()' => self::sym(1, 100, 10), 'fib' => self::sym(4, 90, 5), 'fib@1' => self::sym(1, 90, 5)];
+
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
+        $this->assertCount(1, $hits);
+        $this->assertSame('fib', $hits[0]->symbol, '裸名在 symbol_tab 里存在 → 该给链接');
+
+        // 同一个边表，只去掉裸名那一项
+        unset($tab['fib']);
+        $hits = self::rule(Analyzer::analyze($tab, $raw, ['wt' => 100]), 'R4');
+        $this->assertCount(1, $hits, '判据只看边表：有没有裸名不影响"是不是递归"');
+        $this->assertSame('', $hits[0]->symbol, '裸名不存在 → 置空，渲染层跳过链接');
     }
 
     #[Test]
@@ -649,6 +700,193 @@ class AnalyzerTest extends TestCase
     }
 
     /**
+     * 逐项 is_finite 承重（分析侧最要害的一条）：坏值不只"该被跳过"，而是会被**放行**。
+     *
+     * is_numeric() 对 NAN 与 '1e400' 都返回 true，而 `NAN < 阈值`/`INF < 阈值` 恒为假
+     * —— 所有闸门都是"小于阈值就 continue"的形状，于是 NAN 一路通过，最后渲染出
+     * 「自身耗时 nanms，占本次请求 nan%」/「called nan times」/「峰值内存 nanB」。
+     * 可达性：serialize() 原样存 NAN，xhprof_compute_flat_info() 又用减法算 excl_*。
+     *
+     * 夹具必须是"正常值下命中"的形态，否则本测试静默空转。
+     */
+    #[Test]
+    #[DataProvider('nonFiniteProvider')]
+    public function nonFiniteMetricsAreSkippedPerItem(mixed $bad): void
+    {
+        $normal = ['good()' => self::sym(1, 1000, 500), 'junk()' => self::sym(1, 1000, 500)];
+        $broken = ['good()' => self::sym(1, 1000, 500), 'junk()' => self::withMetric(self::sym(1, 1000, 500), 'excl_wt', $bad)];
+
+        // 前提：同一个夹具在正常值下 R1 必须命中（两条），否则下面断言的是"空集相等"
+        $this->assertCount(2, self::rule(Analyzer::analyze($normal, [], ['wt' => 1000]), 'R1'));
+        $this->assertSame(
+            ['good()'],
+            array_map(fn($f) => $f->symbol, self::rule(Analyzer::analyze($broken, [], ['wt' => 1000]), 'R1')),
+            'NAN/INF 的 excl_wt 必须让该项整体不产生结论'
+        );
+    }
+
+    /** R2：ct 是印刷量（number_format），NAN 会印成 "called nan times" */
+    #[Test]
+    #[DataProvider('nonFiniteProvider')]
+    public function nonFiniteCallCountsAreSkippedPerItem(mixed $bad): void
+    {
+        $entry = self::withMetric(self::sym(1000, 10, 1), 'ct', $bad);
+        $tab   = ['good()' => self::sym(1000, 10, 1), 'junk()' => $entry];
+
+        $this->assertCount(2, self::rule(Analyzer::analyze(['a()' => self::sym(1000, 10, 1), 'b()' => self::sym(1000, 10, 1)], [], []), 'R2'));
+        $this->assertSame(
+            ['good()'],
+            array_map(fn($f) => $f->symbol, self::rule(Analyzer::analyze($tab, [], []), 'R2'))
+        );
+    }
+
+    /** R5：excl_pmu 同上，NAN 会印成「峰值内存 nanB，占全局 nan%」 */
+    #[Test]
+    #[DataProvider('nonFiniteProvider')]
+    public function nonFinitePeakMemoryIsSkippedPerItem(mixed $bad): void
+    {
+        $totals = ['wt' => 100, 'pmu' => 100];
+        $entry  = self::withMetric(self::sym(1, 10, 1, 30), 'excl_pmu', $bad);
+        $tab    = ['good()' => self::sym(1, 10, 1, 30), 'junk()' => $entry];
+
+        $this->assertCount(2, self::rule(Analyzer::analyze(['a()' => self::sym(1, 10, 1, 30), 'b()' => self::sym(1, 10, 1, 30)], [], $totals), 'R5'));
+        $this->assertSame(
+            ['good()'],
+            array_map(fn($f) => $f->symbol, self::rule(Analyzer::analyze($tab, [], $totals), 'R5'))
+        );
+    }
+
+    /** R3 的三个读点（边 ct / 被调方 excl_wt / 边 wt）都要挡 */
+    #[Test]
+    #[DataProvider('nonFiniteProvider')]
+    public function nonFiniteEdgeMetricsAreSkipped(mixed $bad): void
+    {
+        $tab = ['main()' => self::sym(1, 1000, 100), 'foo()' => self::sym(600, 600, 60)];
+        $raw = ['main()==>foo()' => ['ct' => 600, 'wt' => 400]];
+        // 前提：三行坏用例逐个对应"只坏一处"，正常夹具必须命中 R3
+        $this->assertCount(1, self::rule(Analyzer::analyze($tab, $raw, ['wt' => 1000]), 'R3'));
+
+        $cases = [
+            '边 ct'          => [$tab, ['main()==>foo()' => ['ct' => $bad, 'wt' => 400]]],
+            '边 wt'          => [$tab, ['main()==>foo()' => ['ct' => 600, 'wt' => $bad]]],
+            '被调方 excl_wt' => [
+                ['main()' => self::sym(1, 1000, 100), 'foo()' => self::withMetric(self::sym(600, 600, 60), 'excl_wt', $bad)],
+                $raw,
+            ],
+        ];
+        foreach ($cases as $label => $case) {
+            $this->assertSame([], self::rule(Analyzer::analyze($case[0], $case[1], ['wt' => 1000]), 'R3'), $label . ' 必须让该边不产生结论');
+        }
+    }
+
+    /** R6：两个操作数都要挡——`NAN > NAN`、`INF > 1` 都不是可印刷的结论 */
+    #[Test]
+    #[DataProvider('nonFiniteProvider')]
+    public function nonFiniteDurationsAreSkippedInR6(mixed $bad): void
+    {
+        $base = ['ct' => 1, 'wt' => 180, 'excl_wt' => 210, 'pmu' => 0, 'excl_pmu' => 0];
+        // 前提：同一形状的好数据必须命中，否则下面断言的是空集
+        $this->assertCount(1, self::rule(Analyzer::analyze(['a()' => $base], [], []), 'R6'));
+
+        foreach (['excl_wt', 'wt'] as $key) {
+            $broken = $base;
+            $broken[$key] = $bad;
+            $this->assertSame(
+                [],
+                self::rule(Analyzer::analyze(['a()' => $broken], [], []), 'R6'),
+                $key . ' 非有限时不得产出结论'
+            );
+        }
+    }
+
+    /**
+     * 越界（但不是坏类型）的量程守卫：审计实测 excl_wt=1e20 / wt=1e19 时
+     * `(int) round()` 是 UB，标题印出「总耗时 -8,446,744,073,709,551,616μs」——负的时间。
+     * 不硬转：超出 1e15μs（≈31 年）量程的微秒数当坏数据，R6 不产生结论。
+     */
+    #[Test]
+    public function r6RejectsOutOfRangeDurationsInsteadOfWrappingNegative(): void
+    {
+        $tab = ['f()' => ['ct' => 1, 'wt' => 1e19, 'excl_wt' => 1e20, 'pmu' => 0, 'excl_pmu' => 0]];
+        $found = Analyzer::analyze($tab, [], ['wt' => 1000]);
+
+        $this->assertSame([], self::rule($found, 'R6'));
+        foreach ($found as $f) {
+            $this->assertStringNotContainsString('-,', $f->title, '不得印出负的时间');
+            $this->assertStringNotContainsString('nan', $f->title);
+        }
+    }
+
+    /**
+     * 两个操作数都有限，商仍可能溢出成 INF（1e20 / 1e-300），而 `INF < 阈值` 恒为假。
+     * 三个占比闸门（R1/R3/R5）都是这个形状，所以同一个守卫要写三处。
+     */
+    #[Test]
+    public function nonFiniteSharesAreSkippedEvenWhenOperandsAreFinite(): void
+    {
+        $tab = ['hog()' => self::sym(1, 1000, 1e20, 1e20), 'hot()' => self::sym(600, 600, 1e20)];
+        $raw = ['main()==>hot()' => ['ct' => 600, 'wt' => 400]];
+        // 荒谬的分母：量纲合法（有限、>0），只有商溢出
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1e-300, 'pmu' => 1e-300]);
+
+        $this->assertSame([], self::rule($found, 'R1'));
+        $this->assertSame([], self::rule($found, 'R3'));
+        $this->assertSame([], self::rule($found, 'R5'));
+    }
+
+    /** 坏类型/缺键的逐项形态：`!is_array($info)` 与所有缺键分支此前零覆盖 */
+    #[Test]
+    #[DataProvider('malformedMetricEntryProvider')]
+    public function analyzeToleratesMalformedMetricEntries(mixed $entry): void
+    {
+        $tab = ['good()' => self::sym(1, 1000, 500), 'junk()' => $entry];
+        $raw = [
+            0 => ['ct' => 999, 'wt' => 1],          // 整型键（PHP 会转 int）
+            'main()==>x()' => 'not-an-array',       // 非数组的边值
+            'y()==>z()' => null,
+        ];
+        $found = Analyzer::analyze($tab, $raw, ['wt' => 1000]);
+
+        $this->assertSame(
+            ['good()'],
+            array_map(fn($f) => $f->symbol, self::rule($found, 'R1')),
+            '坏条目不得连累同表里的有效项'
+        );
+        foreach ($found as $f) {
+            foreach ([$f->title, $f->detail] as $text) {
+                $this->assertStringNotContainsString('nan', $text);
+                $this->assertStringNotContainsString('inf', $text);
+            }
+        }
+    }
+
+    public static function malformedMetricEntryProvider(): array
+    {
+        return [
+            '非数组：字符串'   => ['not-an-array'],
+            '非数组：null'     => [null],
+            '非数组：对象'     => [new \stdClass()],
+            '非数组：int'      => [7],
+            '空数组（全缺键）' => [[]],
+            '只缺 excl_wt'     => [['ct' => 1, 'wt' => 1000]],
+            '指标全为非数值'   => [['ct' => 'x', 'wt' => [], 'excl_wt' => '1,000', 'excl_pmu' => false]],
+        ];
+    }
+
+    public static function nonFiniteProvider(): array
+    {
+        // '1e400' 是同一族的字符串形态：is_numeric 为真，(float) 得 INF
+        return ['NAN' => [NAN], 'INF' => [INF], '-INF' => [-INF], '1e400 字符串' => ['1e400']];
+    }
+
+    /** 造一个"只坏一处"的指标项：sym() 的签名是 float，字符串坏值得绕过类型声明 */
+    private static function withMetric(array $info, string $key, mixed $value): array
+    {
+        $info[$key] = $value;
+        return $info;
+    }
+
+    /**
      * 三个微秒数必须在**同一次舍入之后**自洽：各自取整会让 138.4/137.6 渲染成
      * 「138μs 大于 138μs，差 1μs」——与当初弃用 ms() 是同一类自相矛盾。
      * 取整后 138 不大于 138 → 不产出结论（亚 0.5μs 的倒挂有意忽略）；
@@ -726,8 +964,9 @@ class AnalyzerTest extends TestCase
     }
 
     /**
-     * 补充区**不得**按 symbol 去重：R4 的 symbol 是空串，一旦去重，所有递归结论
-     * 会被折叠成一条。这条 spec 规则此前只被 r4SortsByDepthDescending 的夹具顺带守住
+     * 补充区**不得**按 symbol 去重：R4 在裸名不在 symbol_tab 时给出空 symbol（本夹具
+     * 即此情形），一旦去重，这类递归结论会被折叠成一条。这条 spec 规则此前只被
+     * r4SortsByDepthDescending 的夹具顺带守住
      * ——而那条测试的命名意图是排序方向，改写它就会静默丢掉本规则。
      */
     #[Test]
@@ -744,7 +983,7 @@ class AnalyzerTest extends TestCase
             fn($f) => $f->severity === Finding::SEVERITY_SUPPLEMENT
         );
 
-        $this->assertCount(2, $supp, '补充区不得按 symbol 去重（R4 的 symbol 是空串）');
+        $this->assertCount(2, $supp, '补充区不得按 symbol 去重（本夹具的 R4 symbol 是空串）');
     }
 
     #[Test]

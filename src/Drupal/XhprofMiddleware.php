@@ -39,10 +39,14 @@ class XhprofMiddleware implements HttpKernelInterface
     private const REPORT_PATH = '/xhprof';
 
     /**
-     * 静态资源前缀，与 Core\StaticController 内部那个私有常量一致
-     * （Core 只读且常量是 private，只能在此重复；同上，测试拿文件系统的事实对照）。
+     * `xhprof.assets_url` 的默认值，与 Core\StaticController::URI_PREFIX 及十份配置文件一致。
+     *
+     * 前缀本身**从配置读**（见 isReportOrAssets()），这个常量只是缺配置时的兜底。
+     * 这里曾经镜像 Core 的私有常量 '/xhprof-assets' 并注释成「两处必须一致」——Core 改成
+     * 读配置后那句话就反了：镜像硬编码反而制造了分叉（配了自定义前缀时守卫认不出资源请求、
+     * 照常采样，而 StaticController 那边也不服务它们）。
      */
-    private const ASSETS_PREFIX = '/xhprof-assets';
+    private const DEFAULT_ASSETS_URL = '/xhprof-assets';
 
     private HttpKernelInterface $httpKernel;
     private ConfigFactoryInterface $configFactory;
@@ -107,16 +111,37 @@ class XhprofMiddleware implements HttpKernelInterface
         }
     }
 
-    /** 报告页或静态资源请求（路径与 StaticController 的解析方式一致；末尾斜杠容忍）。 */
+    /** 报告页或静态资源请求（路径与 StaticController 的解析来源一致；末尾斜杠容忍）。 */
     private function isReportOrAssets(Request $request): bool
     {
-        // 用 request URI 而不是 getPathInfo()：StaticController::getPathFromRequest() 解析的
-        // 就是这个（parse_url(uri(), PHP_URL_PATH)），两边用同一个来源才不会一个认定是资源、
-        // 另一个不认。**已知边界**：Drupal 装在子目录（/sites/app/xhprof）时 URI 带 base path，
-        // 这里匹配不上 → 只是回到「采样但不落库」的旧行为（默认 ignore_url_arr 兜住），
-        // 与 assets_url 硬编码前缀是同一类限制（README 已记）。
-        $path = rtrim((string) parse_url($request->getRequestUri(), PHP_URL_PATH), '/');
+        // 用 getPathInfo()：这正是 Drupal 路由**实际匹配**的路径
+        // （RequestContext::fromRequest() 拿的就是它），base path 已被剥掉。
+        // 不能用 getRequestUri()：站点装在子目录时（文档根 = /sites/app、站点在
+        // /sites/app/sub）URI 带着 base path（/sub/xhprof），这里匹配不上 → 报告页与资源
+        // 请求照常被采样，用户把 ignore_url_arr 清空（「什么都不过滤」）时每次刷新报告都会
+        // 多出一条 run —— 而「打开报告」这个动作本身被写进报告正是那个配置想避免的事。
+        // 与 StaticController 的来源也必须继续一致：资源路由那边交给它的是同一个 pathInfo
+        // （Adapter\RoutedPathRequestAdapter），否则就是「一边认是资源、另一边不认」，
+        // 那半边会让子目录下的 CSS/JS 静默变空。
+        $path = rtrim($request->getPathInfo(), '/');
+        if ($path === self::REPORT_PATH) {
+            return true;
+        }
 
-        return $path === self::REPORT_PATH || str_starts_with($path, self::ASSETS_PREFIX . '/');
+        // 前缀从配置归一化，口径与 Core\StaticController::uriPrefix() 及另外 5 家入口类
+        // （Slim/Symfony/WordPress/Joomla/Yii3 的短路前缀）完全一致：先取原始串再 rtrim
+        // （先 rtrim 再判空会把 '/' 归成空串），空串/非字符串 = 不启用资源短路、一个都不认。
+        // 必须与 StaticController 同源，否则「守卫认的」与「serve() 认的」是两批路径。
+        // 已知边界：Drupal 的资源路由写死在 xhprof.routing.yml（'/xhprof-assets/{file}'），
+        // 不会跟着 assets_url 走 —— 配了自定义前缀时资源请求落不到控制器上（空 200）。
+        $cfg = Xhprof::getConfig();
+        $assetsUrl = $cfg !== null
+            ? $cfg->get('xhprof.assets_url', self::DEFAULT_ASSETS_URL)
+            : self::DEFAULT_ASSETS_URL;
+        if (!is_string($assetsUrl) || $assetsUrl === '') {
+            return false;
+        }
+
+        return str_starts_with($path, rtrim($assetsUrl, '/') . '/');
     }
 }

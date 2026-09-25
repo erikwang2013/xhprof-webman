@@ -219,9 +219,9 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
     /**
      * assets_url 归一化成带尾斜杠的前缀；配成空串视为不启用资源短路。
      *
-     * 与 WordPress 入口同一口径。注意 StaticController 内部把 URI 前缀硬编码成
-     * /xhprof-assets（src/Core/StaticController.php:13），所以这里配成别的路径时
-     * 只会命中并输出空响应——Core 只读，此取舍在 10 个框架上一致。
+     * 口径与 `Core\StaticController::uriPrefix()` 及另外 5 家入口类一致（取原串 → 非字符串
+     * 或空串视为不启用 → 否则 rtrim 掉尾斜杠再补一个 '/'）：Joomla 的短路判定必须与 Core 的
+     * 服务判定同源，否则配了自定义前缀会出现「一边认是资源、另一边不认」。
      */
     private static function assetsPrefix(ConfigInterface $config): string
     {

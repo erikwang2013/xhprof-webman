@@ -48,6 +48,24 @@ final class Analyzer
     public const SUPPLEMENT_LIMIT = 3;
 
     /**
+     * R6 的微秒量程上限（1e15 μs ≈ 31 年）。
+     *
+     * 守卫是给 `(int) round()` 用的：float 超出 int 范围时该转换是 UB，实测 1e20
+     * 会印出负的时间（1e19 → -8,446,744,073,709,551,616μs）。31 年比任何真实请求
+     * 都长几个数量级，越过它只可能是坏数据 —— 按"不产生结论"处理，不硬转。
+     */
+    private const MAX_US = 1.0e15;
+
+    /**
+     * R4 的递归深度量程上限。
+     *
+     * `(int)` 对超长数字串会**静默饱和**成 PHP_INT_MAX（实测 `@99999999999999999999`
+     * 印成"最大深度 9223372036854775807"），不报错也不溢出，只是印出一个假数字。
+     * 真实的 @N 是递归层数，百万层已经远超 PHP 栈能到的量级。
+     */
+    private const MAX_DEPTH = 1000000;
+
+    /**
      * @param mixed $symbol_tab xhprof_compute_flat_info() 的结果
      * @param mixed $raw_data   原始 xhprof 边表
      * @param mixed $totals     总计（wt / pmu 等）
@@ -78,7 +96,7 @@ final class Analyzer
             self::safe(static fn(): array => self::ruleR2($symbol_tab))
         );
         $supplement = array_merge(
-            self::safe(static fn(): array => self::ruleR4($raw_data)),
+            self::safe(static fn(): array => self::ruleR4($symbol_tab, $raw_data)),
             self::safe(static fn(): array => self::ruleR5($symbol_tab, $totals)),
             self::safe(static fn(): array => self::ruleR6($symbol_tab))
         );
@@ -119,12 +137,18 @@ final class Analyzer
 
         $hits = array();
         foreach ($symbol_tab as $fn => $info) {
-            if (!is_array($info) || !isset($info['excl_wt']) || !is_numeric($info['excl_wt'])) {
+            if (!is_array($info)) {
                 continue;
             }
-            $excl  = (float) $info['excl_wt'];
+            // 被除数一侧的洞与 totals 一侧相同：is_numeric(NAN) 为真、NAN < 阈值 恒假，
+            // 闸门会放行并印出「自身耗时 nanms，占本次请求 nan%」。逐项走 finiteNum()。
+            $excl = self::finiteNum($info['excl_wt'] ?? null);
+            if ($excl === null) {
+                continue;
+            }
             $share = $excl / $total;
-            if ($share < self::SHARE_THRESHOLD) {
+            // 除法本身也可能溢出成 INF（极小分母配极大分子），INF < 阈值同样恒假。
+            if (!is_finite($share) || $share < self::SHARE_THRESHOLD) {
                 continue;
             }
             $hits[] = array($excl, (string) $fn, $share);
@@ -150,11 +174,12 @@ final class Analyzer
     {
         $hits = array();
         foreach ($symbol_tab as $fn => $info) {
-            if (!is_array($info) || !isset($info['ct']) || !is_numeric($info['ct'])) {
+            if (!is_array($info)) {
                 continue;
             }
-            $ct = (float) $info['ct'];
-            if ($ct < self::CALL_COUNT_THRESHOLD) {
+            // ct 是印刷量（number_format），NAN 会印成「called nan times」——同上走 finiteNum()
+            $ct = self::finiteNum($info['ct'] ?? null);
+            if ($ct === null || $ct < self::CALL_COUNT_THRESHOLD) {
                 continue;
             }
             $hits[] = array($ct, (string) $fn);
@@ -203,8 +228,8 @@ final class Analyzer
             //   f→1（边基本都被滤掉）时上限 1 + p/g ≈ 2x
             //   f→0（边大多能过闸门）时趋近 1x，等于白重排
             // 所以不要为这条优化预算 2x 以上的收益。
-            $ct = isset($info['ct']) && is_numeric($info['ct']) ? (float) $info['ct'] : 0.0;
-            if ($ct < self::EDGE_COUNT_THRESHOLD) {
+            $ct = self::finiteNum($info['ct'] ?? null);
+            if ($ct === null || $ct < self::EDGE_COUNT_THRESHOLD) {
                 continue;
             }
             // 必须 (string)：PHP 会把 "123" 这类数组键转成 int，整型传给
@@ -214,14 +239,20 @@ final class Analyzer
             if ($parent === null || $parent === '') {
                 continue;   // 裸 main() 键没有父，不是边
             }
-            if (!isset($symbol_tab[$child]['excl_wt']) || !is_numeric($symbol_tab[$child]['excl_wt'])) {
+            $excl = self::finiteNum($symbol_tab[$child]['excl_wt'] ?? null);
+            if ($excl === null) {
                 continue;
             }
-            $excl = (float) $symbol_tab[$child]['excl_wt'];
-            if (($excl / $total) < self::EDGE_SHARE_THRESHOLD) {
+            $share = $excl / $total;
+            if (!is_finite($share) || $share < self::EDGE_SHARE_THRESHOLD) {
                 continue;
             }
-            $wt = isset($info['wt']) && is_numeric($info['wt']) ? (float) $info['wt'] : 0.0;
+            // wt 印进标题（ms()），NAN/INF 会成 "nanms"。这里**不兜成 0.0**：
+            // 边本身照常命中闸门，但它的耗时不详，印「0.0ms」是编出来的数字。
+            $wt = self::finiteNum($info['wt'] ?? null);
+            if ($wt === null) {
+                continue;
+            }
             $hits[] = array($wt, (string) $parent, (string) $child, $ct);
         }
         usort($hits, static fn($a, $b) => $b[0] <=> $a[0]);
@@ -244,8 +275,10 @@ final class Analyzer
      * R4：递归。
      * xhprof 把递归展开成 fib@1、fib@2 …，非递归调用没有 @ 后缀（如 main()==>fib）。
      * 判据是同名符号出现在 >= 2 个不同深度。
+     *
+     * $symbol_tab 只参与"要不要给详情页链接"这一个决定，不参与判据——判据仍然只看边表。
      */
-    private static function ruleR4(array $raw_data): array
+    private static function ruleR4(array $symbol_tab, array $raw_data): array
     {
         $depths = array();
         foreach (array_keys($raw_data) as $edge) {
@@ -253,7 +286,13 @@ final class Analyzer
                 if (preg_match('/^(.+)@(\d+)$/', $sym, $m) !== 1) {
                     continue;
                 }
-                $depths[$m[1]][(int) $m[2]] = true;
+                $depth = (int) $m[2];
+                // 量程守卫：超长数字串会被 (int) 静默饱和（20 位 → PHP_INT_MAX），
+                // 差值/标题里的"最大深度 9223372036854775807"就是这么来的。丢弃该 token。
+                if ($depth > self::MAX_DEPTH) {
+                    continue;
+                }
+                $depths[$m[1]][$depth] = true;
             }
         }
 
@@ -271,9 +310,13 @@ final class Analyzer
             $out[] = new Finding(
                 'R4',
                 Finding::SEVERITY_SUPPLEMENT,
-                // 符号置空：递归在 symbol_tab 里的键是 fib@1/fib@2，而详情页按 symbol=fib 查，
-                // 必然"未找到"。spec 允许 symbol 为空（渲染层会跳过链接），这里就该为空。
-                '',
+                // 符号只在 symbol_tab 里**真有裸名**时才给。递归在 symbol_tab 里的键是
+                // fib@1/fib@2，详情页却按 symbol=fib 查——真实递归数据里 xhprof 会同时
+                // 记下非递归的裸名（main()==>fib 那条边的 fib），此时该详情页正常渲染；
+                // 没有裸名时才必然"未找到"，那时（且只有那时）置空让渲染层跳过链接。
+                // 代价：同一 symbol 可能同时出现在主区（R1/R3）与补充区——渲染层已把
+                // 这种"两条结论各说各话、指向同一详情页"写成明确允许的行为。
+                isset($symbol_tab[$h[1]]) ? $h[1] : '',
                 sprintf(I18n::t('diag.r4.title'), $h[1], $h[0]),
                 // R4 是唯一「标题 + 说明」都在词表里的规则：这句原先硬编码中文，
                 // 于是 12 个语种的报告页上都印着中文（I18nTest 的夹具没有递归数据，
@@ -295,12 +338,16 @@ final class Analyzer
 
         $hits = array();
         foreach ($symbol_tab as $fn => $info) {
-            if (!is_array($info) || !isset($info['excl_pmu']) || !is_numeric($info['excl_pmu'])) {
+            if (!is_array($info)) {
                 continue;
             }
-            $pmu   = (float) $info['excl_pmu'];
+            // 同 R1：NAN 会让「峰值内存 nanB，占全局 nan%」过关
+            $pmu = self::finiteNum($info['excl_pmu'] ?? null);
+            if ($pmu === null) {
+                continue;
+            }
             $share = $pmu / $total;
-            if ($share < self::PMU_SHARE_THRESHOLD) {
+            if (!is_finite($share) || $share < self::PMU_SHARE_THRESHOLD) {
                 continue;
             }
             $hits[] = array($pmu, (string) $fn, $share);
@@ -334,17 +381,25 @@ final class Analyzer
     {
         $hits = array();
         foreach ($symbol_tab as $fn => $info) {
-            if (!is_array($info) || !isset($info['excl_wt'], $info['wt'])) {
+            if (!is_array($info)) {
                 continue;
             }
-            if (!is_numeric($info['excl_wt']) || !is_numeric($info['wt'])) {
+            $exF = self::finiteNum($info['excl_wt'] ?? null);
+            $inF = self::finiteNum($info['wt'] ?? null);
+            if ($exF === null || $inF === null) {
+                continue;
+            }
+            // 量程守卫：`(int)` 对越界 float 是 UB，实测 1e20/1e19 会印出负的时间
+            // （「自身耗时 7,766,...μs 大于其总耗时 -8,446,...μs」）。取 abs 一并挡住负向越界，
+            // 使下面的减法也不可能溢出。
+            if (abs($exF) > self::MAX_US || abs($inF) > self::MAX_US) {
                 continue;
             }
             // 三个微秒数必须来自**同一次舍入**：各自取整会让 excl=138.4 / wt=137.6
             // 渲染成「138μs 大于 138μs，差 1μs」，与当初弃用 ms() 是同一类自相矛盾。
             // 代价是亚 0.5μs 的倒挂被四舍五入抹平——有意忽略，这不该是探针报的量级。
-            $ex = (int) round((float) $info['excl_wt']);
-            $in = (int) round((float) $info['wt']);
+            $ex = (int) round($exF);
+            $in = (int) round($inF);
             if ($ex <= $in) {
                 continue;
             }
@@ -391,6 +446,25 @@ final class Analyzer
     private static function num(array $totals, string $key): float
     {
         return isset($totals[$key]) && is_numeric($totals[$key]) ? (float) $totals[$key] : 0.0;
+    }
+
+    /**
+     * 从逐项数据里取一个**有限**数值：缺失 / 非数值 / NAN / ±INF 一律 null（＝该指标不可用）。
+     *
+     * is_numeric() 挡不住这一族坏值：它对 NAN 和 '1e400' 都返回 true，而 '1e400' 转 float
+     * 得 INF。更要命的是 `NAN < 阈值` 与 `INF < 阈值` **恒为假**——所有闸门都是这个形状，
+     * 于是坏值不是被拦下，而是**被放行**，最后印成「自身耗时 nanms，占本次请求 nan%」。
+     * 可达性：serialize() 原样存 NAN，xhprof_compute_flat_info() 又用减法算 excl_*。
+     *
+     * totals 一侧的同名守卫是 ruleR1/ruleR3 里的 is_finite（见那里的注释）。
+     */
+    private static function finiteNum($v): ?float
+    {
+        if (!is_numeric($v)) {
+            return null;
+        }
+        $f = (float) $v;
+        return is_finite($f) ? $f : null;
     }
 
     /** 微秒 → 毫秒，保留 1 位小数 */

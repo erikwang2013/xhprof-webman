@@ -37,8 +37,28 @@ class I18nTest extends TestCase
         return dirname(__DIR__, 3) . '/src/Core/I18n/lang';
     }
 
+    /** @var array<string, array<string, mixed>> */
+    private array $savedCatalogs = [];
+
+    /** @var array<int, array<string, mixed>> 「协程」编号 => 它自己的 Context 存储 */
+    private array $coroutineStores = [];
+
+    private int $currentCoroutine = 0;
+
+    private bool $savedHyperfFlag = false;
+
+    /** @var array<string, mixed> */
+    private array $savedContextStore = [];
+
     protected function setUp(): void
     {
+        $this->savedCatalogs = self::rawCatalogs();
+        // 本文件有几条用例要把进程切进「Hyperf 协程环境」（那个标志一旦置位就不可逆），
+        // 结束后必须原样还回去：否则后面每个测试类的 Xhprof::getRequest() 等 getter 都会
+        // 改读协程 Context，而那里是空的。
+        $this->savedHyperfFlag = Xhprof::isHyperfContext();
+        $this->savedContextStore = self::rawStatic(\Hyperf\Context\Context::class, 'data');
+        $this->coroutineStores = [$this->currentCoroutine => $this->savedContextStore];
         I18n::setLocale(I18n::FALLBACK);
     }
 
@@ -47,11 +67,43 @@ class I18nTest extends TestCase
         // 语言是静态的，会跨用例残留：本文件里有把语言设成 en/ko/ar 的用例，
         // 不还原就会让后面断言中文的用例莫名其妙地红。
         I18n::setLocale(I18n::FALLBACK);
+        // 词表缓存**不再有「换语言就清空」这一步**（改成按语言键的不可变缓存了），
+        // 于是本文件注入过的坏词表会永久留在进程里 —— 必须显式还原，否则
+        // 「哪份词表是好的」会随测试顺序变化（注入整张 map 更会把别的语言全抹掉）。
+        self::writeCatalogs($this->savedCatalogs);
+        self::writeStatic(\Hyperf\Context\Context::class, 'data', $this->savedContextStore);
+        self::writeStatic(Xhprof::class, '_hyperf', $this->savedHyperfFlag);
         Xhprof::$request = null;
         Xhprof::$response = null;
         Xhprof::$config = null;
         Xhprof::$cache = null;
         Xhprof::$logger = null;
+    }
+
+    /** @return array<string, array<string, mixed>> 当前进程里的词表缓存 */
+    private static function rawCatalogs(): array
+    {
+        return self::rawStatic(I18n::class, 'catalogs');
+    }
+
+    /** @param array<string, array<string, mixed>> $catalogs */
+    private static function writeCatalogs(array $catalogs): void
+    {
+        self::writeStatic(I18n::class, 'catalogs', $catalogs);
+    }
+
+    /**
+     * 读写私有静态量。用反射打的是**框架桩与 Core 的私有标志**（测试要把进程切进/切出
+     * 「Hyperf 协程环境」、还要把注入过的词表还回去），不是被测行为本身。
+     */
+    private static function rawStatic(string $class, string $property): mixed
+    {
+        return (new \ReflectionProperty($class, $property))->getValue();
+    }
+
+    private static function writeStatic(string $class, string $property, mixed $value): void
+    {
+        (new \ReflectionProperty($class, $property))->setValue(null, $value);
     }
 
     // ---------------- 1. 四级优先级 ----------------
@@ -236,7 +288,7 @@ class I18nTest extends TestCase
     {
         $zh = I18n::catalogOf(I18n::FALLBACK);
 
-        I18n::setLocale('en');            // 先定语言：setLocale() 会清掉已载入的词表
+        I18n::setLocale('en');            // 先定语言（下面的坏词表要装到 en 这一格上）
         $en = I18n::catalogOf('en');      // 再取真实词表当夹具
 
         // 五种坏值，各自是真实的坏法：没填、写坏类型、整条漏掉
@@ -272,12 +324,15 @@ class I18nTest extends TestCase
     }
 
     /**
-     * 装一份「已载入的词表」。`t()` 读的是私有静态 `$catalog`，没有公开入口——
-     * 从磁盘换语言只能换成 lang/ 下真实存在的那 12 份，而它们现在都是完整的。
+     * 装一份「坏了几个值的 en 词表」。`t()` 读的是私有静态 `$catalogs`（语言码 => 词表
+     * 的不可变缓存），没有公开入口——从磁盘换语言只能换成 lang/ 下真实存在的那 12 份，
+     * 而它们现在都是完整的。
      */
     private static function setLoadedCatalog(array $catalog): void
     {
-        (new \ReflectionProperty(I18n::class, 'catalog'))->setValue(null, $catalog);
+        $all = self::rawCatalogs();
+        $all['en'] = $catalog;
+        self::writeCatalogs($all);
     }
 
     // ---------------- 3. 转义策略 ----------------
@@ -734,6 +789,151 @@ class I18nTest extends TestCase
 
         $this->assertStringContainsString('<html lang="ar" dir="rtl">', $html);
         $this->assertStringNotContainsString('<html lang="ar">', $html);
+    }
+
+    // ---------------- 7. Hyperf 协程：语言互不污染（**部分**隔离） ----------------
+
+    /**
+     * 模拟一次 Hyperf 协程切换：把 `\Hyperf\Context\Context` 的存储整块换掉。
+     *
+     * 真实的 Context 是**每个协程一份存储**（底层是协程局部变量），而测试桩是平坦的
+     * ——全进程一份（tests/Stubs/framework-stubs.php）。要让用例表达「两个协程各有各的
+     * 存储」，只能把桩那块存储整块换成另一个协程的；「切协程 = 换存储」与真实语义同形。
+     * 反射打的是**桩**的内部，不是被测代码的内部：桩要是改了字段名，这里以
+     * ReflectionException 红掉，而不是静默地不再检查任何东西。
+     */
+    private function switchCoroutine(int $id): void
+    {
+        $this->coroutineStores[$this->currentCoroutine] = self::rawStatic(\Hyperf\Context\Context::class, 'data');
+        $this->currentCoroutine = $id;
+        self::writeStatic(\Hyperf\Context\Context::class, 'data', $this->coroutineStores[$id] ?? []);
+    }
+
+    /**
+     * 两个协程各说各的语言，互不覆盖。
+     *
+     * 隔离的判据不是「setLocale 写到了哪里」，而是**读到的东西**：协程 1 在协程 2
+     * 改过语言之后回来，htmlLang()/dir()/t() 必须还是它自己的那门语言。语言退回静态
+     * 存储时这条必红（协程 2 的 setLocale 会盖掉协程 1 的）。
+     */
+    #[Test]
+    public function twoCoroutinesDoNotShareTheLocale(): void
+    {
+        Xhprof::markHyperfContext();   // 生产里由 Hyperf 中间件在 bootstrap() 之前置位
+
+        $this->switchCoroutine(1);
+        I18n::setLocale('en');
+        $lang = I18n::htmlLang();
+        $title = I18n::t('report.title');
+        $this->assertSame('en', $lang);
+        $this->assertNotSame($title, I18n::catalogOf('ar')['report.title'], '两门语言的标题必须不同，否则下面的断言在空转');
+
+        // 切到另一个协程：同一常驻 worker 里的另一个请求，协商出阿拉伯语
+        $this->switchCoroutine(2);
+        I18n::setLocale('ar');
+        $this->assertSame('ar', I18n::htmlLang());
+        $this->assertSame('rtl', I18n::dir());
+        $this->assertSame(I18n::catalogOf('ar')['report.title'], I18n::t('report.title'));
+
+        // 回到协程 1：页首读的语言与 I/O 之后的 t() 必须还是同一门
+        $this->switchCoroutine(1);
+        $this->assertSame($lang, I18n::htmlLang(), '协程 2 的 setLocale 改掉了协程 1 的语言');
+        $this->assertSame('ltr', I18n::dir());
+        $this->assertSame($title, I18n::t('report.title'));
+    }
+
+    /** 没 setLocale 过的协程落在兜底语言上，而不是「上一个用这个进程的协程」的语言。 */
+    #[Test]
+    public function aFreshCoroutineFallsBackToChineseNotToTheOtherCoroutinesLocale(): void
+    {
+        Xhprof::markHyperfContext();
+        $this->switchCoroutine(1);
+        I18n::setLocale('ko');
+
+        $this->switchCoroutine(2);
+        $this->assertSame('zh_CN', I18n::locale(), '语言不能从别的协程漏过来');
+        $this->assertSame('zh-CN', I18n::htmlLang());
+    }
+
+    /**
+     * 审计实测的那条症状，入口级：`Xhprof::index()` 在**页首**读一次 htmlLang()/dir()
+     * 拼 `<html>`，正文的 t() 要等 Redis I/O 之后才读。Hyperf 常驻 worker 里
+     * `RedisAdapter::get()` 就是一次会让出协程的 I/O —— 一让出，隔壁协程可能刚好把语言
+     * 改成阿拉伯语，同一页于是成了 `<html lang="en">` + 阿拉伯语正文。
+     *
+     * 夹具把「让出」复现成缓存 get() 里的一次协程切换（真实 I/O 就在这个位置：
+     * `XHProfRunsDefault::get_run()` → `Xhprof::getCache()->get(...)`）。语言存进本协程的
+     * Context 后，切回来仍是 en；退回静态存储时正文会变阿拉伯语。
+     */
+    #[Test]
+    public function aYieldInTheMiddleOfThePageCannotChangeThePageLanguage(): void
+    {
+        Xhprof::markHyperfContext();
+        $this->switchCoroutine(1);   // 本请求
+        I18n::setLocale('en');
+
+        $yielded = 0;
+        $cache = new class extends FakeCache {
+            /** @var null|\Closure(): void */
+            public $onGet = null;
+
+            public function get(string $key): mixed
+            {
+                $cb = $this->onGet;
+                $this->onGet = null;   // 只让出一次，别把每条 get() 都变成切换点
+                if ($cb !== null) {
+                    $cb();
+                }
+                return parent::get($key);
+            }
+        };
+        $cache->onGet = function () use (&$yielded): void {
+            $yielded++;
+            $this->switchCoroutine(2);        // 隔壁协程：另一个请求，另一种语言
+            I18n::setLocale('ar');
+            $this->switchCoroutine(1);        // 让出结束，本协程接着渲染
+        };
+
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $cache->set('xhprof:xhprof_log:' . $runId, serialize($this->sampleRunData()));
+        $cache->set('xhprof:request_log:' . $runId, json_encode([
+            'request_uri' => '/order?x=1', 'method' => 'GET', 'wt' => 0.8, 'mu' => 2.0,
+            'ip' => '6.6.6.6', 'create_time' => 1700000000,
+        ]));
+
+        Xhprof::$time_limit = 0;
+        Xhprof::$ignore_url_arr = ['/xhprof'];
+        Xhprof::$key_prefix = 'xhprof';
+        Xhprof::$view_wtred = 3;
+        Xhprof::$ui_html = '';
+        Xhprof::bootstrap(
+            new FakeRequest(['run' => $runId, 'source' => 'xhprof_foo', 'all' => 1, 'lang' => 'en'], ['uri' => '/xhprof']),
+            new FakeResponse(),
+            new FakeConfig(['xhprof' => []]),
+            $cache,
+            new FakeLogger()
+        );
+
+        $html = Xhprof::index();
+
+        $this->assertIsString($html);
+        $this->assertSame(1, $yielded, '夹具没在渲染中途让出协程（缓存没被读），这条用例形同虚设');
+        $this->assertStringContainsString('<html lang="en">', $html, '页首是英文');
+
+        // 语言切换器列的是各语言的**自称**（含 العربية）——专有名词，不是待翻译的文案，先摘掉
+        $body = (string) preg_replace('#<select class="xp-lang".*?</select>#s', '', $html);
+        // 列头渲染在 let-go 之后：它的英文必须还在（去掉这一句，下面那条「没有阿拉伯文」
+        // 在页面根本没渲染出来时也会绿）
+        $this->assertStringContainsString(
+            I18n::escapeHtml((string) I18n::catalogOf('en')['col.wt']),
+            $body,
+            '让出之后的正文必须仍是英文'
+        );
+        $this->assertSame(
+            0,
+            preg_match('/\p{Arabic}/u', $body),
+            '让出协程后正文变成了阿拉伯语（页首却还是 <html lang="en">）'
+        );
     }
 
     #[Test]

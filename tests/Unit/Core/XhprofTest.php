@@ -170,6 +170,29 @@ class XhprofTest extends TestCase
         $this->assertSame($this->request, Xhprof::getRequest());
     }
 
+    /**
+     * Hyperf 模式下 Context 里**没有** `xhprof.config` 时不回落 `Xhprof::$config`，就是 null。
+     *
+     * 这是刻意的（见 Xhprof::getConfig() 的注释）：`Xhprof::$config` 在常驻 worker 里是
+     * 跨协程共享量，谁最后 bootstrap 就写谁的。若缺键时回落，一个没走 bootstrap() 的
+     * 执行路径会静默用上**另一个请求**的配置——assets_url、auth_token、log_ttl、
+     * view_wtred 全是按请求来的，而报告页不会报错，只会照别人的配置渲染。缺键 = 未
+     * bootstrap，调用方（Xhprof::index() / StaticController::uriPrefix()）都按 null 走默认。
+     *
+     * 反向钉：把 `?? self::$config` 加回 getConfig()，本用例立刻红。
+     */
+    #[Test]
+    public function hyperfModeWithoutContextConfigReturnsNullInsteadOfTheSharedConfig(): void
+    {
+        // 闩是进程级、不可逆的（本文件前面的用例已经把它置真过），这里显式置真，
+        // 让本用例单跑/全量跑一个结果——否则单跑时走静态分支、断言不同源。
+        (new \ReflectionProperty(Xhprof::class, '_hyperf'))->setValue(null, true);
+        Context::reset(); // 模拟「这条执行路径没走 bootstrap()」
+        Xhprof::$config = new FakeConfig(['xhprof' => ['assets_url' => '/static/xhprof']]);
+
+        $this->assertNull(Xhprof::getConfig(), 'Context 缺键必须返回 null，不得回落到跨协程共享的 Xhprof::$config');
+    }
+
     #[Test]
     public function hyperfModeIndexEnforcesAuthToken(): void
     {
@@ -179,7 +202,58 @@ class XhprofTest extends TestCase
 
         $result = Xhprof::index();
         $this->assertInstanceOf(\Hyperf\HttpServer\Response::class, $result);
-        $this->assertSame(403, $result->status);
+        // 走 PSR-7 的 getStatusCode()：Hyperf 响应的 $status 不是 public
+        // （桩按真包改成 protected 之后，`$result->status` 是 Error，不是断言失败）
+        $this->assertSame(403, $result->getStatusCode());
+    }
+
+    /**
+     * 闩开着、但当前协程没 bootstrap()：index() 必须**明确拒绝**，不能以一个 fatal 收场。
+     *
+     * 这种状态下 Context 里既没有 `xhprof.request` 也没有 `xhprof.config`：旧代码会静默跳过
+     * 403 判定，再在 `$req->get('run')` 处 `Call to a member function get() on null`——
+     * 同样是 500、同样不吐数据，但「读不出来」与「不需要读」在日志里长得一模一样。
+     * 响应也不在 Context 里，`deny()` 走 `http_response_code()` 分支返回纯文本
+     * （CLI 下状态码本身观测不到，所以断言钉在文案上：必须点明成因与「拒绝」）。
+     */
+    #[Test]
+    public function hyperfModeIndexRefusesToRenderWhenTheCoroutineNeverBootstrapped(): void
+    {
+        (new \ReflectionProperty(Xhprof::class, '_hyperf'))->setValue(null, true);
+        Context::reset();
+
+        $result = Xhprof::index();
+
+        $this->assertIsString($result, '没有 request 时必须走 deny()，不能是 fatal，也不能是报告页');
+        $this->assertStringContainsString('no request adapter', $result);
+        $this->assertStringNotContainsString('<html', $result, '拒绝渲染时不得输出报告页');
+
+        // 状态码本身：上面那种状态下响应也不在 Context 里，deny() 走 http_response_code()
+        // （CLI 下读不到）。绑一个响应再跑一次，读真实的 500——拒绝必须是 500，不是 200。
+        Context::set('xhprof.response', $this->response);
+        Xhprof::index();
+        $this->assertSame(500, $this->response->status, '没有 request 时必须明确 500 拒绝，而不是渲染报告页');
+    }
+
+    /**
+     * 守卫只看 request、**不看 config**：Hyperf 下 config 缺失是「这个协程没配 auth_token」的
+     * 正常形态（`bootstrap()` 只给 request 不给 config 也一样合法），报告页照常出、不做鉴权。
+     * 「读不到配置」与「读不到请求」是两件事——防止后来人把守卫顺手扩成 `$req === null || $cfg === null`。
+     */
+    #[Test]
+    public function hyperfModeIndexStillRendersWhenOnlyTheConfigIsMissing(): void
+    {
+        (new \ReflectionProperty(Xhprof::class, '_hyperf'))->setValue(null, true);
+        Context::reset();
+        Context::set('xhprof.request', $this->request);
+        Context::set('xhprof.response', $this->response);
+        Context::set('xhprof.cache', $this->cache);
+        Context::set('xhprof.logger', $this->logger);
+
+        $result = Xhprof::index();
+
+        $this->assertIsString($result);
+        $this->assertStringContainsString('<html', $result, '缺 config 只是「没配 auth_token」，不该 500');
     }
 
     #[Test]
