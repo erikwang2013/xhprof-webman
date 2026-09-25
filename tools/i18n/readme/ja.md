@@ -6,11 +6,11 @@ xhprof 拡張で計測データを収集し、Redis に保存します。開発�
 
 **リクエスト記録**
 
-![リクエスト記録](doc/1.jpg)
+![リクエスト記録](docs/images/runs-list.png)
 
 **単一実行のレポート**
 
-![単一実行のレポート](doc/2.jpg)
+![単一実行のレポート](docs/images/run-report.png)
 
 ## 動作要件
 

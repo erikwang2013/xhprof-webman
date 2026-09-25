@@ -6,11 +6,11 @@ Recoge datos de perfilado mediante la extensión xhprof y los guarda en Redis. L
 
 **Registro de peticiones**
 
-![Registro de peticiones](doc/1.jpg)
+![Registro de peticiones](docs/images/runs-list.png)
 
 **Informe de una ejecución**
 
-![Informe de una ejecución](doc/2.jpg)
+![Informe de una ejecución](docs/images/run-report.png)
 
 ## Requisitos
 

@@ -8,11 +8,11 @@
 
 **请求记录**
 
-![请求记录](doc/1.jpg)
+![请求记录](docs/images/runs-list.png)
 
 **单次运行报告**
 
-![单次运行报告](doc/2.jpg)
+![单次运行报告](docs/images/run-report.png)
 
 ## 环境要求
 

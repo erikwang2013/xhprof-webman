@@ -10,11 +10,11 @@ Collects profiling data via the xhprof extension and stores it in Redis. Develop
 
 **Request Log**
 
-![Request Log](../../../doc/1.jpg)
+![Request Log](../../../docs/images/runs-list.png)
 
 **Single run report**
 
-![Single run report](../../../doc/2.jpg)
+![Single run report](../../../docs/images/run-report.png)
 
 ## Requirements
 

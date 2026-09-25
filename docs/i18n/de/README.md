@@ -10,11 +10,11 @@ Sammelt Profiling-Daten über die xhprof-Erweiterung und legt sie in Redis ab. E
 
 **Request-Protokoll**
 
-![Request-Protokoll](../../../doc/1.jpg)
+![Request-Protokoll](../../../docs/images/runs-list.png)
 
 **Report eines einzelnen Laufs**
 
-![Report eines einzelnen Laufs](../../../doc/2.jpg)
+![Report eines einzelnen Laufs](../../../docs/images/run-report.png)
 
 ## Voraussetzungen
 

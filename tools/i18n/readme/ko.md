@@ -6,11 +6,11 @@ xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니
 
 **요청 기록**
 
-![요청 기록](doc/1.jpg)
+![요청 기록](docs/images/runs-list.png)
 
 **단일 실행 보고서**
 
-![단일 실행 보고서](doc/2.jpg)
+![단일 실행 보고서](docs/images/run-report.png)
 
 ## 요구 사항
 

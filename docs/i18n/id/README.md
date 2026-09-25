@@ -10,11 +10,11 @@ Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pen
 
 **Riwayat Request**
 
-![Riwayat Request](../../../doc/1.jpg)
+![Riwayat Request](../../../docs/images/runs-list.png)
 
 **Laporan satu eksekusi**
 
-![Laporan satu eksekusi](../../../doc/2.jpg)
+![Laporan satu eksekusi](../../../docs/images/run-report.png)
 
 ## Persyaratan
 

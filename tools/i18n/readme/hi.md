@@ -6,11 +6,11 @@ webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joo
 
 **रिक्वेस्ट लॉग**
 
-![रिक्वेस्ट लॉग](doc/1.jpg)
+![रिक्वेस्ट लॉग](docs/images/runs-list.png)
 
 **एकल रन रिपोर्ट**
 
-![एकल रन रिपोर्ट](doc/2.jpg)
+![एकल रन रिपोर्ट](docs/images/run-report.png)
 
 ## आवश्यकताएँ
 

@@ -10,11 +10,11 @@ Il collecte les données de profilage via l'extension xhprof et les stocke dans 
 
 **Journal des requêtes**
 
-![Journal des requêtes](../../../doc/1.jpg)
+![Journal des requêtes](../../../docs/images/runs-list.png)
 
 **Rapport d’une exécution**
 
-![Rapport d’une exécution](../../../doc/2.jpg)
+![Rapport d’une exécution](../../../docs/images/run-report.png)
 
 ## Prérequis
 

@@ -10,11 +10,11 @@ Coleta dados de profiling pela extensão xhprof e os guarda no Redis. O desenvol
 
 **Registro de Requisições**
 
-![Registro de Requisições](../../../doc/1.jpg)
+![Registro de Requisições](../../../docs/images/runs-list.png)
 
 **Relatório de uma execução**
 
-![Relatório de uma execução](../../../doc/2.jpg)
+![Relatório de uma execução](../../../docs/images/run-report.png)
 
 ## Requisitos
 
