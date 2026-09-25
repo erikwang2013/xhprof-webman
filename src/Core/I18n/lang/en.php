@@ -82,7 +82,7 @@ return [
     'unit.microsecs' => 'microsecs',
     'unit.bytes' => 'bytes',
     'unit.samples' => 'samples',
-    'agg.invalidInput' => 'Invalid input..',
+    'agg.invalidInput' => 'Invalid input.',
     'common.run' => 'Run',
     'diff.invert' => 'Invert %s Report',
     'diff.viewRun' => 'View Run #%s',

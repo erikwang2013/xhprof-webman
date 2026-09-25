@@ -91,7 +91,7 @@ return [
     'unit.microsecs' => 'mikrodetik',
     'unit.bytes' => 'bytes',
     'unit.samples' => 'sampel',
-    'agg.invalidInput' => 'Input tidak valid..',
+    'agg.invalidInput' => 'Input tidak valid.',
     'common.run' => 'Eksekusi',
     'diff.invert' => 'Balikkan Laporan %s',
     'diff.viewRun' => 'Lihat Eksekusi #%s',

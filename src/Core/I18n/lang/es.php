@@ -87,7 +87,7 @@ return [
     'unit.microsecs' => 'microsegundos',
     'unit.bytes' => 'bytes',
     'unit.samples' => 'muestras',
-    'agg.invalidInput' => 'Entrada no válida..',
+    'agg.invalidInput' => 'Entrada no válida.',
     'common.run' => 'Run',
     'diff.invert' => 'Invertir el informe de %s',
     'diff.viewRun' => 'Ver el run #%s',

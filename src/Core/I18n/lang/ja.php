@@ -86,7 +86,7 @@ return [
     'unit.microsecs' => 'マイクロ秒',
     'unit.bytes' => 'バイト',
     'unit.samples' => 'サンプル',
-    'agg.invalidInput' => '入力が無効です..',
+    'agg.invalidInput' => '入力が無効です。',
     'common.run' => '実行',
     'diff.invert' => '%sレポートを反転',
     'diff.viewRun' => '実行 #%s を表示',

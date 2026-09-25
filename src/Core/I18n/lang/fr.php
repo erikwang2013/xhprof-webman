@@ -91,7 +91,7 @@ return [
     'unit.microsecs' => 'µs',
     'unit.bytes' => 'octets',
     'unit.samples' => 'échantillons',
-    'agg.invalidInput' => 'Entrée invalide..',
+    'agg.invalidInput' => 'Entrée invalide.',
     'common.run' => 'Exécution',
     'diff.invert' => 'Inverser le rapport %s',
     'diff.viewRun' => 'Voir l\'exécution #%s',

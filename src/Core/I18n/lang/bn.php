@@ -85,7 +85,7 @@ return [
     'unit.microsecs' => 'মাইক্রোসেক',
     'unit.bytes' => 'বাইট',
     'unit.samples' => 'স্যাম্পল',
-    'agg.invalidInput' => 'ভুল ইনপুট..',
+    'agg.invalidInput' => 'ভুল ইনপুট.',
     'common.run' => 'রান',
     'diff.invert' => '%s রিপোর্ট উল্টান',
     'diff.viewRun' => 'রান #%s দেখুন',

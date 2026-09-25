@@ -91,7 +91,7 @@ return [
     'unit.microsecs' => 'ميكروثانية',
     'unit.bytes' => 'بايت',
     'unit.samples' => 'عيّنة',
-    'agg.invalidInput' => 'مدخل غير صالح..',
+    'agg.invalidInput' => 'مدخل غير صالح.',
     'common.run' => 'التشغيل',
     'diff.invert' => 'عكس تقرير %s',
     'diff.viewRun' => 'عرض التشغيل #%s',

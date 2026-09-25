@@ -94,7 +94,7 @@ return [
     'unit.microsecs' => 'µs',
     'unit.bytes' => 'Bytes',
     'unit.samples' => 'Samples',
-    'agg.invalidInput' => 'Ungültige Eingabe..',
+    'agg.invalidInput' => 'Ungültige Eingabe.',
     'common.run' => 'Run',
     'diff.invert' => '%s-Report invertieren',
     'diff.viewRun' => 'Run #%s ansehen',

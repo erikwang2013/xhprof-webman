@@ -92,7 +92,7 @@ return [
     'unit.microsecs' => '마이크로초',
     'unit.bytes' => '바이트',
     'unit.samples' => '샘플',
-    'agg.invalidInput' => '잘못된 입력..',
+    'agg.invalidInput' => '잘못된 입력.',
     'common.run' => '실행',
     'diff.invert' => '%s 보고서 반전',
     'diff.viewRun' => '실행 #%s 보기',

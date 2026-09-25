@@ -82,7 +82,7 @@ return [
     'unit.microsecs' => '微秒',
     'unit.bytes' => '字节',
     'unit.samples' => '样本',
-    'agg.invalidInput' => '输入无效..',
+    'agg.invalidInput' => '输入无效。',
     'common.run' => '运行',
     'diff.invert' => '反转%s报告',
     'diff.viewRun' => '查看第 %s 次运行',

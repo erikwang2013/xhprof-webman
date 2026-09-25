@@ -298,7 +298,7 @@ class XhprofLibTest extends TestCase
     public function aggregateRunsRejectsEmptyRuns(): void
     {
         $res = XhprofLib::xhprof_aggregate_runs([], []);
-        self::assertSame('输入无效..', $res['description']);
+        self::assertSame('输入无效。', $res['description']);
         self::assertNull($res['raw']);
     }
 
@@ -306,7 +306,7 @@ class XhprofLibTest extends TestCase
     public function aggregateRunsRejectsWeightCountMismatch(): void
     {
         $res = XhprofLib::xhprof_aggregate_runs(['a1a1a1a1a1a1a1a1'], [1, 2]);
-        self::assertSame('输入无效..', $res['description']);
+        self::assertSame('输入无效。', $res['description']);
     }
 
     #[Test]
@@ -456,7 +456,7 @@ class XhprofLibTest extends TestCase
             'xhprof_foo'
         );
 
-        self::assertSame('输入无效..', $res['description']);
+        self::assertSame('输入无效。', $res['description']);
         self::assertNull($res['raw']);
     }
 

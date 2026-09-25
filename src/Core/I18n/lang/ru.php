@@ -92,7 +92,7 @@ return [
     'unit.microsecs' => 'мкс',
     'unit.bytes' => 'байт',
     'unit.samples' => 'выборок',
-    'agg.invalidInput' => 'Недопустимый ввод..',
+    'agg.invalidInput' => 'Недопустимый ввод.',
     'common.run' => 'Запуск',
     'diff.invert' => 'Инвертировать отчёт «%s»',
     'diff.viewRun' => 'Просмотреть запуск #%s',

@@ -96,7 +96,7 @@ return [
     'unit.microsecs' => 'microssegundos',
     'unit.bytes' => 'bytes',
     'unit.samples' => 'amostras',
-    'agg.invalidInput' => 'Entrada inválida..',
+    'agg.invalidInput' => 'Entrada inválida.',
     'common.run' => 'Execução',
     'diff.invert' => 'Inverter Relatório de %s',
     'diff.viewRun' => 'Ver a Execução #%s',

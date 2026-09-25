@@ -91,7 +91,7 @@ return [
     'unit.microsecs' => 'माइक्रोसेक',
     'unit.bytes' => 'बाइट',
     'unit.samples' => 'सैंपल',
-    'agg.invalidInput' => 'अमान्य इनपुट..',
+    'agg.invalidInput' => 'अमान्य इनपुट.',
     'common.run' => 'रन',
     'diff.invert' => '%s रिपोर्ट उलटें',
     'diff.viewRun' => 'रन #%s देखें',
