@@ -1,0 +1,23 @@
+# 报告页与静态资源。这是六个框架里唯一走「模块 + 路由」而非入口类自服务的例外。
+# 路径 /xhprof 与 assets_url 的默认值 /xhprof-assets 必须与 xhprof.settings 里的
+# assets_url 一致（Xhprof::index() 用它拼 <link>/<script> 的地址）。
+xhprof.report:
+  path: '/xhprof'
+  defaults:
+    _controller: 'xhprof.controller:report'
+    _title: 'XHProf report'
+  requirements:
+    # 报告页含完整调用栈，必须鉴权。这里用 core 权限而不是自定义权限，是为了
+    # 装完即用（标准安装的 Administrator 角色已具备该权限，无需再去勾选）；
+    # 要更细的粒度就改成自己定义的权限（xhprof.permissions.yml）+ 'access xhprof reports'。
+    _permission: 'administer site configuration'
+
+xhprof.assets:
+  path: '/xhprof-assets/{file}'
+  defaults:
+    _controller: 'xhprof.controller:assets'
+    _title: 'XHProf assets'
+  requirements:
+    _permission: 'administer site configuration'
+    # 默认的 {file} 不匹配斜杠，js/css 都在子目录里，必须放开
+    file: '.+'

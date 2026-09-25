@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="system" method="upgrade">
+    <name>System - xhprof</name>
+    <author>erik</author>
+    <creationDate>2026-09</creationDate>
+    <copyright>Copyright (C) 2026 erik. All rights reserved.</copyright>
+    <license>MIT</license>
+    <authorEmail>erik@erik.xyz</authorEmail>
+    <authorUrl>https://github.com/erikwang2013/xhprof-webman</authorUrl>
+    <version>3.0.6</version>
+    <description>基于 xhprof 扩展 + Redis 的 PHP 性能采样，报告页自服务（/xhprof），不需要注册控制器与路由。配置见包内 src/Joomla/config/xhprof.php，可在站点根放 xhprof.php 覆盖。</description>
+    <namespace path="src">Joomla\Plugin\System\Xhprof</namespace>
+    <files>
+        <folder plugin="xhprof">services</folder>
+        <folder>src</folder>
+    </files>
+</extension>

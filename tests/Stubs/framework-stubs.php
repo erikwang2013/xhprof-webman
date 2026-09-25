@@ -1040,15 +1040,9 @@ namespace Psr\Log {
     }
 }
 
-namespace Psr\Http\Message {
-    interface ServerRequestInterface
-    {
-    }
-
-    interface ResponseInterface
-    {
-    }
-}
+// 注意：`Psr\Http\Message` 一族已整体移到 tests/Stubs/Framework/Psr7.php
+// （真实签名 + 可用 fake，由 tools/contracts 的 L0 case 守着）。此处不得再声明，
+// 同名接口重复声明的后果是加载期 fatal。
 
 namespace Psr\Http\Server {
     interface MiddlewareInterface

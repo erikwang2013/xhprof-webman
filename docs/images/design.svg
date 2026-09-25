@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img"
+     font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+  <title>设计取舍：决策、理由与代价</title>
+  <desc>五条关键决策的对照表，每条列出决策本身、它买到的收益、以及它付出的代价：Core 只依赖 5 个契约、入口类自服务报告页、不抽共享层、桩由独立验证环校验、显式注入而非 autoDetect。</desc>
+
+  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">设计取舍：决策 → 理由 → 代价</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">五条决策各自买到了什么，又付出了什么</text>
+
+  <!-- 结论条 -->
+  <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">本次 6 个新框架对 src/Core/ 的改动数 = 0</text>
+
+  <!-- ============ 表头 ============ -->
+  <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="38" y="157" width="10" height="10" rx="2" fill="#0969da"/>
+  <text x="56" y="168" font-size="12.5" font-weight="600" fill="#0969da">决策 · 我们选了什么</text>
+
+  <rect x="412" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="426" y="157" width="10" height="10" rx="2" fill="#1a7f37"/>
+  <text x="444" y="168" font-size="12.5" font-weight="600" fill="#1a7f37">理由 · 买到了什么</text>
+
+  <rect x="800" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="814" y="157" width="10" height="10" rx="2" fill="#bc4c00"/>
+  <text x="832" y="168" font-size="12.5" font-weight="600" fill="#bc4c00">代价 · 付出了什么</text>
+
+  <!-- ============ 第 1 行：Core 只依赖 5 个契约 ============ -->
+  <rect x="24" y="182" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="204" font-size="12.5" font-weight="600" fill="#0550ae">Core 只依赖 5 个契约接口</text>
+  <text x="40" y="224" font-size="11" fill="#24292f">src/Core/ 只 import 那 5 个接口，</text>
+  <text x="40" y="240" font-size="11" fill="#24292f">不 import 任何框架类</text>
+
+  <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">加框架 = 只加一个目录</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">6 个新框架对 src/Core/ 改动 0 行；</text>
+  <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel 的行为也不受影响</text>
+
+  <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">同一契约实现 10 遍</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">10 个框架各写 5 个 Adapter，</text>
+  <text x="816" y="240" font-size="11" fill="#24292f">契约不变但实现代码反复重写</text>
+
+  <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
+  <rect x="24" y="272" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="294" font-size="12.5" font-weight="600" fill="#0550ae">入口类自服务报告页</text>
+  <text x="40" y="314" font-size="11" fill="#24292f">入口类在 start 之前判路径；命中报告页就</text>
+  <text x="40" y="330" font-size="11" fill="#24292f">withBody(Xhprof::index())-&gt;send() 直接返回</text>
+
+  <rect x="412" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="294" font-size="12.5" font-weight="600" fill="#1a7f37">砍掉每框架 3 处工作</text>
+  <text x="428" y="314" font-size="11" fill="#24292f">不用写控制器、不用注册报告页路由、</text>
+  <text x="428" y="330" font-size="11" fill="#24292f">不用注册资源路由</text>
+
+  <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">短路逻辑重复 10 份</text>
+  <text x="816" y="314" font-size="11" fill="#24292f">那 3 处恰是猜错也不会被测试发现的地方，</text>
+  <text x="816" y="330" font-size="11" fill="#24292f">重复换确定性（Drupal 标准模块是例外）</text>
+
+  <!-- ============ 第 3 行：不抽共享层 ============ -->
+  <rect x="24" y="362" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="384" font-size="12.5" font-weight="600" fill="#0550ae">不抽共享层</text>
+  <text x="40" y="404" font-size="11" fill="#24292f">PSR-7（Yii3 / Slim）与 HttpFoundation</text>
+  <text x="40" y="420" font-size="11" fill="#24292f">（Symfony / Drupal）形状相同，仍各自实现</text>
+
+  <rect x="412" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="384" font-size="12.5" font-weight="600" fill="#1a7f37">框架之间完全隔离</text>
+  <text x="428" y="404" font-size="11" fill="#24292f">改一个框架的适配器不会波及另一个，</text>
+  <text x="428" y="420" font-size="11" fill="#24292f">共享文件的冲突面缩到最小</text>
+
+  <rect x="800" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="384" font-size="12.5" font-weight="600" fill="#bc4c00">约 30 个近似重复适配器</text>
+  <text x="816" y="404" font-size="11" fill="#24292f">重复是明账、漂移是暗账 ——</text>
+  <text x="816" y="420" font-size="11" fill="#24292f">用 parity 测试把漂移变成红灯</text>
+
+  <!-- ============ 第 4 行：桩由独立验证环校验 ============ -->
+  <rect x="24" y="452" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="474" font-size="12.5" font-weight="600" fill="#0550ae">桩由独立验证环校验</text>
+  <text x="40" y="494" font-size="11" fill="#24292f">不让写适配器的人自己写它依赖的桩，</text>
+  <text x="40" y="510" font-size="11" fill="#24292f">桩、签名与语义由验证环独立核对</text>
+
+  <rect x="412" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="474" font-size="12.5" font-weight="600" fill="#1a7f37">打破循环论证</text>
+  <text x="428" y="494" font-size="11" fill="#24292f">否则桩会忠实编码作者对框架 API 的猜想：</text>
+  <text x="428" y="510" font-size="11" fill="#24292f">单测全绿，真机 Call to undefined method</text>
+
+  <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">验证深度不均</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">L2 语义覆盖 4.5/6；WordPress 覆盖不到，</text>
+  <text x="816" y="510" font-size="11" fill="#24292f">只能源码文本核对 + 手工冒烟</text>
+
+  <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
+  <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">显式注入而非 autoDetect</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">6 个新框架全部显式注入：</text>
+  <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
+
+  <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="564" font-size="12.5" font-weight="600" fill="#1a7f37">消灭「分支永不命中」</text>
+  <text x="428" y="584" font-size="11" fill="#24292f">探测的类名写错 → 分支永不命中；</text>
+  <text x="428" y="600" font-size="11" fill="#24292f">这类事故本仓库的 Hyperf 分支已经栽过一次</text>
+
+  <rect x="800" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="564" font-size="12.5" font-weight="600" fill="#bc4c00">入口类要自己凑齐适配器</text>
+  <text x="816" y="584" font-size="11" fill="#24292f">Core 不再代劳探测；每个入口类自写</text>
+  <text x="816" y="600" font-size="11" fill="#24292f">约 30 行（含 5 个适配器构造）</text>
+</svg>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img"
+     font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+  <title>一次被采样请求的生命周期</title>
+  <desc>上半部分是采样请求的 8 个阶段：请求进入、入口类先判报告页与资源路径（命中则短路不采样）、Xhprof::bootstrap 注入 5 个适配器、isEnabled 与 extension_loaded 双重判断、xhprofStart、业务处理、finally 中 xhprofStop、save_run 落 Redis。下半部分是 5 条泳道，用色带标出 PSR-15（Yii3 / Slim）、Symfony、WordPress、Joomla、Drupal 各自的采样起止点与 shutdown 兜底。</desc>
+
+  <defs>
+    <marker id="lc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="560" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">一次被采样请求的生命周期</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">从请求进入到 Redis 落库；finally 保证采样状态一定被关闭</text>
+
+  <!-- ============ 管线 8 阶段 ============ -->
+  <!-- 1 请求进入 -->
+  <rect x="44" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <circle cx="60" cy="118" r="9" fill="#0969da"/>
+  <text x="60" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">1</text>
+  <text x="54" y="142" font-size="10.5" fill="#24292f">请求进入</text>
+  <text x="54" y="156" font-size="10.5" fill="#57606a">进入框架请求管线</text>
+  <line x1="172" y1="148" x2="182" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 2 入口类短路判断 -->
+  <rect x="184" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <circle cx="200" cy="118" r="9" fill="#bc4c00"/>
+  <text x="200" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">2</text>
+  <text x="194" y="142" font-size="10.5" fill="#24292f">入口类先判</text>
+  <text x="194" y="156" font-size="10.5" fill="#57606a">报告页/资源路径</text>
+  <text x="194" y="170" font-size="10.5" fill="#57606a">命中即短路</text>
+  <text x="194" y="184" font-size="10.5" fill="#57606a">（不采样）</text>
+  <line x1="312" y1="148" x2="322" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 3 bootstrap -->
+  <rect x="324" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <circle cx="340" cy="118" r="9" fill="#0969da"/>
+  <text x="340" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">3</text>
+  <text x="334" y="142" font-size="10.5" fill="#24292f">Xhprof::</text>
+  <text x="334" y="156" font-size="10.5" fill="#24292f">bootstrap()</text>
+  <text x="334" y="170" font-size="10.5" fill="#57606a">显式注入</text>
+  <text x="334" y="184" font-size="10.5" fill="#57606a">5 个适配器</text>
+  <line x1="452" y1="148" x2="462" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 4 双重判断 -->
+  <rect x="464" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <circle cx="480" cy="118" r="9" fill="#0969da"/>
+  <text x="480" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">4</text>
+  <text x="474" y="142" font-size="10.5" fill="#24292f">isEnabled()</text>
+  <text x="474" y="156" font-size="10.5" fill="#24292f">&amp;&amp; extension_</text>
+  <text x="474" y="170" font-size="10.5" fill="#24292f">loaded('xhprof')</text>
+  <line x1="592" y1="148" x2="602" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 5 xhprofStart -->
+  <rect x="604" y="100" width="128" height="96" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <circle cx="620" cy="118" r="9" fill="#0969da"/>
+  <text x="620" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">5</text>
+  <text x="614" y="142" font-size="10.5" fill="#24292f">xhprofStart()</text>
+  <text x="614" y="156" font-size="10.5" fill="#57606a">采样开始</text>
+  <line x1="732" y1="148" x2="742" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 6 业务处理 -->
+  <rect x="744" y="100" width="128" height="96" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <circle cx="760" cy="118" r="9" fill="#0969da"/>
+  <text x="760" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">6</text>
+  <text x="754" y="142" font-size="10.5" fill="#24292f">业务处理</text>
+  <text x="754" y="156" font-size="10.5" fill="#57606a">handler / next</text>
+  <line x1="872" y1="148" x2="882" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 7 finally stop -->
+  <rect x="884" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <circle cx="900" cy="118" r="9" fill="#1a7f37"/>
+  <text x="900" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">7</text>
+  <text x="894" y="142" font-size="10.5" fill="#24292f">finally</text>
+  <text x="894" y="156" font-size="10.5" fill="#24292f">xhprofStop()</text>
+  <text x="894" y="170" font-size="10.5" fill="#57606a">抛异常也执行</text>
+  <line x1="1012" y1="148" x2="1022" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 8 save_run -->
+  <rect x="1024" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <circle cx="1040" cy="118" r="9" fill="#1a7f37"/>
+  <text x="1040" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">8</text>
+  <text x="1034" y="142" font-size="10.5" fill="#24292f">save_run()</text>
+  <text x="1034" y="156" font-size="10.5" fill="#57606a">写 Redis</text>
+  <text x="1034" y="170" font-size="10.5" fill="#57606a">失败只记日志</text>
+
+  <!-- 短路说明 + 图例 -->
+  <text x="44" y="216" font-size="11.5" fill="#57606a">短路分支：命中报告页路径 → withBody(Xhprof::index())-&gt;send()；命中 assets_url → StaticController::serve()，都不采样</text>
+  <rect x="880" y="204" width="14" height="14" rx="3" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="900" y="215.5" font-size="11.5" fill="#57606a">采样中</text>
+  <rect x="970" y="204" width="14" height="14" rx="3" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="990" y="215.5" font-size="11.5" fill="#57606a">必定执行</text>
+
+  <!-- ============ 泳道：各框架采样起止点 ============ -->
+  <text x="44" y="252" font-size="14" font-weight="600" fill="#24292f">各框架的采样起止点</text>
+  <text x="1156" y="252" font-size="11.5" fill="#57606a" text-anchor="end">实心色带 = 采样窗口；虚线尾 = shutdown 兜底（色带只表示相对起止，不代表耗时比例）</text>
+
+  <!-- 阶段轴 -->
+  <line x1="340" y1="284" x2="1156" y2="284" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="560" y1="280" x2="560" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="700" y1="280" x2="700" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="980" y1="280" x2="980" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="1080" y1="280" x2="1080" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="450" y="278" font-size="10" fill="#57606a" text-anchor="middle">引导</text>
+  <text x="630" y="278" font-size="10" fill="#57606a" text-anchor="middle">路由与分发</text>
+  <text x="840" y="278" font-size="10" fill="#57606a" text-anchor="middle">业务处理</text>
+  <text x="1030" y="278" font-size="10" fill="#57606a" text-anchor="middle">响应</text>
+  <text x="1118" y="278" font-size="10" fill="#57606a" text-anchor="middle">shutdown</text>
+
+  <!-- 泳道 1：PSR-15 -->
+  <text x="44" y="308" font-size="11.5" font-weight="600" fill="#24292f">PSR-15（Yii3 / Slim）</text>
+  <text x="44" y="324" font-size="10.5" fill="#57606a">XhprofMiddleware · PSR-15</text>
+  <rect x="340" y="300" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="620" y="300" width="360" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="630" y="317" font-size="9.5" fill="#0550ae">process()</text>
+  <text x="970" y="317" font-size="9.5" fill="#0550ae" text-anchor="end">finally</text>
+
+  <!-- 泳道 2：Symfony -->
+  <text x="44" y="358" font-size="11.5" font-weight="600" fill="#24292f">Symfony</text>
+  <text x="44" y="374" font-size="10.5" fill="#57606a">XhprofListener · shutdown 兜底</text>
+  <rect x="340" y="350" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="420" y="350" width="560" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <rect x="980" y="350" width="100" height="24" rx="6" fill="#ffffff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="430" y="367" font-size="9.5" fill="#0550ae">kernel.request @10000</text>
+  <text x="970" y="367" font-size="9.5" fill="#0550ae" text-anchor="end">kernel.response @-10000</text>
+
+  <!-- 泳道 3：WordPress -->
+  <text x="44" y="408" font-size="11.5" font-weight="600" fill="#24292f">WordPress</text>
+  <text x="44" y="424" font-size="10.5" fill="#57606a">XhprofPlugin · WordPress 插件</text>
+  <rect x="340" y="400" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="520" y="400" width="560" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="530" y="417" font-size="9.5" fill="#0550ae">plugins_loaded</text>
+  <text x="1070" y="417" font-size="9.5" fill="#0550ae" text-anchor="end">shutdown</text>
+  <text x="336" y="417" font-size="9.5" fill="#bc4c00" text-anchor="end">不含引导与插件加载</text>
+
+  <!-- 泳道 4：Joomla -->
+  <text x="44" y="458" font-size="11.5" font-weight="600" fill="#24292f">Joomla</text>
+  <text x="44" y="474" font-size="10.5" fill="#57606a">Joomla\Extension\Xhprof · 幂等 shutdown 兜底</text>
+  <rect x="340" y="450" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="470" y="450" width="510" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <rect x="980" y="450" width="100" height="24" rx="6" fill="#ffffff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="480" y="467" font-size="9.5" fill="#0550ae">AFTER_INITIALISE</text>
+  <text x="970" y="467" font-size="9.5" fill="#0550ae" text-anchor="end">AFTER_RESPOND</text>
+
+  <!-- 泳道 5：Drupal -->
+  <text x="44" y="508" font-size="11.5" font-weight="600" fill="#24292f">Drupal</text>
+  <text x="44" y="524" font-size="10.5" fill="#57606a">XhprofMiddleware · HttpKernel 中间件</text>
+  <rect x="340" y="500" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="440" y="500" width="540" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="450" y="517" font-size="9.5" fill="#0550ae">http_middleware priority 1000（最外层）</text>
+  <text x="970" y="517" font-size="9.5" fill="#0550ae" text-anchor="end">finally</text>
+</svg>

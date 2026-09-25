@@ -1,0 +1,37 @@
+name: Contracts
+
+# 契约验证环：用**真实** PSR 包校验 tests/Stubs 里的框架桩。
+# 与 ci.yml 分开是刻意的：环需要一台装了真实包的机器（`tools/contracts/vendor`），
+# 而 ci.yml 的 test job 跑的是零运行依赖的单测，两者的失败含义完全不同。
+# 也因此 `tools/` 不进 ci.yml 的 `find src tests` —— ci.yml 保持零改动。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: 契约验证环（桩 vs 真实包）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          # tools/contracts/composer.json 要求 php >= 8.2（对齐 ci.yml 的 test job）。
+          # 不写死版本的话，runner 默认 PHP 变了会变成"环在某天开始失败"的噪声。
+          php-version: '8.3'
+          # 必须显式装 xhprof（与 ci.yml 一致）。理由不是"多测一点"：几个 case 在缺
+          # ext-xhprof 时会把采样类断言**诚实地计入 SKIP**而不是静默通过，于是
+          # run.php 的 SKIP 总数会随环境漂移（本机 9 → 无扩展 13），而 EXPECTED_SKIPS
+          # 是一个冻结常量 —— 它一旦随环境变化，这道签字闸门就失去意义。
+          extensions: xhprof, redis
+          coverage: none
+      # 故意**不加** --ignore-platform-reqs：PHP 或扩展不满足时这里就该炸，
+      # 而不是装出一套残缺依赖让环在下面假装通过。
+      - name: Install contract dependencies
+        run: composer install -d tools/contracts --no-interaction --prefer-dist
+      # 环自带三道闸：任一 FAIL 非零退出；SKIP 数必须等于冻结常量（否则"验不过就标
+      # skip"会静默变绿）；某个 case 加载期崩溃时仍会打印其余 case 的结论。
+      - name: Run contract checks
+        run: php tools/contracts/run.php

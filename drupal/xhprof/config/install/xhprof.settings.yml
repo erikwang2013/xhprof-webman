@@ -1,0 +1,11 @@
+# 默认值与包内其他框架的 config/xhprof.php 逐键一致。
+enable: true
+time_limit: 0        # 仅记录响应超过多少秒的请求，0 = 全记
+log_num: 1000        # 仅保留最近多少条记录
+view_wtred: 3        # 列表耗时超过多少秒标红
+ignore_url_arr:
+  - '/xhprof'        # 子串匹配：/xhprof 与 /xhprof-assets/* 都不会落库
+assets_url: '/xhprof-assets'   # 必须与 xhprof.routing.yml 的 xhprof.assets 路径前缀一致
+auth_token: null     # 设置后报告页必须带 ?token=xxx 才能访问，null = 不鉴权
+key_prefix: xhprof    # Redis key 前缀，多项目共用 Redis 时建议改掉
+log_ttl: 604800      # 86400 * 7：性能数据保留 7 天

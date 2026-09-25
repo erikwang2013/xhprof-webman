@@ -1,0 +1,23 @@
+services:
+  # 采样中间件。priority 越高越靠外（StackedKernelPass 按 priority 升序逐个前插）：
+  # 1000 高于 core 现有的最高值（D10 的 negotiation 400 / D11 的 500），所以它位于
+  # 页面缓存（200）之外——命中页面缓存的请求同样会被采样。对性能工具这是期望行为。
+  #
+  # 内侧 kernel 由 StackedKernelPass **自动注入构造参数 0**，这里只写自己的额外参数。
+  # 不要写 '@xhprof.http_middleware.http_middleware_inner'：11.2 及以前没有这个别名
+  # （编译期 ServiceNotFoundException，整站起不来），11.3 起该别名由 pass 自己注入
+  # （写了就会重复注入，构造参数 1 收到 StackedHttpKernel，每个请求 TypeError）。
+  #
+  # cache 是可选的第 4 个参数，默认 phpredis 默认连接（127.0.0.1:6379）。
+  # 要指定 host 或复用 redis 贡献模块的连接，在这里追加：
+  #   arguments: ['@config.factory', '@logger.factory', '@my.xhprof.cache']
+  xhprof.http_middleware:
+    class: ErikWang2013\Xhprof\Drupal\XhprofMiddleware
+    arguments: ['@config.factory', '@logger.factory']
+    tags:
+      - { name: http_middleware, priority: 1000 }
+
+  # 报告页/静态资源控制器（_controller: 'xhprof.controller:report|assets'）。
+  # 无构造参数：适配器已由上面的中间件 bootstrap，控制器直接复用。
+  xhprof.controller:
+    class: ErikWang2013\Xhprof\Drupal\Controller\XhprofController

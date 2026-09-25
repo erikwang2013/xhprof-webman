@@ -29,6 +29,8 @@ use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Hyperf\ConfigProvider;
 use ErikWang2013\Xhprof\Hyperf\Middleware;
+use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakePsrResponse;
+use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeServerRequest;
 
 class HyperfTest extends TestCase
 {
@@ -285,10 +287,8 @@ class HyperfTest extends TestCase
         });
 
         $middleware = new Middleware();
-        $request = new class implements \Psr\Http\Message\ServerRequestInterface {
-        };
-        $response = new class implements \Psr\Http\Message\ResponseInterface {
-        };
+        $request = new FakeServerRequest();
+        $response = new FakePsrResponse();
         $handler = new class($response) implements \Psr\Http\Server\RequestHandlerInterface {
             public function __construct(private \Psr\Http\Message\ResponseInterface $response)
             {

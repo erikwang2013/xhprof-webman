@@ -1,0 +1,37 @@
+# 类型化配置 schema：没有它，drush config:export/import 与 config_inspector 会报
+# "missing schema"。键集必须与 config/install/xhprof.settings.yml 一致。
+xhprof.settings:
+  type: config_object
+  label: 'XHProf settings'
+  mapping:
+    enable:
+      type: boolean
+      label: 'Enable profiling'
+    time_limit:
+      type: integer
+      label: 'Only record requests slower than this many seconds (0 = every request)'
+    log_num:
+      type: integer
+      label: 'Maximum number of runs to keep'
+    view_wtred:
+      type: integer
+      label: 'Mark list rows slower than this many seconds in red'
+    ignore_url_arr:
+      type: sequence
+      label: 'URL substrings that are not recorded'
+      sequence:
+        type: string
+        label: 'URL substring'
+    assets_url:
+      type: string
+      label: 'URL prefix of the bundled static assets'
+    auth_token:
+      type: string
+      label: 'Token required to view the report (empty = no auth)'
+      nullable: true
+    key_prefix:
+      type: string
+      label: 'Redis key prefix'
+    log_ttl:
+      type: integer
+      label: 'Run retention in seconds'

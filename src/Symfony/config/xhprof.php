@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+// 与 Laravel/Thinkphp/Hyperf/Webman 四份配置的 key 集保持一致（Wave 2 的 ConfigParityTest 会断言）。
+// Symfony 侧没有框架级配置系统可读，这份默认值由 ConfigAdapter 合并用户传入的数组得到。
+return [
+    'enable' => true,
+    'time_limit' => 0,
+    'log_num' => 1000,
+    'view_wtred' => 3,
+    'ignore_url_arr' => ['/xhprof'],
+    'assets_url' => '/xhprof-assets',
+    'auth_token' => null,  //设置后报告页必须带 ?token=xxx 才能访问，null 表示不鉴权
+    'key_prefix' => 'xhprof',  //Redis key 前缀，多项目共用 Redis 时建议改掉
+    'log_ttl' => 86400 * 7,  //性能数据保留时间(秒)，默认7天
+];

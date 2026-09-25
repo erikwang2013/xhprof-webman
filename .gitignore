@@ -1,5 +1,11 @@
 /vendor/
 /composer.lock
+# 契约验证环是独立的嵌套 composer 项目（前面两条带 / 前缀只匹配仓库根，
+# 否则 tools/contracts/vendor 会被 git add tools 一并扫进仓库）
+/tools/contracts/vendor/
+# 但 tools/contracts/composer.lock **要入库**：环是 CI 门槛，没有 lock 的话
+# 每次 CI 都解析到「当前最新」，上游发个新版就能把门槛变红 —— 一道会无故
+# 变红的闸门等于一道会被忽略的闸门。升级依赖应当是一次刻意动作。
 /node_modules/
 /.phpunit.cache/
 /test-reports/

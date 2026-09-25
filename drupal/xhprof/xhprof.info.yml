@@ -1,0 +1,6 @@
+name: XHProf
+type: module
+description: 'XHProf profiling: samples each request, stores runs in Redis, and serves the report at /xhprof.'
+package: Development
+core_version_requirement: ^10 || ^11
+dependencies: []

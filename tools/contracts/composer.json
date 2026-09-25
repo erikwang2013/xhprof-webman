@@ -1,0 +1,29 @@
+{
+    "name": "erikwang2013/xhprof-contracts",
+    "description": "契约验证环：用真实 PSR 包校验 tests/Stubs 的框架桩与真实框架 API 是否一致。独立嵌套项目，不与主仓库共享依赖。",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "joomla/event": "^3.0",
+        "joomla/input": "^3.0",
+        "joomla/registry": "^3.0",
+        "joomla/uri": "^3.0",
+        "nyholm/psr7": "^1.8",
+        "nyholm/psr7-server": "^1.1",
+        "php-stubs/wordpress-stubs": "*",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^2.0",
+        "slim/psr7": "^1.8",
+        "slim/slim": "^4.12",
+        "symfony/event-dispatcher": "^7.0",
+        "symfony/http-foundation": "^7.0",
+        "symfony/http-kernel": "^7.0",
+        "symfony/mime": "^7.0",
+        "yiisoft/di": "^1.0",
+        "yiisoft/middleware-dispatcher": "^5.0"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
