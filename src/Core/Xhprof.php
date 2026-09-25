@@ -9,6 +9,7 @@ use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
 use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
 
@@ -117,7 +118,11 @@ class Xhprof
         $symbol = $req->get('symbol');
         $sort = $req->get('sort');
         $params = $req->all();
-        $echo_page = "<html lang=\"zh-CN\">";
+        // 报告页语言：?lang= > 配置 xhprof.locale > Accept-Language > 兜底中文。
+        // 四级都拿不到认识的语言码时 resolve() 返回 zh_CN，绝不抛异常。
+        I18n::setLocale(I18n::resolve($req, $cfg));
+        $echo_page = '<html lang="' . I18n::htmlLang() . '"'
+            . (I18n::dir() === 'rtl' ? ' dir="rtl"' : '') . '>';
         $assetsUrl = '';
         if ($cfg !== null) {
             $assetsUrl = $cfg->get('xhprof.assets_url', '');
@@ -125,7 +130,7 @@ class Xhprof
         if ($assetsUrl === '') {
             $assetsUrl = self::$ui_html ?: '/xhprof-assets';
         }
-        $echo_page .= "<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>XHProf 性能分析报告</title>";
+        $echo_page .= "<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" . I18n::plain('report.title') . "</title>";
         $echo_page .= XhprofDisplay::xhprof_include_js_css($assetsUrl);
         $echo_page .= "</head>";
         $echo_page .= "<body>";

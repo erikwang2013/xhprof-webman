@@ -25,7 +25,7 @@ use ErikWang2013\Xhprof\Yii3\XhprofMiddleware as Yii3XhprofMiddleware;
  */
 class ConfigParityTest extends TestCase
 {
-    /** @var list<string> 九个键，顺序即配置文件的书写顺序 */
+    /** @var list<string> 十个键，顺序即配置文件的书写顺序 */
     private const EXPECTED_KEYS = [
         'enable',
         'time_limit',
@@ -36,6 +36,7 @@ class ConfigParityTest extends TestCase
         'auth_token',
         'key_prefix',
         'log_ttl',
+        'locale',
     ];
 
     private function root(): string
@@ -187,9 +188,9 @@ class ConfigParityTest extends TestCase
     }
 
     #[Test]
-    public function theSharedKeySetIsExactlyTheNineDocumentedKeys(): void
+    public function theSharedKeySetIsExactlyTheTenDocumentedKeys(): void
     {
-        // 与上一条互补：上一条管「十份彼此一致」，这条管「一致的确实是这九个」——
+        // 与上一条互补：上一条管「十份彼此一致」，这条管「一致的确实是这十个」——
         // 十个文件被同一次改动一起加键时，只有这条会红。
         $this->assertSame(self::EXPECTED_KEYS, array_keys($this->loadPhp('src/Slim/config/xhprof.php')));
     }
@@ -223,7 +224,7 @@ class ConfigParityTest extends TestCase
     public function yii3RedisIsRuntimeInjectedNotAKeyOfTheShippedConfigFile(): void
     {
         // README「Yii3」一节的 DI 片段把 redis 写在**用户传入**的 config 里；
-        // 包内默认配置文件里没有它（键集仍是那 nine 个）。两者并不矛盾，这里钉住这个区别。
+        // 包内默认配置文件里没有它（键集仍是那十个）。两者并不矛盾，这里钉住这个区别。
         $shipped = $this->loadPhp('src/Yii3/config/xhprof.php');
         $this->assertArrayNotHasKey('redis', $shipped, 'Yii3 的默认配置文件不该出现 redis（README 说的是运行时注入）');
         $this->assertSame(self::EXPECTED_KEYS, array_keys($shipped));

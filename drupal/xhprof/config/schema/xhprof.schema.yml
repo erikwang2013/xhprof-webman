@@ -35,3 +35,7 @@ xhprof.settings:
     log_ttl:
       type: integer
       label: 'Run retention in seconds'
+    locale:
+      type: string
+      label: 'Report page language (empty = negotiate from Accept-Language)'
+      nullable: true

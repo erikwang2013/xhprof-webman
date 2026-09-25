@@ -337,7 +337,7 @@ class WordpressTest extends TestCase
         // 与 README「配置项说明」表一致（Wave 2 的 ConfigParityTest 会跨框架比对 key 集）
         $this->assertSame([
             'assets_url', 'auth_token', 'enable', 'ignore_url_arr',
-            'key_prefix', 'log_num', 'log_ttl', 'time_limit', 'view_wtred',
+            'key_prefix', 'locale', 'log_num', 'log_ttl', 'time_limit', 'view_wtred',
         ], $keys);
         $this->assertNull($cfg->get('xhprof.auth_token'), '默认不鉴权');
     }

@@ -428,9 +428,9 @@ class DrupalTest extends TestCase
         preg_match_all('/^    ([a-z_]+):$/m', $schema, $b);
 
         $this->assertSame(
-            ['enable', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl'],
+            ['enable', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
             array_values(array_unique($a[1])),
-            '安装文件应恰好声明这 9 个键'
+            '安装文件应恰好声明这 10 个键'
         );
         $this->assertSame($a[1], $b[1], 'install 与 schema 的键集/顺序必须一致');
     }

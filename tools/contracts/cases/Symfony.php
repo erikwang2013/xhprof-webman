@@ -456,7 +456,11 @@ return static function (): array {
 
     // ---- g) 真实 Dispatcher + 真实 HttpKernel：优先级与短路 ----
     $dispatcher = new Symfony\Component\EventDispatcher\EventDispatcher();
-    $listener = new \ErikWang2013\Xhprof\Symfony\XhprofListener(['enable' => true], new ErikWang2013\Xhprof\Tests\Fixtures\FakeCache());
+    // `locale` 钉死不是装饰：报告页文案现在是语言协商来的，而 Symfony 的
+    // Request::create() **自带** `Accept-Language: en-us,en;q=0.5`（实测），
+    // 协商出来是 en，下面那条中文标题断言就会红。钉住配置的 locale 既让断言
+    // 与框架的默认头无关，也顺带在真实请求上验了「配置压过浏览器头」这一级。
+    $listener = new \ErikWang2013\Xhprof\Symfony\XhprofListener(['enable' => true, 'locale' => 'zh_CN'], new ErikWang2013\Xhprof\Tests\Fixtures\FakeCache());
     $dispatcher->addSubscriber($listener);
 
     $order = [];
@@ -521,6 +525,10 @@ return static function (): array {
     $dispatcher->removeListener(Symfony\Component\HttpKernel\KernelEvents::REQUEST, $thrower);
     $expect('L2 报告页：状态码 200', $report->getStatusCode(), 200);
     $expectContains('L2 报告页：返回的是报告 HTML', (string) $report->getContent(), 'XHProf 性能分析报告');
+    // 上一行用的是配置里钉死的 locale；这一行验最高一级：`?lang=` 压过配置。
+    // 两条合起来才说明「中文」不是碰巧（框架工厂默认头是 en-us,en）。
+    $turned = $kernel->handle(Symfony\Component\HttpFoundation\Request::create('http://example.com/xhprof?lang=en'));
+    $expectContains('L2 报告页：?lang=en 压过配置的 locale，整页切成英文', (string) $turned->getContent(), 'XHProf Performance Report');
     // Content-Type 由入口类**自己**显式设，不依赖 ResponseListener 的 prepare()。
     // 真实 Response 构造后 Content-Type 是 NULL（下面这条前置断言钉住这个事实）——
     // 依赖 prepare() 补值 = 依赖 @0 在位 + 依赖 symfony/mime + charset 取值随监听器构造参数变。

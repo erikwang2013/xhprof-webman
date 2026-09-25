@@ -524,7 +524,10 @@ return static function (): array {
     if (!defined('JPATH_ROOT')) {
         define('JPATH_ROOT', $siteRoot);   // 站点根配置的读法（包内 config + 站点根 xhprof.php）
     }
-    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => false, 'auth_token' => 'tok'];\n");
+    // `locale` 钉死：报告页文案随语言协商变化，断言（中文标题 / 拒绝页不是报告页）
+    // 不该依赖请求里默认带没带 Accept-Language。同一条配置也喂给下面的 403 用例，
+    // 那句「不是报告页」因此不会因为报告页翻成别的语言而假通过。
+    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => false, 'auth_token' => 'tok', 'locale' => 'zh_CN'];\n");
 
     // 假应用把自己的输入当参数拿：$_REQUEST 只喂给真实 Input 的默认构造，
     // 应用侧的输入必须显式传（真实 CMS 里它就是 $app->getInput()）。

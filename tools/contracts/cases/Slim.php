@@ -285,7 +285,9 @@ return static function (): array {
         return [$app, $middleware];
     };
 
-    [$app, ] = $buildApp(['enable' => false]);
+    // 报告页文案随语言协商变化（`?lang=` > 配置 locale > Accept-Language > 中文）。
+    // 这里钉死语言，断言才不会依赖请求工厂的默认头（Symfony 的会塞 en-us）。
+    [$app, ] = $buildApp(['enable' => false, 'locale' => 'zh_CN']);
 
     $report = $app->handle($makeRequest('GET', 'http://localhost/xhprof'));
     $expect('L2 报告页短路：200', $report->getStatusCode(), 200);
@@ -375,7 +377,7 @@ return static function (): array {
     $appWithContainer->addErrorMiddleware(false, false, false);
     $appWithContainer->get('/hello', static fn (): string => 'route-ok');
     $container->defs[\ErikWang2013\Xhprof\Slim\XhprofMiddleware::class] =
-        new \ErikWang2013\Xhprof\Slim\XhprofMiddleware($appWithContainer->getResponseFactory(), ['enable' => false], $makeCache());
+        new \ErikWang2013\Xhprof\Slim\XhprofMiddleware($appWithContainer->getResponseFactory(), ['enable' => false, 'locale' => 'zh_CN'], $makeCache());
     $appWithContainer->add(\ErikWang2013\Xhprof\Slim\XhprofMiddleware::class);
     $viaClassString = $appWithContainer->handle($makeRequest('GET', 'http://localhost/xhprof'));
     $expect('L2 add(类名) + 容器有定义：报告页短路成功', $viaClassString->getStatusCode(), 200);

@@ -442,7 +442,9 @@ return static function (): array {
             ],
             \ErikWang2013\Xhprof\Yii3\XhprofMiddleware::class => [
                 'class' => \ErikWang2013\Xhprof\Yii3\XhprofMiddleware::class,
-                '__construct()' => [1 => ['enable' => true, 'auth_token' => 'secret']],
+                // `locale` 钉死：报告页文案随语言协商变化，下面那条中文标题断言
+                // 不该依赖请求对象默认带没带 Accept-Language。
+                '__construct()' => [1 => ['enable' => true, 'auth_token' => 'secret', 'locale' => 'zh_CN']],
             ],
         ])
     );

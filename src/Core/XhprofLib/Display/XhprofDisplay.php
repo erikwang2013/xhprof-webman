@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Core\XhprofLib\Display;
 
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\Xhprof;
 
 class XhprofDisplay
@@ -310,13 +311,25 @@ class XhprofDisplay
   }
 
 
+  /**
+   * 表格列头文案：按 `col.<统计项>` 从当前语言词表取，已转义、保留 `<br>` 折行。
+   *
+   * `$descriptions` 那张字面量表仍是中文源（词表的 zh_CN 与它逐字相同，改一边
+   * 不改另一边测试会红），这里只是换了个取用方式。取不到时 I18n::t() 逐级回落到
+   * 中文源，不会因为某份词表漏了一条就白掉一列。
+   */
+  public static function col_text($stat)
+  {
+    return I18n::html('col.' . $stat);
+  }
+
   public static function stat_description($stat)
   {
-    $descriptions = XhprofDisplay::$descriptions;
     $diff_descriptions = XhprofDisplay::$diff_descriptions;
     $diff_mode = XhprofDisplay::$diff_mode;
-    $result = $descriptions[$stat];
-    if ($diff_mode) $result = $diff_descriptions[$stat];
+    // 非 diff 模式走词表；diff 模式仍用 $diff_descriptions 的英文字面量
+    // （diff 列头这次没纳入翻译范围，行为保持不变）。
+    $result = $diff_mode ? ($diff_descriptions[$stat] ?? '') : XhprofDisplay::col_text($stat);
     return $result;
   }
 
@@ -409,7 +422,9 @@ class XhprofDisplay
     }
 
 
-    $links[] = '<div class="xp-search"><input type="text" class="xhprof-search-input" placeholder="查找 函数/方法名..." id="xhprofFuncSearch"><button type="button" id="funcSub">搜索</button></div>';
+    $links[] = '<div class="xp-search"><input type="text" class="xhprof-search-input" placeholder="'
+      . I18n::plain('search.placeholder') . '" id="xhprofFuncSearch"><button type="button" id="funcSub">'
+      . I18n::plain('search.button') . '</button></div>';
     $echo_page = XhprofDisplay::xhprof_render_actions($links);
     // 这两个描述此前只 sprintf 了却从不输出，导致聚合报告的
     // "Aggregated Report for N runs..." 等说明性文案被静默丢弃。
@@ -674,7 +689,6 @@ class XhprofDisplay
     $totals_2 = XhprofDisplay::$totals_2;
     $metrics = XhprofDisplay::$metrics;
     $diff_mode = XhprofDisplay::$diff_mode;
-    $descriptions = XhprofDisplay::$descriptions;
     $sort_col = XhprofDisplay::$sort_col;
     $format_cbk = XhprofDisplay::$format_cbk;
     $display_calls = XhprofDisplay::$display_calls;
@@ -726,7 +740,7 @@ class XhprofDisplay
       foreach ($metrics as $metric) {
         $m = $metric;
         $echo_page .= '<tr>';
-        $echo_page .= "<td>" . str_replace("<br>", " ", $descriptions[$m]) . "</td>";
+        $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::col_text($m)) . "</td>";
         $echo_page .= XhprofDisplay::print_td_num($totals_1[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($totals_2[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($totals_2[$m] - $totals_1[$m], $format_cbk[$m], true);
@@ -748,11 +762,11 @@ class XhprofDisplay
       $echo_page .= '<table class="xp-table"><tr>';
       $echo_page .= "<td colspan='8' style='text-align:center;font-weight:600'>{$request_uri}</td>";
       $echo_page .= "</tr><tr>";
-      $echo_page .= "<td>请求方法</td><td>" . htmlspecialchars($method, ENT_QUOTES, 'UTF-8') . "</td>";
-      $echo_page .= "<td>请求时间</td><td>{$create_time_text}</td>";
-      $echo_page .= "<td>来源IP</td><td>" . htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') . "</td>";
+      $echo_page .= "<td>" . I18n::plain('run.col.method') . "</td><td>" . htmlspecialchars($method, ENT_QUOTES, 'UTF-8') . "</td>";
+      $echo_page .= "<td>" . I18n::plain('run.col.time') . "</td><td>{$create_time_text}</td>";
+      $echo_page .= "<td>" . I18n::plain('run.col.ip') . "</td><td>" . htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') . "</td>";
       if ($display_calls) {
-        $echo_page .= "<td>函数/方法调用总次数</td><td>" . number_format($totals['ct']) . "</td>";
+        $echo_page .= "<td>" . I18n::plain('run.col.totalCalls') . "</td><td>" . number_format($totals['ct']) . "</td>";
       }
       $echo_page .= "</tr><tr>";
       foreach ($metrics as $metric) {
@@ -782,7 +796,7 @@ class XhprofDisplay
       $limit = 0;    // display all rows
     }
 
-    $desc = str_replace("<br>", " ", $descriptions[$sort_col]);
+    $desc = str_replace("<br>", " ", XhprofDisplay::col_text($sort_col));
     if ($diff_mode) {
       $title = "Top 100 <i style='color:red'>Regressions</i>/"
         . "<i style='color:green'>Improvements</i>: "
@@ -931,7 +945,6 @@ class XhprofDisplay
     $sortable_columns = XhprofDisplay::$sortable_columns;
     $metrics = XhprofDisplay::$metrics;
     $diff_mode = XhprofDisplay::$diff_mode;
-    $descriptions = XhprofDisplay::$descriptions;
     $format_cbk = XhprofDisplay::$format_cbk;
     $sort_col = XhprofDisplay::$sort_col;
     $display_calls = XhprofDisplay::$display_calls;
@@ -995,7 +1008,7 @@ class XhprofDisplay
 
         // Inclusive stat for metric
         $echo_page .= '<tr>';
-        $echo_page .= "<td>" . str_replace("<br>", " ", $descriptions[$m]) . "</td>";
+        $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::col_text($m)) . "</td>";
         $echo_page .= XhprofDisplay::print_td_num($symbol_info1[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($symbol_info2[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($symbol_info2[$m] - $symbol_info1[$m], $format_cbk[$m], true);
@@ -1004,7 +1017,7 @@ class XhprofDisplay
 
         // AVG (per call) Inclusive stat for metric
         $echo_page .= '<tr>';
-        $echo_page .= "<td>" . str_replace("<br>", " ", $descriptions[$m]) . " per call </td>";
+        $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::col_text($m)) . " per call </td>";
         $avg_info1 = 'N/A';
         $avg_info2 = 'N/A';
         if ($symbol_info1['ct'] > 0) $avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
@@ -1023,7 +1036,7 @@ class XhprofDisplay
         // Exclusive stat for metric
         $m = "excl_" . $metric;
         $echo_page .= '<tr style="border-bottom: 1px solid black;">';
-        $echo_page .= "<td>" . str_replace("<br>", " ", $descriptions[$m]) . "</td>";
+        $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::col_text($m)) . "</td>";
         $echo_page .= XhprofDisplay::print_td_num($symbol_info1[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($symbol_info2[$m], $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($symbol_info2[$m] - $symbol_info1[$m], $format_cbk[$m], true);
@@ -1334,16 +1347,22 @@ class XhprofDisplay
     $base_url_params = XhprofLib::xhprof_array_unset($url_params, 'symbol');
     $top_link_query_string = "$base_path?" . http_build_query($base_url_params);
     $li_html = "";
+    // 文案逐条取词表再拼接：导航是「首页 | 运行报告 | 方法详情」这种 HTML 片段，
+    // 不是整串独立文案，不能整段丢给译者（会让 href 一起被改写）。
+    $nav_home = '<li><a href="' . $base_path . '">' . I18n::plain('nav.home') . '</a></li>';
     if (isset($url_params['run']) && isset($url_params['symbol'])) {
-      $li_html = '<li><a href="' . $base_path . '">首页</a></li><li><a href="' . $top_link_query_string . '">运行报告</a></li><li class="active"><span>方法详情</span></li>';
+      $li_html = $nav_home
+        . '<li><a href="' . $top_link_query_string . '">' . I18n::plain('nav.runs') . '</a></li>'
+        . '<li class="active"><span>' . I18n::plain('nav.symbol') . '</span></li>';
     } else if (isset($url_params['run'])) {
-      $li_html = '<li><a href="' . $base_path . '">首页</a></li><li class="active"><a href="' . $top_link_query_string . '">运行报告</a></li>';
+      $li_html = $nav_home
+        . '<li class="active"><a href="' . $top_link_query_string . '">' . I18n::plain('nav.runs') . '</a></li>';
     } else {
-      $li_html = '<li class="active"><a href="' . $base_path . '">首页</a></li>';
+      $li_html = '<li class="active"><a href="' . $base_path . '">' . I18n::plain('nav.home') . '</a></li>';
     }
 
     return '<nav class="xp-nav"><div class="xp-nav-inner">'
-      . '<a href="' . $base_path . '" class="xp-brand"><span class="xp-brand-icon"></span>XHProf 性能分析</a>'
+      . '<a href="' . $base_path . '" class="xp-brand"><span class="xp-brand-icon"></span>' . I18n::plain('nav.brand') . '</a>'
       . '<ul class="xp-nav-links">' . $li_html . '</ul>'
       . '<div class="xp-nav-extra"><a href="https://github.com/erikwang2013/xhprof-webman" target="_blank" rel="noopener" title="GitHub">GitHub</a></div>'
       . '</div></nav>';

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Core\XhprofLib\Utils;
 
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\Xhprof;
 
 class XHProfRunsDefault implements XHProfRuns
@@ -161,10 +162,15 @@ class XHProfRunsDefault implements XHProfRuns
         }
 
         $str_html = '<div class="xp-main">'
-            . '<div class="xp-card"><div class="xp-card-title">请求记录</div>'
+            . '<div class="xp-card"><div class="xp-card-title">' . I18n::plain('runs.title') . '</div>'
             . '<div class="xp-table-wrap"><table id="table_id_example" class="xp-table xp-runs-table">'
             . '<thead><tr>'
-            . '<th>方法</th><th>请求地址</th><th>请求时间</th><th>耗时(s)</th><th>内存(Mb)</th><th>IP</th>'
+            . '<th>' . I18n::plain('runs.col.method') . '</th>'
+            . '<th>' . I18n::plain('runs.col.url') . '</th>'
+            . '<th>' . I18n::plain('runs.col.time') . '</th>'
+            . '<th>' . I18n::plain('runs.col.wt') . '</th>'
+            . '<th>' . I18n::plain('runs.col.mu') . '</th>'
+            . '<th>' . I18n::plain('runs.col.ip') . '</th>'
             . '</tr></thead><tbody>' . $table_html . '</tbody></table></div></div></div>';
         return $str_html;
     }
