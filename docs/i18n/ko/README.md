@@ -447,6 +447,7 @@ services:
 | `auth_token` | string\|null | `null` | 설정하면 보고서 페이지에 `?token=xxx` 가 필요합니다. 공개 배포에 권장합니다 |
 | `key_prefix` | string | `xhprof` | Redis 키 접두사. Redis를 공유할 때 프로젝트마다 다른 값을 설정하십시오 |
 | `log_ttl` | int | `604800` | 데이터 보존 기간(초), 기본 7일 |
+| `locale` | string\|null | `null` | 보고서 페이지 언어: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = 브라우저 `Accept-Language` 를 따르고, 맞는 언어가 없으면 중국어; `?lang=xx` 는 요청 하나에 대해 이를 덮어씁니다 |
 
 각 프레임워크에서 이 옵션들의 알려진 제한은 [검증과 알려진 제한 사항](#검증과-알려진-제한-사항)에 정리되어 있습니다.
 

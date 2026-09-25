@@ -447,6 +447,7 @@ Semua framework berbagi opsi konfigurasi berikut:
 | `auth_token` | string\|null | `null` | Kalau diisi, halaman report mensyaratkan `?token=xxx`; disarankan untuk deployment publik |
 | `key_prefix` | string | `xhprof` | Prefiks key Redis; isi nilai berbeda per proyek bila berbagi satu Redis |
 | `log_ttl` | int | `604800` | Masa simpan data dalam detik (default 7 hari) |
+| `locale` | string\|null | `null` | Bahasa halaman report: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = ikuti `Accept-Language` peramban, kalau tidak ada yang cocok pakai bahasa Mandarin; `?lang=xx` menimpanya untuk satu permintaan |
 
 Keterbatasan yang diketahui dari opsi-opsi ini pada tiap framework tercantum di [Verifikasi dan Keterbatasan yang Diketahui](#verifikasi-dan-keterbatasan-yang-diketahui).
 

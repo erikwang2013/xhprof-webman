@@ -445,6 +445,7 @@ services:
 | `auth_token` | string\|null | `null` | 设置后报告页必须带 `?token=xxx` 才能访问；建议公网部署时设置 |
 | `key_prefix` | string | `xhprof` | Redis key 前缀，多项目共用 Redis 时务必改成各自独立的值 |
 | `log_ttl` | int | `604800` | 性能数据保留时间（秒），默认 7 天 |
+| `locale` | string\|null | `null` | 报告页语言：`zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`；`null` = 跟随浏览器 `Accept-Language`，都匹配不上则中文；任意语言下都可用 `?lang=xx` 临时覆盖 |
 
 各配置项在不同框架上的已知限制见[验证与已知限制](#验证与已知限制)。
 

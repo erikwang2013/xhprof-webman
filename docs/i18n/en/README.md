@@ -447,6 +447,7 @@ All frameworks share these configuration options:
 | `auth_token` | string\|null | `null` | When set, report page requires `?token=xxx`; recommended for public deployments |
 | `key_prefix` | string | `xhprof` | Redis key prefix; set distinct values per project when sharing one Redis |
 | `log_ttl` | int | `604800` | Data retention in seconds (default 7 days) |
+| `locale` | string\|null | `null` | Report page language: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = follow the browser's `Accept-Language`, falling back to Chinese; `?lang=xx` overrides it for a single request |
 
 Known limitations of these options on each framework are listed in [Verification and Known Limitations](#verification-and-known-limitations).
 

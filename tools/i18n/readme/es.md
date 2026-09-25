@@ -443,6 +443,7 @@ Todos los frameworks comparten estas opciones de configuración:
 | `auth_token` | string\|null | `null` | Si se define, la página de informe exige `?token=xxx`; recomendado en despliegues públicos |
 | `key_prefix` | string | `xhprof` | Prefijo de las claves de Redis; usa valores distintos por proyecto si compartes un mismo Redis |
 | `log_ttl` | int | `604800` | Retención de datos en segundos (por defecto 7 días) |
+| `locale` | string\|null | `null` | Idioma de la página de informe: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = seguir el `Accept-Language` del navegador y, si no coincide, usar chino; `?lang=xx` lo sobrescribe en una petición |
 
 Las limitaciones conocidas de estas opciones en cada framework están en [Verificación y limitaciones conocidas](#verificación-y-limitaciones-conocidas).
 

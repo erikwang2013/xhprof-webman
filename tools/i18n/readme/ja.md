@@ -443,6 +443,7 @@ services:
 | `auth_token` | string\|null | `null` | 設定するとレポートページに `?token=xxx` が必要。公開環境での利用を推奨 |
 | `key_prefix` | string | `xhprof` | Redis のキープレフィックス。1 つの Redis を共有する場合はプロジェクトごとに別の値を設定 |
 | `log_ttl` | int | `604800` | データ保持期間（秒、既定 7 日） |
+| `locale` | string\|null | `null` | レポートページの言語：`zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`。`null` = ブラウザの `Accept-Language` に従い、一致しなければ中国語。`?lang=xx` で 1 リクエストだけ上書きできます |
 
 各設定項目のフレームワークごとの既知の制限は[検証と既知の制限](#検証と既知の制限)にまとめています。
 
