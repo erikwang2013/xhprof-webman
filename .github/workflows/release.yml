@@ -51,7 +51,23 @@ jobs:
               NEW_VERSION="v0.1.0"
             else
               IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
-              NEW_VERSION="v$MAJOR.$MINOR.$((PATCH + 1))"
+              # 递增哪一位由**提交类型**决定，不是恒递增 patch。
+              # 恒 patch 会把一个 feature 级变更（如「新增 6 个框架兼容」）压成
+              # v3.0.7，而包使用者看 semver 判断该不该升。规则即 Conventional
+              # Commits：`type!:` 或 `BREAKING CHANGE` → major；`feat` → minor；
+              # 其余（fix/docs/chore/test/refactor…）→ patch。
+              RANGE="${LATEST}..HEAD"
+              SUBJECTS=$(git log "$RANGE" --format='%s' 2>/dev/null || echo '')
+              BODIES=$(git log "$RANGE" --format='%b' 2>/dev/null || echo '')
+              if echo "$SUBJECTS" | grep -qE '^[a-z]+(\([^)]+\))?!:' || echo "$BODIES" | grep -q 'BREAKING CHANGE'; then
+                NEW_VERSION="v$((MAJOR + 1)).0.0"
+              elif echo "$SUBJECTS" | grep -qE '^feat(\([^)]+\))?:'; then
+                NEW_VERSION="v$MAJOR.$((MINOR + 1)).0"
+              else
+                NEW_VERSION="v$MAJOR.$MINOR.$((PATCH + 1))"
+              fi
+              echo "自 $LATEST 起的提交类型判定 → $NEW_VERSION"
+              git log "$RANGE" --format='  %s' | head -20
             fi
           fi
           if ! echo "$NEW_VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
