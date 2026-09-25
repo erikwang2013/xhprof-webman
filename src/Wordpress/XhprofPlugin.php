@@ -9,6 +9,7 @@ use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
+use ErikWang2013\Xhprof\Core\SamplingGuard;
 use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
@@ -82,8 +83,9 @@ class XhprofPlugin
             exit;
         }
 
-        // 3) 守卫
-        if (!XhprofProfiler::isEnabled() || !extension_loaded('xhprof')) {
+        // 3) 守卫：缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
+        //    判断顺序不可换：available() 短路在前，enable=false 时才不会把"缺扩展"吞掉。
+        if (!SamplingGuard::available() || !XhprofProfiler::isEnabled()) {
             return;
         }
 

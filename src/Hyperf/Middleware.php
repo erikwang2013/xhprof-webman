@@ -10,6 +10,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Http\Message\ResponseInterface;
+use ErikWang2013\Xhprof\Core\SamplingGuard;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
 use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
@@ -43,7 +44,9 @@ class Middleware implements MiddlewareInterface
             new LogAdapter($container->get(LoggerInterface::class))
         );
 
-        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
+        // 缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）；判断顺序
+        // 不可换：available() 短路在前，enable=false 时才不会把"缺扩展"这件事吞掉。
+        $enabled = SamplingGuard::available() && XhprofProfiler::isEnabled();
         if ($enabled) {
             Xhprof::xhprofStart();
         }

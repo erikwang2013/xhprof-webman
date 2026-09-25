@@ -19,7 +19,9 @@ class ResponseAdapter implements ResponseInterface
 
     public function withBody(string $body): self
     {
-        $this->response = response($body, $this->response->getCode());
+        // 就地改：`response($body, $code)` 会重建响应，把此前 header() 设的头丢掉。
+        // content() 是 think\Response 的内容设置器（改 $this 并返回它）。
+        $this->response = $this->response->content($body);
         return $this;
     }
 

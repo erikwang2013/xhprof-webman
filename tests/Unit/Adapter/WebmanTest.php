@@ -187,6 +187,30 @@ class WebmanTest extends TestCase
         $this->assertSame('10.0.0.1', $adapter->getRealIp());
     }
 
+    /**
+     * get() 与 all() 必须同源 —— 同一个 key 两种取法给同一个答案。
+     *
+     * 潜伏项：README 给 webman 的报告路由是 Route::get，所以"参数只出现在 body 里"目前
+     * 到不了 Core。但真实 webman 的 Request::get() 只读 query，而 all() 是
+     * `get() + post()`（webman-framework v2.2.4 src/Http/Request.php:71），桩按同一语义
+     * 把两个来源拆开了（第二参的 'post'）。旧实现是裸透传：get('only_body') 给 default，
+     * all()['only_body'] 给值 —— Core 的白名单校验走前者、渲染走后者，两个答案。
+     */
+    #[Test]
+    public function requestAdapterGetAndAllAgreeOnTheSameKey(): void
+    {
+        $request = new Request(['both' => 'query'], ['post' => ['both' => 'body', 'only_body' => 'b']]);
+        $adapter = new RequestAdapter($request);
+
+        $all = $adapter->all();
+        $this->assertSame(['both' => 'query', 'only_body' => 'b'], $all, 'query 胜出，body 只补 query 没有的键');
+        foreach (array_keys($all) as $key) {
+            $this->assertSame($all[$key], $adapter->get((string) $key), "get({$key}) 与 all()[{$key}] 不同值");
+        }
+        $this->assertSame('b', $adapter->get('only_body'), 'query 里没有的键必须从 body 里取到');
+        $this->assertSame('d', $adapter->get('missing', 'd'));
+    }
+
     #[Test]
     public function responseAdapterBodyHeadersStatus(): void
     {
@@ -199,12 +223,34 @@ class WebmanTest extends TestCase
         $this->assertSame('1', $res->headers['X-A']);
         $this->assertSame('2', $res->headers['X-B']);
 
-        // withStatus 返回全新的 Response(status)
+        // withStatus 就地改同一个响应（workerman 的 Response 是可变的）
         $adapter->withStatus(404);
         $res2 = $adapter->send();
-        $this->assertNotSame($res, $res2);
+        $this->assertSame($res, $res2, '就地改，不是重建');
         $this->assertSame(404, $res2->status);
-        $this->assertSame('', $res2->body);
+        $this->assertSame('hello', $res2->body, '先设的正文不能因为改状态而丢');
+    }
+
+    /**
+     * 调用顺序不是契约的一部分：先设的头不能因为后面设正文/状态就消失。
+     *
+     * 旧实现 `withStatus()` 里是 `new Response($status)` —— 重建响应，此前
+     * withHeaders()/withBody() 攒下的一切全丢。触发形态是 Core 的任意一条链被重排
+     * （报告页那条就是 status → headers → body，见 Symfony 的 serveReport()）。
+     * 另外 7 个适配器都是就地改，这里对齐。
+     */
+    #[Test]
+    public function responseAdapterHeadersSurviveLaterBodyAndStatus(): void
+    {
+        $adapter = new ResponseAdapter(new Response(200));
+        $adapter->withHeaders(['Cache-Control' => 'public, max-age=86400'])
+            ->withBody('hello')
+            ->withStatus(404);
+
+        $res = $adapter->send();
+        $this->assertSame('public, max-age=86400', $res->headers['Cache-Control'], '先设的头被 withBody/withStatus 冲掉了');
+        $this->assertSame('hello', $res->body);
+        $this->assertSame(404, $res->status);
     }
 
     #[Test]

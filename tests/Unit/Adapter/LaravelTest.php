@@ -150,6 +150,30 @@ class LaravelTest extends TestCase
         $this->assertSame('10.0.0.1', $adapter->getRealIp());
     }
 
+    /**
+     * get() 与 all() 必须同源 —— 同一个 key 两种取法给同一个答案。
+     *
+     * 潜伏项：README 给 Laravel 的报告路由是 Route::get，所以"同名键同时出现在 query 与
+     * body"目前到不了 Core。但两个来源在真实框架里**优先级相反**：get() 是
+     * Symfony Request::get()（attributes → query → body，query 胜出），all() 是
+     * InteractsWithInput::input() = `body + query`（body 胜出）。桩按同一语义拆开
+     * （第二参的 'post'），旧实现的裸透传在这条上就是两个答案。
+     */
+    #[Test]
+    public function requestAdapterGetAndAllAgreeOnTheSameKey(): void
+    {
+        $request = new Request(['both' => 'query'], ['post' => ['both' => 'body', 'only_body' => 'b']]);
+        $adapter = new RequestAdapter($request);
+
+        $all = $adapter->all();
+        $this->assertSame(['both' => 'query', 'only_body' => 'b'], $all, 'query 胜出，body 只补 query 没有的键');
+        foreach (array_keys($all) as $key) {
+            $this->assertSame($all[$key], $adapter->get((string) $key), "get({$key}) 与 all()[{$key}] 不同值");
+        }
+        $this->assertSame('query', $adapter->get('both'), 'query 胜出：body 里的同名键不得覆盖');
+        $this->assertSame('b', $adapter->get('only_body'));
+    }
+
     #[Test]
     public function responseAdapterBodyHeadersStatus(): void
     {
@@ -164,6 +188,28 @@ class LaravelTest extends TestCase
 
         $adapter->withStatus(404);
         $this->assertSame(404, $adapter->send()->status);
+    }
+
+    /**
+     * 调用顺序不是契约的一部分：先设的头不能因为后面设正文就消失。
+     *
+     * 旧实现 `withBody()` 里是 `response($body, $this->response->getStatusCode())` —— 重建响应，
+     * 此前 withHeaders() 设的头全丢。触发形态是 Core 的任意一条链被重排（报告页那条就是
+     * status → headers → body）。现在走 Illuminate\Http\Response::setContent()（就地改，与
+     * Drupal/Symfony 两个适配器的 withBody() 是同一个调用）。
+     */
+    #[Test]
+    public function responseAdapterHeadersSurviveLaterBody(): void
+    {
+        $adapter = new ResponseAdapter();
+        $adapter->withStatus(403)
+            ->withHeaders(['Cache-Control' => 'no-cache, private'])
+            ->withBody('403 Forbidden');
+
+        $res = $adapter->send();
+        $this->assertSame('no-cache, private', $res->headers['Cache-Control'], '先设的头被 withBody 冲掉了');
+        $this->assertSame('403 Forbidden', $res->body);
+        $this->assertSame(403, $res->status);
     }
 
     #[Test]

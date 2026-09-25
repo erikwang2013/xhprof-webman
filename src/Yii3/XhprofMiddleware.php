@@ -11,6 +11,7 @@ use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
+use ErikWang2013\Xhprof\Core\SamplingGuard;
 use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
@@ -91,8 +92,9 @@ class XhprofMiddleware implements MiddlewareInterface
             return $this->serveAssets($req, $res);
         }
 
-        // 3) 守卫
-        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
+        // 3) 守卫：缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
+        //    判断顺序不可换：available() 短路在前，enable=false 时才不会把"缺扩展"吞掉。
+        $enabled = SamplingGuard::available() && XhprofProfiler::isEnabled();
         if ($enabled) {
             Xhprof::xhprofStart();
         }

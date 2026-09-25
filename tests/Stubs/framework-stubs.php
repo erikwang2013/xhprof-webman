@@ -133,9 +133,16 @@ namespace Webman {
 }
 
 namespace Webman\Http {
+    /**
+     * 桩只覆盖本包适配器调用的部分，但**来源要拆开**：$params 是 query，body 由
+     * $options['post'] 单独给。真实 webman 的 Request::get() 只读 query，而
+     * all() 是 `get() + post()`（webman-framework v2.2.4 src/Http/Request.php:71），
+     * 合成一份就测不出「同一个 key 两种取法不同源」。
+     */
     class Request
     {
         private array $params;
+        private array $post;
         private array $headers;
         private string $method;
         private string $host;
@@ -146,6 +153,7 @@ namespace Webman\Http {
         public function __construct(array $params = [], array $options = [])
         {
             $this->params = $params;
+            $this->post = $options['post'] ?? [];
             $this->headers = $options['headers'] ?? [];
             $this->method = $options['method'] ?? 'GET';
             $this->host = $options['host'] ?? 'localhost';
@@ -156,12 +164,19 @@ namespace Webman\Http {
 
         public function get(string $key, mixed $default = null): mixed
         {
+            // 真实实现只读 query（`return $this->get[$name] ?? $default;`）
             return $this->params[$key] ?? $default;
+        }
+
+        public function post(string $key, mixed $default = null): mixed
+        {
+            return $this->post[$key] ?? $default;
         }
 
         public function all(): array
         {
-            return $this->params;
+            // 真实实现：`return $this->get() + $this->post();` —— query 胜出
+            return $this->params + $this->post;
         }
 
         public function method(): string
@@ -212,6 +227,18 @@ namespace Webman\Http {
         public function withBody(string $body): self
         {
             $this->body = $body;
+            return $this;
+        }
+
+        /**
+         * 真实签名 withStatus(int $code, ?string $reasonPhrase = null): static
+         * （workerman 5.2.2 src/Protocols/Http/Response.php:361），改的是 $this 并返回它。
+         * 响应对象是**可变**的 —— 这正是本包 Webman 适配器能用「先设头后设状态」而不丢头
+         * 的前提；少了它，适配器就只能 new 一个新响应，先设的头与正文全丢。
+         */
+        public function withStatus(int $status): self
+        {
+            $this->status = $status;
             return $this;
         }
 
@@ -321,9 +348,17 @@ namespace Illuminate\Support\Facades {
 }
 
 namespace Illuminate\Http {
+    /**
+     * 与 Webman\Http\Request 同理拆开来源：$params 是 query，body 由 $options['post'] 给。
+     * 真实优先级两边**相反**，这正是本包 Laravel 适配器要收敛的那处：
+     *  - get()  → Symfony Request::get()：attributes → query → body，**query 胜出**
+     *  - all()  → InteractsWithInput::all() = input() + allFiles()，而
+     *             input() = `getInputSource()->all() + $this->query->all()` —— **body 胜出**
+     */
     class Request
     {
         private array $params;
+        private array $post;
         private array $headers;
         private string $method;
         private string $host;
@@ -334,6 +369,7 @@ namespace Illuminate\Http {
         public function __construct(array $params = [], array $options = [])
         {
             $this->params = $params;
+            $this->post = $options['post'] ?? [];
             $this->headers = $options['headers'] ?? [];
             $this->method = $options['method'] ?? 'GET';
             $this->host = $options['host'] ?? 'localhost';
@@ -344,12 +380,20 @@ namespace Illuminate\Http {
 
         public function get(string $key, mixed $default = null): mixed
         {
-            return $this->params[$key] ?? $default;
+            if (array_key_exists($key, $this->params)) {
+                return $this->params[$key];
+            }
+            return array_key_exists($key, $this->post) ? $this->post[$key] : $default;
+        }
+
+        public function post(string $key, mixed $default = null): mixed
+        {
+            return $this->post[$key] ?? $default;
         }
 
         public function all(): array
         {
-            return $this->params;
+            return $this->post + $this->params;
         }
 
         public function method(): string
@@ -400,6 +444,17 @@ namespace Illuminate\Http {
         public function getStatusCode(): int
         {
             return $this->status;
+        }
+
+        /**
+         * 真实签名 setContent(mixed $content): static（illuminate/http v11
+         * src/Response.php:58 覆写 Symfony 的 setContent(?string)，就地改内容并返回 $this）。
+         * 桩把它落在 $body 上。
+         */
+        public function setContent(mixed $content): self
+        {
+            $this->body = (string) $content;
+            return $this;
         }
 
         public function withHeaders(array $headers): self
@@ -683,6 +738,16 @@ namespace think {
         public function header(array $headers): self
         {
             $this->headers = array_merge($this->headers, $headers);
+            return $this;
+        }
+
+        /**
+         * 真实签名 content($content)（topthink/framework 6.1.5 src/think/Response.php:261），
+         * 就地设内容并返回 $this；桩把它落在 $body 上。
+         */
+        public function content(string $content): self
+        {
+            $this->body = $content;
             return $this;
         }
 

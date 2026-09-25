@@ -7,6 +7,7 @@ namespace ErikWang2013\Xhprof\Joomla\Extension;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
+use ErikWang2013\Xhprof\Core\SamplingGuard;
 use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof as CoreXhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
@@ -149,7 +150,9 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
         }
 
         // ---- 采样 ----
-        if (!XhprofProfiler::isEnabled() || !extension_loaded('xhprof')) {
+        // 缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
+        // 判断顺序不可换：available() 短路在前，enable=false 时才不会把"缺扩展"吞掉。
+        if (!SamplingGuard::available() || !XhprofProfiler::isEnabled()) {
             return;
         }
 

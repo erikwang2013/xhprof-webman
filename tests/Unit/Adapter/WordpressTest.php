@@ -7,6 +7,7 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Adapter;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
+use ErikWang2013\Xhprof\Core\RedisAdapterTrait;
 use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof as CoreXhprof;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
@@ -363,16 +364,66 @@ class WordpressTest extends TestCase
     }
 
     #[Test]
-    public function redisAdapterUsesPhpRedisDirectly(): void
+    public function redisAdapterUsesTraitAndStaysLazy(): void
     {
         $adapter = new RedisAdapter();
         $this->assertInstanceOf(CacheInterface::class, $adapter);
+        // R-9：lPush 的返回值、mget([]) 的短路、set() 的 ttl 退化等语义全在 trait 里，
+        // 自己重写一遍就会漂移；class_uses 是唯一能证明「用的是那份实现」的断言
+        $this->assertContains(RedisAdapterTrait::class, class_uses($adapter));
 
-        // R-9：RedisAdapterTrait 靠 call_user_func 调用 redis() 返回的类名，类不存在时是
-        // 「Class not found」致命错误而不是异常，所以在验证环之外这里也钉一下。
-        $class = (new \ReflectionMethod($adapter, 'redis'))->invoke($adapter);
-        $this->assertSame('Redis', $class);
-        $this->assertTrue(class_exists($class), 'ext-redis 必须已加载');
+        // 懒连接：入口类每个请求都会 new 一个（XhprofPlugin:62），构造时建连就是
+        // 每个请求一次握手——即使采样是关的。
+        $read = \Closure::bind(static function (RedisAdapter $a): mixed {
+            return $a->client;
+        }, null, RedisAdapter::class);
+        $this->assertIsCallable($read);
+        $this->assertNull($read($adapter), '构造时不得建连');
+    }
+
+    /**
+     * 真 ext-redis 走一遍。这是**唯一能抓住本次缺陷**的用例：
+     *
+     * 旧实现的 redis() 返回字符串 'Redis'，trait 的调用形式是
+     * `call_user_func([$this->redis(), 'get'], …)` —— 对 phpredis 的**实例方法**做静态调用，
+     * PHP 直接抛 TypeError。Webman/Laravel 之所以没事，是因为那两个返回的是带 __callStatic 的
+     * 门面；WordPress 没有门面，于是缓存 100% 失败（异常被 XhprofProfiler::stop() 吞掉，
+     * 表现是"请求正常、报告页永远没有数据"）。旧的断言只比类名字符串，从不调用缓存方法，
+     * 所以漏掉了它。
+     *
+     * 「连不上 Redis」与「调用方式非法」必须分开：前者可以是 RedisException（与 Drupal/Symfony
+     * 两家直连适配器同形，由 stop() 兜住），后者是本缺陷。
+     */
+    #[Test]
+    public function redisAdapterReallyCallsPhpRedis(): void
+    {
+        $adapter = new RedisAdapter();
+        $key = 'xhprof:probe:' . bin2hex(random_bytes(4));
+
+        try {
+            // phpredis 对不存在的键返回 false（不是 null）—— 直连实例的适配器
+            // （Drupal/Symfony/Yii3 同族）都是这个语义，而门面（Webman/Laravel）
+            // 返回 null。Core 的消费点用 `!is_string($res)` 判空，两种都吃。
+            $this->assertFalse($adapter->get($key), '不存在的键');
+            $this->assertTrue($adapter->set($key, 'v', 60), 'phpredis 的 set() 返回 bool');
+            $this->assertSame('v', $adapter->get($key), '写进去的值要能读回来');
+            $this->assertSame(1, $adapter->incr($key . ':n'));
+            $this->assertSame(['v'], $adapter->mget([$key]));
+        } catch (\TypeError $e) {
+            $this->fail('调用方式非法（redis() 没给出实例）：' . $e->getMessage());
+        } catch (\RedisException $e) {
+            // 本机没有 Redis 服务端：允许。注意旧实现走到这里时**什么都不会抛**
+            // （连 TypeError 之前的 call_user_func 校验都过不了），故捕获到 RedisException
+            // 本身就证明调用方式已合法。
+            $this->assertStringNotContainsString('call_user_func', $e->getMessage());
+            $this->addToAssertionCount(1);
+        } finally {
+            try {
+                $adapter->del($key, $key . ':n');
+            } catch (\Throwable $e) {
+                // 没连上就没东西可清
+            }
+        }
     }
 
     // ---------- XhprofPlugin：接线 ----------

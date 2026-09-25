@@ -30,7 +30,10 @@ class ResponseAdapter implements ResponseInterface
 
     public function withStatus(int $status): self
     {
-        $this->response = new Response($status);
+        // 就地改：workerman 的 Response::withStatus() 改的就是 $this 并返回它。
+        // `new Response($status)` 会把此前 withBody()/withHeaders() 攒下的正文与头全丢掉
+        // （R-5 的同类问题：先设头再设状态时 Cache-Control 静默消失）。
+        $this->response = $this->response->withStatus($status);
         return $this;
     }
 

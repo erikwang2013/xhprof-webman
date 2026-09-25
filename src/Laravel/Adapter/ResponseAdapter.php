@@ -17,7 +17,10 @@ class ResponseAdapter implements ResponseInterface
 
     public function withBody(string $body): self
     {
-        $this->response = response($body, $this->response->getStatusCode());
+        // 就地改：`response($body, $code)` 会重建响应，把此前 withHeaders() 设的头丢掉。
+        // setContent() 来自 Symfony 的 Response（Illuminate\Http\Response 覆写了它，
+        // 返回 $this），与 Drupal/Symfony 两个适配器的 withBody() 是同一个调用。
+        $this->response = $this->response->setContent($body);
         return $this;
     }
 

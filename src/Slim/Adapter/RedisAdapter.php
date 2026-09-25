@@ -24,6 +24,14 @@ class RedisAdapter implements CacheInterface
 
     protected function redis(): mixed
     {
-        return $this->redis ??= new \Redis();
+        // 不注入时连本机，与 Drupal/Symfony/Yii3 三家直连适配器同一条默认路径：
+        // 显式给 1s 连接超时——不给的话若目标主机的 SYN 被丢（防火墙），phpredis
+        // 会按内核默认重试两分钟，一个性能工具的旁路存储不该拖垮业务请求。
+        if ($this->redis === null) {
+            $redis = new \Redis();
+            $redis->connect('127.0.0.1', 6379, 1.0);
+            $this->redis = $redis;
+        }
+        return $this->redis;
     }
 }

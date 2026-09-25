@@ -8,6 +8,7 @@ use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
+use ErikWang2013\Xhprof\Core\SamplingGuard;
 use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
@@ -94,8 +95,11 @@ class XhprofListener implements EventSubscriberInterface
             return;
         }
 
-        // 静态资源：包内直接提供，不注册路由
-        $assetsUrl = (string) $this->config->get('xhprof.assets_url', '/xhprof-assets');
+        // 静态资源：包内直接提供，不注册路由。
+        // 尾斜杠必须归一化掉再拼 '/'：配置写成 '/xhprof-assets/'（很自然的手滑）时，
+        // 旧写法拼出 '/xhprof-assets//'，任何真实的资源 URL 都不匹配，短路永不命中
+        // ——请求落回下面的采样分支。Slim/WordPress/Yii3/Joomla 四家都是这么归一化的。
+        $assetsUrl = rtrim((string) $this->config->get('xhprof.assets_url', '/xhprof-assets'), '/');
         if ($assetsUrl !== '' && str_starts_with($this->pathOf($uri), $assetsUrl . '/')) {
             $served = StaticController::serve($req, $res)->send();
             if ($served instanceof Response) {
@@ -104,7 +108,11 @@ class XhprofListener implements EventSubscriberInterface
             return;
         }
 
-        if (!XhprofProfiler::isEnabled() || !extension_loaded('xhprof')) {
+        // 缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
+        // 顺序不可换：available() 短路在前，enable=false 时才不会把「缺扩展」吞掉。
+        // 此前这里只判 ext-xhprof —— 缺 redis 时会照常采样、落库必然失败，
+        // 报告页读缓存还会变成未捕获错误，而另外 9 个入口早已统一到 SamplingGuard。
+        if (!SamplingGuard::available() || !XhprofProfiler::isEnabled()) {
             return;
         }
 

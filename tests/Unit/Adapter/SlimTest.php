@@ -505,8 +505,35 @@ class SlimTest extends TestCase
         $this->assertEmpty($adapter->rPop('xhprof:run_id'));
     }
 
-    // 注：`new RedisAdapter()` 的惰性建连（构造函数不碰 ext-redis）在本机不可观测 ——
-    // ext-redis 已装，`new \Redis()` 不会失败。没有能变红的断言就不写这条测试。
+    /**
+     * 不注入实例时必须连本机，且**显式给 1s 连接超时**（Drupal/Symfony/Yii3 三家同一默认路径）。
+     *
+     * 判别手段是 phpredis 自己的连接状态：没 connect() 过的实例
+     * isConnected() 是 false、getHost() 是 false、getTimeout() 是 false（本机 phpredis 5.3.7 实测），
+     * 只有真连过才有值。旧实现 `return $this->redis ??= new \Redis();` 只造对象不建连 ——
+     * 本机有 Redis 服务端时也照样被这条抓住（不依赖"连不上"这种环境差异）。
+     */
+    #[Test]
+    public function redisAdapterConnectsToLocalhostWithExplicitTimeout(): void
+    {
+        $adapter = new RedisAdapter();
+
+        try {
+            $client = (new \ReflectionMethod($adapter, 'redis'))->invoke($adapter);
+        } catch (\RedisException $e) {
+            // 本机没有 Redis 服务端：连接失败允许（由 XhprofProfiler::stop() 的 catch 兜住）。
+            // 旧实现在这里**不会**抛，所以它还是会走到下面那组断言上变红。
+            $this->addToAssertionCount(1);
+            return;
+        }
+
+        $this->assertInstanceOf(\Redis::class, $client);
+        $this->assertTrue($client->isConnected(), 'redis() 必须真的建连（旧实现只 new 不 connect）');
+        $this->assertSame('127.0.0.1', $client->getHost());
+        $this->assertSame(6379, $client->getPort());
+        // SYN 被丢（防火墙）时不显式给超时会按内核默认重试两分钟，拖垮业务请求
+        $this->assertSame(1.0, $client->getTimeout());
+    }
 
     // ---------- XhprofMiddleware ----------
 

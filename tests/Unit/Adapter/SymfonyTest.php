@@ -558,6 +558,27 @@ class SymfonyTest extends TestCase
         $this->assertSame([], $this->runs($cache));
     }
 
+    /**
+     * 配置写成 '/xhprof-assets/'（多一个尾斜杠，很自然的手滑）时短路必须照样命中。
+     *
+     * 旧实现直接拼 `$assetsUrl . '/'` → '/xhprof-assets//'，任何真实资源 URL 都不匹配，
+     * 请求落回下面的采样分支：静态资源被当成业务请求采样（且响应交给 HttpKernel 去 404）。
+     * Slim/WordPress/Yii3/Joomla 四家都先 rtrim 掉尾斜杠，这里对齐。
+     */
+    #[Test]
+    public function assetsPathShortCircuitsWhenConfiguredUrlHasTrailingSlash(): void
+    {
+        $cache = new FakeCache();
+        $event = $this->requestEvent('http://example.com/xhprof-assets/css/xhprof.css');
+        $this->listener($cache, ['enable' => true, 'assets_url' => '/xhprof-assets/'])->onRequest($event);
+
+        $this->assertTrue($event->hasResponse(), '尾斜杠让资源短路失效了：请求落回了采样分支');
+        $this->assertInstanceOf(BinaryFileResponse::class, $event->getResponse());
+        $this->assertStringEndsWith('/src/html/css/xhprof.css', $event->getResponse()->getFile()->getPathname());
+        $this->assertNull(xhprof_disable(), '静态资源请求不应启动采样');
+        $this->assertSame([], $this->runs($cache));
+    }
+
     // ---------- 入口类：守卫 2（子请求） ----------
 
     #[Test]

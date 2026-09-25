@@ -90,13 +90,90 @@ class StaticControllerTest extends TestCase
     }
 
     #[Test]
-    public function serveSetsCacheControlHeaderOnly(): void
+    public function serveSetsCacheControlAndContentTypeHeaders(): void
     {
         $request = new FakeRequest([], ['uri' => '/xhprof-assets/js/xhprof_report.js']);
 
         StaticController::serve($request, $this->response);
 
-        $this->assertSame(['Cache-Control' => 'public, max-age=86400'], $this->response->headers);
+        $this->assertSame(
+            ['Cache-Control' => 'public, max-age=86400', 'Content-Type' => 'application/javascript'],
+            $this->response->headers
+        );
+    }
+
+    /**
+     * file() 之后的 withHeaders() 必须显式钉住 Content-Type。
+     *
+     * 不钉的话，Laravel 的 response()->file() 会把它交给 Symfony BinaryFileResponse::prepare()，
+     * 那里在**缺** Content-Type 时用 finfo 按内容嗅探——实测本包 18 个资源里 14 个被猜错
+     * （js/css 猜成 text/plain、dataTables.bootstrap.js 猜成 text/html），
+     * 浏览器会拒收 text/plain 的脚本、不套用 text/plain 的样式表。
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function assetContentTypeProvider(): iterable
+    {
+        yield 'js' => ['js/xhprof_report.js', 'application/javascript'];
+        yield 'js in subdir' => ['js/dataTables.bootstrap.js', 'application/javascript'];
+        yield 'jquery' => ['jquery/jquery-3.0.0.min.js', 'application/javascript'];
+        yield 'css' => ['css/xhprof.css', 'text/css'];
+        yield 'css (bootstrap)' => ['css/bootstrap.css', 'text/css'];
+        yield 'png' => ['images/sort_both.png', 'image/png'];
+        yield 'gif' => ['jquery/indicator.gif', 'image/gif'];
+    }
+
+    #[Test]
+    #[DataProvider('assetContentTypeProvider')]
+    public function servePinsContentTypeByFileExtension(string $asset, string $expected): void
+    {
+        $request = new FakeRequest([], ['uri' => '/xhprof-assets/' . $asset]);
+
+        $result = StaticController::serve($request, $this->response);
+
+        $this->assertNotNull($result->filePath, "资源不存在：$asset");
+        $this->assertSame($expected, $result->headers['Content-Type']);
+        // 与 LocalFile 嗅探无关的证据：钉的就是扩展名推出来的那个类型（见 contentType()）
+        $this->assertSame($expected, StaticController::contentType($result->filePath));
+    }
+
+    /**
+     * 类型表本身：readFile() 与 file 响应共用同一张，扩展名大小写不敏感与否以表为准。
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function contentTypeProvider(): iterable
+    {
+        yield 'css' => ['a.css', 'text/css'];
+        yield 'js' => ['a.js', 'application/javascript'];
+        yield 'png' => ['a.png', 'image/png'];
+        yield 'gif' => ['a.gif', 'image/gif'];
+        yield 'jpg' => ['a.jpg', 'image/jpeg'];
+        yield 'jpeg' => ['a.jpeg', 'image/jpeg'];
+        yield 'svg' => ['a.svg', 'image/svg+xml'];
+        yield '表外扩展名' => ['a.woff2', 'application/octet-stream'];
+        yield '无扩展名' => ['LICENSE', 'application/octet-stream'];
+    }
+
+    #[Test]
+    #[DataProvider('contentTypeProvider')]
+    public function contentTypeComesFromTheSharedMimeTable(string $path, string $expected): void
+    {
+        $this->assertSame($expected, StaticController::contentType($path));
+    }
+
+    #[Test]
+    public function readFileAndFileResponseShareOneMimeTable(): void
+    {
+        // 一处新造第二张表就会红：readFile()（六个适配器的 file() 用它）与 serve()
+        // 钉的 Content-Type 必须永远是同一个来源。
+        foreach (['css/xhprof.css', 'js/xhprof_report.js', 'images/sort_both.png'] as $asset) {
+            $path = StaticController::getAssetsPath() . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $asset);
+            $file = StaticController::readFile($path);
+
+            $this->assertNotNull($file, "资源不存在：$asset");
+            $this->assertSame(StaticController::contentType($path), $file[1]);
+        }
     }
 
     /**

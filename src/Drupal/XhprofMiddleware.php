@@ -7,6 +7,7 @@ namespace ErikWang2013\Xhprof\Drupal;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
+use ErikWang2013\Xhprof\Core\SamplingGuard;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
 use ErikWang2013\Xhprof\Drupal\Adapter\ConfigAdapter;
@@ -79,7 +80,9 @@ class XhprofMiddleware implements HttpKernelInterface
             new LogAdapter($this->loggerFactory)
         );
 
-        $enabled = XhprofProfiler::isEnabled() && extension_loaded('xhprof');
+        // 缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
+        // 判断顺序不可换：available() 短路在前，enable=false 时才不会把"缺扩展"吞掉。
+        $enabled = SamplingGuard::available() && XhprofProfiler::isEnabled();
 
         // 报告页与静态资源**只跳过采样，不短路响应**：响应仍由模块路由的 Controller 产生，
         // 短路会让 routing.yml + Controller 变成死代码（Drupal 是六家里唯一用模块路由的）。

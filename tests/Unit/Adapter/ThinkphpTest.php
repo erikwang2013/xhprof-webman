@@ -301,6 +301,28 @@ class ThinkphpTest extends TestCase
     }
 
     /**
+     * 调用顺序不是契约的一部分：先设的头不能因为后面设正文就消失。
+     *
+     * 旧实现 `withBody()` 里是 `response($body, $this->response->getCode())` —— 重建响应，
+     * 此前 header() 设的头全丢（状态倒是靠 getCode() 带过去了，所以只有头这条会红）。
+     * 触发形态是 Core 的任意一条链被重排（报告页那条就是 status → headers → body）。
+     * 现在走 think\Response::content()（就地改）。
+     */
+    #[Test]
+    public function responseAdapterHeadersSurviveLaterBody(): void
+    {
+        $adapter = new ResponseAdapter();
+        $adapter->withStatus(403)
+            ->withHeaders(['Cache-Control' => 'no-cache, private'])
+            ->withBody('403 Forbidden');
+
+        $res = $adapter->send();
+        $this->assertSame('no-cache, private', $res->headers['Cache-Control'], '先设的头被 withBody 冲掉了');
+        $this->assertSame('403 Forbidden', $res->body);
+        $this->assertSame(403, $res->status);
+    }
+
+    /**
      * @return array<string, array{string, string}>
      */
     public static function mimeProvider(): array
