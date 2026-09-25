@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Lib;
 
 require_once __DIR__ . '/../../Fixtures/Fakes.php';
 
+use ErikWang2013\Xhprof\Core\Analysis\Finding;
 use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\Xhprof;
@@ -122,6 +123,47 @@ class XhprofDisplayTest extends TestCase
             'main()==>bar()' => ['ct' => 1, 'wt' => 30000, 'mu' => 256],
             'foo()==>strlen()' => ['ct' => 2, 'wt' => 5000, 'mu' => 64],
         ];
+    }
+
+    /**
+     * 单 run 夹具 + 一条必须产出 R3 结论的边（main()==>hot()）。
+     *
+     * 不往 sampleRunData() 里加边，是因为它有约十个调用方带着精确数值钉子
+     * （如 `>5</td>`、`>30,000`）；加一条边会改动总调用次数与 main() 的自身耗时。
+     *
+     * 数字不是随手取的，两个窗口都要满足：
+     * 1) hot() 自身占比 7%（7000/100000）必须落在 **[5%, 10%)** —— 低于 5% 触发不了
+     *    R3 自己的闸门；高于 10% 会被 R1 先认领，同 symbol 时 R1 优先（去重），R3 被吞掉。
+     * 2) R1 的命中数必须 ≤ 2 —— analyze() 把 R1++R3++R2 合并后按 MAIN_LIMIT=3 切片，
+     *    而 R1 整组排在 R3 之前。本夹具里 R1 只有 main()(53%) 与 foo()(40%) 两条，
+     *    故 R3 恰好卡在第三位活下来。若 R1 命中三条，R3 会被切片丢掉，
+     *    测 `[R3]` 的断言就成了永远为假的盲探针。
+     */
+    private function sampleRunDataWithHotEdge(): array
+    {
+        return [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 2048],
+            'main()==>foo()' => ['ct' => 1, 'wt' => 40000, 'mu' => 512],
+            'main()==>hot()' => ['ct' => 600, 'wt' => 7000, 'mu' => 64],
+        ];
+    }
+
+    /**
+     * 断言 $first 在 $second 之前，且**两者都必须存在**。
+     *
+     * 不能直接写 assertLessThan(strpos(...), strpos(...))：strpos 在缺失时返回 false，
+     * 而 PHP 里 `false < 任意正数` 为真，于是锚点消失时位置断言会静默通过。
+     * 实测：把 splice 的 `.=` 改成 `=`（卡片覆盖而非追加）会让页面丢掉动作栏、
+     * 搜索框与 run 描述，而 strpos($html,'Run #') 变成 false，整套测试仍然全绿。
+     */
+    private static function assertBefore(string $html, string $first, string $second): void
+    {
+        $posFirst  = strpos($html, $first);
+        $posSecond = strpos($html, $second);
+
+        self::assertNotFalse($posFirst, "锚点缺失：$first");
+        self::assertNotFalse($posSecond, "锚点缺失：$second");
+        self::assertLessThan($posSecond, $posFirst, "$first 必须在 $second 之前");
     }
 
     #[Test]
@@ -731,5 +773,320 @@ class XhprofDisplayTest extends TestCase
 
         self::assertStringContainsString('main()', $html);
         self::assertStringContainsString('运行报告', $html);
+    }
+
+    #[Test]
+    public function renderDiagnosisShowsFindings(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', 'foo() 自身耗时 780.0ms，占本次请求 43.0%', '自身耗时不含子调用', 780.0),
+                new Finding('R4', Finding::SEVERITY_SUPPLEMENT, 'fib', '检测到 fib() 递归，最大深度 6', '递归深度过大', 6.0),
+            ],
+            ['run' => 'a1a1a1a1a1a1a1a1']
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+        self::assertStringContainsString('为什么慢', $html);
+        self::assertStringContainsString('其他发现', $html);
+        self::assertStringContainsString('foo() 自身耗时', $html);
+        self::assertStringContainsString('检测到 fib() 递归', $html);
+
+        // 钉住归属关系，而不只是「这些串都出现了」：主结论必须出现在「其他发现」之前
+        self::assertBefore($html, 'foo() 自身耗时', '其他发现');
+    }
+
+    /** R4 的 symbol 是空串（见 Analyzer::ruleR4），此时不该给出指向"未找到"详情页的死链 */
+    #[Test]
+    public function renderDiagnosisOmitsLinkWhenSymbolIsEmpty(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R4', Finding::SEVERITY_SUPPLEMENT, '', '检测到 fib() 递归，最大深度 6', '递归深度过大', 6.0)],
+            ['run' => 'a1a1a1a1a1a1a1a1']
+        );
+
+        self::assertStringContainsString('检测到 fib() 递归', $html);
+        self::assertStringNotContainsString('symbol=', $html);
+        self::assertStringNotContainsString('<a href', $html);
+    }
+
+    /** 空结果必须显式说明，否则用户会以为功能坏了 */
+    #[Test]
+    public function renderDiagnosisShowsEmptyStateWithThresholds(): void
+    {
+        $html = XhprofDisplay::render_diagnosis([], []);
+
+        self::assertStringContainsString('未发现明显瓶颈', $html);
+        // 必须带 % 号：'10' 会被紧随其后的 '1000' 满足，
+        // 删掉「自身耗时」子句断言依然成立——空转
+        self::assertStringContainsString('10%', $html);
+        // 空态是**另一条 return**，EmitsCardWrapper 只走非空分支，故此处单独钉闭合
+        self::assertStringEndsWith('</div></div>', $html, '空态分支的卡片也必须闭合');
+    }
+
+    /**
+     * 标题/细节由 Analyzer 以纯文本产出，渲染时必须 htmlspecialchars。
+     * 注意：$f->symbol 本身**只用于拼链接**（走 http_build_query 百分号编码），
+     * 不会作为文本渲染，所以转义断言要打在 title 上而不是 symbol 上。
+     */
+    #[Test]
+    public function renderDiagnosisEscapesTitleAndDetail(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', '标题 "<script>"', '细节 & 更多', 1.0)],
+            []
+        );
+
+        self::assertStringNotContainsString('<script>', $html);
+        self::assertStringContainsString('&quot;', $html);
+        self::assertStringContainsString('&amp;', $html);
+
+        // rule 同样走 htmlspecialchars。Analyzer 只会产出 R1..R6，所以真实数据里
+        // 触发不了——但去掉这处转义目前 341 条测试全绿，故显式钉住。
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R<1&"x"', Finding::SEVERITY_MAIN, 'foo()', '标题', '细节', 1.0)],
+            []
+        );
+        self::assertStringContainsString('[R&lt;1&amp;&quot;x&quot;]', $html);
+    }
+
+    /** symbol 里的引号经 http_build_query 编码成 %22，逃不出 href 属性 */
+    #[Test]
+    public function renderDiagnosisEncodesSymbolInLink(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'x"onmouseover="alert(1)', '标题', '细节', 1.0)],
+            []
+        );
+
+        self::assertStringContainsString('symbol=x%22onmouseover', $html);
+        self::assertStringNotContainsString('"onmouseover="', $html);
+    }
+
+    /** 链接必须带上当前 run，否则点进去只看到运行列表 */
+    #[Test]
+    public function renderDiagnosisLinkKeepsRunParam(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', '标题', '细节', 1.0)],
+            ['run' => 'a1a1a1a1a1a1a1a1']
+        );
+
+        // 只有一个链接，且 run 与 symbol 必须在同一个 URL 里——
+        // 分成两个 href 也能满足「两者都存在」，但用户点到的那个会落到运行列表
+        self::assertSame(1, substr_count($html, 'href="'), '只应有一个链接');
+        preg_match('/href="([^"]*)"/', $html, $m);
+        self::assertStringContainsString('run=a1a1a1a1a1a1a1a1', $m[1]);
+        self::assertStringContainsString('symbol=foo%28%29', $m[1]);
+        self::assertStringStartsWith('/xhprof?', $m[1], 'href 必须由 base_path() 生成，不能用裸查询串');
+    }
+
+    /** 主区必须渲染在补充区之前——「为什么慢」是头部结论，顺序反转是真实的 UX 回归 */
+    #[Test]
+    public function renderDiagnosisRendersMainSectionFirst(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R6', Finding::SEVERITY_SUPPLEMENT, 'a()', '补充项', '细节', 1.0),
+                new Finding('R1', Finding::SEVERITY_MAIN, 'b()', '主结论', '细节', 1.0),
+            ],
+            []
+        );
+
+        self::assertBefore($html, '为什么慢', '其他发现');
+    }
+
+    /** 只有补充项时不得渲染「为什么慢」——否则会出现一个空的主区标题 */
+    #[Test]
+    public function renderDiagnosisOmitsMainHeadingWhenOnlySupplements(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R4', Finding::SEVERITY_SUPPLEMENT, 'fib', '补充项', '细节', 6.0)],
+            []
+        );
+
+        self::assertStringNotContainsString('为什么慢', $html);
+        self::assertStringContainsString('其他发现', $html);
+    }
+
+    #[Test]
+    public function renderDiagnosisSkipsNonFindingValues(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            ['x', 42, null, [], new Finding('R1', Finding::SEVERITY_MAIN, 'ok()', '有效项', '细节', 1.0)],
+            []
+        );
+
+        self::assertStringContainsString('有效项', $html);
+        self::assertSame(1, substr_count($html, '<li'), '非 Finding 值应被跳过，只渲染有效项');
+    }
+
+    /** 不得按 score 重排：score 是各规则自己的量纲，跨规则不可比 */
+    #[Test]
+    public function renderDiagnosisPreservesInputOrderWithoutSortingByScore(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R1', Finding::SEVERITY_MAIN, 'low()', '低分在前', '细节', 1.0),
+                new Finding('R2', Finding::SEVERITY_MAIN, 'high()', '高分在后', '细节', 999.0),
+            ],
+            []
+        );
+
+        self::assertBefore($html, '低分在前', '高分在后');
+
+        // 补充区同样不得重排：上一条夹具只有主区结论，故只守住了主区
+        $html = XhprofDisplay::render_diagnosis(
+            [
+                new Finding('R4', Finding::SEVERITY_SUPPLEMENT, '', '补充低分在前', '细节', 1.0),
+                new Finding('R5', Finding::SEVERITY_SUPPLEMENT, 'b()', '补充高分在后', '细节', 999.0),
+            ],
+            []
+        );
+        self::assertBefore($html, '补充低分在前', '补充高分在后');
+    }
+
+    /** 空态必须列全五个阈值——逐个断言，任何一个被删掉都要能变红 */
+    #[Test]
+    public function renderDiagnosisEmptyStateListsEveryThreshold(): void
+    {
+        $html = XhprofDisplay::render_diagnosis([], []);
+
+        foreach (['10%', '1000', '500', '5%', '30%'] as $token) {
+            self::assertStringContainsString($token, $html, "空态缺少阈值 $token");
+        }
+    }
+
+    #[Test]
+    public function renderDiagnosisEmitsCardWrapper(): void
+    {
+        $html = XhprofDisplay::render_diagnosis(
+            [new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', '标题', '细节', 1.0)],
+            []
+        );
+
+        self::assertStringContainsString('<div class="xp-main"><div class="xp-card">', $html);
+        self::assertStringContainsString('诊断结论', $html);
+        self::assertStringEndsWith('</div></div>', $html, '卡片必须闭合，否则报告体会被嵌进 .xp-card（其 overflow:hidden 会截断宽表格）');
+    }
+
+    #[Test]
+    public function singleRunReportContainsDiagnosisSection(): void
+    {
+        // 下面几条锚点都是中文源文案：语言是静态状态，先钉死，别被别的用例留下的语言影响
+        I18n::setLocale('zh_CN');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $this->useRequest(new FakeRequest(['run' => $runId, 'all' => 1], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1],
+            $this->sampleRunDataWithHotEdge(),
+            'desc',
+            null,
+            'wt',
+            $runId
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+        // 断言「为什么慢」而不是「诊断结论」：空态同样渲染「诊断结论」，
+        // 所以前者才区分得出「渲染出真实结论」与「analyze() 拿到错参数返回空」
+        self::assertStringContainsString('为什么慢', $html);
+        // $echo_page 是逐段拼接的，拼接顺序即 DOM 顺序：卡片必须在 run 描述之后。
+        // 锚点从词表取「run 标签」的前缀（`运行 #` / `Run #`），不写死英文——
+        // 那句 run 描述本身已经进词表了，写死会在非中文语言下假红。
+        self::assertBefore($html, explode('%s', I18n::t('diff.run'))[0], '诊断结论');
+        // 上界同理——只钉下界会放过"把卡片挪到报告末尾（数据表之后）"这种变异
+        self::assertBefore($html, '诊断结论', '函数/方法调用总次数');
+
+        // 以下两条必须**限定在卡片内**断言：整页到处都是 run= 链接，
+        // 对整页断言会连「卡片自己丢光了 run」都发现不了（盲探针）。
+        $cardStart = strpos($html, '诊断结论');
+        $cardEnd   = strpos($html, '</div></div>', $cardStart);
+        self::assertNotFalse($cardEnd, '卡片必须闭合');
+        $card = substr($html, $cardStart, $cardEnd - $cardStart);
+        // $run1_data 是 R3 唯一的来源：传进去空数组，[R3] 与整块为什么慢都会消失
+        self::assertStringContainsString('[R3]', $card, '$run1_data 必须真的喂进 analyze()');
+        // $base_url_params 携带 run：传 array() 则诊断链接退化成 ?symbol=...
+        self::assertStringContainsString('run=' . $runId, $card, '$base_url_params 必须真的喂进 render_diagnosis()');
+    }
+
+    /**
+     * 这条测试的真正职责是**数据完整性**，不是"文案上不想在 diff 里显示卡片"。
+     *
+     * 单 run 路径上 $symbol_tab/$totals 都由 $run1_data 派生，没有任何东西改写它们——
+     * 所以那里的接线错误是**不可达**的。`if ($diff_mode)` 是**唯一**会把这两个局部变量
+     * 换成增量的地方。因此这条测试**唯一**要守的是"守卫被摘掉"：去掉 !$diff_mode 只会让
+     * 它一条变红，别的测试都抓不住（喂错数据已被其他用例钉住，不再是它的独有能力）。
+     *
+     * 若把它读成文案问题，最自然的"改进"就是去掉守卫、让卡片也出现在 diff 模式——
+     * 而那正是静默损坏路径：增量做分母、原始 $run1_data 做边表，R3 标题里出现负耗时。
+     */
+    #[Test]
+    public function diffReportHasNoDiagnosisSection(): void
+    {
+        $data = ['main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100]];
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'all' => 1],
+            $data,
+            'd1',
+            $data,
+            'd2',
+            null,
+            'wt',
+            'r1',
+            'r2'
+        );
+
+        self::assertStringNotContainsString('诊断结论', $html);
+    }
+
+    /**
+     * 多 run 聚合视图（?run=a,b）走的是 profiler_single_run_report，形态与单 run 一致，
+     * 所以诊断区**会**在那里出现（IR-1 的第三条渲染路径）。这是**可接受**的——占比是
+     * "平均值的占比"，仍有意义——但必须显式接受而非碰巧发生，故钉住它。
+     */
+    #[Test]
+    public function aggregateRunReportContainsDiagnosisSection(): void
+    {
+        $rid1 = 'a1a1a1a1a1a1a1a1';
+        $rid2 = 'b2b2b2b2b2b2b2b2';
+        $this->cache->set('xhprof:xhprof_log:' . $rid1, serialize($this->sampleRunData()));
+        $this->cache->set('xhprof:xhprof_log:' . $rid2, serialize($this->sampleRunData()));
+        $this->useRequest(new FakeRequest(['run' => "$rid1,$rid2", 'all' => 1], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::displayXHProfReport(
+            ['run' => "$rid1,$rid2", 'all' => 1],
+            'xhprof_foo',
+            "$rid1,$rid2",
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        self::assertStringContainsString('诊断结论', $html);
+        // 断言「为什么慢」而不是「诊断结论」：空态同样渲染「诊断结论」，
+        // 所以前者才区分得出「渲染出真实结论」与「analyze() 拿到错参数返回空」
+        self::assertStringContainsString('为什么慢', $html);
+    }
+
+    /** 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢" */
+    #[Test]
+    public function symbolReportHasNoDiagnosisSection(): void
+    {
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $this->useRequest(new FakeRequest(['run' => $runId, 'all' => 1, 'symbol' => 'foo()'], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1, 'symbol' => 'foo()'],
+            $this->sampleRunData(),
+            'desc',
+            'foo()',
+            'wt',
+            $runId
+        );
+
+        self::assertStringNotContainsString('诊断结论', $html);
     }
 }

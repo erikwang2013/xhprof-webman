@@ -25,6 +25,8 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Core\XhprofLib\Display;
 
+use ErikWang2013\Xhprof\Core\Analysis\Analyzer;
+use ErikWang2013\Xhprof\Core\Analysis\Finding;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
 use ErikWang2013\Xhprof\Core\I18n\I18n;
@@ -495,6 +497,35 @@ class XhprofDisplay
       . ($diff_mode ? ' &nbsp;|&nbsp; ' . $run2_txt : '')
       . '</div>';
 
+    // 诊断只在顶层单 run 视图显示。
+    // 守卫不是"限制"，它是让四个入参**同时**正确的那个条件：在 !$diff_mode && empty($rep_symbol) 下，
+    // $symbol_tab/$totals 是单 run 值；$run1_data 未被改写（xhprof_trim_run 只发生在
+    // !empty($rep_symbol) 那一半分支里）；$base_url_params 仍带着 run。
+    // 去掉守卫，四个里三个静默变错——diff 模式把 $symbol_tab/$totals 换成 run2-run1 的
+    // 增量，而 $run1_data 仍是单 run 边表，于是增量做分母、原始边表做分子，R3 标题里
+    // 会出现负耗时。两个数据参数是**无声**错的、不是响亮错的：Analyzer 里
+    // `$total <= 0` 的提前返回只能拦住"全负"这一种情况。
+    // 也别顺手换成别的局部变量：$run_delta/$symbol_tab1/$symbol_tab2/$inverted_params
+    // 都是 diff-only、单 run 路径上**未定义**；$run2_data 虽已定义但那是空数组
+    // （非 diff 模式压根没有第二个 run）；$base_path 渲染器自己会取；
+    // $run1 是 id，它该待在 $url_params['run'] 里（当参数数组传会拼出 `?<runid>=…`）。
+    //
+    // - 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢"，故守 $rep_symbol。
+    // 传 $base_url_params（已 unset symbol/all），不要传 $url_params：
+    // 1) 它是本页既有的"跳回本报告"标准形状——show_nav() 与 full_report() 里
+    //    那句 $base_url_params 用的都是它，传它让诊断链接与页面上其他链接结构一致，而不是特例；
+    // 2) 它不含 symbol，故 xhprof_array_set(...) 结果恰好一个 symbol 键；传原始
+    //    $url_params 则要靠该助手的**覆盖**语义来保证正确，等于依赖助手行为而非入参形状；
+    // 3) 非 diff 模式下它带 run —— 这正是 render_diagnosis 第二个参数存在的理由。
+    // （传 $url_params 也只是 URL 多一个无用的 all=1：全仓库唯一读 all 的地方是
+    //   full_report() 里那句 `if (!empty($url_params['all']))`，符号详情页不读它。
+    //   故属"不必"而非"错误"。）
+    // 注：此处刻意不写行号——本特性里同一个位置被三个 agent 在三个时刻读成 866/867/882，
+    //     引用代码片段比引用行号稳。
+    if (!$diff_mode && empty($rep_symbol)) {
+      $findings = Analyzer::analyze($symbol_tab, $run1_data, $totals);
+      $echo_page .= XhprofDisplay::render_diagnosis($findings, $base_url_params);
+    }
 
     // data tables
     if (!empty($rep_symbol)) {
@@ -673,6 +704,96 @@ class XhprofDisplay
 
     $echo_page .= "</tr>\n";
     return $echo_page;
+  }
+
+  /**
+   * 渲染诊断结论卡片。
+   *
+   * $title / $detail 由 Analyzer 以纯文本产出，HTML 转义**只在这里做一次**——
+   * 符号名来自 profile 数据，动态调用（call_user_func、$obj->$method()）
+   * 可以让请求影响它，不转义就是反射型 XSS。
+   *
+   * 顺序：先由 severity 分区（主区在前），分区内保持 Analyzer 给出的顺序，
+   * **不要重排**：$score 是各规则自己的量纲（微秒 / 次数 / 深度 / 字节），跨规则不可比。
+   *
+   * @param Finding[] $findings
+   * @param array     $url_params 当前查询参数，用于生成带 run 的详情页链接
+   */
+  public static function render_diagnosis(array $findings, array $url_params): string
+  {
+    $main = array();
+    $supplement = array();
+    foreach ($findings as $f) {
+      if (!$f instanceof Finding) continue;
+      if ($f->severity === Finding::SEVERITY_MAIN) {
+        $main[] = $f;
+      } else {
+        $supplement[] = $f;
+      }
+    }
+
+    $echo_page = '<div class="xp-main"><div class="xp-card">'
+      . '<div class="xp-card-title">' . I18n::plain('diag.title') . '</div>';
+
+    if (!$main && !$supplement) {
+      // 空白会让人以为功能坏了，所以显式说明并列出阈值
+      // 列全所有规则的阈值：空态的意义就是让用户区分"没超阈值"与"没分析"
+      // 阈值一并进词表：空态的意义是让用户分清「没超阈值」与「没分析」，
+      // 所以五个数都得印出来，模板里用 %s 占位、字面百分号写成 %%。
+      $echo_page .= '<p style="padding:12px 20px;color:#666">'
+        . sprintf(
+            I18n::plain('diag.empty'),
+            Analyzer::SHARE_THRESHOLD * 100,
+            Analyzer::CALL_COUNT_THRESHOLD,
+            Analyzer::EDGE_COUNT_THRESHOLD,
+            Analyzer::EDGE_SHARE_THRESHOLD * 100,
+            Analyzer::PMU_SHARE_THRESHOLD * 100
+        ) . '</p>'
+        . '</div></div>';
+      return $echo_page;
+    }
+
+    if ($main) {
+      $echo_page .= '<div class="xp-card-title">' . I18n::plain('diag.whySlow') . '</div>'
+        . '<ul style="list-style:none;margin:0;padding:0">';
+      foreach ($main as $f) {
+        $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      }
+      $echo_page .= '</ul>';
+    }
+
+    // 同一个 symbol 可能同时出现在两个区，**这不是 bug**，别去"修"：
+    // 主区按 symbol 去重，补充区故意不去重——R4 的 symbol 是空串，
+    // 对补充区去重会把所有递归结论折叠成一条。
+    // 于是一个函数可以既是"为什么慢"里的 R1、又是"其他发现"里的 R6，
+    // 页面上就是两条标题不同、却指向同一详情页的链接——这两条结论本来就各说各话。
+    if ($supplement) {
+      $echo_page .= '<div class="xp-card-title">' . I18n::plain('diag.otherFindings') . '</div>'
+        . '<ul style="list-style:none;margin:0;padding:0">';
+      foreach ($supplement as $f) {
+        $echo_page .= XhprofDisplay::diagnosis_item($f, $url_params);
+      }
+      $echo_page .= '</ul>';
+    }
+
+    return $echo_page . '</div></div>';
+  }
+
+  private static function diagnosis_item(Finding $f, array $url_params): string
+  {
+    $title = htmlspecialchars($f->title, ENT_QUOTES, 'UTF-8');
+    $detail = htmlspecialchars($f->detail, ENT_QUOTES, 'UTF-8');
+    $rule = htmlspecialchars($f->rule, ENT_QUOTES, 'UTF-8');
+
+    $link = '';
+    if ($f->symbol !== '') {
+      $href = XhprofDisplay::base_path() . '?'
+        . http_build_query(XhprofLib::xhprof_array_set($url_params, 'symbol', $f->symbol));
+      $link = ' ' . XhprofDisplay::xhprof_render_link(I18n::plain('diag.view'), $href);
+    }
+
+    return '<li style="padding:6px 20px"><b>[' . $rule . ']</b> ' . $title . $link
+      . '<br><span style="color:#666;font-size:12px">' . $detail . '</span></li>';
   }
 
   /**
