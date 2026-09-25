@@ -20,8 +20,13 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: redis, xhprof
           coverage: none
+      # joomla/ wordpress/ 是随包交付的 PHP：仓库没有 .gitattributes（无 export-ignore）、
+      # composer.json 也没有 archive.exclude，`git archive HEAD` 实测带出这两个目录。
+      # 它们与 src/ 一样声明要跑在 composer.json 的 php >= 8.0 上，此前的**唯一**解析点
+      # 却是契约环，而契约环钉在单一 PHP 8.3（contracts.yml:23）—— 也就是说这两个目录
+      # 在 8.0–8.4 矩阵里一次 php -l 都没跑过。并进扫描面，让下限真正被覆盖。
       - name: Lint all PHP files
-        run: find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find src tests joomla wordpress -name '*.php' -print0 | xargs -0 -n1 php -l
 
   # composer.json 声明 php >= 8.0，但 PHPUnit 11 要求 >= 8.2，
   # 单测无法在 8.0/8.1 上运行。此 job 用 --no-dev 只装运行时依赖，
@@ -50,10 +55,11 @@ jobs:
       # dump-autoload 不做依赖求解，正合此处所需。
       - name: Generate autoloader
         run: composer dump-autoload --no-interaction
-      - name: No post-8.0 functions in src
+      # 扫描面与上面的 lint 一致：joomla/ wordpress/ 同样是随包交付、声明要能在 8.0 上跑的 PHP。
+      - name: No post-8.0 functions in shipped PHP
         run: |
-          if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ --include='*.php'; then
-            echo "::error::src/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
+          if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ joomla/ wordpress/ --include='*.php'; then
+            echo "::error::src/ joomla/ wordpress/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
             exit 1
           fi
       - name: Load shipped classes and exercise pure logic

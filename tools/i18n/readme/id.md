@@ -4,6 +4,14 @@ Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPH
 
 Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pengembang dapat dengan cepat membuka laporan analisis performa melalui browser untuk menemukan hambatan performa kode.
 
+**Riwayat Request**
+
+![Riwayat Request](doc/1.jpg)
+
+**Laporan satu eksekusi**
+
+![Laporan satu eksekusi](doc/2.jpg)
+
 ## Persyaratan
 
 - PHP >= 8.0
@@ -226,10 +234,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+Saat `Xhprof::index()` mengembalikan string HTML, **jangan** langsung `return`: `CoreMiddleware::transferToResponse()` milik Hyperf tanpa syarat menambahkan `content-type: text/plain` pada nilai kembalian berupa string, sehingga browser menampilkan halaman report sebagai teks biasa (terukur sama pada 3.0.45 / 3.1.69 / 3.2.0). Respons eksplisit di atas menghindarinya; bila autentikasi gagal, `index()` mengembalikan objek respons yang sudah terkirim — kembalikan saja apa adanya.
 
 **3. Route aset statis** — `config/routes.php`:
 
@@ -544,7 +561,9 @@ xhprof-webman/
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifes)
 ├── drupal/xhprof/                # modul Drupal standar (info / routing / services + controller)
 ├── tools/contracts/              # loop verifikasi mandiri: signature dan semantik terhadap paket framework asli
-├── tests/                        # PHPUnit: adapter, wiring, paritas README
+├── tools/i18n/                   # rantai alat terjemahan untuk README dan ketiga SVG (generate / check / selftest)
+├── docs/i18n/                    # 12 hasil terjemahan (Inggris, Korea, Rusia, Jerman, Prancis, Spanyol, Portugis, Arab, Hindi, Bengali, Indonesia, Jepang)
+├── tests/                        # PHPUnit: test adapter, test wiring, test Core, paritas struktural di 14 README
 └── docs/images/                  # diagram README
 ```
 
@@ -554,7 +573,7 @@ Kecuali Drupal, setiap direktori `src/<Fw>/` memiliki bentuk yang sama:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # 9 key konfigurasi yang sama seperti framework lain
+└── config/xhprof.php             # 10 key konfigurasi yang sama seperti framework lain
 ```
 
 `src/Drupal/` adalah satu-satunya pengecualian: ia tidak punya direktori `config/` — konfigurasinya berada di config bertipe tingkat modul (`drupal/xhprof/config/install/xhprof.settings.yml`).
@@ -570,10 +589,9 @@ src/<Fw>/
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
 | Kesepuluh framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
-| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri): memasang paket framework asli dan memastikan setiap metode / konstanta / fungsi global lewat reflection |
+| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri): memasang paket framework asli dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk enam framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
 | Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, termasuk dua invarian: `uri()` tidak membawa skema/host, dan `withHeaders()` tetap berlaku setelah `file()` |
 
-Tiga baris pertama di atas — perilaku adapter dan wiring kelas entri, satu set key konfigurasi bersama untuk kesepuluh framework, dan kedua README yang saling mencerminkan — menggambarkan **hasil yang masih akan datang** (kasus wiring enam framework, tes paritas konfigurasi, tes paritas README) yang belum ada pada saat dokumen ini ditulis. Untuk keenam framework baru, perlakukan daftar periksa smoke manual sebagai acuan untuk sekarang.
 
 **Tidak diverifikasi secara otomatis (jangan dibaca sebagai "keenamnya sudah diuji")**
 
@@ -586,6 +604,7 @@ Tiga baris pertama di atas — perilaku adapter dan wiring kelas entri, satu set
 | Konfigurasi otomatis `kernel.event_subscriber` Symfony | Membutuhkan kompilasi container asli |
 | Cakap-silang state statis di proses berjalan lama | Diwarisi dari arsitektur yang ada (hal yang sama juga berlaku untuk Webman / Hyperf); tidak diubah di sini |
 | I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | Di luar cakupan unit test dan loop verifikasi |
+| Signature dan semantik adapter untuk Webman / Laravel / ThinkPHP / Hyperf | keempatnya tidak masuk loop verifikasi (loop hanya mencakup enam framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
 
 **Daftar periksa smoke manual (tiga langkah per framework)**
 
@@ -626,4 +645,4 @@ Kompatibilitas Symfony 6.4 sudah diukur (dari situlah dua over-fit yang tak terl
 
 ---
 
-Plugin ini merujuk pada [phacility/xhprof](https://github.com/phacility/xhprof) dan [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof).
+Plugin ini merujuk pada [phacility/xhprof](https://github.com/phacility/xhprof) dan [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).

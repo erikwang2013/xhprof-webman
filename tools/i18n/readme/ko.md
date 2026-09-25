@@ -4,6 +4,14 @@ webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joo
 
 xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니다. 개발자는 브라우저로 성능 분석 보고서를 빠르게 열어 코드의 성능 병목을 찾아낼 수 있습니다.
 
+**요청 기록**
+
+![요청 기록](doc/1.jpg)
+
+**단일 실행 보고서**
+
+![단일 실행 보고서](doc/2.jpg)
+
 ## 요구 사항
 
 - PHP >= 8.0
@@ -226,10 +234,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+`Xhprof::index()`가 HTML 문자열을 반환할 때는 **그대로** `return`하면 안 됩니다. Hyperf의 `CoreMiddleware::transferToResponse()`는 문자열 반환값에 무조건 `content-type: text/plain`을 붙이므로, 브라우저가 리포트 페이지를 일반 텍스트로 표시합니다(3.0.45 / 3.1.69 / 3.2.0 세 버전에서 동일한 동작을 실측했습니다). 위처럼 응답을 명시적으로 구성하면 이를 피할 수 있습니다. 인증에 실패하면 `index()`는 이미 전송된 응답 객체를 반환하므로 그대로 반환하면 됩니다.
 
 **3. 정적 리소스 라우트** — `config/routes.php`:
 
@@ -544,7 +561,9 @@ xhprof-webman/
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
 ├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
-├── tests/                        # PHPUnit: adapters, wiring, README parity
+├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
+├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
+├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
 └── docs/images/                  # README diagrams
 ```
 
@@ -554,7 +573,7 @@ Drupal을 제외하면 모든 `src/<Fw>/` 디렉터리가 같은 모양입니다
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 9 config keys as every other framework
+└── config/xhprof.php             # the same 10 config keys as every other framework
 ```
 
 `src/Drupal/` 이 유일한 예외입니다. `config/` 디렉터리가 없고, 설정은 모듈 수준의 타입 지정 config(`drupal/xhprof/config/install/xhprof.settings.yml`)에 있습니다.
@@ -570,10 +589,9 @@ src/<Fw>/
 | 어댑터와 진입 배선 동작 | `tests/Unit/Adapter/*Test.php`: 활성화 → 저장 / 비활성화 → 저장 안 함 / 비즈니스 예외 → `finally` 로 여전히 저장 |
 | 열 프레임워크가 하나의 설정 키 집합을 공유 | config parity 테스트(키 집합 기준이며 바이트 단위가 아님, 주석은 달라도 됨) |
 | 두 README가 서로 대응 | README parity 테스트: `##` / `###` 제목 순서와 코드 블록 수를 비교 |
-| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡): 실제 프레임워크 패키지를 설치하고 리플렉션으로 모든 메서드 / 상수 / 전역 함수를 단언 |
+| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡): 실제 프레임워크 패키지를 설치하고 **루프에 들어간 6개 프레임워크**(Slim / Symfony / Yii3 / Joomla / WordPress / Drupal)에 대해 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다. Webman / Laravel / ThinkPHP / Hyperf는 루프 밖입니다(아래 참조) |
 | 어댑터의 의미 | 같은 루프가 실제 요청·응답 객체를 만들어 어댑터를 실행하며, 두 가지 불변식(`uri()` 에 스킴/호스트가 없을 것, `file()` 뒤에도 `withHeaders()` 가 적용될 것)까지 확인 |
 
-위 표의 처음 세 줄, 즉 어댑터와 진입 배선 동작, 열 프레임워크가 공유하는 하나의 설정 키 집합, 두 README의 상호 대응은 **앞으로의 산출물**(신규 6개 프레임워크의 배선 케이스, config parity 테스트, README parity 테스트)을 가리키며, 이 문서를 쓰는 시점에는 아직 갖춰지지 않았습니다. 신규 6개 프레임워크에 대해서는 당분간 수동 스모크 체크리스트를 기준으로 삼으십시오.
 
 **자동으로 검증되지 않은 것 ("여섯 개 모두 테스트했다"로 읽지 마십시오)**
 
@@ -586,6 +604,7 @@ src/<Fw>/
 | Symfony의 `kernel.event_subscriber` 자동 구성 | 실제 컨테이너 컴파일이 필요합니다 |
 | 장수명 프로세스에서의 정적 상태 간섭 | 기존 아키텍처에서 물려받은 문제입니다(Webman / Hyperf도 마찬가지). 이번에 바뀌지 않았습니다 |
 | 실제 Redis I/O, 브라우저 렌더링, 실제 부하에서의 프로파일링 오버헤드 | 단위 테스트와 검증 루프의 범위 밖입니다 |
+| Webman / Laravel / ThinkPHP / Hyperf 어댑터의 시그니처와 시맨틱스 | 이 네 프레임워크는 검증 루프에 들어 있지 않습니다(루프는 6개 프레임워크만 커버합니다). 스텁은 패키지 안의 `tests/Stubs/framework-stubs.php`에 손으로 작성되어 있고, 실제 패키지와의 대조가 없습니다 |
 
 **수동 스모크 체크리스트 (프레임워크당 세 단계)**
 
@@ -626,4 +645,4 @@ Symfony 6.4 호환성은 실측으로 확인했습니다(7.4에서는 보이지 
 
 ---
 
-이 플러그인은 [phacility/xhprof](https://github.com/phacility/xhprof) 와 [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof) 를 참고했습니다.
+이 플러그인은 [phacility/xhprof](https://github.com/phacility/xhprof) 와 [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof) 를 참고했습니다.

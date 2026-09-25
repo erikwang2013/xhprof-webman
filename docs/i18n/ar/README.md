@@ -8,6 +8,14 @@
 
 تجمع بيانات التنميط عبر إضافة xhprof وتخزّنها في Redis. ويستطيع المطوّرون الوصول سريعًا من المتصفح إلى تقارير تحليل الأداء لتحديد مواضع الاختناق في أداء الشيفرة.
 
+**سجل الطلبات**
+
+![سجل الطلبات](../../../doc/1.jpg)
+
+**تقرير تشغيل واحد**
+
+![تقرير تشغيل واحد](../../../doc/2.jpg)
+
 ## المتطلبات
 
 - PHP >= 8.0
@@ -230,10 +238,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+عندما يعيد `Xhprof::index()`‎ سلسلة HTML، **لا** تُرجعه مباشرةً عبر `return`: فـ `CoreMiddleware::transferToResponse()`‎ في Hyperf يضيف `content-type: text/plain`‎ بلا شرط إلى القيم المُعادة من نوع سلسلة، فيعرض المتصفح صفحة التقرير كنصّ عادي (قيس السلوك نفسه في الإصدارات 3.0.45 / 3.1.69 / 3.2.0). والاستجابة الصريحة أعلاه تتجاوز ذلك؛ وعند فشل المصادقة يعيد `index()`‎ كائن استجابة سبق إرساله — فأعِده كما هو.
 
 **3. مسارات الموارد الساكنة** — `config/routes.php`:
 
@@ -548,7 +565,9 @@ xhprof-webman/
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
 ├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
-├── tests/                        # PHPUnit: adapters, wiring, README parity
+├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
+├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
+├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
 └── docs/images/                  # README diagrams
 ```
 
@@ -558,7 +577,7 @@ xhprof-webman/
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 9 config keys as every other framework
+└── config/xhprof.php             # the same 10 config keys as every other framework
 ```
 
 و`src/Drupal/`‎ هو الاستثناء الوحيد: فليس فيه مجلد `config/`‎ — إذ تعيش إعداداته في إعدادات مُهيّأة على مستوى الوحدة (`drupal/xhprof/config/install/xhprof.settings.yml`).
@@ -574,10 +593,9 @@ src/<Fw>/
 | سلوك المحوّلات وتوصيل فئات المدخل | `tests/Unit/Adapter/*Test.php`: مفعّل → يُحفظ / معطّل → لا يُحفظ / استثناء في منطق العمل → يُحفظ رغم ذلك عبر `finally` |
 | الأطر العشرة كلها تتشارك مجموعة مفاتيح إعدادات واحدة | اختبار تكافؤ الإعدادات (مجموعات المفاتيح لا التطابق الحرفي؛ فالتعليقات قد تختلف) |
 | ملفا README يطابق أحدهما الآخر | اختبار تكافؤ README: يقارن تسلسل عناوين `##` / `###` وعدد كتل الشيفرة |
-| الدوال التي تستدعيها المحوّلات موجودة فعلًا | حلقة التحقق في `tools/contracts/`‎ (ولها مهمة CI خاصة): تثبّت حزم الأطر الحقيقية وتتحقق من كل دالة وثابت ودالة عامة عبر الانعكاس |
+| الدوال التي تستدعيها المحوّلات موجودة فعلًا | حلقة التحقق في `tools/contracts/`‎ (ولها مهمة CI خاصة): تثبّت حزم الأطر الحقيقية وتتحقق عبر الانعكاس من وجود كل دالة وثابت ودالة عامة **للأطر الستة المشمولة في الحلقة** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal)؛ أما Webman / Laravel / ThinkPHP / Hyperf فغير مشمولة بالحلقة، انظر أدناه |
 | دلالات المحوّلات | الحلقة نفسها تنشئ كائنات طلب واستجابة حقيقية وتشغّل المحوّلات، بما في ذلك ثابتان: أن `uri()`‎ لا تحمل مخطّطًا ولا مضيفًا، وأن `withHeaders()`‎ تظل سارية بعد `file()`‎ |
 
-الصفوف الثلاثة الأولى أعلاه — سلوك المحوّلات وتوصيل فئات المدخل، ومجموعة إعدادات مشتركة واحدة عبر الأطر العشرة، وتطابق ملفي README — تصف **مخرجات مستقبلية** (حالات توصيل الأطر الستة، واختبار تكافؤ الإعدادات، واختبار تكافؤ README) غير الموجودة وقت كتابة هذا المستند. وبالنسبة للأطر الستة الجديدة، اعتبر قائمة التحقق اليدوية هي المرجع مؤقتًا.
 
 **غير مُتحقَّق منه آليًا (لا تقرأ هذا على أنه «اختبار الأطر الستة جميعًا»)**
 
@@ -590,6 +608,7 @@ src/<Fw>/
 | التهيئة التلقائية لـ `kernel.event_subscriber` في Symfony | يحتاج ترجمة حاوية حقيقية |
 | تشابك الحالة الساكنة في العمليات طويلة العمر | موروث من البنية القائمة (والأمر نفسه ينطبق على Webman / Hyperf)؛ ولم يتغير هنا |
 | إدخال/إخراج Redis الحقيقي، وعرض المتصفح، وكلفة التنميط تحت حمل حقيقي | خارج نطاق اختبارات الوحدة وحلقة التحقق |
+| توقيعات محوّلات Webman / Laravel / ThinkPHP / Hyperf ودلالاتها | هذه الأربعة ليست في حلقة التحقق (فالحلقة تغطي ستة أطر)؛ وستَباتها (stubs) مكتوبة يدويًا داخل الحزمة في `tests/Stubs/framework-stubs.php`‎، دون مقارنة بحزم حقيقية |
 
 **قائمة تحقق دخانية يدوية (ثلاث خطوات لكل إطار)**
 
@@ -630,4 +649,4 @@ src/<Fw>/
 
 ---
 
-تستند هذه الإضافة إلى [phacility/xhprof](https://github.com/phacility/xhprof) و [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof).
+تستند هذه الإضافة إلى [phacility/xhprof](https://github.com/phacility/xhprof) و [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).

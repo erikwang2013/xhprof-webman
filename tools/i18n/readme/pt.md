@@ -4,6 +4,14 @@ Um plugin de profiling de performance de código compatível com webman / Larave
 
 Coleta dados de profiling pela extensão xhprof e os guarda no Redis. O desenvolvedor acessa rapidamente relatórios de análise de performance pelo navegador para identificar gargalos de performance no código.
 
+**Registro de Requisições**
+
+![Registro de Requisições](doc/1.jpg)
+
+**Relatório de uma execução**
+
+![Relatório de uma execução](doc/2.jpg)
+
 ## Requisitos
 
 - PHP >= 8.0
@@ -226,10 +234,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+Quando `Xhprof::index()` devolve uma string HTML, **não** faça `return` dela diretamente: o `CoreMiddleware::transferToResponse()` do Hyperf acrescenta incondicionalmente `content-type: text/plain` a valores de retorno do tipo string, e o navegador exibe a página de relatório como texto puro (verificado idêntico em 3.0.45 / 3.1.69 / 3.2.0). A resposta explícita acima contorna isso; quando a autenticação falha, `index()` devolve um objeto de resposta já enviado — basta devolvê-lo como está.
 
 **3. Rotas dos recursos estáticos** — `config/routes.php`:
 
@@ -544,7 +561,9 @@ xhprof-webman/
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifesto)
 ├── drupal/xhprof/                # módulo Drupal padrão (info / routing / services + controller)
 ├── tools/contracts/              # ciclo de verificação independente: assinaturas e semântica contra os pacotes reais dos frameworks
-├── tests/                        # PHPUnit: adaptadores, wiring, paridade do README
+├── tools/i18n/                   # cadeia de ferramentas de tradução do README e dos três SVGs (gerar / verificar / autoteste)
+├── docs/i18n/                    # os 12 resultados traduzidos (inglês, coreano, russo, alemão, francês, espanhol, português, árabe, hindi, bengali, indonésio, japonês)
+├── tests/                        # PHPUnit: testes dos adaptadores, da fiação, do Core, e paridade estrutural dos 14 READMEs
 └── docs/images/                  # diagramas do README
 ```
 
@@ -554,7 +573,7 @@ Com exceção do Drupal, todo diretório `src/<Fw>/` tem o mesmo formato:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # as mesmas 9 chaves de configuração de todos os outros frameworks
+└── config/xhprof.php             # as mesmas 10 chaves de configuração de todos os outros frameworks
 ```
 
 O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a configuração dele fica em config tipada de nível de módulo (`drupal/xhprof/config/install/xhprof.settings.yml`).
@@ -570,10 +589,9 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | Comportamento dos adaptadores e do wiring das entradas | `tests/Unit/Adapter/*Test.php`: habilitado → salvo / desabilitado → não salvo / exceção de negócio → ainda assim salvo via `finally` |
 | Os dez frameworks compartilham um mesmo conjunto de chaves de configuração | teste de paridade de config (conjuntos de chaves, não byte a byte; os comentários podem diferir) |
 | Os dois READMEs espelham um ao outro | teste de paridade do README: compara a sequência de títulos `##` / `###` e o número de blocos de código |
-| Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI): instala os pacotes reais dos frameworks e verifica cada método / constante / função global por reflection |
+| Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI): instala os pacotes reais dos frameworks e verifica por reflection que cada método / constante / função global existe **para os seis frameworks do ciclo** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf não estão no ciclo — veja abaixo |
 | Semântica dos adaptadores | O mesmo ciclo instancia objetos reais de request e response e executa os adaptadores, incluindo dois invariantes: `uri()` não carrega scheme/host, e `withHeaders()` continua valendo depois de `file()` |
 
-As três primeiras linhas acima — comportamento dos adaptadores e do wiring das entradas, um conjunto de chaves de configuração compartilhado pelos dez frameworks e os dois READMEs espelhando um ao outro — descrevem **entregas futuras** (os casos de wiring dos seis frameworks, o teste de paridade de config e o teste de paridade do README) que ainda não existem na data deste documento. Para os seis novos frameworks, considere a checklist manual de smoke como a fonte da verdade por enquanto.
 
 **Não verificado automaticamente (não leia isto como "os seis foram testados")**
 
@@ -586,6 +604,7 @@ As três primeiras linhas acima — comportamento dos adaptadores e do wiring da
 | A autoconfiguração de `kernel.event_subscriber` do Symfony | Exige uma compilação real do container |
 | Vazamento de estado estático em processos de longa duração | Herdado da arquitetura existente (o mesmo vale para Webman / Hyperf); inalterado aqui |
 | I/O real no Redis, renderização no navegador, overhead de profiling sob carga real | Fora do escopo dos testes unitários e do ciclo de verificação |
+| Assinaturas e semântica dos adaptadores de Webman / Laravel / ThinkPHP / Hyperf | esses quatro não estão no ciclo de verificação (que cobre seis frameworks); seus stubs são escritos à mão em `tests/Stubs/framework-stubs.php`, sem comparação com os pacotes reais |
 
 **Checklist manual de smoke (três passos por framework)**
 
@@ -626,4 +645,4 @@ A compatibilidade com o Symfony 6.4 foi medida (foi assim que dois over-fits inv
 
 ---
 
-Este plugin faz referência a [phacility/xhprof](https://github.com/phacility/xhprof) e [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof).
+Este plugin faz referência a [phacility/xhprof](https://github.com/phacility/xhprof) e [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).

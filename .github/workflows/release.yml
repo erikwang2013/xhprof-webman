@@ -32,12 +32,38 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: redis, xhprof
+          # dom, mbstring 与 i18n.yml 对齐：tools/i18n/check.php 用 DOMDocument 解析
+          # SVG、用 mbstring 量字数与宽度。i18n.yml 显式列了这两个，这里跟着列 ——
+          # 已装载的扩展再列一次是空操作，少列一个是"本地能跑、runner 上必红"。
+          extensions: redis, xhprof, dom, mbstring
           coverage: none
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
       - name: Unit tests must pass before tagging
         run: vendor/bin/phpunit --no-coverage
+
+      # 上面那段注释只说了单测——但契约环（contracts.yml）与 i18n 门禁（i18n.yml）
+      # 的 on: 同样只挂 main push，与本 workflow 并行且无 needs: 依赖。于是
+      # 「提交只破坏契约环」或「只破坏某语言的门禁」时，tag 与 Release 照常产生，
+      # Packagist 随之发布坏版本。两道门禁在 tag 之前补跑（下面的命令与那两个
+      # workflow 逐字一致，只是不再按 workflow 隔离）。
+      - name: Contract checks must pass before tagging
+        # 故意不加 --ignore-platform-reqs（与 contracts.yml 一致）：PHP 或扩展不满足时
+        # 这里就该炸，而不是装出一套残缺依赖让环在下面假装通过。本 job 的 PHP 8.3 与
+        # xhprof/redis 已满足 tools/contracts/composer.json 的 php >= 8.2 与扩展要求。
+        run: |
+          composer install -d tools/contracts --no-interaction --prefer-dist
+          php tools/contracts/run.php
+      - name: Every locale must pass its own gate before tagging
+        # 语言清单与 i18n.yml 的 for 列表逐字一致；两条清单都由
+        # tests/Unit/Docs/I18nWorkflowTest.php 与 I18n::AVAILABLE 机械对齐，
+        # 所以这里不引入第二份"无人看守的手写清单"。
+        run: |
+          for lang in en ko ru de fr es pt ar hi bn id ja; do
+            echo "::group::$lang"
+            php tools/i18n/check.php --lang="$lang"
+            echo "::endgroup::"
+          done
 
       - name: Compute next version
         id: version

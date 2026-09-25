@@ -1,0 +1,43 @@
+Third-party code in this repository
+===================================
+
+This project is distributed under the MIT license (see LICENSE). Two groups of
+files come from elsewhere and keep their own terms.
+
+1. Derived from phacility/xhprof (Apache License 2.0)
+----------------------------------------------------
+
+The report rendering and run-storage layer is derived from phacility/xhprof:
+
+  src/Core/XhprofLib/**            (display, lib and run-store classes)
+  src/html/js/xhprof_report.js     (carries the upstream Facebook/Apache header)
+  src/html/css/**, src/html/images/**
+
+phacility/xhprof is licensed under the Apache License, Version 2.0
+(https://github.com/phacility/xhprof — verified 2026-09-25). Those files are
+used and modified under that license; the modifications are the multi-framework
+adapters, the i18n layer, and the fixes recorded in this repository's history.
+
+2. Redistributed third-party front-end libraries
+------------------------------------------------
+
+src/html/ ships unmodified copies of libraries that the report page loads:
+
+  jquery/jquery-3.0.0.min.js          jQuery (jQuery Foundation)
+  js/bootstrap.min.js, css/bootstrap.css   Bootstrap 3 (MIT — header present)
+  js/jquery.dataTables.min.js, js/dataTables.bootstrap.js, css/dataTables.bootstrap.css
+                                       DataTables 1.10.15 (DataTables)
+  js/bootstrap-table.js, js/bootstrap-table-zh-CN.js   bootstrap-table
+  js/jquery.autocomplete.js, js/jquery.tooltip.js, jquery/jquery-1.2.6.js
+                                       jQuery plugins of the same vintage
+
+Their own license terms apply (jQuery, Bootstrap, DataTables and bootstrap-table
+are all MIT-licensed upstream); where the upstream file shipped a license header
+it is kept verbatim in the file.
+
+Two of these libraries are currently **not** loaded by the report page
+(`xhprof_include_js_css()` loads five scripts): `bootstrap-table.js` (and its
+Chinese locale file) and the jQuery 1.2.6 / autocomplete / tooltip trio, the
+last of which predates jQuery 3 and is kept only because the parent/child
+tooltip code was ported from upstream. They are listed here for completeness,
+not because they are active.

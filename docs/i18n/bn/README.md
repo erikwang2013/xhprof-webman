@@ -8,6 +8,14 @@ webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joo
 
 xhprof এক্সটেনশনের মাধ্যমে প্রোফাইলিং ডেটা সংগ্রহ করে Redis-এ সংরক্ষণ করে। ডেভেলপাররা ব্রাউজার দিয়ে দ্রুত পারফরম্যান্স বিশ্লেষণ রিপোর্ট দেখে কোডের পারফরম্যান্স বটলনেক চিহ্নিত করতে পারেন।
 
+**রিকোয়েস্ট লগ**
+
+![রিকোয়েস্ট লগ](../../../doc/1.jpg)
+
+**একক রানের রিপোর্ট**
+
+![একক রানের রিপোর্ট](../../../doc/2.jpg)
+
 ## প্রয়োজনীয়তা
 
 - PHP >= 8.0
@@ -230,10 +238,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+`Xhprof::index()` যখন HTML স্ট্রিং ফেরায়, তখন সেটি **সরাসরি** `return` করবেন না: Hyperf-এর `CoreMiddleware::transferToResponse()` স্ট্রিং রিটার্ন ভ্যালুতে শর্তহীনভাবে `content-type: text/plain` যোগ করে, ফলে ব্রাউজার রিপোর্ট পেজটি সাধারণ টেক্সট হিসেবে দেখায় (3.0.45 / 3.1.69 / 3.2.0 — তিনটি সংস্করণেই একই আচরণ মাপা হয়েছে)। উপরের স্পষ্ট রেসপন্স এটিকে এড়িয়ে যায়; প্রমাণীকরণ ব্যর্থ হলে `index()` এমন একটি রেসপন্স অবজেক্ট ফেরায় যা ইতিমধ্যেই পাঠানো হয়েছে — সেটি যেমন আছে তেমনই ফেরত দিন।
 
 **৩. স্ট্যাটিক অ্যাসেট রুট** — `config/routes.php`:
 
@@ -548,7 +565,9 @@ xhprof-webman/
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
 ├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
-├── tests/                        # PHPUnit: adapters, wiring, README parity
+├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
+├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
+├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
 └── docs/images/                  # README diagrams
 ```
 
@@ -558,7 +577,7 @@ Drupal ছাড়া প্রতিটি `src/<Fw>/` ডিরেক্ট�
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 9 config keys as every other framework
+└── config/xhprof.php             # the same 10 config keys as every other framework
 ```
 
 `src/Drupal/` একমাত্র ব্যতিক্রম: এতে কোনো `config/` ডিরেক্টরি নেই — এর কনফিগারেশন মডিউল-স্তরের টাইপড কনফিগে থাকে (`drupal/xhprof/config/install/xhprof.settings.yml`)।
@@ -574,10 +593,9 @@ src/<Fw>/
 | অ্যাডাপ্টার ও এন্ট্রি-ওয়্যারিংয়ের আচরণ | `tests/Unit/Adapter/*Test.php`: চালু → সংরক্ষিত / বন্ধ → সংরক্ষিত নয় / বিজনেস এক্সেপশন → `finally`-এর মাধ্যমে তবুও সংরক্ষিত |
 | দশটি ফ্রেমওয়ার্কই একই কনফিগ কী সেট শেয়ার করে | config parity টেস্ট (কী সেট, বাইট-প্রতি-বাইট নয়; কমেন্ট আলাদা হতে পারে) |
 | দুটি README পরস্পরের প্রতিচ্ছবি | README parity টেস্ট: `##` / `###` শিরোনামের ক্রম ও কোড ব্লকের সংখ্যা তুলনা করে |
-| অ্যাডাপ্টার যে মেথডগুলো ডাকে সেগুলো সত্যিই আছে | `tools/contracts/` verification loop (নিজস্ব CI জব): আসল ফ্রেমওয়ার্ক প্যাকেজ ইনস্টল করে রিফ্লেকশনের মাধ্যমে প্রতিটি মেথড / ধ্রুবক / গ্লোবাল ফাংশন নিশ্চিত করে |
+| অ্যাডাপ্টার যে মেথডগুলো ডাকে সেগুলো সত্যিই আছে | `tools/contracts/` verification loop (নিজস্ব CI জব): আসল ফ্রেমওয়ার্ক প্যাকেজ ইনস্টল করে রিফ্লেকশনের মাধ্যমে যাচাই করে যে প্রতিটি মেথড / ধ্রুবক / গ্লোবাল ফাংশন আছে — **লুপে থাকা ছয়টি ফ্রেমওয়ার্কের** জন্য (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf লুপে নেই, নিচে দেখুন |
 | অ্যাডাপ্টারের সিমান্টিক্স | একই লুপ আসল রিকোয়েস্ট ও রেসপন্স অবজেক্ট তৈরি করে অ্যাডাপ্টার চালায়, দুটি ইনভ্যারিয়েন্টসহ: `uri()`-তে স্কিম/হোস্ট থাকে না, আর `file()`-এর পরেও `withHeaders()` প্রয়োগ হয় |
 
-উপরের প্রথম তিনটি সারি — অ্যাডাপ্টার ও এন্ট্রি-ওয়্যারিংয়ের আচরণ, দশটি ফ্রেমওয়ার্কেই একই কনফিগ কী সেট, আর দুটি README-র পরস্পরকে প্রতিফলন — **ভবিষ্যতের ডেলিভারেবল** বর্ণনা করে (ছয়-ফ্রেমওয়ার্ক ওয়্যারিং কেস, config parity টেস্ট, README parity টেস্ট) যা এই নথির সময়ে এখনো নেই। ছয়টি নতুন ফ্রেমওয়ার্কের জন্য আপাতত ম্যানুয়াল স্মোক চেকলিস্টকেই সত্যের উৎস ধরুন।
 
 **স্বয়ংক্রিয়ভাবে যাচাই করা হয় না (এটিকে "ছয়টিই পরীক্ষিত" বলে পড়বেন না)**
 
@@ -590,6 +608,7 @@ src/<Fw>/
 | Symfony-র `kernel.event_subscriber` স্বয়ংক্রিয়-কনফিগারেশন | আসল কন্টেইনার কম্পাইল দরকার |
 | দীর্ঘকাল চলা প্রসেসে স্ট্যাটিক স্টেটের ক্রসটক | বিদ্যমান আর্কিটেকচার থেকে উত্তরাধিকারসূত্রে পাওয়া (Webman / Hyperf-েও একই); এখানে অপরিবর্তিত |
 | প্রকৃত Redis I/O, ব্রাউজার রেন্ডারিং, আসল লোডে প্রোফাইলিং ওভারহেড | ইউনিট টেস্ট ও verification loop-এর পরিধির বাইরে |
+| Webman / Laravel / ThinkPHP / Hyperf-এর অ্যাডাপ্টার সিগনেচার ও সিম্যান্টিক্স | এই চারটি verification loop-এ নেই (লুপ ছয়টি ফ্রেমওয়ার্ক কভার করে); তাদের স্টাব প্যাকেজের ভিতরে `tests/Stubs/framework-stubs.php`-এ হাতে লেখা, আসল প্যাকেজের সঙ্গে কোনো মিলিয়ে দেখা নেই |
 
 **ম্যানুয়াল স্মোক চেকলিস্ট (প্রতি ফ্রেমওয়ার্কে তিনটি ধাপ)**
 
@@ -630,4 +649,4 @@ Symfony 6.4 সামঞ্জস্য মাপা হয়েছে (এভ�
 
 ---
 
-এই প্লাগইনটি [phacility/xhprof](https://github.com/phacility/xhprof) ও [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof) থেকে রেফারেন্স নিয়েছে।
+এই প্লাগইনটি [phacility/xhprof](https://github.com/phacility/xhprof) ও [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof) থেকে রেফারেন্স নিয়েছে।

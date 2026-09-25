@@ -6,6 +6,14 @@
 
 基于 xhprof 扩展采集数据并存入 Redis，开发者可通过浏览器快速访问性能分析报告，排查代码性能瓶颈。
 
+**请求记录**
+
+![请求记录](doc/1.jpg)
+
+**单次运行报告**
+
+![单次运行报告](doc/2.jpg)
+
 ## 环境要求
 
 - PHP >= 8.0
@@ -228,10 +236,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+`Xhprof::index()` 返回 HTML 字符串时，**不要**直接 `return`：Hyperf 的 `CoreMiddleware::transferToResponse()` 对字符串返回值会无条件加上 `content-type: text/plain`，浏览器把报告页当纯文本显示（实测 3.0.45 / 3.1.69 / 3.2.0 三版行为一致）。上面显式构造响应即可绕开它；`index()` 在鉴权失败时返回的是已经发过的响应对象，原样返回即可。
 
 **3. 静态资源路由** — `config/routes.php`：
 
@@ -546,7 +563,9 @@ xhprof-webman/
 ├── joomla/                       # Joomla 插件（CMSPlugin + 清单）
 ├── drupal/xhprof/                # Drupal 标准模块（info / routing / services + Controller）
 ├── tools/contracts/              # 独立验证环：对真实框架包校验签名与语义
-├── tests/                        # PHPUnit：适配器单测、接线测试、README 一致性测试
+├── tools/i18n/                   # README 与三张 SVG 的翻译工具链（生成 / 校验 / 自检）
+├── docs/i18n/                    # 12 份译文产物（英文、韩语、俄语、德语、法语、西班牙语、葡萄牙语、阿拉伯语、印地语、孟加拉语、印尼语、日语）
+├── tests/                        # PHPUnit：适配器单测、接线测试、Core 单测、14 份 README 的结构一致性
 └── docs/images/                  # README 配图
 ```
 
@@ -556,7 +575,7 @@ xhprof-webman/
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <入口类>.php
-└── config/xhprof.php             # 9 个配置键，与其它框架一致
+└── config/xhprof.php             # 10 个配置键，与其它框架一致
 ```
 
 `src/Drupal/` 是唯一的例外：它没有 `config/`，配置改用模块内的 typed config（`drupal/xhprof/config/install/xhprof.settings.yml`）。
@@ -572,10 +591,9 @@ src/<Fw>/
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
 | 十个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job）：装真实框架包，用反射断言每个方法 / 常量 / 全局函数存在 |
+| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job）：装真实框架包，对**已入环的 6 个框架**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal）用反射断言每个方法 / 常量 / 全局函数存在；Webman / Laravel / ThinkPHP / Hyperf 未入环，见下 |
 | 适配器语义正确 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效 |
 
-表中前三行——适配器与入口接线的行为、十个框架的配置 key 集一致、两份 README 逐段镜像——对应的是**后续交付物**（六框架的接线用例、配置一致性测试、README 一致性测试），本文档成稿时尚未落地；现阶段六个新框架请以手工冒烟为准。
 
 **未自动化验证的（不要当成已验过）**
 
@@ -588,6 +606,7 @@ src/<Fw>/
 | Symfony 的 `kernel.event_subscriber` 自动配置 | 需要真实容器编译 |
 | 长驻进程下的静态状态串扰 | 继承自既有架构（Webman / Hyperf 同样如此），本次未改 |
 | 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 超出单测与验证环的范围 |
+| Webman / Laravel / ThinkPHP / Hyperf 的适配器签名与语义 | 这四家未装入验证环（环只覆盖 6 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
 
 **手工冒烟清单（每个框架三步）**
 
@@ -628,4 +647,4 @@ Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看
 
 ---
 
-本插件参考 [phacility/xhprof](https://github.com/phacility/xhprof)、[phpxxb/xhprof](https://github.com/xiexianbo123/xhprof)
+本插件参考 [phacility/xhprof](https://github.com/phacility/xhprof)、[xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof)

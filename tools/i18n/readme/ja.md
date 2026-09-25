@@ -4,6 +4,14 @@ webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joo
 
 xhprof 拡張で計測データを収集し、Redis に保存します。開発者はブラウザからパフォーマンス解析レポートをすばやく確認でき、コードのパフォーマンスボトルネックを特定できます。
 
+**リクエスト記録**
+
+![リクエスト記録](doc/1.jpg)
+
+**単一実行のレポート**
+
+![単一実行のレポート](doc/2.jpg)
+
 ## 動作要件
 
 - PHP >= 8.0
@@ -226,10 +234,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+`Xhprof::index()` が HTML 文字列を返すときは、**そのまま** `return` してはいけません。Hyperf の `CoreMiddleware::transferToResponse()` は文字列の戻り値に無条件で `content-type: text/plain` を付けるため、ブラウザはレポートページをプレーンテキストとして表示します（3.0.45 / 3.1.69 / 3.2.0 の 3 版で同一の挙動を実測）。上のコードのように明示的にレスポンスを組み立てれば回避できます。認証に失敗した場合、`index()` はすでに送信済みのレスポンスオブジェクトを返すので、そのまま返してください。
 
 **3. 静的アセットのルート** — `config/routes.php`：
 
@@ -544,7 +561,9 @@ xhprof-webman/
 ├── joomla/                       # Joomla プラグイン（CMSPlugin + マニフェスト）
 ├── drupal/xhprof/                # 標準 Drupal モジュール（info / routing / services + Controller）
 ├── tools/contracts/              # 独立検証ループ：実フレームワークパッケージに対するシグネチャとセマンティクスの検証
-├── tests/                        # PHPUnit：アダプタ、配線、README の一致テスト
+├── tools/i18n/                   # README と 3 枚の SVG の翻訳ツールチェーン（生成 / 検証 / 自己テスト）
+├── docs/i18n/                    # 12 言語の訳文成果物（英語、韓国語、ロシア語、ドイツ語、フランス語、スペイン語、ポルトガル語、アラビア語、ヒンディー語、ベンガル語、インドネシア語、日本語）
+├── tests/                        # PHPUnit：アダプタ・配線・Core のテスト、14 の README の構造一致
 └── docs/images/                  # README の図
 ```
 
@@ -554,7 +573,7 @@ Drupal を除き、すべての `src/<Fw>/` ディレクトリは同じ形です
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # 他のフレームワークと同じ 9 つの設定キー
+└── config/xhprof.php             # 他のフレームワークと同じ 10 つの設定キー
 ```
 
 `src/Drupal/` だけが例外です。`config/` ディレクトリを持たず、設定はモジュールレベルの typed config（`drupal/xhprof/config/install/xhprof.settings.yml`）にあります。
@@ -570,10 +589,9 @@ src/<Fw>/
 | アダプタと入口の配線の挙動 | `tests/Unit/Adapter/*Test.php`：有効 → 保存 / 無効 → 保存しない / 業務例外 → `finally` 経由で保存される |
 | 10 フレームワークが 1 つの設定キー集合を共有 | 設定パリティテスト（キー集合のみで、バイト単位の一致は見ない。コメントは差異を許容） |
 | 2 つの README が対応している | README パリティテスト：`##` / `###` の見出し列とコードブロック数を比較 |
-| アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ）：実フレームワークパッケージをインストールし、すべてのメソッド / 定数 / グローバル関数をリフレクションで検証 |
+| アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ）：実フレームワークパッケージをインストールし、**ループに入っている 6 つのフレームワーク**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal）について、すべてのメソッド / 定数 / グローバル関数の存在をリフレクションで検証；Webman / Laravel / ThinkPHP / Hyperf はループ外（下記参照） |
 | アダプタのセマンティクス | 同じループが実際の request / response オブジェクトを生成してアダプタを走らせる。`uri()` がスキームとホストを含まないこと、`file()` の後でも `withHeaders()` が適用されることの 2 つの不変条件を含む |
 
-上記の最初の 3 行 —— アダプタと入口の配線の挙動、10 フレームワークが 1 つの設定キー集合を共有すること、2 つの README が対応していること —— は**今後の成果物**（6 フレームワークの配線ケース、設定パリティテスト、README パリティテスト）を指しており、本文書の時点では未整備です。新規 6 フレームワークについては、当面は手動スモークチェックリストを正としてください。
 
 **自動検証されていないこと（「6 つとも検証済み」と読まないでください）**
 
@@ -586,6 +604,7 @@ src/<Fw>/
 | Symfony の `kernel.event_subscriber` 自動設定 | 実際のコンテナコンパイルが必要 |
 | 長時間稼働プロセスでの静的状態の混線 | 既存アーキテクチャから引き継いだもの（Webman / Hyperf でも同様）。本件では未変更 |
 | 実際の Redis I/O、ブラウザ描画、実負荷での計測オーバーヘッド | 単体テストと検証ループの範囲外 |
+| Webman / Laravel / ThinkPHP / Hyperf のアダプタのシグネチャとセマンティクス | この 4 つは検証ループに入っていません（ループが覆うのは 6 つのフレームワーク）。スタブはパッケージ内の `tests/Stubs/framework-stubs.php` に手書きで、実パッケージとの突き合わせはありません |
 
 **手動スモークチェックリスト（フレームワークごとに 3 ステップ）**
 
@@ -626,4 +645,4 @@ Symfony 6.4 互換性は実測済みです（7.4 では見えない 2 つの過�
 
 ---
 
-本プラグインは [phacility/xhprof](https://github.com/phacility/xhprof) と [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof) を参考にしています。
+本プラグインは [phacility/xhprof](https://github.com/phacility/xhprof) と [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof) を参考にしています。

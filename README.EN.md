@@ -6,6 +6,14 @@ A code performance profiling plugin compatible with webman / Laravel / ThinkPHP 
 
 Collects profiling data via the xhprof extension and stores it in Redis. Developers can quickly access performance analysis reports through a browser to identify code performance bottlenecks.
 
+**Request Log**
+
+![Request Log](doc/1.jpg)
+
+**Single run report**
+
+![Single run report](doc/2.jpg)
+
 ## Requirements
 
 - PHP >= 8.0
@@ -228,10 +236,19 @@ class XhprofController
     public function index()
     {
         Xhprof::bootstrap();
-        return Xhprof::index();
+        $html = Xhprof::index();
+        if (!is_string($html)) {
+            return $html;
+        }
+        return $this->response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
     }
 }
 ```
+
+When `Xhprof::index()` returns an HTML string, do **not** return it directly: Hyperf's `CoreMiddleware::transferToResponse()` unconditionally adds `content-type: text/plain` to string return values, so browsers render the report as plain text (verified identical in 3.0.45 / 3.1.69 / 3.2.0). The explicit response above bypasses it; when authentication fails, `index()` returns a response object that has already been sent — return it as is.
 
 **3. Static asset routes** — `config/routes.php`:
 
@@ -546,7 +563,9 @@ xhprof-webman/
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
 ├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
-├── tests/                        # PHPUnit: adapters, wiring, README parity
+├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
+├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
+├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
 └── docs/images/                  # README diagrams
 ```
 
@@ -556,7 +575,7 @@ Except for Drupal, every `src/<Fw>/` directory has the same shape:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 9 config keys as every other framework
+└── config/xhprof.php             # the same 10 config keys as every other framework
 ```
 
 `src/Drupal/` is the one exception: it has no `config/` directory — its configuration lives in module-level typed config (`drupal/xhprof/config/install/xhprof.settings.yml`).
@@ -572,10 +591,9 @@ src/<Fw>/
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
 | All ten frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
-| The methods the adapters call really exist | `tools/contracts/` verification loop (its own CI job): installs real framework packages and asserts every method / constant / global function via reflection |
+| The methods the adapters call really exist | `tools/contracts/` verification loop (its own CI job): installs real framework packages and asserts via reflection that every method / constant / global function exists **for the six frameworks in the loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal); Webman / Laravel / ThinkPHP / Hyperf are not in the loop — see below |
 | Adapter semantics | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()` |
 
-The first three rows above — adapter and entry-wiring behaviour, one shared config key set across all ten frameworks, and the two READMEs mirroring each other — describe **future deliverables** (the six-framework wiring cases, the config parity test, the README parity test) that are not in place as of this document. For the six new frameworks, treat the manual smoke checklist as the source of truth for now.
 
 **Not automatically verified (do not read this as "all six were tested")**
 
@@ -588,6 +606,7 @@ The first three rows above — adapter and entry-wiring behaviour, one shared co
 | Symfony's `kernel.event_subscriber` auto-configuration | Requires a real container compile |
 | Static-state crosstalk in long-running processes | Inherited from the existing architecture (the same is true of Webman / Hyperf); unchanged here |
 | Real Redis I/O, browser rendering, profiling overhead under real load | Outside the scope of unit tests and the verification loop |
+| Adapter signatures and semantics for Webman / Laravel / ThinkPHP / Hyperf | these four are not in the verification loop (it covers six frameworks); their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
 
 **Manual smoke checklist (three steps per framework)**
 
@@ -628,4 +647,4 @@ Symfony 6.4 compatibility has been measured (which is how two over-fits invisibl
 
 ---
 
-This plugin references [phacility/xhprof](https://github.com/phacility/xhprof) and [phpxxb/xhprof](https://github.com/xiexianbo123/xhprof).
+This plugin references [phacility/xhprof](https://github.com/phacility/xhprof) and [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).

@@ -469,15 +469,21 @@ $body = (string) file_get_contents($readmeSource);
 $translated = array_fill_keys(I18N_DOCS, true);
 $up = str_repeat('../', i18n_out_depth());
 $rewrite = function (string $url) use ($translated, $up): string {
-    if (preg_match('#^(?:\./)?docs/(.+)$#', $url, $m)) {
-        $rest = $m[1];
+    // `docs/` 与 `doc/` 都要重写：前者是配图与译文，后者是两张报告页截图
+    // （`doc/1.jpg` 请求记录页、`doc/2.jpg` 单次运行报告）。只重写 `docs/` 时，
+    // 截图在 12 份译文里会指向 `docs/i18n/<lang>/doc/1.jpg`（不存在），而
+    // check.php 的「相对链接必须解析得动」正是用来抓这个的。
+    if (preg_match('#^(?:\./)?(docs?)/(.+)$#', $url, $m)) {
+        $dir = $m[1];
+        $rest = $m[2];
         $base = basename($rest);
-        if (isset($translated[pathinfo($base, PATHINFO_FILENAME)])
+        if ($dir === 'docs'
+            && isset($translated[pathinfo($base, PATHINFO_FILENAME)])
             && pathinfo($base, PATHINFO_EXTENSION) === 'svg'
             && dirname($rest) === 'images') {
             return './images/' . $base;
         }
-        return $up . 'docs/' . $rest;
+        return $up . $dir . '/' . $rest;
     }
     return $url;
 };
