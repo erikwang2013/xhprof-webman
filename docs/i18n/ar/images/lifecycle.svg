@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" direction="rtl">
+  <title>دورة حياة طلب واحد خاضع للتنميط</title>
+  <desc>النصف الأعلى هو مراحل الطلب الخاضع للتنميط الثماني: دخول الطلب، ثم فحص فئة المدخل لمسار التقرير ومسار الموارد أولًا (والإصابة تتجاوز التنميط)، ثم حقن Xhprof::bootstrap للمحوّلات الخمسة، ثم الفحص المزدوج isEnabled و extension_loaded، ثم xhprofStart، ثم منطق العمل، ثم xhprofStop داخل finally، ثم save_run الذي يكتب في Redis. والنصف الأسفل خمسة مسارات تبيّن بأشرطة ملونة مواضع بدء كل من PSR-15 (Yii3 / Slim) و Symfony و WordPress و Joomla و Drupal للتنميط وإيقافه، مع احتياطي shutdown لكل منها. ترجمة آلية غير مُراجَعة. هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. النسخة الإنجليزية هي المرجع المعتمد: README.EN.md.</desc>
+
+  <defs>
+    <marker id="lc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="560" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f" text-anchor="end">دورة حياة طلب واحد خاضع للتنميط</text>
+  <text x="32" y="70" font-size="13" fill="#57606a" text-anchor="end">من دخول الطلب إلى الحفظ في Redis؛ و finally يضمن إيقاف التنميط دائمًا</text>
+
+  <!-- ============ 管线 8 阶段 ============ -->
+  <!-- 1 请求进入 -->
+  <rect x="44" y="100" width="139" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <circle cx="60" cy="118" r="9" fill="#0969da"/>
+  <text x="60" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">1</text>
+  <text x="54" y="142" font-size="10.5" fill="#24292f" text-anchor="end">دخول الطلب</text>
+  <text x="54" y="156" font-size="7.87" fill="#57606a" text-anchor="end"><tspan x="54">يدخل خط معالجة الطلبات في</tspan><tspan x="54" dy="9.8">الإطار</tspan></text>
+  <line x1="172" y1="148" x2="182" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 2 入口类短路判断 -->
+  <rect x="184" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <circle cx="200" cy="118" r="9" fill="#bc4c00"/>
+  <text x="200" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">2</text>
+  <text x="194" y="142" font-size="9.93" fill="#24292f" text-anchor="end">فئة المدخل تفحص أولًا</text>
+  <text x="194" y="156" font-size="9.2" fill="#57606a" text-anchor="end">مسار التقرير / الموارد</text>
+  <text x="194" y="170" font-size="8.72" fill="#57606a" text-anchor="end">الإصابة تتجاوز التنميط</text>
+  <text x="194" y="184" font-size="10.5" fill="#57606a" text-anchor="end">(بدون تنميط)‎</text>
+  <line x1="312" y1="148" x2="322" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 3 bootstrap -->
+  <rect x="324" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <circle cx="340" cy="118" r="9" fill="#0969da"/>
+  <text x="340" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">3</text>
+  <text x="334" y="142" font-size="10.5" fill="#24292f" direction="ltr">Xhprof::</text>
+  <text x="334" y="156" font-size="10.5" fill="#24292f" direction="ltr">bootstrap()</text>
+  <text x="334" y="170" font-size="10.5" fill="#57606a" text-anchor="end">تحقن صريحًا</text>
+  <text x="334" y="184" font-size="10.5" fill="#57606a" text-anchor="end">5 محوّلات</text>
+  <line x1="452" y1="148" x2="462" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 4 双重判断 -->
+  <rect x="464" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <circle cx="480" cy="118" r="9" fill="#0969da"/>
+  <text x="480" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">4</text>
+  <text x="474" y="142" font-size="10.5" fill="#24292f" direction="ltr">isEnabled()</text>
+  <text x="474" y="156" font-size="10.5" fill="#24292f" direction="ltr">&amp;&amp; extension_</text>
+  <text x="474" y="170" font-size="10.5" fill="#24292f" direction="ltr">loaded('xhprof')</text>
+  <line x1="592" y1="148" x2="602" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 5 xhprofStart -->
+  <rect x="604" y="100" width="128" height="96" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <circle cx="620" cy="118" r="9" fill="#0969da"/>
+  <text x="620" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">5</text>
+  <text x="614" y="142" font-size="10.5" fill="#24292f" direction="ltr">xhprofStart()</text>
+  <text x="614" y="156" font-size="10.5" fill="#57606a" text-anchor="end">يبدأ التنميط</text>
+  <line x1="732" y1="148" x2="742" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 6 业务处理 -->
+  <rect x="744" y="100" width="128" height="96" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <circle cx="760" cy="118" r="9" fill="#0969da"/>
+  <text x="760" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">6</text>
+  <text x="754" y="142" font-size="10.5" fill="#24292f" text-anchor="end">منطق العمل</text>
+  <text x="754" y="156" font-size="10.5" fill="#57606a" direction="ltr">handler / next</text>
+  <line x1="872" y1="148" x2="882" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 7 finally stop -->
+  <rect x="884" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <circle cx="900" cy="118" r="9" fill="#1a7f37"/>
+  <text x="900" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">7</text>
+  <text x="894" y="142" font-size="10.5" fill="#24292f" direction="ltr">finally</text>
+  <text x="894" y="156" font-size="10.5" fill="#24292f" direction="ltr">xhprofStop()</text>
+  <text x="894" y="170" font-size="8.95" fill="#57606a" text-anchor="end">يُنفَّذ حتى عند الاستثناء</text>
+  <line x1="1012" y1="148" x2="1022" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
+
+  <!-- 8 save_run -->
+  <rect x="1024" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <circle cx="1040" cy="118" r="9" fill="#1a7f37"/>
+  <text x="1040" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle" direction="ltr">8</text>
+  <text x="1034" y="142" font-size="10.5" fill="#24292f" direction="ltr">save_run()</text>
+  <text x="1034" y="156" font-size="10.5" fill="#57606a" text-anchor="end">كتابة إلى Redis</text>
+  <text x="1034" y="170" font-size="10.5" fill="#57606a" text-anchor="end">الفشل يُسجَّل فقط</text>
+
+  <!-- 短路说明 + 图例 -->
+  <text x="44" y="216" font-size="11.5" fill="#57606a" text-anchor="end">التجاوز المبكر: مسار التقرير → withBody(Xhprof::index())-&gt;send()‎؛ assets_url → StaticController::serve()‎؛ ولا يُنمَّط أي منهما</text>
+  <rect x="880" y="204" width="14" height="14" rx="3" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="900" y="215.5" font-size="11.5" fill="#57606a" text-anchor="end">تنميط جارٍ</text>
+  <rect x="970" y="204" width="14" height="14" rx="3" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="990" y="215.5" font-size="11.5" fill="#57606a" text-anchor="end">يُنفَّذ دائمًا</text>
+
+  <!-- ============ 泳道：各框架采样起止点 ============ -->
+  <text x="44" y="252" font-size="14" font-weight="600" fill="#24292f" text-anchor="end">أين يبدأ كل إطار التنميط وأين يوقفه</text>
+  <text x="1156" y="252" font-size="11.5" fill="#57606a" text-anchor="start">الشريط الممتلئ = نافذة التنميط؛ والذيل المتقطع = احتياطي shutdown (الأشرطة تبيّن البداية والنهاية النسبية فقط، لا نسبة الزمن)</text>
+
+  <!-- 阶段轴 -->
+  <line x1="340" y1="284" x2="1156" y2="284" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="560" y1="280" x2="560" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="700" y1="280" x2="700" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="980" y1="280" x2="980" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <line x1="1080" y1="280" x2="1080" y2="288" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="450" y="278" font-size="10" fill="#57606a" text-anchor="middle">الإقلاع</text>
+  <text x="630" y="278" font-size="10" fill="#57606a" text-anchor="middle">التوجيه والإرسال</text>
+  <text x="840" y="278" font-size="10" fill="#57606a" text-anchor="middle">منطق العمل</text>
+  <text x="1030" y="278" font-size="10" fill="#57606a" text-anchor="middle">الاستجابة</text>
+  <text x="1118" y="278" font-size="10" fill="#57606a" text-anchor="middle" direction="ltr">shutdown</text>
+
+  <!-- 泳道 1：PSR-15 -->
+  <text x="44" y="308" font-size="11.5" font-weight="600" fill="#24292f" direction="ltr">PSR-15 (Yii3 / Slim)‎</text>
+  <text x="44" y="324" font-size="10.5" fill="#57606a" direction="ltr">XhprofMiddleware · PSR-15</text>
+  <rect x="340" y="300" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="620" y="300" width="360" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="630" y="317" font-size="9.5" fill="#0550ae" direction="ltr">process()</text>
+  <text x="970" y="317" font-size="9.5" fill="#0550ae" text-anchor="end" direction="ltr">finally</text>
+
+  <!-- 泳道 2：Symfony -->
+  <text x="44" y="358" font-size="11.5" font-weight="600" fill="#24292f" direction="ltr">Symfony</text>
+  <text x="44" y="374" font-size="10.5" fill="#57606a" text-anchor="end">XhprofListener · احتياطي shutdown</text>
+  <rect x="340" y="350" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="420" y="350" width="560" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <rect x="980" y="350" width="100" height="24" rx="6" fill="#ffffff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="430" y="367" font-size="9.5" fill="#0550ae" direction="ltr">kernel.request @10000</text>
+  <text x="970" y="367" font-size="9.5" fill="#0550ae" text-anchor="end" direction="ltr">kernel.response @-10000</text>
+
+  <!-- 泳道 3：WordPress -->
+  <text x="44" y="408" font-size="11.5" font-weight="600" fill="#24292f" direction="ltr">WordPress</text>
+  <text x="44" y="424" font-size="10.5" fill="#57606a" text-anchor="end">XhprofPlugin · إضافة WordPress</text>
+  <rect x="340" y="400" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="520" y="400" width="560" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="530" y="417" font-size="9.5" fill="#0550ae" direction="ltr">plugins_loaded</text>
+  <text x="1070" y="417" font-size="9.5" fill="#0550ae" text-anchor="end" direction="ltr">shutdown</text>
+  <text x="336" y="408" font-size="9.5" fill="#bc4c00" text-anchor="start">لا يشمل الإقلاع وتحميل الإضافات</text>
+
+  <!-- 泳道 4：Joomla -->
+  <text x="44" y="458" font-size="11.5" font-weight="600" fill="#24292f" direction="ltr">Joomla</text>
+  <text x="44" y="474" font-size="10.5" fill="#57606a" text-anchor="end">Joomla\Extension\Xhprof · احتياطي shutdown قابل للتكرار بأمان</text>
+  <rect x="340" y="450" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="470" y="450" width="510" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <rect x="980" y="450" width="100" height="24" rx="6" fill="#ffffff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="480" y="467" font-size="9.5" fill="#0550ae" direction="ltr">AFTER_INITIALISE</text>
+  <text x="970" y="467" font-size="9.5" fill="#0550ae" text-anchor="end" direction="ltr">AFTER_RESPOND</text>
+
+  <!-- 泳道 5：Drupal -->
+  <text x="44" y="508" font-size="11.5" font-weight="600" fill="#24292f" direction="ltr">Drupal</text>
+  <text x="44" y="524" font-size="10.5" fill="#57606a" text-anchor="end">XhprofMiddleware · وسيط HttpKernel</text>
+  <rect x="340" y="500" width="816" height="24" rx="6" fill="#f6f8fa" stroke="#e1e4e8"/>
+  <rect x="440" y="500" width="540" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="450" y="517" font-size="9.5" fill="#0550ae" text-anchor="end">http_middleware بأولوية 1000 (الطبقة الخارجية)</text>
+  <text x="970" y="517" font-size="9.5" fill="#0550ae" text-anchor="end" direction="ltr">finally</text>
+</svg>

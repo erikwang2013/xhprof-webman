@@ -1,0 +1,52 @@
+name: i18n
+
+# 译文与图的多语言工具链。与其它 workflow 分开是刻意的 —— 这里的失败含义
+# 与其他 job 完全不同：
+#
+#   * ci.yml 的单测失败 = 代码行为不对；
+#   * contracts.yml 的失败 = 契约桩与真实包不符；
+#   * **这里的失败 = 某份译文/图与它的术语表脱节，或工具自身不可信。**
+#
+# 补的是一个真实缺口：在此之前**没有任何 workflow 跑 `tools/i18n` 的东西**，
+# 而 `tests/Unit/Docs/I18nParityTest.php` 只校验 README 的结构、切换器与链接深度，
+# **不比对 SVG 文本与术语表**。于是「本地生成被 generate.php 拒绝 → 提交旧图 →
+# CI 全绿」是可能的 —— bn 卡住那次就是这个状态（绿门禁罩着陈旧产物）。
+#
+# tools/i18n/*.php 全部合 PHP 8.0 语法（已用 php-parser 按 8.0 解析验证），
+# 所以这里不放进 ci.yml 的 8.0–8.4 矩阵，而是单版本跑一次；矩阵的价值在
+# 「下限能不能跑」，而这里的下限已由语法检查保证。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  i18n:
+    name: 多语言工具链（自测 + 12 语言门禁）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          # check.php 用 DOMDocument 解析 SVG；mbstring 用于字数与宽度。
+          extensions: dom, mbstring
+          coverage: none
+      # ci.yml 的 lint 只覆盖 `find src tests`（tools/contracts 要 PHP 8.2，
+      # 放进 8.0–8.4 的矩阵会红），所以 tools/i18n 的 lint 落在这里。
+      - name: Lint the i18n tooling
+        run: find tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
+      # 自测先跑：它证明这些门禁在**该红的时候真的会红**。一个从未见过失败的
+      # 检查等于没有检查，所以让它先于门禁本身失败。
+      - name: Self-test must pass before the gates are trusted
+        run: php tools/i18n/selftest.php
+      # 任一语言非零即整步失败（bash -e）。--lang 的 warn 不影响退出码；
+      # FAIL 才会 —— 这正是「结构不合规」与「值得一看」的区别。
+      - name: Every locale passes its own gate
+        run: |
+          for lang in en ko ru de fr es pt ar hi bn id ja; do
+            echo "::group::$lang"
+            php tools/i18n/check.php --lang="$lang"
+            echo "::endgroup::"
+          done

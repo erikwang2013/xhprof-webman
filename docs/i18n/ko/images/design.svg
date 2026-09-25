@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+  <title>설계 트레이드오프: 결정, 이유, 비용</title>
+  <desc>다섯 가지 핵심 결정을 대조한 표로, 각 항목이 결정 자체와 그것이 얻은 이익, 그리고 치른 비용을 나열합니다: Core는 계약 5개에만 의존, 진입 클래스가 보고서 페이지를 자체 제공, 공유 계층을 뽑지 않음, 스텁은 독립 검증 루프가 검사, autoDetect 대신 명시적 주입. 기계 번역. 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 영문판을 기준으로 하십시오.</desc>
+
+  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">설계 트레이드오프: 결정 → 이유 → 비용</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">다섯 가지 결정이 각각 무엇을 얻고 무엇을 치렀는가</text>
+
+  <!-- 结论条 -->
+  <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">이번 신규 프레임워크 6개의 src/Core/ 변경 수 = 0</text>
+
+  <!-- ============ 表头 ============ -->
+  <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="38" y="157" width="10" height="10" rx="2" fill="#0969da"/>
+  <text x="56" y="168" font-size="12.5" font-weight="600" fill="#0969da">결정 · 무엇을 골랐나</text>
+
+  <rect x="412" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="426" y="157" width="10" height="10" rx="2" fill="#1a7f37"/>
+  <text x="444" y="168" font-size="12.5" font-weight="600" fill="#1a7f37">이유 · 무엇을 얻었나</text>
+
+  <rect x="800" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="814" y="157" width="10" height="10" rx="2" fill="#bc4c00"/>
+  <text x="832" y="168" font-size="12.5" font-weight="600" fill="#bc4c00">비용 · 무엇을 치렀나</text>
+
+  <!-- ============ 第 1 行：Core 只依赖 5 个契约 ============ -->
+  <rect x="24" y="182" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="204" font-size="12.5" font-weight="600" fill="#0550ae">Core는 계약 인터페이스 5개에만 의존</text>
+  <text x="40" y="224" font-size="11" fill="#24292f">src/Core/ 는 그 인터페이스 5개만 import하고,</text>
+  <text x="40" y="240" font-size="11" fill="#24292f">프레임워크 클래스는 import하지 않음</text>
+
+  <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">프레임워크 추가 = 디렉터리 하나 추가</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">신규 6개 프레임워크의 src/Core/ 변경 0줄;</text>
+  <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel 동작에도 영향 없음</text>
+
+  <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">같은 계약을 10번 구현</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">프레임워크 10개가 각각 Adapter 5개를 작성,</text>
+  <text x="816" y="240" font-size="11" fill="#24292f">계약은 그대로지만 구현은 반복 재작성</text>
+
+  <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
+  <rect x="24" y="272" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="294" font-size="12.5" font-weight="600" fill="#0550ae">진입 클래스가 보고서 페이지를 자체 제공</text>
+  <text x="40" y="314" font-size="11" fill="#24292f">진입 클래스가 start 전에 경로를 확인; 보고서 페이지면</text>
+  <text x="40" y="330" font-size="11" fill="#24292f">withBody(Xhprof::index())-&gt;send() 로 즉시 반환</text>
+
+  <rect x="412" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="294" font-size="12.5" font-weight="600" fill="#1a7f37">프레임워크마다 작업 3개 제거</text>
+  <text x="428" y="314" font-size="11" fill="#24292f">컨트롤러 작성 불필요, 보고서 페이지 라우트 등록 불필요,</text>
+  <text x="428" y="330" font-size="11" fill="#24292f">리소스 라우트 등록 불필요</text>
+
+  <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">단락 로직이 10번 중복</text>
+  <text x="816" y="314" font-size="11" fill="#24292f">그 3곳이야말로 잘못 짚어도 테스트가 못 잡는 자리,</text>
+  <text x="816" y="330" font-size="11" fill="#24292f">중복이 확실성을 삼 (Drupal 표준 모듈은 예외)</text>
+
+  <!-- ============ 第 3 行：不抽共享层 ============ -->
+  <rect x="24" y="362" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="384" font-size="12.5" font-weight="600" fill="#0550ae">공유 계층을 뽑아내지 않음</text>
+  <text x="40" y="404" font-size="11" fill="#24292f">PSR-7 (Yii3 / Slim) 과 HttpFoundation 은</text>
+  <text x="40" y="420" font-size="11" fill="#24292f">(Symfony / Drupal) 모양이 같은데도 각각 따로 구현</text>
+
+  <rect x="412" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="384" font-size="12.5" font-weight="600" fill="#1a7f37">프레임워크끼리 완전히 격리</text>
+  <text x="428" y="404" font-size="11" fill="#24292f">한 프레임워크의 어댑터 변경이 다른 쪽으로 번지지 않고,</text>
+  <text x="428" y="420" font-size="11" fill="#24292f">공유 파일 충돌 면적이 최소</text>
+
+  <rect x="800" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="384" font-size="12.5" font-weight="600" fill="#bc4c00">거의 중복인 어댑터 약 30개</text>
+  <text x="816" y="404" font-size="11" fill="#24292f">중복은 장부 안, 드리프트는 장부 밖 —</text>
+  <text x="816" y="420" font-size="11" fill="#24292f">parity 테스트가 드리프트를 빨간불로</text>
+
+  <!-- ============ 第 4 行：桩由独立验证环校验 ============ -->
+  <rect x="24" y="452" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="474" font-size="12.5" font-weight="600" fill="#0550ae">스텁은 독립 검증 루프가 검사</text>
+  <text x="40" y="494" font-size="11" fill="#24292f">어댑터를 쓰는 사람이 자기가 의존하는 스텁을 쓰지 않고,</text>
+  <text x="40" y="510" font-size="11" fill="#24292f">스텁·시그니처·의미를 검증 루프가 독립적으로 확인</text>
+
+  <rect x="412" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="474" font-size="12.5" font-weight="600" fill="#1a7f37">순환 논증을 끊음</text>
+  <text x="428" y="494" font-size="11" fill="#24292f">그렇지 않으면 스텁이 작성자의 프레임워크 API 추측을 그대로 담아:</text>
+  <text x="428" y="510" font-size="11" fill="#24292f">단위 테스트는 전부 초록, 실기에서는 Call to undefined method</text>
+
+  <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">검증 깊이가 고르지 않음</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">L2 의미 검증은 4.5/6 커버; WordPress 는 커버 불가,</text>
+  <text x="816" y="510" font-size="11" fill="#24292f">소스 텍스트 검사와 수동 스모크 테스트뿐</text>
+
+  <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
+  <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">autoDetect 대신 명시적 주입</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">신규 6개 프레임워크 모두 명시적 주입:</text>
+  <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
+
+  <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="564" font-size="12.5" font-weight="600" fill="#1a7f37">절대 실행되지 않는 분기를 제거</text>
+  <text x="428" y="584" font-size="11" fill="#24292f">탐색 클래스 이름을 잘못 쓰면 → 분기가 영영 실행되지 않고;</text>
+  <text x="428" y="600" font-size="11" fill="#24292f">이 저장소의 Hyperf 분기가 이미 한 번 당함</text>
+
+  <rect x="800" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="564" font-size="12.5" font-weight="600" fill="#bc4c00">진입 클래스가 어댑터를 직접 모아야 함</text>
+  <text x="816" y="584" font-size="11" fill="#24292f">Core는 더 이상 탐색하지 않고 각 진입 클래스가 작성</text>
+  <text x="816" y="600" font-size="11" fill="#24292f">약 30줄 (어댑터 5개 생성 포함)</text>
+</svg>

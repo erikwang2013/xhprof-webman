@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+  <title>নকশার ট্রেড-অফ: সিদ্ধান্ত, কারণ ও খরচ</title>
+  <desc>পাঁচটি মূল সিদ্ধান্তের তুলনামূলক সারণি, প্রতিটিতে সিদ্ধান্তটি, তার প্রাপ্ত সুবিধা ও তার মূল্য দেওয়া আছে: Core কেবল ৫টি চুক্তির উপর নির্ভর করে, এন্ট্রি ক্লাস নিজেরাই রিপোর্ট পেজ পরিবেশন করে, কোনো শেয়ার্ড স্তর আলাদা করা হয়নি, স্টাব যাচাই করে একটি স্বাধীন যাচাইকরণ লুপ, আর autoDetect-এর বদলে স্পষ্ট ইনজেকশন। যন্ত্রানুবাদ। এই নথিটি স্বয়ংক্রিয়ভাবে অনূদিত হয়েছে এবং কোনো মাতৃভাষী দ্বারা পুনরালোচিত হয়নি। নির্ভরযোগ্য তথ্যের জন্য ইংরেজি সংস্করণ README.EN.md দেখুন।</desc>
+
+  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">নকশার ট্রেড-অফ: সিদ্ধান্ত → কারণ → খরচ</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">পাঁচটি সিদ্ধান্তের প্রত্যেকে কী এনেছে, আর কী দিতে হয়েছে</text>
+
+  <!-- 结论条 -->
+  <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">৬টি নতুন ফ্রেমওয়ার্ক থেকে src/Core/ -এ পরিবর্তন = 0</text>
+
+  <!-- ============ 表头 ============ -->
+  <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="38" y="157" width="10" height="10" rx="2" fill="#0969da"/>
+  <text x="56" y="168" font-size="12.5" font-weight="600" fill="#0969da">সিদ্ধান্ত · আমরা কী বেছেছি</text>
+
+  <rect x="412" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="426" y="157" width="10" height="10" rx="2" fill="#1a7f37"/>
+  <text x="444" y="168" font-size="12.5" font-weight="600" fill="#1a7f37">কারণ · কী এনেছে</text>
+
+  <rect x="800" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="814" y="157" width="10" height="10" rx="2" fill="#bc4c00"/>
+  <text x="832" y="168" font-size="12.5" font-weight="600" fill="#bc4c00">খরচ · কী দিতে হয়েছে</text>
+
+  <!-- ============ 第 1 行：Core 只依赖 5 个契约 ============ -->
+  <rect x="24" y="182" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="204" font-size="12.5" font-weight="600" fill="#0550ae">Core কেবল ৫টি চুক্তি ইন্টারফেসের উপর নির্ভর করে</text>
+  <text x="40" y="224" font-size="11" fill="#24292f">src/Core/ কেবল ওই ৫টি ইন্টারফেস import করে,</text>
+  <text x="40" y="240" font-size="11" fill="#24292f">কোনো ফ্রেমওয়ার্ক ক্লাস import করে না</text>
+
+  <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">ফ্রেমওয়ার্ক যোগ = একটি ডিরেক্টরি যোগ</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">৬টি নতুন ফ্রেমওয়ার্ক src/Core/ -এর 0 লাইন বদলায়;</text>
+  <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel-এর আচরণও অপরিবর্তিত</text>
+
+  <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">একই চুক্তি ১০ বার বাস্তবায়িত</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">১০টি ফ্রেমওয়ার্ক প্রত্যেকে ৫টি Adapter লেখে,</text>
+  <text x="816" y="240" font-size="11" fill="#24292f">চুক্তি অটুট থাকে কিন্তু বাস্তবায়ন বারবার নতুন করে লেখা হয়</text>
+
+  <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
+  <rect x="24" y="272" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="294" font-size="12.5" font-weight="600" fill="#0550ae">এন্ট্রি ক্লাস নিজেরাই রিপোর্ট পেজ পরিবেশন করে</text>
+  <text x="40" y="314" font-size="11" fill="#24292f">এন্ট্রি ক্লাস start-এর আগে পাথ যাচাই করে; রিপোর্ট পেজে হিট হলে</text>
+  <text x="40" y="330" font-size="11" fill="#24292f">সঙ্গে সঙ্গে withBody(Xhprof::index())-&gt;send() দিয়ে ফিরে আসে</text>
+
+  <rect x="412" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="294" font-size="12.5" font-weight="600" fill="#1a7f37">প্রতি ফ্রেমওয়ার্কে ৩টি কাজ বাদ দেয়</text>
+  <text x="428" y="314" font-size="11" fill="#24292f">কন্ট্রোলার লিখতে হয় না, রিপোর্ট পেজের রুট নিবন্ধন করতে হয় না,</text>
+  <text x="428" y="330" font-size="11" fill="#24292f">অ্যাসেট রুট নিবন্ধন করতে হয় না</text>
+
+  <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">শর্ট সার্কিট লজিক ১০ বার পুনরাবৃত্ত</text>
+  <text x="816" y="314" font-size="11" fill="#24292f">ওই ৩টি জায়গাই ঠিক যেখানে ভুল অনুমান টেস্টের চোখ এড়িয়ে যায়,</text>
+  <text x="816" y="330" font-size="11" fill="#24292f">পুনরাবৃত্তি নিশ্চয়তা কেনে (Drupal স্ট্যান্ডার্ড মডিউলটি ব্যতিক্রম)</text>
+
+  <!-- ============ 第 3 行：不抽共享层 ============ -->
+  <rect x="24" y="362" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="384" font-size="12.5" font-weight="600" fill="#0550ae">কোনো শেয়ার্ড স্তর আলাদা করা হয়নি</text>
+  <text x="40" y="404" font-size="11" fill="#24292f">PSR-7 (Yii3 / Slim) ও HttpFoundation</text>
+  <text x="40" y="420" font-size="10.68" fill="#24292f">(Symfony / Drupal) একই আকারের, তবু প্রত্যেকটি আলাদাভাবে বাস্তবায়িত</text>
+
+  <rect x="412" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="384" font-size="12.5" font-weight="600" fill="#1a7f37">ফ্রেমওয়ার্কগুলো সম্পূর্ণ বিচ্ছিন্ন থাকে</text>
+  <text x="428" y="404" font-size="11" fill="#24292f">একটি ফ্রেমওয়ার্কের অ্যাডাপ্টার বদলালে অন্যটিতে পৌঁছায় না,</text>
+  <text x="428" y="420" font-size="11" fill="#24292f">তাই শেয়ার্ড ফাইলের সংঘর্ষ ন্যূনতম থাকে</text>
+
+  <rect x="800" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="384" font-size="12.5" font-weight="600" fill="#bc4c00">প্রায় ৩০টি প্রায়-একই অ্যাডাপ্টার</text>
+  <text x="816" y="404" font-size="11" fill="#24292f">ডুপ্লিকেশন খাতায় লেখা, ড্রিফট খাতার বাইরে —</text>
+  <text x="816" y="420" font-size="11" fill="#24292f">parity টেস্ট ড্রিফটকে লাল বাতিতে পরিণত করে</text>
+
+  <!-- ============ 第 4 行：桩由独立验证环校验 ============ -->
+  <rect x="24" y="452" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="474" font-size="12.5" font-weight="600" fill="#0550ae">স্টাব যাচাই করে একটি স্বাধীন যাচাইকরণ লুপ</text>
+  <text x="40" y="494" font-size="11" fill="#24292f">যে অ্যাডাপ্টার লেখে সে তার নির্ভর করা স্টাব লেখে না,</text>
+  <text x="40" y="510" font-size="11" fill="#24292f">স্টাব, সিগনেচার ও সিমান্টিক্স স্বাধীনভাবে যাচাই করা হয়</text>
+
+  <rect x="412" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="474" font-size="12.5" font-weight="600" fill="#1a7f37">চক্রাকার যুক্তি ভাঙে</text>
+  <text x="428" y="494" font-size="9.69" fill="#24292f">নাহলে স্টাবটি লেখকের ফ্রেমওয়ার্ক API নিয়ে অনুমান বিশ্বস্তভাবে ধারণ করে:</text>
+  <text x="428" y="510" font-size="11" fill="#24292f">ইউনিট টেস্ট সব সবুজ, আর আসল মেশিনে Call to undefined method</text>
+
+  <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">যাচাইয়ের গভীরতা অসম</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">L2 সিমান্টিক্স 4.5/6 কভার করে; WordPress কভার করা যায় না,</text>
+  <text x="816" y="510" font-size="11" fill="#24292f">কেবল সোর্স টেক্সট যাচাই আর একটি ম্যানুয়াল স্মোক টেস্ট</text>
+
+  <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
+  <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">autoDetect-এর বদলে স্পষ্ট ইনজেকশন</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">৬টি নতুন ফ্রেমওয়ার্কই স্পষ্ট ইনজেকশন ব্যবহার করে:</text>
+  <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
+
+  <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="564" font-size="12.5" font-weight="600" fill="#1a7f37">যে শাখা কখনো নড়বে না তা নির্মূল করে</text>
+  <text x="428" y="584" font-size="11" fill="#24292f">অনুসন্ধানের ক্লাসের নাম ভুল লিখলে → শাখা কখনো নড়ে না;</text>
+  <text x="428" y="600" font-size="11" fill="#24292f">এই রিপোতে Hyperf শাখাটি একবার সেই আঘাত খেয়েছে</text>
+
+  <rect x="800" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="564" font-size="12.5" font-weight="600" fill="#bc4c00">এন্ট্রি ক্লাসকে নিজেদের অ্যাডাপ্টার জোগাড় করতে হয়</text>
+  <text x="816" y="584" font-size="11" fill="#24292f">Core আর অন্বেষণ করে না; প্রতিটি এন্ট্রি ক্লাস নিজে লেখে</text>
+  <text x="816" y="600" font-size="11" fill="#24292f">প্রায় ৩০ লাইন (৫টি অ্যাডাপ্টার নির্মাণসহ)</text>
+</svg>

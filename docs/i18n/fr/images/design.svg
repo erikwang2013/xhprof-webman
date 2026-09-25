@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+  <title>Compromis de conception : décision, raison et coût</title>
+  <desc>Un comparatif de cinq décisions clés, chacune listant la décision, le bénéfice qu'elle a apporté et le coût qu'elle a occasionné : Core ne dépend que de 5 contrats, les classes d'entrée servent elles-mêmes la page de rapport, aucune couche partagée n'est extraite, les stubs sont vérifiés par une boucle de vérification indépendante, et les six nouveaux frameworks utilisent l'injection explicite plutôt qu'autoDetect. Traduction automatique. Ce document a été traduit automatiquement et n'a pas été relu par un traducteur natif ; en cas de divergence, la version anglaise (README.EN.md) fait foi.</desc>
+
+  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">Compromis de conception : décision → raison → coût</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">Ce que chacune des cinq décisions a apporté, et ce qu'elle a coûté</text>
+
+  <!-- 结论条 -->
+  <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">changements de src/Core/ dus aux 6 nouveaux frameworks = 0</text>
+
+  <!-- ============ 表头 ============ -->
+  <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="38" y="157" width="10" height="10" rx="2" fill="#0969da"/>
+  <text x="56" y="168" font-size="12.5" font-weight="600" fill="#0969da">Décision · ce que nous avons choisi</text>
+
+  <rect x="412" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="426" y="157" width="10" height="10" rx="2" fill="#1a7f37"/>
+  <text x="444" y="168" font-size="12.5" font-weight="600" fill="#1a7f37">Raison · ce que ça a apporté</text>
+
+  <rect x="800" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="814" y="157" width="10" height="10" rx="2" fill="#bc4c00"/>
+  <text x="832" y="168" font-size="12.5" font-weight="600" fill="#bc4c00">Coût · ce que ça a coûté</text>
+
+  <!-- ============ 第 1 行：Core 只依赖 5 个契约 ============ -->
+  <rect x="24" y="182" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="204" font-size="12.5" font-weight="600" fill="#0550ae">Core ne dépend que des 5 interfaces de contrat</text>
+  <text x="40" y="224" font-size="11" fill="#24292f">src/Core/ n'importe que ces 5 interfaces,</text>
+  <text x="40" y="240" font-size="11" fill="#24292f">et n'importe aucune classe de framework</text>
+
+  <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">ajouter un framework = ajouter un répertoire</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">les 6 nouveaux frameworks changent 0 ligne de src/Core/ ;</text>
+  <text x="428" y="240" font-size="11" fill="#24292f">le comportement de Webman/Laravel est inchangé aussi</text>
+
+  <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">le même contrat implémenté 10 fois</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">10 frameworks écrivent chacun 5 Adapter,</text>
+  <text x="816" y="240" font-size="11" fill="#24292f">le contrat tient mais l'implémentation est réécrite</text>
+
+  <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
+  <rect x="24" y="272" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="294" font-size="12.27" font-weight="600" fill="#0550ae">les classes d'entrée servent la page de rapport elles-mêmes</text>
+  <text x="40" y="314" font-size="11" fill="#24292f">la classe d'entrée vérifie le chemin avant start ; page de rapport trouvée</text>
+  <text x="40" y="330" font-size="11" fill="#24292f">renvoie aussitôt avec withBody(Xhprof::index())-&gt;send()</text>
+
+  <rect x="412" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="294" font-size="12.5" font-weight="600" fill="#1a7f37">supprime 3 tâches par framework</text>
+  <text x="428" y="314" font-size="11" fill="#24292f">pas de contrôleur à écrire, pas de route de rapport à enregistrer,</text>
+  <text x="428" y="330" font-size="11" fill="#24292f">pas de route d'assets à enregistrer</text>
+
+  <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">la logique de court-circuit répétée 10 fois</text>
+  <text x="816" y="314" font-size="11" fill="#24292f">ces 3 points sont exactement là où une erreur échappe aux tests,</text>
+  <text x="816" y="330" font-size="10.65" fill="#24292f">la répétition achète la certitude (le module standard Drupal est l'exception)</text>
+
+  <!-- ============ 第 3 行：不抽共享层 ============ -->
+  <rect x="24" y="362" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="384" font-size="12.5" font-weight="600" fill="#0550ae">aucune couche partagée extraite</text>
+  <text x="40" y="404" font-size="11" fill="#24292f">PSR-7 (Yii3 / Slim) et HttpFoundation</text>
+  <text x="40" y="420" font-size="10.56" fill="#24292f">(Symfony / Drupal) ont la même forme, mais chacun est implémenté à part</text>
+
+  <rect x="412" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="384" font-size="12.5" font-weight="600" fill="#1a7f37">les frameworks restent totalement isolés</text>
+  <text x="428" y="404" font-size="11" fill="#24292f">modifier l'adaptateur d'un framework ne peut pas atteindre un autre,</text>
+  <text x="428" y="420" font-size="11" fill="#24292f">les conflits de fichiers partagés restent minimes</text>
+
+  <rect x="800" y="362" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="384" font-size="12.5" font-weight="600" fill="#bc4c00">environ 30 adaptateurs quasi identiques</text>
+  <text x="816" y="404" font-size="11" fill="#24292f">la duplication est un coût visible, la dérive un coût caché —</text>
+  <text x="816" y="420" font-size="11" fill="#24292f">les tests parity transforment la dérive en signal rouge</text>
+
+  <!-- ============ 第 4 行：桩由独立验证环校验 ============ -->
+  <rect x="24" y="452" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="474" font-size="10.87" font-weight="600" fill="#0550ae">les stubs sont vérifiés par une boucle de vérification indépendante</text>
+  <text x="40" y="494" font-size="11" fill="#24292f">celui qui écrit un adaptateur n'écrit pas les stubs dont il dépend,</text>
+  <text x="40" y="510" font-size="11" fill="#24292f">stubs, signatures et sémantique sont vérifiés indépendamment</text>
+
+  <rect x="412" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="474" font-size="12.5" font-weight="600" fill="#1a7f37">brise le raisonnement circulaire</text>
+  <text x="428" y="494" font-size="10.01" fill="#24292f">sinon le stub encode fidèlement l'hypothèse de l'auteur sur l'API du framework :</text>
+  <text x="428" y="510" font-size="11" fill="#24292f">tous les tests verts, puis en machine réelle, Call to undefined method</text>
+
+  <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">la profondeur de vérification est inégale</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">la sémantique L2 couvre 4.5/6 ; WordPress ne peut pas être couvert,</text>
+  <text x="816" y="510" font-size="11" fill="#24292f">seuls contrôles du texte source + test de fumée manuel</text>
+
+  <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
+  <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">injection explicite plutôt qu'autoDetect</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">les 6 nouveaux frameworks utilisent l'injection explicite :</text>
+  <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
+
+  <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="428" y="564" font-size="12.5" font-weight="600" fill="#1a7f37">supprime la branche qui ne peut jamais se déclencher</text>
+  <text x="428" y="584" font-size="10.42" fill="#24292f">un nom de classe de sonde mal saisi → la branche ne se déclenche jamais ;</text>
+  <text x="428" y="600" font-size="11" fill="#24292f">la branche Hyperf de ce dépôt a déjà encaissé ce coup une fois</text>
+
+  <rect x="800" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <text x="816" y="564" font-size="11.33" font-weight="600" fill="#bc4c00">les classes d'entrée doivent assembler leurs propres adaptateurs</text>
+  <text x="816" y="584" font-size="11" fill="#24292f">Core ne sonde plus ; chaque classe d'entrée écrit</text>
+  <text x="816" y="600" font-size="11" fill="#24292f">environ 30 lignes (dont 5 constructions d'adaptateurs)</text>
+</svg>

@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+  <title>XHProf-Webman-Schichtenarchitektur</title>
+  <desc>Drei Schichtdiagramme: oben die 10 Framework-Eintragsklassen (4 bereits unterstützt + 6 in diesem Release neu), in der Mitte die 5 Interfaces in src/Core/Contract/, unten die 5 Klassen im Core. Das rote Band unten markiert die einzigen zwei im Core verbliebenen Kopplungen an Frameworks und hält fest, dass die 6 neuen Frameworks nie durch autoDetect laufen — alle nutzen die explizite Injektion über Xhprof::bootstrap(). Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original: README.EN.md.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#cf222e"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="870" fill="#f6f8fa"/>
+
+  <!-- ============ 标题 ============ -->
+  <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">XHProf-Webman-Schichtenarchitektur</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">10 Framework-Einträge → 5 Verträge → 1 Core: neue Frameworks ändern Core nicht</text>
+
+  <!-- 图例 -->
+  <rect x="700" y="32" width="18" height="18" rx="4" fill="#ffffff" stroke="#1a7f37" stroke-width="2"/>
+  <text x="726" y="46" font-size="12.5" fill="#57606a">4 unterstützt</text>
+  <rect x="830" y="32" width="18" height="18" rx="4" fill="#ddf4ff" stroke="#0969da" stroke-width="2" stroke-dasharray="5 3"/>
+  <text x="856" y="46" font-size="12.5" fill="#57606a">6 neu</text>
+
+  <!-- ============ ① 框架入口层 ============ -->
+  <rect x="24" y="100" width="1152" height="236" rx="12" fill="#ffffff" stroke="#e1e4e8" stroke-width="1.5"/>
+  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f">① Framework-Eintragsschicht — 10 Eintragsklassen</text>
+  <text x="1156" y="128" font-size="11.5" fill="#57606a" text-anchor="end">Eintragsklassen lassen das Namespace-Präfix ErikWang2013\Xhprof\ weg</text>
+
+  <text x="44" y="152" font-size="12" font-weight="600" fill="#1a7f37">4 Frameworks bereits unterstützt</text>
+
+  <!-- 已适配 4 个：webman -->
+  <rect x="44" y="158" width="263" height="64" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="58" y="184" font-size="15" font-weight="600" fill="#24292f">webman</text>
+  <text x="58" y="206" font-size="11" fill="#57606a">Webman\XhprofMiddleware</text>
+  <rect x="249" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
+  <text x="273" y="179" font-size="7.89" fill="#ffffff" text-anchor="middle">unterstützt</text>
+
+  <!-- Laravel -->
+  <rect x="327" y="158" width="263" height="64" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="341" y="184" font-size="15" font-weight="600" fill="#24292f">Laravel</text>
+  <text x="341" y="206" font-size="11" fill="#57606a">Laravel\Middleware</text>
+  <rect x="532" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
+  <text x="556" y="179" font-size="7.89" fill="#ffffff" text-anchor="middle">unterstützt</text>
+
+  <!-- ThinkPHP -->
+  <rect x="610" y="158" width="263" height="64" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="624" y="184" font-size="15" font-weight="600" fill="#24292f">ThinkPHP</text>
+  <text x="624" y="206" font-size="11" fill="#57606a">Thinkphp\Middleware</text>
+  <rect x="815" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
+  <text x="839" y="179" font-size="7.89" fill="#ffffff" text-anchor="middle">unterstützt</text>
+
+  <!-- Hyperf -->
+  <rect x="893" y="158" width="263" height="64" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+  <text x="907" y="184" font-size="15" font-weight="600" fill="#24292f">Hyperf</text>
+  <text x="907" y="206" font-size="11" fill="#57606a">Hyperf\Middleware</text>
+  <rect x="1098" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
+  <text x="1122" y="179" font-size="7.89" fill="#ffffff" text-anchor="middle">unterstützt</text>
+
+  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da">6 neue Frameworks in diesem Release</text>
+
+  <!-- 新增 6 个 -->
+  <rect x="44" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="56" y="279" font-size="13" font-weight="600" fill="#24292f">Yii3</text>
+  <text x="56" y="300" font-size="10.5" fill="#57606a">Yii3\XhprofMiddleware</text>
+  <rect x="164" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="186" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <rect x="232" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="244" y="279" font-size="13" font-weight="600" fill="#24292f">Symfony</text>
+  <text x="244" y="300" font-size="10.5" fill="#57606a">Symfony\XhprofListener</text>
+  <rect x="352" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="374" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <rect x="420" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="432" y="279" font-size="13" font-weight="600" fill="#24292f">Slim 4</text>
+  <text x="432" y="300" font-size="10.5" fill="#57606a">Slim\XhprofMiddleware</text>
+  <rect x="540" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="562" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <rect x="608" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="620" y="279" font-size="13" font-weight="600" fill="#24292f">WordPress</text>
+  <text x="620" y="300" font-size="10.5" fill="#57606a">Wordpress\XhprofPlugin</text>
+  <rect x="728" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="750" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <rect x="796" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="808" y="279" font-size="13" font-weight="600" fill="#24292f">Joomla</text>
+  <text x="808" y="300" font-size="10.5" fill="#57606a">Joomla\Extension\Xhprof</text>
+  <rect x="916" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="938" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <rect x="984" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="996" y="279" font-size="13" font-weight="600" fill="#24292f">Drupal</text>
+  <text x="996" y="300" font-size="10.5" fill="#57606a">Drupal\XhprofMiddleware</text>
+  <rect x="1104" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="1126" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <!-- ① → ② -->
+  <line x1="600" y1="340" x2="600" y2="358" stroke="#57606a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="616" y="353" font-size="11.5" fill="#57606a">Eintragsklassen erzeugen 5 Adapter und injizieren sie; Core ruft nur über diese 5 Verträge auf</text>
+
+  <!-- ============ ② 契约层 ============ -->
+  <rect x="24" y="362" width="1152" height="120" rx="12" fill="#ffffff" stroke="#e1e4e8" stroke-width="1.5"/>
+  <text x="44" y="390" font-size="14" font-weight="600" fill="#24292f">② Vertragsschicht — die 5 Interfaces in src/Core/Contract/</text>
+  <text x="1156" y="390" font-size="11.5" fill="#57606a" text-anchor="end">Core erreicht Frameworks nur über diese 5 Schnittstellen; implementiert werden sie in jedem Framework im eigenen Adapter/-Verzeichnis</text>
+
+  <rect x="45" y="402" width="206" height="66" rx="8" fill="#ffffff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="59" y="429" font-size="13" font-weight="600" fill="#0969da">RequestInterface</text>
+  <text x="59" y="452" font-size="11" fill="#57606a">8 Methoden · Request lesen</text>
+
+  <rect x="271" y="402" width="206" height="66" rx="8" fill="#ffffff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="285" y="429" font-size="13" font-weight="600" fill="#0969da">ResponseInterface</text>
+  <text x="285" y="452" font-size="11" fill="#57606a">5 Methoden · Response schreiben</text>
+
+  <rect x="497" y="402" width="206" height="66" rx="8" fill="#ffffff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="511" y="429" font-size="13" font-weight="600" fill="#0969da">ConfigInterface</text>
+  <text x="511" y="452" font-size="11" fill="#57606a">1 Methode get()</text>
+
+  <rect x="723" y="402" width="206" height="66" rx="8" fill="#ffffff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="737" y="429" font-size="13" font-weight="600" fill="#0969da">CacheInterface</text>
+  <text x="737" y="452" font-size="11" fill="#57606a">9 Methoden · Redis lesen/schreiben</text>
+
+  <rect x="949" y="402" width="206" height="66" rx="8" fill="#ffffff" stroke="#0969da" stroke-width="1.5"/>
+  <text x="963" y="429" font-size="13" font-weight="600" fill="#0969da">LoggerInterface</text>
+  <text x="963" y="452" font-size="11" fill="#57606a">1 Methode error()</text>
+
+  <!-- ② → ③ -->
+  <line x1="600" y1="486" x2="600" y2="504" stroke="#57606a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="616" y="499" font-size="11.5" fill="#57606a">Die 5 Klassen des Core rufen nur Interface-Methoden auf und kennen keine konkrete Framework-Klasse</text>
+
+  <!-- ============ ③ Core ============ -->
+  <rect x="24" y="508" width="1152" height="120" rx="12" fill="#ffffff" stroke="#e1e4e8" stroke-width="1.5"/>
+  <text x="44" y="536" font-size="14" font-weight="600" fill="#24292f">③ Core — die 5 Klassen in src/Core/</text>
+  <text x="1156" y="536" font-size="11.5" fill="#57606a" text-anchor="end">importiert keine Framework-Klasse</text>
+
+  <rect x="45" y="548" width="206" height="66" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="59" y="572" font-size="13" font-weight="600" fill="#24292f">Xhprof</text>
+  <text x="59" y="590" font-size="10.5" fill="#57606a">bootstrap() index() deny()</text>
+  <text x="59" y="605" font-size="10.5" fill="#57606a">xhprofStart() xhprofStop()</text>
+
+  <rect x="271" y="548" width="206" height="66" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="285" y="572" font-size="13" font-weight="600" fill="#24292f">XhprofProfiler</text>
+  <text x="285" y="590" font-size="10.5" fill="#57606a">start() stop()</text>
+  <text x="285" y="605" font-size="10.5" fill="#57606a">isEnabled() bootstrap()</text>
+
+  <rect x="497" y="548" width="206" height="66" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="511" y="572" font-size="13" font-weight="600" fill="#24292f">XHProfRunsDefault</text>
+  <text x="511" y="590" font-size="10.5" fill="#57606a">save_run() get_run()</text>
+  <text x="511" y="605" font-size="10.5" fill="#57606a">list_runs() · run_id-Allowlist</text>
+
+  <rect x="723" y="548" width="206" height="66" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="737" y="572" font-size="13" font-weight="600" fill="#24292f">StaticController</text>
+  <text x="737" y="590" font-size="10.5" fill="#57606a">serve()</text>
+  <text x="737" y="605" font-size="10.5" fill="#57606a">/xhprof-assets/</text>
+
+  <rect x="949" y="548" width="206" height="66" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="963" y="572" font-size="13" font-weight="600" fill="#24292f">XhprofDisplay</text>
+  <text x="963" y="590" font-size="10.5" fill="#57606a">displayXHProfReport()</text>
+  <text x="963" y="605" font-size="10.5" fill="#57606a">xhprof_include_js_css()</text>
+
+  <!-- ③ → ④ 红色耦合箭头 -->
+  <line x1="100" y1="630" x2="100" y2="652" stroke="#cf222e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow-red)"/>
+  <text x="116" y="647" font-size="11.5" fill="#cf222e">Beide sitzen in Xhprof</text>
+
+  <!-- ============ ④ 两处耦合 ============ -->
+  <rect x="24" y="654" width="1152" height="200" rx="12" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+  <rect x="44" y="668" width="252" height="26" rx="13" fill="#cf222e"/>
+  <text x="170" y="686" font-size="10.22" font-weight="600" fill="#ffffff" text-anchor="middle">Nur zwei Framework-Kopplungen bleiben im Core</text>
+  <text x="312" y="686" font-size="11.5" fill="#57606a">Beide wirken nur auf dem alten argumentlosen bootstrap()-Pfad; die 6 neuen Frameworks sind nicht betroffen</text>
+
+  <rect x="45" y="698" width="546" height="76" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+  <text x="61" y="719" font-size="12.5" font-weight="600" fill="#cf222e">① Die class_exists-Kette in Xhprof::autoDetect()</text>
+  <text x="61" y="738" font-size="10.5" fill="#57606a">Ein argumentloses bootstrap() probiert nacheinander 4 Framework-Klassennamen durch:</text>
+  <text x="61" y="753" font-size="10.5" fill="#57606a">\Webman\App · \Illuminate\Foundation\Application</text>
+  <text x="61" y="768" font-size="10.5" fill="#57606a">\think\App · \Hyperf\Context\ApplicationContext</text>
+
+  <rect x="611" y="698" width="546" height="76" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+  <text x="627" y="719" font-size="12.5" font-weight="600" fill="#cf222e">② Die in Xhprof hart kodierte Hyperf-Koroutinen-Isolation</text>
+  <text x="627" y="738" font-size="10.5" fill="#57606a">Xhprof::$_hyperf + markHyperfContext()</text>
+  <text x="627" y="753" font-size="10.5" fill="#57606a">→ \Hyperf\Context\Context::set()/get() hält die 5 Adapter</text>
+  <text x="627" y="768" font-size="10.5" fill="#57606a">Der einzige Code in Core, der eine Framework-Klasse direkt nennt</text>
+
+  <rect x="44" y="792" width="1112" height="42" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">Die 6 neuen Frameworks laufen nie durch autoDetect</text>
+  <text x="600" y="829" font-size="11.5" fill="#24292f" text-anchor="middle">Alle nutzen explizite Injektion: Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
+</svg>

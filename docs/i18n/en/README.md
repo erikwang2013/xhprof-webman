@@ -1,6 +1,8 @@
+[中文](../../../README.md) · **English** · [한국어](../ko/README.md) · [Русский](../ru/README.md) · [Deutsch](../de/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
+
 # XHProf Performance Profiler
 
-[中文](./README.md) · **English** · [한국어](./docs/i18n/ko/README.md) · [Русский](./docs/i18n/ru/README.md) · [Deutsch](./docs/i18n/de/README.md) · [Français](./docs/i18n/fr/README.md) · [Español](./docs/i18n/es/README.md) · [Português](./docs/i18n/pt/README.md) · [العربية](./docs/i18n/ar/README.md) · [हिन्दी](./docs/i18n/hi/README.md) · [বাংলা](./docs/i18n/bn/README.md) · [Bahasa Indonesia](./docs/i18n/id/README.md) · [日本語](./docs/i18n/ja/README.md)
+[中文](./README.md) · **English** · [한국어](../../../docs/i18n/ko/README.md) · [Русский](../../../docs/i18n/ru/README.md) · [Deutsch](../../../docs/i18n/de/README.md) · [Français](../../../docs/i18n/fr/README.md) · [Español](../../../docs/i18n/es/README.md) · [Português](../../../docs/i18n/pt/README.md) · [العربية](../../../docs/i18n/ar/README.md) · [हिन्दी](../../../docs/i18n/hi/README.md) · [বাংলা](../../../docs/i18n/bn/README.md) · [Bahasa Indonesia](../../../docs/i18n/id/README.md) · [日本語](../../../docs/i18n/ja/README.md)
 
 A code performance profiling plugin compatible with webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla and Drupal.
 
@@ -491,11 +493,11 @@ Each framework provides 5 adapters implementing these contracts, registered into
 
 **The six new frameworks never go through `autoDetect()` — they all use explicit injection**: each entry class constructs its own 5 adapters and passes them to `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`. The reason is that on PSR-7 frameworks the Request/Response can only be obtained from the request pipeline, so a no-argument `bootstrap()` cannot work by construction; a second benefit is that `autoDetect()` stays frozen at its current four frameworks.
 
-![Architecture](docs/images/architecture.svg)
+![Architecture](./images/architecture.svg)
 
 The first diagram is the **structure**: each of the ten frameworks' entry class, the 5 contracts, Core's three layers, and the only two couplings left.
 
-![Design rationale](docs/images/design.svg)
+![Design rationale](./images/design.svg)
 
 The second diagram is the **reasoning**: five trade-offs laid out as decision / reason / cost, headed by "changes to `src/Core/` from the six new frameworks = 0".
 
@@ -512,7 +514,7 @@ One profiled request:
 5. `finally { Xhprof::xhprofStop(); }` → `xhprof_disable()`, then `XHProfRunsDefault::save_run()` writes to Redis. `finally` rather than a plain statement, so that a thrown exception still clears the profiling state and saves the run.
 6. The browser opens the report page; `Xhprof::index()` reads the data back from Redis and renders it.
 
-![Lifecycle](docs/images/lifecycle.svg)
+![Lifecycle](./images/lifecycle.svg)
 
 | Framework | Profiling starts | Profiling ends |
 |-----------|-----------------|----------------|
@@ -621,8 +623,8 @@ Symfony 6.4 compatibility has been measured (which is how two over-fits invisibl
 ## Support Open Source
 
 <p align="center">
-  <img src="./docs/weixinpay.png" alt="WeChat Pay" width="130" height="130" title="WeChat Pay" />
-  <img src="./docs/alipay.png" alt="Alipay" width="130" height="130" title="Alipay" />
+  <img src="../../../docs/weixinpay.png" alt="WeChat Pay" width="130" height="130" title="WeChat Pay" />
+  <img src="../../../docs/alipay.png" alt="Alipay" width="130" height="130" title="Alipay" />
 </p>
 
 ---
