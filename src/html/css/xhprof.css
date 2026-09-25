@@ -121,6 +121,18 @@ body {
   font-size: 13px;
 }
 
+/* 语言切换器：只用逻辑属性之外的通用样式（不写 border-left 这类物理方向），
+   RTL 页面（ar）下由浏览器按 dir 自行布局。 */
+.xp-lang {
+  font-size: 13px;
+  color: var(--xp-text-muted);
+  background: var(--xp-surface);
+  border: 1px solid var(--xp-border);
+  border-radius: var(--xp-radius);
+  padding: 3px 6px;
+  max-width: 160px;
+}
+
 .xp-nav-extra a:hover {
   color: var(--xp-accent);
 }
@@ -146,6 +158,13 @@ body {
   font-weight: 600;
   border-bottom: 1px solid var(--xp-border);
   background: var(--xp-table-stripe);
+}
+
+/* 卡片里的纯文字内容（如「这次 run 的数据已过期」的空态说明）。
+   .xp-card 自己没有内边距，子元素各自带，所以这里必须给。 */
+.xp-card-note {
+  padding: 16px 20px;
+  color: var(--xp-text-muted);
 }
 
 /* ========== 表格 ========== */
@@ -354,11 +373,17 @@ ul.xhprof_actions a:hover {
   margin: 0;
 }
 
-.xp-runs-table .xp-table th:nth-child(1) { width: 56px; }
-.xp-runs-table .xp-table th:nth-child(3) { width: 160px; }
-.xp-runs-table .xp-table th:nth-child(4) { width: 100px; }
-.xp-runs-table .xp-table th:nth-child(5) { width: 100px; }
-.xp-runs-table .xp-table th:nth-child(6) { width: 120px; }
+/* 两个 class 在**同一个** <table> 上（XHProfRunsDefault::list_runs 里是
+   `class="xp-table xp-runs-table"`），所以这里不能写后代选择器：原来那版把
+   xp-table 写成 xp-runs-table 的**子孙**，页面里不存在这种元素，这 5 条列宽
+   规则一直空转，而且看不出错。
+   注意：这条注释刻意不逐字写出那个错误的选择器——tests/Unit/Core/XhprofTest.php
+   里有一条断言按字面量扫这个文件，写出来就会把它自己变成假红。 */
+.xp-runs-table th:nth-child(1) { width: 56px; }
+.xp-runs-table th:nth-child(3) { width: 160px; }
+.xp-runs-table th:nth-child(4) { width: 100px; }
+.xp-runs-table th:nth-child(5) { width: 100px; }
+.xp-runs-table th:nth-child(6) { width: 120px; }
 
 /* ========== 子函数/父函数区块 ========== */
 .xp-pc-section .xp-pc-current td,

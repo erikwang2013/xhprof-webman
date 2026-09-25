@@ -88,6 +88,14 @@ class Xhprof
 
     public static function index(): mixed
     {
+        // 报告页要读缓存，而所有 CacheInterface 实现最终都要 `new \Redis()`
+        // （缺扩展时是 "Class Redis not found" 的 Fatal error，浏览器上就是一片白加
+        // 一行栈）。装了什么比「坏了」更该说清楚，所以这里先给一句能读的提示。
+        // 与各入口类的「缺扩展就跳过采样」是同一件事的两半：那一半管写，这一半管读。
+        if (!extension_loaded('redis')) {
+            return self::deny('500 xhprof: ext-redis is not installed, so the report page cannot read profile data.', 500);
+        }
+
         $req = self::getRequest();
         $cfg = self::getConfig();
         // 鉴权：配置了 auth_token 后，报告页必须带 ?token=xxx 才能访问
@@ -117,6 +125,15 @@ class Xhprof
         $wts = $req->get('wts');
         $symbol = $req->get('symbol');
         $sort = $req->get('sort');
+        // 这三个也来自查询串，形态可以是数组（`?sort[]=wt`）。以前它们被原样透传，
+        // 直到 `isset($arr[$array])` / `explode(",", $array)` 抛 TypeError → 500。
+        // 而同一批参数里 `sort` 传非法**字符串**是被优雅处理的（回落 wt + 记日志），
+        // 说明数组形态只是没人想到过。类型不对就是坏请求，与 run/source 同样 400。
+        foreach ([$wts, $symbol, $sort] as $scalar_param) {
+            if ($scalar_param !== null && !is_string($scalar_param)) {
+                return self::deny('400 Bad Request', 400);
+            }
+        }
         $params = $req->all();
         // 报告页语言：?lang= > 配置 xhprof.locale > Accept-Language > 兜底中文。
         // 四级都拿不到认识的语言码时 resolve() 返回 zh_CN，绝不抛异常。

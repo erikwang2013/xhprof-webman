@@ -65,6 +65,9 @@ class XHProfRunsDefaultTest extends TestCase
     protected FakeConfig $config;
     protected FakeLogger $logger;
 
+    /** setUp 时的 Xhprof::$log_ttl，tearDown 原样还回去（静态量会跨用例残留） */
+    protected int $originalLogTtl;
+
     protected function setUp(): void
     {
         $this->cache = new RunsFixedListCache();
@@ -86,6 +89,14 @@ class XHProfRunsDefaultTest extends TestCase
         Xhprof::$key_prefix = 'xhprof';
         Xhprof::$log_num = 1000;
         Xhprof::$view_wtred = 3;
+        $this->originalLogTtl = Xhprof::$log_ttl;
+    }
+
+    protected function tearDown(): void
+    {
+        // log_ttl 是静态量：有用例会把它改成非默认值来证明透传，改过就必须还原，
+        // 否则泄漏给后续用例（顺序相关的假绿/假红都是这么来的）。
+        Xhprof::$log_ttl = $this->originalLogTtl;
     }
 
     /** 替换请求时同步刷新 Hyperf Context，保证 $_hyperf=true 时 getRequest() 仍取到 fake */
@@ -262,6 +273,10 @@ class XHProfRunsDefaultTest extends TestCase
         $this->useRequest($this->request);
 
         $data = $this->sampleData();
+        // 刻意设成不等于默认值（86400*7 = 604800）的数：期望值若写成 Xhprof::$log_ttl，
+        // 就与生产代码读的是同一个静态量——「自己等于自己」永真，把生产代码换成硬编码
+        // 604800 的变异体照样绿。设成 3600 后，透传的是不是这个静态量才成为可观测事实。
+        Xhprof::$log_ttl = 3600;
         $runId = XHProfRunsDefault::save_run($data, 'xhprof_foo');
 
         self::assertMatchesRegularExpression('/^[a-f0-9]{16}$/', $runId);
@@ -280,8 +295,9 @@ class XHProfRunsDefaultTest extends TestCase
 
         // log_ttl 必须透传到两个写入点。此前 fake 直接丢弃 TTL，
         // 把配置改成 0 或干脆不传，整套测试依然全绿（数据永不失效也测不出来）。
-        self::assertSame(Xhprof::$log_ttl, $this->cache->ttls['xhprof:request_log:' . $runId]);
-        self::assertSame(Xhprof::$log_ttl, $this->cache->ttls['xhprof:xhprof_log:' . $runId]);
+        // 期望值是上面的字面量 3600，不是 Xhprof::$log_ttl——理由见那里的注释。
+        self::assertSame(3600, $this->cache->ttls['xhprof:request_log:' . $runId]);
+        self::assertSame(3600, $this->cache->ttls['xhprof:xhprof_log:' . $runId]);
     }
 
     #[Test]

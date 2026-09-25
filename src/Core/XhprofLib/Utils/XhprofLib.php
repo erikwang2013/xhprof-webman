@@ -1,9 +1,31 @@
 <?php
+/*
+ * Derived from phacility/xhprof — Copyright (c) 2009 Facebook.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * CHANGES FROM UPSTREAM: namespaced under ErikWang2013\Xhprof\Core\XhprofLib,
+ * ten-framework adapters in place of the original PHP superglobals, an i18n
+ * layer, and the fixes recorded in this repository's history. The rest of this
+ * package (everything outside src/Core/XhprofLib/) is the MIT-licensed work of
+ * this project — see LICENSE and NOTICE.
+ */
 
 declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Core\XhprofLib\Utils;
 
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\Xhprof;
 
@@ -137,6 +159,14 @@ class XhprofLib
   public static function xhprof_valid_run($run_id, $raw_data)
   {
 
+    // 先判掉「读不到」：get_run() 在 run 过期（默认 TTL 7 天）或缓存被清时返回 false，
+    // 而 `false["main()"]` 会立下一条 "Trying to access array offset on false" 警告
+    // （PHPUnit 开了 failOnWarning）。过期是**常规**事件，不该是一条看不懂的警告。
+    if (!is_array($raw_data)) {
+      XhprofLib::xhprof_error("XHProf: no data for Run ID: $run_id");
+      return false;
+    }
+
     $main_info = $raw_data["main()"];
     if (empty($main_info)) {
       XhprofLib::xhprof_error("XHProf: main() missing in raw data for Run ID: $run_id");
@@ -223,7 +253,7 @@ class XhprofLib
       (($wts_count > 0) && count(array_filter($wts, 'is_numeric')) != $wts_count)
     ) {
       return array(
-        'description' => 'Invalid input..',
+        'description' => I18n::t('agg.invalidInput'),
         'raw'  => null
       );
     }
@@ -231,15 +261,20 @@ class XhprofLib
     $bad_runs = array();
     foreach ($runs as $idx => $run_id) {
       $raw_data = XHProfRunsDefault::get_run($run_id, $source, $description);
-      if ($idx == 0) {
-        foreach ($raw_data["main()"] as $metric => $val) {
-          if ($metric != "pmu" && isset($val)) $metrics[] = $metric;
-        }
-      }
 
       if (!XhprofLib::xhprof_valid_run($run_id, $raw_data)) {
         $bad_runs[] = $run_id;
         continue;
+      }
+
+      // 指标集取自**第一个有效**的 run。此前它写在有效性检查之前、且写死 `$idx == 0`：
+      // 第一个 run 过期（TTL 默认 7 天）时 get_run() 返回 false，`foreach (false["main()"])`
+      // 只立下警告，$metrics 留空 → 后面每个 `foreach ($metrics …)` 都不进 →
+      // $raw_data_total 保持 null → 报告页只剩导航条。第二个 run 明明可读也白搭。
+      if (!$metrics) {
+        foreach (($raw_data["main()"] ?? array()) as $metric => $val) {
+          if ($metric != "pmu" && isset($val)) $metrics[] = $metric;
+        }
       }
 
       if ($use_script_name) {
@@ -289,13 +324,16 @@ class XhprofLib
     $wts_string = "";
     $normalization_count = $run_count;
     if (isset($wts)) {
-      $wts_string  = "in the ratio (" . implode(":", $wts) . ")";
+      $wts_string  = sprintf(I18n::t('agg.ratio'), implode(":", $wts));
       $normalization_count = array_sum($wts);
     }
 
     $run_count = $run_count - count($bad_runs);
-    $data['description'] = "Aggregated Report for $run_count runs: " .
-      "$runs_string $wts_string\n";
+    // 单复数拆两键：原文案在只聚合到 1 个可用 run 时会印出 "for 1 runs"。
+    // 这段描述随后由 XhprofDisplay 的 sprintf("<b>…</b>") 转义，故用 t()。
+    $data['description'] = ($run_count === 1
+      ? sprintf(I18n::t('agg.titleOne'), $runs_string, $wts_string)
+      : sprintf(I18n::t('agg.title'), $run_count, $runs_string, $wts_string)) . "\n";
     $data['raw'] = XhprofLib::xhprof_normalize_metrics(
       $raw_data_total,
       $normalization_count
@@ -430,6 +468,56 @@ class XhprofLib
   {
     unset($arr[$k]);
     return $arr;
+  }
+
+  /**
+   * 「当前看的是哪一页」的视图参数：页面之间跳转时不该无脑带着它们走
+   * （点「首页」时还留着 `?run=` 就会停在原来那个 run 上）。
+   */
+  public const VIEW_PARAMS = array(
+    'run', 'run1', 'run2', 'symbol', 'all', 'sort', 'wts', 'requrl', 'source',
+  );
+
+  /**
+   * 报告页内部链接 = 当前路径 + 合并后的查询串，**相对 URL**。
+   *
+   * 三个问题都用「相对」解决，而不是拼一个绝对 URL：
+   *
+   *  1. `?token=xxx`（鉴权）与 `?lang=xx`（语言）必须随链接传播。此前 run 列表的
+   *     查询串是硬编码的、首页与品牌链接干脆不带查询串 —— 于是配了 `auth_token`
+   *     后点任何一个 run 都是 403，用 `?lang=` 选了语言点一下也退回浏览器语言。
+   *  2. 端口：`host()` 的契约是不含端口，绝对 URL 会把非 80/443 部署的链接指到
+   *     错误 origin。相对 URL 由浏览器按当前 origin 补全，天然正确。
+   *  3. `x-forwarded-proto` 这个**未校验**的头以前会进 href（实测能把
+   *     `javascript:` 塞进去）。这条路径不再读它，注入面消失。
+   *
+   * @param array      $params 要设/覆盖的参数（值为 null 表示删掉该参数）
+   * @param array|null $drop   要从当前请求里摘掉的参数，默认 {@see self::VIEW_PARAMS}
+   */
+  public static function report_url($params = array(), $drop = null)
+  {
+    $drop  = $drop === null ? self::VIEW_PARAMS : $drop;
+    $query = (array) Xhprof::getRequest()->all();
+    foreach ($drop as $k) {
+      unset($query[$k]);
+    }
+    foreach ((array) $params as $k => $v) {
+      if ($v === null) {
+        unset($query[$k]);
+      } else {
+        $query[$k] = $v;
+      }
+    }
+    $qs = http_build_query($query);
+    return self::report_path() . ($qs === '' ? '' : '?' . $qs);
+  }
+
+  /** 当前请求的路径，已转义（返回值只落进 href="…" 属性）。 */
+  public static function report_path()
+  {
+    // uri 可能没有 path 部分（如 "?run=x"），parse_url 返回 false/null。
+    $path = parse_url(Xhprof::getRequest()->uri(), PHP_URL_PATH) ?: '';
+    return htmlspecialchars(rtrim($path, '/\\'), ENT_QUOTES, 'UTF-8');
   }
 
 

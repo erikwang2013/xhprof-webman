@@ -1,4 +1,25 @@
 <?php
+/*
+ * Derived from phacility/xhprof — Copyright (c) 2009 Facebook.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * CHANGES FROM UPSTREAM: namespaced under ErikWang2013\Xhprof\Core\XhprofLib,
+ * ten-framework adapters in place of the original PHP superglobals, an i18n
+ * layer, and the fixes recorded in this repository's history. The rest of this
+ * package (everything outside src/Core/XhprofLib/) is the MIT-licensed work of
+ * this project — see LICENSE and NOTICE.
+ */
 
 declare(strict_types=1);
 
@@ -14,11 +35,10 @@ class XhprofDisplay
 
   public static function base_path()
   {
-    // uri 可能无 path 部分（如 "?run=x"），parse_url 返回 false/null。
-    // 返回值全部落在 href="..." 属性中，故统一在此转义：挂到通配路由下时
-    // 路径里可以带引号，不转义会逃逸出属性（反射型 XSS）。
-    $path = parse_url(Xhprof::getRequest()->uri(), PHP_URL_PATH) ?: '';
-    return htmlspecialchars(rtrim($path, '/\\'), ENT_QUOTES, 'UTF-8');
+    // 实现搬到 XhprofLib::report_path()：链接现在统一由 XhprofLib::report_url() 拼，
+    // 而它是 Utils 层（不能反向依赖 Display）。这里保留同名入口是为了既有调用点
+    // 与测试不必改，转义策略只有一处。
+    return XhprofLib::report_path();
   }
 
   public static $sort_col = "wt";
@@ -203,10 +223,51 @@ class XhprofDisplay
       " type='text/css' />";
     $echo_page .= "<link href='$ui_dir_url_path/css/dataTables.bootstrap.css' rel='stylesheet' type='text/css' />";
 
-    // javascript
-    $echo_page .= "<script src='$ui_dir_url_path/js/xhprof_report.js'></script>";
+    // 报告页 JS 要用的文案：请求记录表的 DataTable 界面文案（分页/搜索/“没有匹配结果”）。
+    // 以 JSON 注入而不是一堆 data-* 属性 —— JS 只认一个数据来源，加一个字符串只改这里。
+    // 用 t()（原始文案）+ json_encode，不要用 plain()：那是给 HTML 上下文转义的，
+    // 会把 `&` 变成 `&amp;` 显示给用户。HEX 标志把 `<`/`>`/`&`/引号转成 \uXXXX，
+    // 词表里万一混进 `</script>` 也跑不出这个 <script> 块（JS 里解码回来照常）。
+    $data_table_i18n = array();
+    foreach (array(
+        'processing' => 'runs.dt.processing',
+        'loadingRecords' => 'runs.dt.loadingRecords',
+        'lengthMenu' => 'runs.dt.lengthMenu',
+        'zeroRecords' => 'runs.dt.zeroRecords',
+        'emptyTable' => 'runs.dt.emptyTable',
+        'info' => 'runs.dt.info',
+        'infoEmpty' => 'runs.dt.infoEmpty',
+        'infoFiltered' => 'runs.dt.infoFiltered',
+        // 千位分隔符（`sInfoThousands`）**不进词表**：报告页上的数字是 PHP 的
+        // `number_format()` 打的（`$format_cbk`），它永远是英式的 `123,456`；
+        // 而 DataTables 只负责分页那一行的 `_TOTAL_`。两边各用本地分隔符的结果是
+        // **同一张页面上两种写法**（pt 的译者实测报回：表里 123,456、分页行 1.234）。
+        // 统一取英式：不给 DataTables 传这个键，它就用自带的默认值。
+        // 想让整页数字真正本地化是另一件事（要连 number_format 调用点一起改，
+        // 见 `$format_cbk`），那时再把它作为一对（thousands + decimal）加回来。
+        'search' => 'runs.dt.search',
+        'first' => 'runs.dt.first',
+        'previous' => 'runs.dt.previous',
+        'next' => 'runs.dt.next',
+        'last' => 'runs.dt.last',
+        'sortAsc' => 'runs.dt.sortAsc',
+        'sortDesc' => 'runs.dt.sortDesc',
+    ) as $js_key => $catalog_key) {
+        $data_table_i18n[$js_key] = I18n::t($catalog_key);
+    }
+    $echo_page .= '<script>window.xpI18n = '
+        . json_encode(
+            array('dataTable' => $data_table_i18n),
+            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        )
+        . ';</script>';
 
+    // javascript —— 顺序有意义：这两个 <script> 都没有 defer/async，浏览器按文档顺序
+    // **同步**执行，而 xhprof_report.js 的顶层就是 `$(document).ready(...)`。jQuery 排在
+    // 它后面 = `$` 未定义 → ReferenceError，该脚本剩余部分不再执行，搜索按钮的点击处理器
+    // 与请求列表的 DataTable（分页/排序/搜索）全都注册不上，且页面不报错、看起来「就是没反应」。
     $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery-3.0.0.min.js'></script>";
+    $echo_page .= "<script src='$ui_dir_url_path/js/xhprof_report.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/bootstrap.min.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/jquery.dataTables.min.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/dataTables.bootstrap.js'></script>";
@@ -365,19 +426,20 @@ class XhprofDisplay
       XhprofDisplay::$totals_1 = $totals_1;
       XhprofDisplay::$totals_2 = $totals_2;
     }
-    $run1_txt = sprintf(
-      "<b>Run #%s:</b> %s",
+    // 模板 + 两个**已转义**的参数（run_id 来自查询串、描述来自缓存）
+    $run1_txt = '<b>' . sprintf(
+      I18n::plain('diff.run'),
       htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8'),
       htmlspecialchars((string) $run1_desc, ENT_QUOTES, 'UTF-8')
-    );
+    ) . '</b>';
 
     $base_url_params = XhprofLib::xhprof_array_unset(XhprofLib::xhprof_array_unset($url_params, 'symbol'), 'all');
     if ($diff_mode) {
-      $diff_text = "Diff";
+      $diff_text = I18n::plain('common.diff');
       $base_url_params = XhprofLib::xhprof_array_unset($base_url_params, 'run1');
       $base_url_params = XhprofLib::xhprof_array_unset($base_url_params, 'run2');
       $run1_link = XhprofDisplay::xhprof_render_link(
-        'View Run #' . $run1,
+        sprintf(I18n::plain('diff.viewRun'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')),
         "$base_path?" .
           http_build_query(XhprofLib::xhprof_array_set(
             $base_url_params,
@@ -385,14 +447,14 @@ class XhprofDisplay
             $run1
           ))
       );
-      $run2_txt = sprintf(
-        "<b>Run #%s:</b> %s",
+      $run2_txt = '<b>' . sprintf(
+        I18n::plain('diff.run'),
         htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8'),
         htmlspecialchars((string) $run2_desc, ENT_QUOTES, 'UTF-8')
-      );
+      ) . '</b>';
 
       $run2_link = XhprofDisplay::xhprof_render_link(
-        'View Run #' . $run2,
+        sprintf(I18n::plain('diff.viewRun'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')),
         "$base_path?" .
           http_build_query(XhprofLib::xhprof_array_set(
             $base_url_params,
@@ -401,7 +463,7 @@ class XhprofDisplay
           ))
       );
     } else {
-      $diff_text = "Run";
+      $diff_text = I18n::plain('common.run');
     }
 
     // set up the action links for operations that can be done on this report
@@ -415,7 +477,7 @@ class XhprofDisplay
       $links[] = $run1_link;
       $links[] = $run2_link;
       $links[] = XhprofDisplay::xhprof_render_link(
-        'Invert ' . $diff_text . ' Report',
+        sprintf(I18n::plain('diff.invert'), I18n::plain($diff_mode ? 'common.diff' : 'common.run')),
         "$base_path?" .
           http_build_query($inverted_params)
       );
@@ -437,7 +499,13 @@ class XhprofDisplay
     // data tables
     if (!empty($rep_symbol)) {
       if (!isset($symbol_tab[$rep_symbol])) {
-        $echo_page .= '<div class="xp-main"><div class="xp-card"><p class="xp-card-title">Symbol <b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b> not found in XHProf run.</p></div></div>';
+        $echo_page .= '<div class="xp-main"><div class="xp-card"><p class="xp-card-title">'
+          . str_replace(
+              '%s',
+              '<b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b>',
+              I18n::plain('symbol.notFound')
+          )
+          . '</p></div></div>';
         // 符号不存在时必须就此返回：继续往下会把 null 传进 symbol_report()，
         // 在 round()/算术处抛 TypeError，整页 500。
         return $echo_page;
@@ -625,7 +693,7 @@ class XhprofDisplay
       $display_link = "";
     } else {
       $display_link = XhprofDisplay::xhprof_render_link(
-        " [ <b class=bubble>display all </b>]",
+        ' [ <b class=bubble>' . I18n::plain('flat.displayAll') . ' </b>]',
         "$base_path?" .
           http_build_query(XhprofLib::xhprof_array_set(
             $url_params,
@@ -718,18 +786,18 @@ class XhprofDisplay
           $run2
         ));
 
-      $echo_page .= '<h3 style="margin:0 0 12px 0;font-size:15px">Overall Diff Summary</h3>';
+      $echo_page .= '<h3 style="margin:0 0 12px 0;font-size:15px">' . I18n::plain('diff.summary') . '</h3>';
       $echo_page .= '<table class="xp-table"><tr>';
       $echo_page .= "<th></th>";
-      $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link("Run #$run1", $href1) . "</th>";
-      $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link("Run #$run2", $href2) . "</th>";
-      $echo_page .= "<th $vwbar>Diff</th>";
-      $echo_page .= "<th $vwbar>Diff%</th>";
+      $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link(sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')), $href1) . "</th>";
+      $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link(sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')), $href2) . "</th>";
+      $echo_page .= "<th $vwbar>" . I18n::plain('common.diff') . "</th>";
+      $echo_page .= "<th $vwbar>" . I18n::plain('diff.diffPct') . "</th>";
       $echo_page .= '</tr>';
 
       if ($display_calls) {
         $echo_page .= '<tr>';
-        $echo_page .= "<td>Number of Function Calls</td>";
+        $echo_page .= "<td>" . I18n::plain('diff.callCount') . "</td>";
         $echo_page .= XhprofDisplay::print_td_num($totals_1["ct"], $format_cbk["ct"]);
         $echo_page .= XhprofDisplay::print_td_num($totals_2["ct"], $format_cbk["ct"]);
         $echo_page .= XhprofDisplay::print_td_num($totals_2["ct"] - $totals_1["ct"], $format_cbk["ct"], true);
@@ -771,7 +839,11 @@ class XhprofDisplay
       $echo_page .= "</tr><tr>";
       foreach ($metrics as $metric) {
         $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::stat_description($metric)) . "</td>";
-        $echo_page .= "<td>" . number_format($totals[$metric]) . " " . $possible_metrics[$metric][1] . "</td>";
+        // 单位（microsecs/bytes/samples）也进词表：它出现在汇总表里，和列头一样是给人看的。
+        // 键名由单位本身派生（unit.xxx），词表里没有就原样输出——不硬编码第二张映射表。
+        $unit = (string) $possible_metrics[$metric][1];
+        $echo_page .= "<td>" . number_format($totals[$metric]) . " "
+          . (I18n::has('unit.' . $unit) ? I18n::plain('unit.' . $unit) : $unit) . "</td>";
       }
       $echo_page .= "</tr></table>";
     }
@@ -797,14 +869,15 @@ class XhprofDisplay
     }
 
     $desc = str_replace("<br>", " ", XhprofDisplay::col_text($sort_col));
+    // 标题进词表，`%s` 由 sprintf 填。这里用 t()（原始文案）而不是 plain()：
+    // 下游 print_flat_data() 会对整串 strip_tags + htmlspecialchars，用转义过的
+    // 文案会被二次转义。`$desc` 是 col_text() 的转义结果，但列头里没有特殊字符。
     if ($diff_mode) {
-      $title = "Top 100 <i style='color:red'>Regressions</i>/"
-        . "<i style='color:green'>Improvements</i>: "
-        . "Sorted by $desc Diff";
-      if ($all) $title = "Total Diff Report: Sorted by absolute value of regression/improvement in $desc";
+      $title = sprintf(I18n::t('flat.title.diff'), $desc);
+      if ($all) $title = sprintf(I18n::t('flat.title.diffAll'), $desc);
     } else {
-      $title = "Displaying top $limit public static functions: Sorted by $desc";
-      if ($all)  $title = "Sorted by $desc";
+      $title = sprintf(I18n::t('flat.title.top'), $limit, $desc);
+      if ($all)  $title = sprintf(I18n::t('flat.title.sorted'), $desc);
     }
     $echo_page .= XhprofDisplay::print_flat_data($url_params, $title, $flat_data, $limit);
     $echo_page .= '</div>';
@@ -813,15 +886,26 @@ class XhprofDisplay
 
 
   /**
-   * Return attribute names and values to be used by javascript tooltip.
+   * 父/子行上的数据属性，供将来的悬浮提示实现使用。
+   *
+   * **这里曾经还有一个 `onmouseover="return …RowToolTip(this, 'wt')"`，已删除**：
+   * `onmouseover` 的返回值会被浏览器丢弃（只有 `return false` 在个别事件上有意义），
+   * 所以它从来不是触发器 —— 真正缺的是**消费端**。
+   *
+   * 现状核对过（别凭印象）：`xhprof_report.js` 里那两个函数依赖的全局量
+   * （`diff_mode`/`func_name`/`metrics_desc`/`func_metrics`/`metrics_col`…）
+   * **页面是有的**，就注入在父/子表上方那段内联 `<script>` 里（见 `symbol_report()`
+   * 末尾）。所以缺的只有消费端：原版依赖的 `jquery.tooltip.js` 不在加载列表里
+   * （`xhprof_include_js_css()` 只加载 5 个脚本），且该插件用了 jQuery 1.x 的
+   * `$.browser.msie`，与 jQuery 3 不兼容。
+   *
+   * 也就是说：恢复父/子悬浮提示是一个特性（要一个消费端 + 浮层样式 + 13 语言的
+   * 文案——那两句英文句子目前写在 JS 里），不是把这一行加回来就行的修复。
+   * 数据属性保留，`type`/`metric` 正是那个特性需要的输入；本方法因此只返回数据属性。
    */
   public static function get_tooltip_attributes($type, $metric)
   {
-    // onmouseover 是 xhprof_report.js 中 ParentRowToolTip/ChildRowToolTip 的唯一触发点。
-    // 移植时只保留了 data 属性、丢掉了绑定，导致这两个函数（连同 addCommas/
-    // stringAbs/isNegative）永远不会被调用，父/子悬浮提示静默失效。
-    return "type='$type' metric='$metric'"
-      . " onmouseover=\"return {$type}RowToolTip(this, '$metric');\"";
+    return "type='$type' metric='$metric'";
   }
 
   /**
@@ -874,9 +958,16 @@ class XhprofDisplay
     $run2
   ) {
     $base_path = XhprofDisplay::base_path();
-    $title = 'Child public static function';
-    if ($parent) $title = 'Parent public static function';
-    if (count($results) > 1) $title .= 's';
+    // 这里的 "public static " 是移植时一次全局替换留下的残留（把 `function` 当成 PHP
+    // 关键字替换了，连字符串也没放过）：它插在 `function` 前面，把下面那句复数拼接
+    // `.'s'` 的语义也打断了（读起来是 "Child public static functions"）。上游原句就是
+    // `Child function` / `Parent function` + 复数后缀。
+    // 单复数拆成两个键：`.'s'` 是英语的构词法，日/韩/中文没有复数后缀，
+    // 俄语三种形式、阿拉伯语六种——拼接后缀在别的语言里只会印出错东西。
+    $many = count($results) > 1;
+    $title = I18n::plain($parent
+      ? ($many ? 'pc.parentMany' : 'pc.parent')
+      : ($many ? 'pc.childMany' : 'pc.child'));
     $colspan = count(XhprofDisplay::$pc_stats);
     $echo_page = "<tr class=\"xp-pc-section-title\"><td colspan=\"{$colspan}\">";
     $echo_page .= "<b>" . $title . "</b>";
@@ -955,8 +1046,10 @@ class XhprofDisplay
     $diff_text = "";
     $regr_impr = "";
     if ($diff_mode) {
-      $diff_text = "<b>Diff</b>";
-      $regr_impr = "<i style='color:red'>Regression</i>/<i style='color:green'>Improvement</i>";
+      // 颜色标记留在代码里，只把词交给译者
+      $diff_text = I18n::plain('common.diff');
+      $regr_impr = "<i style='color:red'>" . I18n::plain('common.regression')
+        . "</i>/<i style='color:green'>" . I18n::plain('common.improvement') . "</i>";
     }
 
     if ($diff_mode) {
@@ -973,20 +1066,22 @@ class XhprofDisplay
       $href2 = "$base_path?"
         . http_build_query(XhprofLib::xhprof_array_set($base_url_params, 'run', $run2));
 
-      $echo_page .= "<h3 align=center>$regr_impr summary for " . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "<br><br></h3>";
+      $echo_page .= "<h3 align=center>"
+        . sprintf(I18n::plain('pc.summary'), $regr_impr, htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8'))
+        . "<br><br></h3>";
       $echo_page .= '<table border=1 cellpadding=2 cellspacing=1 width="30%" '
         . 'rules=rows bordercolor="#bdc7d8" align=center>' . "\n";
       $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
       $echo_page .= "<th align=left>" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</th>";
-      $echo_page .= "<th $vwbar><a href=" . $href1 . ">Run #$run1</a></th>";
-      $echo_page .= "<th $vwbar><a href=" . $href2 . ">Run #$run2</a></th>";
-      $echo_page .= "<th $vwbar>Diff</th>";
-      $echo_page .= "<th $vwbar>Diff%</th>";
+      $echo_page .= "<th $vwbar><a href=" . $href1 . ">" . sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')) . "</a></th>";
+      $echo_page .= "<th $vwbar><a href=" . $href2 . ">" . sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')) . "</a></th>";
+      $echo_page .= "<th $vwbar>" . I18n::plain('common.diff') . "</th>";
+      $echo_page .= "<th $vwbar>" . I18n::plain('diff.diffPct') . "</th>";
       $echo_page .= '</tr>';
       $echo_page .= '<tr>';
 
       if ($display_calls) {
-        $echo_page .= "<td>Number of Function Calls</td>";
+        $echo_page .= "<td>" . I18n::plain('diff.callCount') . "</td>";
         $echo_page .= XhprofDisplay::print_td_num($symbol_info1["ct"], $format_cbk["ct"]);
         $echo_page .= XhprofDisplay::print_td_num($symbol_info2["ct"], $format_cbk["ct"]);
         $echo_page .= XhprofDisplay::print_td_num(
@@ -1047,7 +1142,12 @@ class XhprofDisplay
     }
 
     $echo_page .= "<h4><center>";
-    $echo_page .= "Parent/Child $regr_impr report for <b>" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</b>";
+    // 两个模板而不是一个「%s 可能是空串」的：非 diff 模式下 $regr_impr 是空串，
+    // 单模板会印出 "Parent/Child  report"（多一个空格）/「 的父/子报告」这种残句。
+    $symbol_html = '<b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b>';
+    $echo_page .= $regr_impr === ''
+      ? sprintf(I18n::plain('pc.report'), $symbol_html)
+      : sprintf(I18n::plain('pc.reportDiff'), $regr_impr, $symbol_html);
 
     $echo_page .= "</center></h4>";
 
@@ -1075,7 +1175,7 @@ class XhprofDisplay
     $echo_page .= "</tr></thead><tbody>";
 
     $echo_page .= "<tr class=\"xp-pc-current\"><td colspan=\"" . (count($pc_stats)) . "\">";
-    $echo_page .= "<b>Current Function</b>";
+    $echo_page .= "<b>" . I18n::plain('pc.current') . "</b>";
     $echo_page .= "</td></tr>";
 
     $echo_page .= "<tr>";
@@ -1098,7 +1198,8 @@ class XhprofDisplay
     $echo_page .= "</tr>";
     $echo_page .= "<tr class=\"xp-excl-row\">";
     $echo_page .= "<td style='text-align:right'>"
-      . "Exclusive Metrics $diff_text for Current Function</td>";
+      . sprintf(I18n::plain('pc.exclusive'), $diff_text === '' ? '' : ' ' . $diff_text)
+      . "</td>";
 
     if ($display_calls) {
       // Call Count
@@ -1305,8 +1406,13 @@ class XhprofDisplay
       }
 
       if ($xhprof_data === false || $xhprof_data === null) {
-        // 无数据时优雅降级（run_id 合法但缓存缺失 / 聚合全部无效），不进入渲染管线
-        return $data;
+        // 无数据时优雅降级（run_id 格式合法但缓存里没有 / 聚合后一个有效 run 都没有），
+        // 不进入渲染管线。但**不能只留一条导航条**：用户看到的是一个几乎空白的页面，
+        // 读起来像「报告坏了」，而事实只是这条记录过期了（默认 TTL 7 天）。
+        return $data . '<div class="xp-main"><div class="xp-card">'
+          . '<div class="xp-card-title">' . I18n::plain('report.title') . '</div>'
+          . '<div class="xp-card-note">' . I18n::plain('report.noData') . '</div>'
+          . '</div></div>';
       }
 
       $data .= XhprofDisplay::profiler_single_run_report(
@@ -1349,7 +1455,12 @@ class XhprofDisplay
     $li_html = "";
     // 文案逐条取词表再拼接：导航是「首页 | 运行报告 | 方法详情」这种 HTML 片段，
     // 不是整串独立文案，不能整段丢给译者（会让 href 一起被改写）。
-    $nav_home = '<li><a href="' . $base_path . '">' . I18n::plain('nav.home') . '</a></li>';
+    //
+    // 「首页」的 href 必须由 report_url() 生成：裸 $base_path 会把整个查询串丢掉，
+    // 于是 `?token=xxx`（配了鉴权就 403）与 `?lang=xx`（选了语言又退回浏览器语言）
+    // 都传不过去。report_url() 默认摘掉视图参数，所以「首页」不会停在原 run 上。
+    $home_href = XhprofLib::report_url();
+    $nav_home = '<li><a href="' . $home_href . '">' . I18n::plain('nav.home') . '</a></li>';
     if (isset($url_params['run']) && isset($url_params['symbol'])) {
       $li_html = $nav_home
         . '<li><a href="' . $top_link_query_string . '">' . I18n::plain('nav.runs') . '</a></li>'
@@ -1358,13 +1469,34 @@ class XhprofDisplay
       $li_html = $nav_home
         . '<li class="active"><a href="' . $top_link_query_string . '">' . I18n::plain('nav.runs') . '</a></li>';
     } else {
-      $li_html = '<li class="active"><a href="' . $base_path . '">' . I18n::plain('nav.home') . '</a></li>';
+      $li_html = '<li class="active"><a href="' . $home_href . '">' . I18n::plain('nav.home') . '</a></li>';
     }
 
+    // 语言切换器：13 种语言此前在报告页上**没有任何入口**（只能靠 ?lang=／配置／浏览器
+    // 协商），而语言参数现在会随链接传播，所以一个下拉就能把整站语言换掉。
+    //
+    // 用 `<select onchange="location.href=this.value">`，不用表单也不用外部 JS：
+    // 表单会把 `?token=` 丢掉（鉴权就 403），而外部 JS 在脚本没加载时控件就废了。
+    // 每个 option 的值都由 report_url() 生成 —— 与页面里其它链接同一个构造函数，
+    // 所以当前查询串里除 lang 之外的参数（token、排序…）都跟着走。
+    // 标签用**各语言的自称**（词表 `_meta.name`，如「한국어」），不必翻译。
+    $lang_options = '';
+    foreach (I18n::AVAILABLE as $code) {
+        $meta = I18n::catalogOf($code)['_meta'] ?? null;
+        $name = is_array($meta) && isset($meta['name']) ? (string) $meta['name'] : $code;
+        $lang_options .= '<option value="' . XhprofLib::report_url(array('lang' => $code)) . '"'
+            . ($code === I18n::locale() ? ' selected' : '') . '>'
+            . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</option>';
+    }
+    $switcher = '<select class="xp-lang" title="' . I18n::plain('nav.language')
+        . '" aria-label="' . I18n::plain('nav.language')
+        . '" onchange="location.href=this.value">' . $lang_options . '</select>';
+
     return '<nav class="xp-nav"><div class="xp-nav-inner">'
-      . '<a href="' . $base_path . '" class="xp-brand"><span class="xp-brand-icon"></span>' . I18n::plain('nav.brand') . '</a>'
+      . '<a href="' . $home_href . '" class="xp-brand"><span class="xp-brand-icon"></span>' . I18n::plain('nav.brand') . '</a>'
       . '<ul class="xp-nav-links">' . $li_html . '</ul>'
-      . '<div class="xp-nav-extra"><a href="https://github.com/erikwang2013/xhprof-webman" target="_blank" rel="noopener" title="GitHub">GitHub</a></div>'
+      . '<div class="xp-nav-extra">' . $switcher
+      . '<a href="https://github.com/erikwang2013/xhprof-webman" target="_blank" rel="noopener" title="GitHub">GitHub</a></div>'
       . '</div></nav>';
   }
 }

@@ -1,4 +1,25 @@
 <?php
+/*
+ * Derived from phacility/xhprof — Copyright (c) 2009 Facebook.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * CHANGES FROM UPSTREAM: namespaced under ErikWang2013\Xhprof\Core\XhprofLib,
+ * ten-framework adapters in place of the original PHP superglobals, an i18n
+ * layer, and the fixes recorded in this repository's history. The rest of this
+ * package (everything outside src/Core/XhprofLib/) is the MIT-licensed work of
+ * this project — see LICENSE and NOTICE.
+ */
 
 declare(strict_types=1);
 
@@ -134,13 +155,6 @@ class XHProfRunsDefault implements XHProfRuns
         }, $run_id_lists);
         // mget 批量取，消除 N+1；兼容部分驱动返回 [key=>value] 的形态
         $values = array_values(Xhprof::getCache()->mget($keys));
-        $http = Xhprof::getRequest()->header('x-forwarded-proto');
-        $http = !empty($http) ? $http . ":" : "http:";
-        // 不能用 url()：四个框架返回的形态不一致（Webman 是协议相对的 //host/path，
-        // Laravel/Hyperf 是绝对的 https://host/path，ThinkPHP url(true) 还附带 query），
-        // 拼上 $http 后链接在 3/4 框架上是坏的（404 或 query 被第二个 ? 污染）。
-        // host() + uri() 是契约里语义明确、四框架一致的访问器。
-        $path = $http . '//' . Xhprof::getRequest()->host() . Xhprof::getRequest()->uri();
         foreach ($run_id_lists as $i => $run_id) {
             if (!self::xhprof_valid_run_id($run_id)) continue;
             $res = $values[$i] ?? null;
@@ -152,7 +166,12 @@ class XHProfRunsDefault implements XHProfRuns
             $wtClass = $wt > Xhprof::$view_wtred ? 'xp-wt-warn' : '';
             $tr = '<tr>'
                 . '<td>' . htmlspecialchars((string) $request_arr['method']) . '</td>'
-                . '<td><a href="' . htmlspecialchars($path) . '?all=1&run=' . $run_id . '&source=xhprof_foo&requrl=' . urlencode((string) $request_arr['request_uri']) . '">' . htmlspecialchars((string) $request_arr['request_uri']) . '</a></td>'
+                . '<td><a href="' . XhprofLib::report_url(array(
+                    'all' => 1,
+                    'run' => $run_id,
+                    'source' => 'xhprof_foo',
+                    'requrl' => (string) $request_arr['request_uri'],
+                )) . '">' . htmlspecialchars((string) $request_arr['request_uri']) . '</a></td>'
                 . '<td>' . date('Y-m-d H:i:s', (int) ($request_arr['create_time'] ?? 0)) . '</td>'
                 . '<td class="' . trim($wtClass) . '">' . $wt . '</td>'
                 . '<td>' . $mu . '</td>'

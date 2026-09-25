@@ -298,7 +298,7 @@ class XhprofLibTest extends TestCase
     public function aggregateRunsRejectsEmptyRuns(): void
     {
         $res = XhprofLib::xhprof_aggregate_runs([], []);
-        self::assertSame('Invalid input..', $res['description']);
+        self::assertSame('输入无效..', $res['description']);
         self::assertNull($res['raw']);
     }
 
@@ -306,7 +306,7 @@ class XhprofLibTest extends TestCase
     public function aggregateRunsRejectsWeightCountMismatch(): void
     {
         $res = XhprofLib::xhprof_aggregate_runs(['a1a1a1a1a1a1a1a1'], [1, 2]);
-        self::assertSame('Invalid input..', $res['description']);
+        self::assertSame('输入无效..', $res['description']);
     }
 
     #[Test]
@@ -331,7 +331,7 @@ class XhprofLibTest extends TestCase
         self::assertEqualsWithDelta(55.0, $res['raw']['main()==>foo()']['wt'], 1e-9);
         self::assertEqualsWithDelta(1.75, $res['raw']['main()']['mu'], 1e-9);
         self::assertStringContainsString(
-            'Aggregated Report for 2 runs: a1a1a1a1a1a1a1a1,b2b2b2b2b2b2b2b2 in the ratio (1:3)',
+            '2 次运行的聚合报告：a1a1a1a1a1a1a1a1,b2b2b2b2b2b2b2b2 权重比 (1:3)',
             $res['description']
         );
     }
@@ -346,7 +346,7 @@ class XhprofLibTest extends TestCase
         $res = XhprofLib::xhprof_aggregate_runs(['a1a1a1a1a1a1a1a1', 'badid'], [], 'xhprof_foo');
         $this->unsilence();
         self::assertSame(['badid'], $res['bad_runs']);
-        self::assertStringContainsString('Aggregated Report for 1 runs', $res['description']);
+        self::assertStringContainsString('1 次运行的聚合报告', $res['description']);
         self::assertSame(100, $res['raw']['main()']['wt']);
     }
 
@@ -357,6 +357,88 @@ class XhprofLibTest extends TestCase
                 'main()' => ['wt' => 100, 'mu' => 1],
             ]));
         }
+    }
+
+    /**
+     * 第一个 run 过期（默认 TTL 7 天）时，聚合报告必须照样出得来。
+     *
+     * 曾经的失败：指标集取自 `$idx == 0`，而且取在有效性检查**之前** —— 第一个 run
+     * 读不到时 `foreach ($raw_data["main()"])` 只立下一条 "array offset on false" 警告，
+     * `$metrics` 留空，于是后面每一层 `foreach ($metrics …)` 都不进，`$raw_data_total`
+     * 保持 null，页面只剩一条导航条（第二个 run 明明可读）。
+     *
+     * 刻意**不** silence()：PHPUnit 开了 failOnWarning，所以只要那条警告回来，
+     * 本用例就会红在新跑出来的 warning 上。
+     */
+    #[Test]
+    public function aggregateRunsStillRendersWhenTheFirstRunExpired(): void
+    {
+        // 只放第二个 run：第一个是格式合法的 run_id，但数据已不在缓存里
+        $this->cache->set('xhprof:xhprof_log:b2b2b2b2b2b2b2b2', serialize([
+            'main()' => ['wt' => 200, 'mu' => 2],
+            'main()==>foo()' => ['wt' => 60, 'mu' => 1],
+        ]));
+
+        $res = XhprofLib::xhprof_aggregate_runs(
+            ['a1a1a1a1a1a1a1a1', 'b2b2b2b2b2b2b2b2'],
+            [],
+            'xhprof_foo'
+        );
+
+        self::assertSame(['a1a1a1a1a1a1a1a1'], $res['bad_runs']);
+        self::assertNotNull($res['raw'], '第一个 run 过期不该让整份聚合报告变成空');
+        self::assertEqualsWithDelta(200.0, $res['raw']['main()']['wt'], 1e-9);
+        self::assertArrayHasKey('main()==>foo()', $res['raw'], '可读的那个 run 的边表必须留下来');
+        self::assertStringContainsString('1 次运行的聚合报告', $res['description']);
+    }
+
+    /**
+     * 报告页内部链接：当前路径 + 合并后的查询串，且必须是**相对** URL。
+     *
+     * 三件事一起钉住：鉴权与语言参数要跟着走（否则点一下 403 / 语言复位）、
+     * 视图参数要被摘掉（点「首页」不该停在原来的 run 上）、
+     * 且不读 `X-Forwarded-Proto`（未校验的请求头以前能整段落进 href）。
+     */
+    #[Test]
+    public function reportUrlMergesParamsAndStaysRelative(): void
+    {
+        $this->useRequest(new FakeRequest(
+            ['run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()', 'token' => 'tok', 'lang' => 'ko', 'sort' => 'wt'],
+            ['uri' => '/xhprof', 'headers' => ['x-forwarded-proto' => 'javascript:alert(1)']]
+        ));
+
+        // 首页：摘掉全部视图参数，鉴权与语言留住
+        $home = XhprofLib::report_url();
+        self::assertStringStartsWith('/xhprof?', $home);
+        self::assertStringContainsString('token=tok', $home);
+        self::assertStringContainsString('lang=ko', $home);
+        foreach (XhprofLib::VIEW_PARAMS as $k) {
+            self::assertStringNotContainsString($k . '=', $home, "首页链接不该带视图参数 {$k}");
+        }
+        self::assertStringNotContainsString('javascript:', $home);
+
+        // run 链接：设上 run 相关的参数，其余照旧传播
+        $run = XhprofLib::report_url(['all' => 1, 'run' => 'b2b2b2b2b2b2b2b2', 'requrl' => '/order?x=1&y=2']);
+        self::assertStringContainsString('token=tok', $run);
+        self::assertStringContainsString('lang=ko', $run);
+        self::assertStringContainsString('run=b2b2b2b2b2b2b2b2', $run);
+        self::assertStringNotContainsString('a1a1a1a1a1a1a1a1', $run, '旧的 run 参数必须被覆盖掉');
+        self::assertStringNotContainsString('symbol=', $run, 'symbol 属于视图参数，该摘掉');
+        self::assertStringContainsString('requrl=%2Forder%3Fx%3D1%26y%3D2', $run, '参数值要按查询串编码');
+
+        // 值为 null = 删掉该参数
+        self::assertStringNotContainsString('lang=', XhprofLib::report_url(['lang' => null]));
+    }
+
+    /** 路径取自当前请求，且已转义（它会落进 href="…" 属性） */
+    #[Test]
+    public function reportPathIsEscaped(): void
+    {
+        $this->useRequest(new FakeRequest([], ['uri' => '/xhprof/']));
+        self::assertSame('/xhprof', XhprofLib::report_path(), '尾斜杠要归一');
+
+        $this->useRequest(new FakeRequest([], ['uri' => '/x"y/z']));
+        self::assertSame('/x&quot;y/z', XhprofLib::report_path(), '引号必须转义，否则能逃出属性');
     }
 
     /**
@@ -374,7 +456,7 @@ class XhprofLibTest extends TestCase
             'xhprof_foo'
         );
 
-        self::assertSame('Invalid input..', $res['description']);
+        self::assertSame('输入无效..', $res['description']);
         self::assertNull($res['raw']);
     }
 

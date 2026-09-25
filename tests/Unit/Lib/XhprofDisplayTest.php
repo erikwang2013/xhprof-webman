@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Lib;
 
 require_once __DIR__ . '/../../Fixtures/Fakes.php';
 
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
@@ -336,7 +337,7 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('函数/方法调用总次数', $html);
         self::assertStringContainsString('>5</td>', $html); // total call count
         self::assertStringContainsString('&lt;script&gt;', $html); // escaped request uri
-        self::assertStringContainsString('Sorted by', $html);
+        self::assertStringContainsString('按 ', $html);
     }
 
     #[Test]
@@ -355,10 +356,15 @@ class XhprofDisplayTest extends TestCase
             $runId
         );
 
-        self::assertStringContainsString('Parent/Child', $html);
-        self::assertStringContainsString('Current Function', $html);
-        self::assertStringContainsString('Parent public static function', $html);
-        self::assertStringContainsString('Child public static function', $html);
+        self::assertStringContainsString('父/子报告', $html);
+        self::assertStringContainsString('当前函数', $html);
+        // 分区标题：上游是 'Child function'/'Parent function' + 复数后缀 's'。
+        // 移植时一次全局替换把 "public static " 插到了 "function" 前面（连字符串
+        // 也没放过），于是每张父/子表都印着 "Child public static functions"，
+        // 而 `.'s'` 那句复数拼接的语义也被打断。这条当时**钉住了那个错字符串**。
+        self::assertStringContainsString('<b>子函数</b>', $html);
+        self::assertStringContainsString('<b>父函数</b>', $html);
+        self::assertStringNotContainsString('public static function', $html);
         self::assertStringContainsString('var func_name = "foo()";', $html);
         self::assertStringContainsString('func_metrics["wt"] = 40000;', $html);
 
@@ -396,7 +402,7 @@ class XhprofDisplayTest extends TestCase
             $runId
         );
 
-        self::assertStringContainsString('not found in XHProf run', $html);
+        self::assertStringContainsString('运行数据里没有函数', $html);
     }
 
     /**
@@ -461,7 +467,7 @@ class XhprofDisplayTest extends TestCase
             'r2'
         );
 
-        self::assertStringContainsString('Overall Diff Summary', $html);
+        self::assertStringContainsString('差异总览', $html);
     }
 
     #[Test]
@@ -489,11 +495,11 @@ class XhprofDisplayTest extends TestCase
             'r1id',
             'r2id'
         );
-        self::assertStringContainsString('Overall Diff Summary', $html);
-        self::assertStringContainsString('Run #r1id', $html);
-        self::assertStringContainsString('Invert Diff Report', $html);
-        self::assertStringContainsString('Number of Function Calls', $html);
-        self::assertStringContainsString('Total Diff Report', $html);
+        self::assertStringContainsString('差异总览', $html);
+        self::assertStringContainsString('运行 #r1id', $html);
+        self::assertStringContainsString('反转差异报告', $html);
+        self::assertStringContainsString('函数调用次数', $html);
+        self::assertStringContainsString('全部差异报告', $html);
 
         $top = XhprofDisplay::profiler_diff_report(
             ['run1' => 'r1id', 'run2' => 'r2id', 'sort' => 'wt'],
@@ -506,7 +512,7 @@ class XhprofDisplayTest extends TestCase
             'r1id',
             'r2id'
         );
-        self::assertStringContainsString('Regressions', $top);
+        self::assertStringContainsString('回归/改善', $top);
     }
 
     #[Test]
@@ -539,15 +545,125 @@ class XhprofDisplayTest extends TestCase
     #[Test]
     public function getTooltipAttributes(): void
     {
-        // onmouseover 是 xhprof_report.js 里 ChildRowToolTip 的唯一触发点，必须存在
+        // 数据属性保留（将来的悬浮提示实现要的就是 type/metric），但**不许**再有
+        // onmouseover：`onmouseover` 的返回值被浏览器丢弃，它从来不是触发器，
+        // 留着只会让人以为提示是好的。这条断言钉的是「已经删掉」。
+        self::assertSame("type='Child' metric='wt'", XhprofDisplay::get_tooltip_attributes('Child', 'wt'));
+
+        $parent = XhprofDisplay::get_tooltip_attributes('Parent', 'mu');
+        self::assertSame("type='Parent' metric='mu'", $parent);
+        self::assertStringNotContainsString('onmouseover', $parent);
+        self::assertStringNotContainsString('RowToolTip', $parent);
+    }
+
+    /**
+     * jQuery 必须排在 xhprof_report.js 之前。
+     *
+     * 两个 `<script>` 都没有 defer/async，浏览器按文档顺序**同步**执行，而后者顶层
+     * 就是 `$(document).ready(...)`：顺序反了 → `$` 未定义 → ReferenceError，
+     * 该脚本剩余部分（搜索按钮的点击处理器、请求列表的 DataTable 分页/排序）
+     * 全部注册不上，页面不报错、只是「点了没反应」。
+     */
+    #[Test]
+    public function jqueryIsLoadedBeforeTheReportScript(): void
+    {
+        $html = XhprofDisplay::xhprof_include_js_css('/xhprof-assets');
+        $jquery = strpos($html, 'jquery-3.0.0.min.js');
+        $report = strpos($html, 'xhprof_report.js');
+
+        // 先各自确认找得到：strpos 找不到返回 false，而 `false < 正数` 恒真，
+        // 少了这两句，选择器一坏这条断言就变成永远通过的摆设。
+        self::assertIsInt($jquery, '输出里没有 jQuery 的 <script>');
+        self::assertIsInt($report, '输出里没有 xhprof_report.js 的 <script>');
+        self::assertLessThan($report, $jquery, 'jQuery 必须排在 xhprof_report.js 之前');
+
+        // 「按文档顺序同步执行」是上面那条断言能推出结论的前提，一并钉住：
+        // 一旦有人加上 defer/async，执行时机就与文档顺序脱钩。
+        self::assertStringNotContainsString('defer', $html);
+        self::assertStringNotContainsString(' async', $html);
+    }
+
+    /**
+     * 注入给 JS 的文案块：随语言变化、占位符原样、且**不含**千位分隔符那个键。
+     *
+     * `window.xpI18n` 是 JS 唯一的数据来源（`xhprof_report.js` 读它），所以这条同时
+     * 覆盖三件事：值确实取自当前语言的词表、DataTables 的 `_MENU_`/`_START_` 占位符
+     * 没被吃掉、以及分隔符键按设计不在里面（页面数字由 PHP 的 `number_format` 统一
+     * 打成英式，见 `XhprofDisplay` 里那段注释）。
+     */
+    #[Test]
+    public function injectedJsCarriesTheLocalizedDataTableStrings(): void
+    {
+        I18n::setLocale('zh_CN');
+        $zh = XhprofDisplay::xhprof_include_js_css('/xhprof-assets');
+        self::assertStringContainsString('window.xpI18n = ', $zh);
+        self::assertStringContainsString('"search":"搜索："', $zh, '注入的应是当前语言的值');
+        self::assertStringContainsString('_MENU_', $zh, 'DataTables 的占位符必须原样传过去');
+        self::assertStringContainsString('_TOTAL_', $zh);
+        self::assertStringNotContainsString('infoThousands', $zh, '这个键按设计不进词表也不注入');
+
+        I18n::setLocale('en');
+        $en = XhprofDisplay::xhprof_include_js_css('/xhprof-assets');
+        self::assertStringContainsString('"search":"Search:"', $en);
+        self::assertNotSame($zh, $en, '换语言必须换掉注入的文案');
+
+        I18n::setLocale(I18n::FALLBACK);
+    }
+
+    /**
+     * 导航里的语言切换器：13 种语言各一个 option，选项值带当前查询串、当前语言选中。
+     *
+     * 两条都要：**13 个**（少一个就是某门语言在报告页上没有入口）与**带参数**
+     * （`?token=` 丢了点进去就是 403 —— 页面内链接刚修过这一类，切换器不能重蹈）。
+     */
+    #[Test]
+    public function navOffersALanguageSwitcherForEveryLocale(): void
+    {
+        $this->useRequest(new FakeRequest(['token' => 'tok', 'lang' => 'ko'], ['uri' => '/xhprof']));
+        I18n::setLocale('ko');
+
+        $nav = XhprofDisplay::show_nav(['token' => 'tok', 'lang' => 'ko']);
+
+        self::assertStringContainsString('<select class="xp-lang"', $nav, '导航里没有切换器');
+        foreach (I18n::AVAILABLE as $code) {
+            self::assertStringContainsString(
+                'value="/xhprof?token=tok&lang=' . $code . '"',
+                $nav,
+                "{$code} 在切换器里没有条目，或该条目丢了 token"
+            );
+        }
+        // 当前语言选中；标签用各语言的自称（词表 _meta.name，不需要翻译）
+        self::assertStringContainsString('value="/xhprof?token=tok&lang=ko" selected', $nav);
+        self::assertStringContainsString('>한국어</option>', $nav);
+        self::assertStringContainsString('>日本語</option>', $nav);
+
+        // 无查询串的请求：仍然是 13 条，只是 URL 更短（不能因为没 token 就不渲染切换器）
+        $this->useRequest(new FakeRequest([], ['uri' => '/xhprof']));
+        I18n::setLocale(I18n::FALLBACK);
+        $plain = XhprofDisplay::show_nav([]);
         self::assertSame(
-            "type='Child' metric='wt' onmouseover=\"return ChildRowToolTip(this, 'wt');\"",
-            XhprofDisplay::get_tooltip_attributes('Child', 'wt')
+            count(I18n::AVAILABLE),
+            substr_count($plain, '<option '),
+            '无查询串时切换器条目数不对'
         );
-        self::assertStringContainsString(
-            'ParentRowToolTip',
-            XhprofDisplay::get_tooltip_attributes('Parent', 'mu')
-        );
+        self::assertStringContainsString('value="/xhprof?lang=zh_CN" selected', $plain);
+    }
+
+    /** 导航里的「首页」/品牌链接必须带上整个查询串（鉴权 token、语言 lang 都靠它传播） */
+    #[Test]
+    public function navHomeLinksCarryTheQueryStringButDropViewParams(): void
+    {
+        $this->useRequest(new FakeRequest(
+            ['run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()', 'token' => 'tok', 'lang' => 'ko'],
+            ['uri' => '/xhprof']
+        ));
+        $nav = XhprofDisplay::show_nav([
+            'run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()', 'token' => 'tok', 'lang' => 'ko',
+        ]);
+
+        self::assertStringContainsString('href="/xhprof?token=tok', $nav);
+        self::assertStringContainsString('lang=ko', $nav);
+        self::assertStringNotContainsString('symbol=', $nav);
     }
 
     #[Test]

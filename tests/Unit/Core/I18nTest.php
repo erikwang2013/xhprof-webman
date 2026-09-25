@@ -370,6 +370,15 @@ class I18nTest extends TestCase
         $this->assertSame('ar', I18n::htmlLang());
     }
 
+    /**
+     * 译文不许与中文源逐字相同（那是「拿中文当译文」）。
+     *
+     * 已知会**合理**挡住的写法：日语里 `改善` 与中文同形且同样正确（`analyze` 那类汉字词
+     * 中日共享）。2026-09-25 的 ja 译者因此把 `common.improvement` 改成了 `向上` ——
+     * 与 `common.regression` 的 `回帰` 正好是日语性能语境里的惯用对，结果比原词更好，
+     * 所以这里**不加白名单**：遇到同形词时换一个同样自然的说法，比给规则开口子便宜。
+     * （同族的还有 [[han-guard-cannot-generalize-to-ja]] 记的那条教训。）
+     */
     #[Test]
     public function noLocaleShipsTheChineseStringItselfAsATranslation(): void
     {
@@ -405,6 +414,57 @@ class I18nTest extends TestCase
         I18n::setLocale('ja');
         $this->assertSame('ko', I18n::catalogOf('ko')['_meta']['lang']);
         $this->assertSame('en', I18n::catalogOf('en')['_meta']['lang']);
+    }
+
+    /**
+     * 各份词表的**占位符**必须与中文源一致（同一个键：丢一个不行、多一个也不行）。
+     *
+     * 两类真实失效都靠这条挡：`sprintf` 的 `%s` 被翻译时漏掉一个 → 页面上少一个数字；
+     * 多写一个 → `sprintf` 抛 ArgumentCountError，整页 500（本轮就发生过一次，
+     * 是单元测试的 ArgumentCountError 先报出来的）。DataTable 的 `_MENU_`/`_START_`
+     * 这类占位符被译者顺手“翻译”掉，分页器就印出字面量 `_MENU_`。
+     *
+     * 判据刻意取**最弱**的一种：比多重集而不是顺序 —— `sprintf` 不要求参数按序出现，
+     * 有的语言本来就要调整语序。这条只拦「丢了 / 多了 / 换了类型」。
+     */
+    #[Test]
+    public function everyCatalogKeepsTheSourcePlaceholders(): void
+    {
+        $source = I18n::catalogOf(I18n::FALLBACK);
+        $placeholders = static function (string $value): array {
+            preg_match_all('/%[0-9]*\$?[sdf]|_[A-Z]+_/', $value, $m);
+            // 位置说明符 `%1$s` 归一成 `%s`：`sprintf` 支持它，而允许译者改语序正是
+            // 「比多重集不比顺序」的目的所在（有的语言就是要把参数提到句首）。
+            // 归一之后仍能抓住真正的错：少一个、多一个、或类型换了。
+            $found = array_map(static fn (string $p): string => preg_replace('/%[0-9]+\$/', '%', $p), $m[0]);
+            sort($found);
+            return $found;
+        };
+
+        $checked = 0;
+        foreach (I18n::AVAILABLE as $code) {
+            if ($code === I18n::FALLBACK) {
+                continue;   // 源语言自己跟自己比没有意义
+            }
+            foreach (I18n::catalogOf($code) as $key => $value) {
+                if ($key === '_meta' || !is_string($value) || $value === '') {
+                    continue;   // 空值 = 还没翻，由 t() 回落中文源
+                }
+                $expected = $placeholders((string) ($source[$key] ?? ''));
+                if ($expected === []) {
+                    continue;   // 这个键本来就没有占位符
+                }
+                $this->assertSame(
+                    $expected,
+                    $placeholders($value),
+                    "{$code} 的 {$key} 占位符与中文源不一致——翻译时丢了、多写了或改了类型"
+                );
+                $checked++;
+            }
+        }
+
+        // 没有这一句，词表里一个带占位符的键都没有时本用例会平凡通过
+        $this->assertGreaterThan(20, $checked, '带占位符的键太少了，夹具可能已失效');
     }
 
     // ---------------- 5. 列头与字面量表不许走岔 ----------------
@@ -493,15 +553,26 @@ class I18nTest extends TestCase
         ];
     }
 
-    /** 断言整页 HTML 里没有汉字——英文页里剩下汉字，就说明有文案没接线 */
+    /**
+     * 断言整页 HTML 里没有汉字——英文页里剩下汉字，就说明有文案没接线。
+     *
+     * **语言切换器的 `<select>` 先摘掉**：它列的是各语言的**自称**（`中文`/`العربية`/
+     * `हिन्दी`），那是专有名词、不是待翻译的界面文案——按设计就该长得跟目标语言一样，
+     * 否则找中文的人要找「Chinese」。这与「英文页里不该有汉字」并不冲突：
+     * 那条规则针对的是**没接线的中文文案**。摘掉是为了不把专有名词误判成漏翻，
+     * 所以另有一条用例（XhprofDisplayTest::navOffersALanguageSwitcherForEveryLocale）
+     * 钉住切换器本身该有什么——摘掉不会把它的缺陷一起藏起来。
+     */
     private function assertNoHanCharacters(string $html, string $where): void
     {
-        if (preg_match('/\p{Han}/u', $html, $m, PREG_OFFSET_CAPTURE) === 1) {
+        $scanned = (string) preg_replace('#<select class="xp-lang".*?</select>#s', '', $html);
+
+        if (preg_match('/\p{Han}/u', $scanned, $m, PREG_OFFSET_CAPTURE) === 1) {
             $from = max(0, $m[0][1] - 60);
-            $this->fail("{$where} 的英文页里还有汉字：…" . substr($html, $from, 140) . '…');
+            $this->fail("{$where} 的英文页里还有汉字：…" . substr($scanned, $from, 140) . '…');
         }
         // 命中不了才算通过也要有断言，否则这条检查在空转
-        $this->assertSame(0, preg_match('/\p{Han}/u', $html), "{$where} 的英文页里还有汉字");
+        $this->assertSame(0, preg_match('/\p{Han}/u', $scanned), "{$where} 的英文页里还有汉字");
     }
 
     #[Test]

@@ -11,6 +11,7 @@ use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter as HyperfRequestAdapter;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
@@ -474,5 +475,194 @@ class XhprofTest extends TestCase
         $this->assertNull($runId); // stop() 无返回值
         $this->assertNotEmpty($this->cache->calls);
         $this->assertStringContainsString('xhprof:run_id', implode(',', $this->cache->calls));
+    }
+
+    // ---------------- 报告页内部链接：参数必须随链接传播 ----------------
+
+    /** 造一条 run 的日志与列表项，使列表页与单 run 页都渲染得出来 */
+    private function seedRunAndLog(string $runId): void
+    {
+        $this->seedRun($runId);
+        $this->cache->lPush(Xhprof::$key_prefix . ':run_id', $runId);
+        $this->cache->set(Xhprof::$key_prefix . ':request_log:' . $runId, json_encode([
+            'request_uri' => '/order?x=1', 'method' => 'GET', 'wt' => 0.8, 'mu' => 2.0,
+            'ip' => '6.6.6.6', 'create_time' => 1700000000,
+        ]));
+    }
+
+    /**
+     * 页面里指向报告页自身的链接（跳过外链与空串）。
+     *
+     * 空表要当失败处理：一旦选择器失灵，下面的「每条都带 token」会平凡成立。
+     *
+     * @return list<string>
+     */
+    private function internalHrefs(string $html): array
+    {
+        preg_match_all('/href="([^"]*)"/', $html, $m);
+        $hrefs = array_values(array_filter(
+            $m[1],
+            static fn (string $h): bool => $h !== '' && !str_starts_with($h, 'http')
+        ));
+        $this->assertNotEmpty($hrefs, '页面里一个内部链接都没解析到，夹具或正则已失效');
+        return $hrefs;
+    }
+
+    /**
+     * 配了 `auth_token` 时，页面里的每个内部链接都必须带着 token。
+     *
+     * 这是一条**可用性**断言，不是风格问题：`index()` 用 `hash_equals` 校验 token，
+     * 而 run 列表的链接此前把查询串写死了、首页/品牌链接干脆不带 —— 结果是
+     * 「带 token 打开首页 200，点其中任何一个 run 都是 403」。修复前本用例会红。
+     */
+    #[Test]
+    public function everyInternalLinkCarriesTheToken(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRunAndLog($runId);
+        $this->config = new FakeConfig(['xhprof' => ['auth_token' => 'tok']]);
+        $this->request = new FakeRequest(['token' => 'tok'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        // 列表页：里面有那条 run 的链接，也有首页/品牌链接
+        $list = (string) Xhprof::index();
+        $this->assertStringContainsString('run=' . $runId, $list, '列表页没渲染出 run 链接，夹具失效');
+
+        foreach ($this->internalHrefs($list) as $href) {
+            $this->assertStringContainsString('token=tok', $href, "列表页的链接 {$href} 丢了 token → 点进去就是 403");
+        }
+
+        // 单 run 页：导航（首页/品牌）与页内链接同样都要带 token
+        $this->request = new FakeRequest(['run' => $runId, 'all' => 1, 'token' => 'tok'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        $this->assertStringContainsString('token=tok', (string) Xhprof::index());
+    }
+
+    /** 语言参数 `?lang=` 也要随链接传播，否则点一下导航就退回浏览器语言 */
+    #[Test]
+    public function everyInternalLinkCarriesTheLanguage(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRunAndLog($runId);
+        $this->request = new FakeRequest(['run' => $runId, 'all' => 1, 'lang' => 'ko'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $html = (string) Xhprof::index();
+        $this->assertStringContainsString('<html lang="ko">', $html);
+
+        foreach ($this->internalHrefs($html) as $href) {
+            $this->assertStringContainsString('lang=ko', $href, "链接 {$href} 丢了 lang → 点进去语言就变了");
+        }
+    }
+
+    /**
+     * 内部链接是**相对** URL：这样端口不会丢，也不再读 `X-Forwarded-Proto`。
+     *
+     * 旧实现拼的是 `$http . '//' . host() . uri()`：`host()` 契约不含端口，
+     * 非 80/443 部署会指到错 origin；而 `$http` 来自一个**未校验**的请求头
+     * （实测 `X-Forwarded-Proto: javascript:alert(1)` 能整段落进 href）。
+     */
+    #[Test]
+    public function internalLinksAreRelativeAndIgnoreTheForwardedProtoHeader(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRunAndLog($runId);
+        $this->request = new FakeRequest([], [
+            'uri' => '/xhprof',
+            'headers' => ['x-forwarded-proto' => 'javascript:alert(1)'],
+        ]);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $hrefs = $this->internalHrefs((string) Xhprof::index());
+        $this->assertStringContainsString('run=' . $runId, implode(' ', $hrefs), '列表页没渲染出 run 链接，夹具失效');
+
+        foreach ($hrefs as $href) {
+            $this->assertStringStartsWith('/xhprof', $href, "链接 {$href} 不是相对 URL");
+            $this->assertStringNotContainsString('javascript:', $href, "未校验的 X-Forwarded-Proto 又进 href 了");
+        }
+    }
+
+    // ---------------- 查询参数的类型校验 ----------------
+
+    /** @return iterable<string, array{0:string}> */
+    public static function arrayValuedQueryParamProvider(): iterable
+    {
+        yield 'sort[]'   => ['sort'];
+        yield 'symbol[]' => ['symbol'];
+        yield 'wts[]'    => ['wts'];
+    }
+
+    /**
+     * `?sort[]=wt` 这类数组形态必须是 400，而不是 500。
+     *
+     * 三个参数以前被原样透传，最后在 `isset($arr[$array])` / `explode(",", $array)`
+     * 抛 TypeError：`sort` 传非法**字符串**会被优雅处理（回落 wt + 记日志），
+     * 数组形态却是未捕获的 500 —— 同一个入口两种失败形态，没有理由。
+     */
+    #[Test]
+    #[DataProvider('arrayValuedQueryParamProvider')]
+    public function indexReturns400WhenAQueryParamArrivesAsAnArray(string $param): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->request = new FakeRequest([
+            'run' => $runId, 'source' => 'xhprof_foo', $param => ['wt'],
+        ]);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $result = Xhprof::index();
+
+        $this->assertSame(400, $this->response->status, "{$param} 传数组应当是 400");
+        $this->assertSame('400 Bad Request', $this->response->body);
+        $this->assertNotSame(500, $this->response->status);
+        $this->assertTrue($result !== null);
+    }
+
+    // ---------------- 空态：过期的 run 要说人话 ----------------
+
+    /**
+     * run 记录过期（默认 TTL 7 天）时，页面给一句说明，而不是只剩一条导航条。
+     *
+     * 旧行为是 `return $data;`（$data 里只有导航），页面看起来像「报告坏了」。
+     */
+    #[Test]
+    public function expiredRunRendersAnExplanationInsteadOfABlankPage(): void
+    {
+        // 语言是静态状态，可能被别的测试类留下过——这条要断言**中文**文案，先钉死
+        I18n::setLocale('zh_CN');
+        // run_id 格式合法，但缓存里没有（模拟过期）
+        $this->request = new FakeRequest(['run' => 'abc123def456789', 'source' => 'xhprof_foo']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $html = (string) Xhprof::index();
+
+        $this->assertStringContainsString('<html lang="zh-CN">', $html, '前提：这一页是中文');
+        $this->assertStringContainsString('性能数据已不存在', $html, '过期页必须有说明，而不是只剩导航条');
+        $this->assertStringContainsString('xp-card-note', $html);
+        // 说明之外还得有导航（页面结构不退化）
+        $this->assertStringContainsString('xp-nav', $html);
+        // 「什么都不说」与「说了」的区别就是这条：修复前这里只有导航
+        $this->assertGreaterThan(80, mb_strlen(strip_tags($html)), '页面不能只剩一条导航条');
+    }
+
+    /**
+     * 请求记录表的两个 class 在**同一个** <table> 上。
+     *
+     * 这条钉的是一个 CSS 缺陷的根因：`xp-runs-table` 与 `xp-table` 同元素，
+     * 所以样式表里不能写后代选择器 `.xp-runs-table .xp-table th`（页面里不存在
+     * 祖孙关系，列宽规则会全部空转，而且看不出错）。
+     */
+    #[Test]
+    public function runsTableCarriesBothClassesOnTheSameElement(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRunAndLog($runId);
+
+        $html = (string) Xhprof::index();
+
+        $this->assertStringContainsString('class="xp-table xp-runs-table"', $html);
+        // 样式表里不许再出现后代形态（那是修掉的那条死规则）
+        $css = (string) file_get_contents(dirname(__DIR__, 3) . '/src/html/css/xhprof.css');
+        $this->assertStringNotContainsString('.xp-runs-table .xp-table', $css);
     }
 }

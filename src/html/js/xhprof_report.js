@@ -179,55 +179,70 @@ function ChildRowToolTip(cell, metric)
 }
 
 $(document).ready(function() {
-  var cur_params = {};
-  $.each(location.search.replace('?','').split('&'), function(i, x) {
-    var y = x.split('='); cur_params[y[0]] = y[1];
-  });
-
-  $("#funcSub").click(function(){
-    cur_params['symbol'] = $("input.xhprof-search-input").val();
-    location.search = '?' + jQuery.param(cur_params);
-  });
-
-
-  $('#table_id_example').DataTable({
-    language: {
-      "sProcessing": "处理中...",
-      "sLengthMenu": "显示 _MENU_ 项结果",
-      "sZeroRecords": "没有匹配结果",
-      "sInfo": "显示第 _START_ 至 _END_ 项结果，共 _TOTAL_ 项",
-      "sInfoEmpty": "显示第 0 至 0 项结果，共 0 项",
-      "sInfoFiltered": "(由 _MAX_ 项结果过滤)",
-      "sInfoPostFix": "",
-      "sSearch": "搜索：",
-      "sUrl": "",
-      "sEmptyTable": "表中数据为空",
-      "sLoadingRecords": "载入中...",
-      "sInfoThousands": ",",
-      "oPaginate": {
-        "sFirst": "首页",
-        "sPrevious": "上页",
-        "sNext": "下页",
-        "sLast": "末页"
-      },
-      "oAria": {
-        "sSortAscending": ": 以升序排列此列",
-        "sSortDescending": ": 以降序排列此列"
-      }
-    },
-    "paging":true,
-    "pagingType":"full_numbers",
-    "lengthMenu":[20,50,100,200],
-    "order": [[ 2, "desc" ]],
-    "columns": [
-      { "orderable": false},
-      { "orderable": false},
-      null,
-      null,
-      null,
-      { "orderable": false},
-    ]
-
-  });
-
+  // 整段包在 try/catch 里：jQuery 3 的 $(document).ready(fn) 内部走 Deferred，
+  // 回调里抛出的异常会被**静默吞掉**（不触发 window.onerror，控制台也不报），
+  // 表现就是「搜索框和分页没反应」而页面看着正常 —— 这种问题最费排查时间。
+  // 至少把它变成一条 console.error。
+  try {
+    var cur_params = {};
+    $.each(location.search.replace('?','').split('&'), function(i, x) {
+      var y = x.split('='); cur_params[y[0]] = y[1];
+    });
+  
+    $("#funcSub").click(function(){
+      cur_params['symbol'] = $("input.xhprof-search-input").val();
+      location.search = '?' + jQuery.param(cur_params);
+    });
+  
+  
+    // 界面文案由 PHP 按当前语言注入（window.xpI18n，见 XhprofDisplay::xhprof_include_js_css）。
+    // 没有它（例如单独打开这段 JS）就什么都不传，DataTables 用它自带的英文默认值 ——
+    // 比猜一个语言好。
+    var dtI18n = (window.xpI18n && window.xpI18n.dataTable) || null;
+  
+    $('#table_id_example').DataTable({
+      language: dtI18n ? {
+        "sProcessing": dtI18n.processing,
+        "sLengthMenu": dtI18n.lengthMenu,
+        "sZeroRecords": dtI18n.zeroRecords,
+        "sInfo": dtI18n.info,
+        "sInfoEmpty": dtI18n.infoEmpty,
+        "sInfoFiltered": dtI18n.infoFiltered,
+        "sInfoPostFix": "",
+        "sSearch": dtI18n.search,
+        "sUrl": "",
+        "sEmptyTable": dtI18n.emptyTable,
+        "sLoadingRecords": dtI18n.loadingRecords,
+        // sInfoThousands 不传：页面上的数字是 PHP number_format 打的（英式 123,456），
+      // 这里若按语言给分隔符，同一张页面上会出现两种写法。取 DataTables 的默认值。
+        "oPaginate": {
+          "sFirst": dtI18n.first,
+          "sPrevious": dtI18n.previous,
+          "sNext": dtI18n.next,
+          "sLast": dtI18n.last
+        },
+        "oAria": {
+          "sSortAscending": dtI18n.sortAsc,
+          "sSortDescending": dtI18n.sortDesc
+        }
+      } : undefined,
+      "paging":true,
+      "pagingType":"full_numbers",
+      "lengthMenu":[20,50,100,200],
+      "order": [[ 2, "desc" ]],
+      "columns": [
+        { "orderable": false},
+        { "orderable": false},
+        null,
+        null,
+        null,
+        { "orderable": false},
+      ]
+  
+    });
+  
+  
+  } catch (e) {
+    if (window.console && console.error) console.error('xhprof report init failed:', e);
+  }
 });
