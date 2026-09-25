@@ -368,7 +368,9 @@ class XHProfRunsDefaultTest extends TestCase
         self::assertStringContainsString('GET', $html);
         self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
         self::assertSame(1, substr_count($html, 'xp-wt-warn'));
-        self::assertStringContainsString('?all=1&run=a1a1a1a1a1a1a1a1&source=xhprof_foo&requrl=', $html);
+        // `&` 在属性里写成 `&amp;`：链接由 XhprofLib::report_url() 生成，它在构造时就按
+        // 属性上下文转义（裸 `&` 会被 HTML 解析器当实体起头，参数名可被改掉）
+        self::assertStringContainsString('?all=1&amp;run=a1a1a1a1a1a1a1a1&amp;source=xhprof_foo&amp;requrl=', $html);
         self::assertStringContainsString(
             'requrl=' . urlencode('http://example.com/<script>alert(1)</script>'),
             $html

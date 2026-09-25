@@ -213,6 +213,30 @@ class XhprofDisplay
    * can be specified in the generated HTML.
    *
    */
+  /**
+   * 把 JS 要用的文案编成一行注入脚本。**取数组而不是自己去读词表**，这样单测能把
+   * 敌意值直接喂进来（词表本身要塞进 `</script>` 得改仓库文件，测不了）。
+   *
+   * 两道防护，缺一不可：
+   *  - `JSON_HEX_TAG/AMP/APOS/QUOT` 把 `<`/`>`/`&`/引号写成 `\uXXXX`，值里带
+   *    `</script>` 也提前结束不了这个块（JS 解码回来照常）；
+   *  - **另外** `json_encode` 默认就把 `/` 转成 `\/`，所以 `</script>` 还有这一层。
+   *    两者叠加才对——只留 HEX 标志的变异体在旧测试下是全绿的，所以有专门的用例压着。
+   *  - `JSON_INVALID_UTF8_SUBSTITUTE`：词表里混进非法 UTF-8 时，`json_encode` 默认返回
+   *    **false**，拼出来就是 `window.xpI18n = ;`（整个 inline script 语法错）。加上它
+   *    退化成 U+FFFD，DataTables 顶多显示一个替换字符。
+   */
+  public static function xpI18nScript(array $data_table_i18n): string
+  {
+    return '<script>window.xpI18n = '
+      . json_encode(
+          array('dataTable' => $data_table_i18n),
+          JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+              | JSON_INVALID_UTF8_SUBSTITUTE
+      )
+      . ';</script>';
+  }
+
   public static function xhprof_include_js_css($ui_dir_url_path = null)
   {
 
@@ -257,12 +281,7 @@ class XhprofDisplay
     ) as $js_key => $catalog_key) {
         $data_table_i18n[$js_key] = I18n::t($catalog_key);
     }
-    $echo_page .= '<script>window.xpI18n = '
-        . json_encode(
-            array('dataTable' => $data_table_i18n),
-            JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-        )
-        . ';</script>';
+    $echo_page .= self::xpI18nScript($data_table_i18n);
 
     // javascript —— 顺序有意义：这两个 <script> 都没有 defer/async，浏览器按文档顺序
     // **同步**执行，而 xhprof_report.js 的顶层就是 `$(document).ready(...)`。jQuery 排在
@@ -1598,14 +1617,16 @@ class XhprofDisplay
     //
     // 用 `<select onchange="location.href=this.value">`，不用表单也不用外部 JS：
     // 表单会把 `?token=` 丢掉（鉴权就 403），而外部 JS 在脚本没加载时控件就废了。
-    // 每个 option 的值都由 report_url() 生成 —— 与页面里其它链接同一个构造函数，
-    // 所以当前查询串里除 lang 之外的参数（token、排序…）都跟着走。
+    // 每个 option 的值都由 report_url() 生成，**drop 表传空**：切换语言是留在当前视图上
+    // 换文案，不是导航到别处 —— 用默认的 VIEW_PARAMS 会把 run/sort/wts/source 一并摘掉，
+    // 于是在 run 报告页上换个语言就被弹回 run 列表（并丢掉选好的排序）。
+    // token 与其余参数照样保留。
     // 标签用**各语言的自称**（词表 `_meta.name`，如「한국어」），不必翻译。
     $lang_options = '';
     foreach (I18n::AVAILABLE as $code) {
         $meta = I18n::catalogOf($code)['_meta'] ?? null;
         $name = is_array($meta) && isset($meta['name']) ? (string) $meta['name'] : $code;
-        $lang_options .= '<option value="' . XhprofLib::report_url(array('lang' => $code)) . '"'
+        $lang_options .= '<option value="' . XhprofLib::report_url(array('lang' => $code), array()) . '"'
             . ($code === I18n::locale() ? ' selected' : '') . '>'
             . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</option>';
     }

@@ -669,13 +669,13 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('<select class="xp-lang"', $nav, '导航里没有切换器');
         foreach (I18n::AVAILABLE as $code) {
             self::assertStringContainsString(
-                'value="/xhprof?token=tok&lang=' . $code . '"',
+                'value="/xhprof?token=tok&amp;lang=' . $code . '"',
                 $nav,
                 "{$code} 在切换器里没有条目，或该条目丢了 token"
             );
         }
         // 当前语言选中；标签用各语言的自称（词表 _meta.name，不需要翻译）
-        self::assertStringContainsString('value="/xhprof?token=tok&lang=ko" selected', $nav);
+        self::assertStringContainsString('value="/xhprof?token=tok&amp;lang=ko" selected', $nav);
         self::assertStringContainsString('>한국어</option>', $nav);
         self::assertStringContainsString('>日本語</option>', $nav);
 
@@ -689,6 +689,61 @@ class XhprofDisplayTest extends TestCase
             '无查询串时切换器条目数不对'
         );
         self::assertStringContainsString('value="/xhprof?lang=zh_CN" selected', $plain);
+
+        // **切换语言是留在当前视图上换文案，不是导航走人**：run 报告页上换语言必须保住
+        // run/symbol/sort/wts/source —— 用 report_url() 的默认 drop 表会把它们摘掉，
+        // 于是点一下语言就被弹回 run 列表（本用例就是这么发现该缺陷的）。
+        $this->useRequest(new FakeRequest(
+            ['run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()', 'sort' => 'wt', 'wts' => 'wt', 'token' => 'tok'],
+            ['uri' => '/xhprof']
+        ));
+        I18n::setLocale('zh_CN');
+        $onRun = XhprofDisplay::show_nav([
+            'run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()', 'sort' => 'wt', 'wts' => 'wt', 'token' => 'tok',
+        ]);
+        foreach (['run=a1a1a1a1a1a1a1a1', 'symbol=foo%28%29', 'sort=wt', 'wts=wt', 'token=tok'] as $keep) {
+            self::assertStringContainsString(
+                $keep,
+                $onRun,
+                "在 run 报告页上换语言时丢了 {$keep} —— 会被弹回列表页/丢掉当前视图"
+            );
+        }
+    }
+
+    /**
+     * 注入块的转义：值里塞 `</script>` 也跑不出这个 `<script>`。
+     *
+     * 走 `xpI18nScript()`（取数组的纯函数）而不是整页 —— 要让**词表**里出现 `</script>`
+     * 得改仓库文件，测不了；而这里是同一个编码函数的输入。
+     * 两道叠加的防护任缺其一都可能出问题（`json_encode` 默认转义 `/`、HEX 标志转 `<`），
+     * 所以这条断言必须**见过红**：删掉四个 HEX 标志 → 本用例失败。
+     */
+    #[Test]
+    public function injectedScriptCannotBeEscapedByACatalogValue(): void
+    {
+        $hostile = '</script><script>alert(1)</script><!--';
+        $script = XhprofDisplay::xpI18nScript(['x' => $hostile, 'y' => 'ok']);
+
+        self::assertSame(
+            1,
+            substr_count($script, '</script>'),
+            '值里的 </script> 提前结束了注入块（页面剩下的部分会被当 HTML 解析）'
+        );
+        self::assertSame(1, substr_count($script, '<script'), '注入块之外不该多出 <script');
+        self::assertStringNotContainsString('<!--', $script);
+        self::assertStringContainsString('ok', $script, '正常值仍要原样进去');
+    }
+
+    /** 非法 UTF-8 的词表值不能把整条文案变成空串（PHP 8.1+ 的 ENT_SUBSTITUTE 会被显式 ENT_QUOTES 顶掉） */
+    #[Test]
+    public function invalidUtf8DegradesToAReplacementCharInsteadOfVanishing(): void
+    {
+        $bad = "Ünicode \xC3\x28 end";   // 常见的「存成 Latin-1/GBK」残留
+
+        self::assertNotSame('', I18n::escapeHtml($bad), '非法 UTF-8 不该让整条文案消失');
+        self::assertNotSame('', I18n::escapePlain($bad));
+        self::assertStringContainsString("\u{FFFD}", I18n::escapeHtml($bad), '应当替换成 U+FFFD');
+        self::assertStringContainsString('Ünicode', I18n::escapeHtml($bad), '合法部分要保留');
     }
 
     /** 导航里的「首页」/品牌链接必须带上整个查询串（鉴权 token、语言 lang 都靠它传播） */
@@ -703,9 +758,13 @@ class XhprofDisplayTest extends TestCase
             'run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()', 'token' => 'tok', 'lang' => 'ko',
         ]);
 
-        self::assertStringContainsString('href="/xhprof?token=tok', $nav);
-        self::assertStringContainsString('lang=ko', $nav);
-        self::assertStringNotContainsString('symbol=', $nav);
+        // 「首页」链接 = report_url() 的默认 drop 表：视图参数摘掉、token/lang 留住
+        self::assertStringContainsString('href="/xhprof?token=tok&amp;lang=ko"', $nav);
+        self::assertStringContainsString('href="/xhprof?token=tok&amp;lang=ko" class="xp-brand"', $nav);
+        // 只对切换器**之前**那段（首页/品牌/运行报告）断言：切换器里的 option 值是
+        // 「留在当前视图换语言」，本来就该带 symbol/run（见上一条用例）。
+        $beforeSwitcher = substr($nav, 0, (int) strpos($nav, '<select'));
+        self::assertStringNotContainsString('symbol=', $beforeSwitcher, '首页/品牌/运行报告链接不该带 symbol');
     }
 
     #[Test]

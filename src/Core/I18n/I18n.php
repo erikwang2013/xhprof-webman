@@ -25,6 +25,14 @@ class I18n
     /** 兜底语言：源语言，任何一档都解析不出来时用它 */
     public const FALLBACK = 'zh_CN';
 
+    /**
+     * 两处转义共用的标志。**`ENT_SUBSTITUTE` 必须显式带上**：PHP 8.1+ 的默认标志里有它，
+     * 但一旦显式传 `ENT_QUOTES` 就会把它顶掉 —— 那时非法 UTF-8 的输入返回**空串**
+     * （而不是替换成 U+FFFD），整条文案白掉，恰好违反本类的「绝不渲染空白」承诺。
+     * 词表是手写的 13 份文件，谁存成 GBK/Latin-1 就可能撞上。
+     */
+    private const HTML_FLAGS = ENT_QUOTES | ENT_SUBSTITUTE;
+
     /** 12 份词表：zh_CN 是源，其余为译文。顺序即 README 语言切换器的顺序。 */
     public const AVAILABLE = [
         'zh_CN',
@@ -180,7 +188,7 @@ class I18n
         return str_replace(
             ['&lt;br&gt;', '&lt;br/&gt;', '&lt;br /&gt;'],
             '<br>',
-            htmlspecialchars($raw, ENT_QUOTES, 'UTF-8')
+            htmlspecialchars($raw, self::HTML_FLAGS, 'UTF-8')
         );
     }
 
@@ -190,7 +198,7 @@ class I18n
         return str_replace(
             ['&lt;br&gt;', '&lt;br/&gt;', '&lt;br /&gt;'],
             ' ',
-            htmlspecialchars($raw, ENT_QUOTES, 'UTF-8')
+            htmlspecialchars($raw, self::HTML_FLAGS, 'UTF-8')
         );
     }
 

@@ -508,8 +508,12 @@ class XhprofLib
         $query[$k] = $v;
       }
     }
+    // 查询串与 path 一样要转义：返回值只落进 `href="…"` / `<option value="…">` 两个
+    // 属性上下文，而**裸 `&` 会被 HTML 解析器当实体起头**——实测参数名 `copy_x`/`amp_x`/
+    // `times_x` 会被浏览器解成 `©_x`/`&_x`/`×_x`，把相邻参数改名、把 token 的值污染
+    // （配了 auth_token 时点一下语言就 403）。原先只有 report_path() 转义，是半截防护。
     $qs = http_build_query($query);
-    return self::report_path() . ($qs === '' ? '' : '?' . $qs);
+    return self::report_path() . ($qs === '' ? '' : '?' . htmlspecialchars($qs, ENT_QUOTES, 'UTF-8'));
   }
 
   /** 当前请求的路径，已转义（返回值只落进 href="…" 属性）。 */
