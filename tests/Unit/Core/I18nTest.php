@@ -432,7 +432,10 @@ class I18nTest extends TestCase
     {
         $source = I18n::catalogOf(I18n::FALLBACK);
         $placeholders = static function (string $value): array {
-            preg_match_all('/%[0-9]*\$?[sdf]|_[A-Z]+_/', $value, $m);
+            // `%` 也在字符集里：`%%`（字面百分号）被译者写成一个 `%` 时，
+            // sprintf 会把它当成格式说明符（实测 `%s%` 直接 ValueError），而只匹配
+            // `%s`/`%d`/`%f` 的正则看不见这种损坏——`%%` 少一个字符不改变 `%s` 的多重集。
+            preg_match_all('/%[0-9]*\$?[sdf%]|_[A-Z]+_/', $value, $m);
             // 位置说明符 `%1$s` 归一成 `%s`：`sprintf` 支持它，而允许译者改语序正是
             // 「比多重集不比顺序」的目的所在（有的语言就是要把参数提到句首）。
             // 归一之后仍能抓住真正的错：少一个、多一个、或类型换了。
@@ -551,6 +554,63 @@ class I18nTest extends TestCase
             'main()==>bar()' => ['ct' => 1, 'wt' => 30000, 'mu' => 256],
             'foo()==>strlen()' => ['ct' => 2, 'wt' => 5000, 'mu' => 64],
         ];
+    }
+
+    /** @return array<string, array<string, mixed>> 带递归的边表（`fib@1`/`fib@2` 两个深度） */
+    private function recursiveRunData(): array
+    {
+        return [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 2048],
+            'main()==>fib@1' => ['ct' => 1, 'wt' => 60000, 'mu' => 512],
+            'fib@1==>fib@2' => ['ct' => 1, 'wt' => 40000, 'mu' => 256],
+        ];
+    }
+
+    /**
+     * 诊断区 R4（递归）那条路径也必须说这门语言。
+     *
+     * 为什么单独一条：R4 只在**有递归**的边表上出现（xhprof 把递归展开成 `fib@1`/`fib@2`），
+     * 而整页那条用例的夹具没有这种数据 —— 于是 R4 的说明句曾长期硬编码中文，12 个语种的
+     * 报告页上都印着它，而「英文页不许有汉字」照绿：**探针没走到那条规则**。
+     * 判据与整页用例同一条（`assertNoHanCharacters`），这里只是把夹具换成会触发 R4 的。
+     */
+    #[Test]
+    public function theRecursionFindingIsTranslatedToo(): void
+    {
+        I18n::setLocale('en');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $cache = new FakeCache();
+        $cache->set('xhprof:request_log:' . $runId, json_encode([
+            'request_uri' => '/fib?n=10', 'method' => 'GET', 'wt' => 0.8, 'mu' => 2.0,
+            'ip' => '6.6.6.6', 'create_time' => 1700000000,
+        ]));
+        Xhprof::$time_limit = 0;
+        Xhprof::$ignore_url_arr = ['/xhprof'];
+        Xhprof::$key_prefix = 'xhprof';
+        Xhprof::$view_wtred = 3;
+        Xhprof::$ui_html = '';
+        Xhprof::bootstrap(
+            new FakeRequest(['run' => $runId, 'all' => 1], ['uri' => '/xhprof']),
+            new FakeResponse(),
+            new FakeConfig(['xhprof' => []]),
+            $cache,
+            new FakeLogger()
+        );
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1],
+            $this->recursiveRunData(),
+            'desc',
+            null,
+            'wt',
+            $runId
+        );
+
+        // 夹具确实触发了 R4 —— 否则下面的断言在空转
+        $this->assertStringContainsString('[R4]', $html, '夹具没触发 R4，这条用例形同虚设');
+        $this->assertStringContainsString('Recursion detected', $html);
+        $this->assertStringContainsString('stack overflow', $html);
+        $this->assertNoHanCharacters($html, 'R4 递归结论');
     }
 
     /**

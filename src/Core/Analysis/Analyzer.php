@@ -274,8 +274,11 @@ final class Analyzer
                 // 符号置空：递归在 symbol_tab 里的键是 fib@1/fib@2，而详情页按 symbol=fib 查，
                 // 必然"未找到"。spec 允许 symbol 为空（渲染层会跳过链接），这里就该为空。
                 '',
-                sprintf(I18n::t('diag.r4.detail'), $h[1], $h[0]),
-                '递归深度过大可能导致栈溢出或耗时呈指数增长',
+                sprintf(I18n::t('diag.r4.title'), $h[1], $h[0]),
+                // R4 是唯一「标题 + 说明」都在词表里的规则：这句原先硬编码中文，
+                // 于是 12 个语种的报告页上都印着中文（I18nTest 的夹具没有递归数据，
+                // 所以那条「英文页不许有汉字」的用例抓不到它——现在有了专门的用例）。
+                I18n::t('diag.r4.detail'),
                 (float) $h[0]
             );
         }
