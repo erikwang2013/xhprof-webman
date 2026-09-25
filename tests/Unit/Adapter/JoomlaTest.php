@@ -72,7 +72,7 @@ class JoomlaTest extends TestCase
     {
         self::$root = sys_get_temp_dir() . '/xhprof-joomla-root-' . getmypid();
         if (!is_dir(self::$root)) {
-            mkdir(self::$root, 0o777, true);
+            mkdir(self::$root, 0777, true);
         }
         if (!defined('JPATH_ROOT')) {
             define('JPATH_ROOT', self::$root);
@@ -894,7 +894,7 @@ PHP
         );
 
         $siteRoot = sys_get_temp_dir() . '/xhprof-joomla-subroot-' . bin2hex(random_bytes(4));
-        mkdir($siteRoot, 0o777, true);
+        mkdir($siteRoot, 0777, true);
         $siteConfig = $siteRoot . '/xhprof.php';
         $this->tempFiles[] = $siteConfig;
 

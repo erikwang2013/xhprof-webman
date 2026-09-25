@@ -907,7 +907,7 @@ PHP
         }
         $root = (string) JPATH_ROOT;
         if (!is_dir($root)) {
-            mkdir($root, 0o777, true);
+            mkdir($root, 0777, true);
         }
         return $root;
     }

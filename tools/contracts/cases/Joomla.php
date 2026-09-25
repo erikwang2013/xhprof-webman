@@ -511,7 +511,7 @@ return static function (): array {
     $_REQUEST = ['token' => 'tok'];
 
     $siteRoot = sys_get_temp_dir() . '/xhprof-joomla-contract-' . bin2hex(random_bytes(4));
-    if (!mkdir($siteRoot, 0o777, true) && !is_dir($siteRoot)) {
+    if (!mkdir($siteRoot, 0777, true) && !is_dir($siteRoot)) {
         return ['status' => 'FAIL', 'detail' => "临时站点根建不出来：{$siteRoot}", 'skips' => 0];
     }
     // 本卡 §3/§4/§5 有多个提前 return 的 FAIL 分支，走不到末尾那两行收尾，临时站点根就留在
