@@ -21,17 +21,23 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Context\Context;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 class XhprofTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     private FakeCache $cache;
     private FakeConfig $config;
     private FakeRequest $request;
     private FakeResponse $response;
     private FakeLogger $logger;
+
+    /** setUp 里会被改写的那 12 个静态量的开工前快照 */
+    private array $saved = [];
 
     protected function setUp(): void
     {
@@ -40,6 +46,12 @@ class XhprofTest extends TestCase
         $this->request = new FakeRequest();
         $this->response = new FakeResponse();
         $this->logger = new FakeLogger();
+
+        // 先照单全收再改：tearDown 必须**还原**而不是清空，否则本类留下的
+        // `$ignore_url_arr` / `$ui_html` 等会漏给后面的用例 —— Adapter 侧
+        // （DrupalTest / WebmanTest）的前置条件断言读的就是这些量，落成假红。
+        // 之前只清 5 个适配器，同一个进程里 Core 先跑就会打翻它们。
+        $this->saved = $this->snapshotXhprofStatics();
 
         Xhprof::$time_limit = 0;
         Xhprof::$ignore_url_arr = ['/test'];
@@ -59,11 +71,7 @@ class XhprofTest extends TestCase
     {
         Context::reset();
         ApplicationContext::reset();
-        Xhprof::$request = null;
-        Xhprof::$response = null;
-        Xhprof::$config = null;
-        Xhprof::$cache = null;
-        Xhprof::$logger = null;
+        $this->restoreXhprofStatics($this->saved);
     }
 
     private function seedRun(string $runId, array $data = []): void

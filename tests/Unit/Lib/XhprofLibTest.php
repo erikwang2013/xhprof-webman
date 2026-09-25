@@ -14,12 +14,18 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 class XhprofLibTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
+    /** setUp 开工前的静态量快照（tearDown 原样放回） */
+    private array $saved = [];
+
     protected FakeCache $cache;
     protected FakeRequest $request;
     protected FakeResponse $response;
@@ -28,6 +34,10 @@ class XhprofLibTest extends TestCase
 
     protected function setUp(): void
     {
+        // 先照单全收再改：本类下面会改写 `$ignore_url_arr` 等进程级静态量，
+        // 不还原就会漏给后面的用例（实测：Core+Lib+Adapter 顺序下 Adapter 侧 3 条假红）。
+        $this->saved = $this->snapshotXhprofStatics();
+
         $this->cache = new FakeCache();
         $this->request = new FakeRequest([], ['uri' => '/xhprof', 'url' => 'http://xhprof.local/xhprof']);
         $this->response = new FakeResponse();
@@ -68,6 +78,11 @@ class XhprofLibTest extends TestCase
         XhprofDisplay::$vbbar = 'class="vbbar"';
         XhprofDisplay::$vrbar = 'class="vrbar"';
         XhprofDisplay::$vgbar = 'class="vgbar"';
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreXhprofStatics($this->saved);
     }
 
     /** 替换请求时同步刷新 Hyperf Context，保证 $_hyperf=true 时 getRequest() 仍取到 fake */

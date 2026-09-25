@@ -32,9 +32,12 @@ use ErikWang2013\Xhprof\Hyperf\ConfigProvider;
 use ErikWang2013\Xhprof\Hyperf\Middleware;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakePsrResponse;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeServerRequest;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 
 class HyperfTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<int, string> */
     private array $tempFiles = [];
 
@@ -72,50 +75,6 @@ class HyperfTest extends TestCase
         return $path;
     }
 
-    private function snapshotXhprofStatics(): array
-    {
-        $hyperf = new \ReflectionProperty(CoreXhprof::class, '_hyperf');
-        $hyperf->setAccessible(true);   // PHP 8.0 需要；8.1+ 是 no-op
-
-        return [
-            // 私有静态、无 setter（生产上刻意不可逆）。漏了它，本进程其后所有测试都会
-            // 走 Hyperf 分支——观察点是反射探针量到的 false→true，不是推断。
-            '_hyperf' => $hyperf->getValue(),
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        $hyperf = new \ReflectionProperty(CoreXhprof::class, '_hyperf');
-        $hyperf->setAccessible(true);
-        // 双参（null 打头）：静态属性的单参形式在 PHP 8.3 起已废弃。
-        $hyperf->setValue(null, $s['_hyperf']);
-
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
-    }
 
     #[Test]
     public function configAdapterDelegatesToHyperfConfig(): void

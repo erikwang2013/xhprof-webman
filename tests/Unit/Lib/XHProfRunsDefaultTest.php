@@ -13,6 +13,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -59,6 +60,11 @@ class RunsFixedListCache extends FakeCache
 
 class XHProfRunsDefaultTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
+    /** setUp 开工前的静态量快照（tearDown 原样放回） */
+    private array $saved = [];
+
     protected FakeCache $cache;
     protected FakeRequest $request;
     protected FakeResponse $response;
@@ -70,6 +76,10 @@ class XHProfRunsDefaultTest extends TestCase
 
     protected function setUp(): void
     {
+        // 先照单全收再改：本类下面会改写 `$ignore_url_arr` 等进程级静态量，
+        // 不还原就会漏给后面的用例（实测：Core+Lib+Adapter 顺序下 Adapter 侧 3 条假红）。
+        $this->saved = $this->snapshotXhprofStatics();
+
         $this->cache = new RunsFixedListCache();
         $this->request = new FakeRequest([], ['uri' => '/order', 'url' => 'http://xhprof.local/xhprof']);
         $this->response = new FakeResponse();
@@ -97,6 +107,9 @@ class XHProfRunsDefaultTest extends TestCase
         // log_ttl 是静态量：有用例会把它改成非默认值来证明透传，改过就必须还原，
         // 否则泄漏给后续用例（顺序相关的假绿/假红都是这么来的）。
         Xhprof::$log_ttl = $this->originalLogTtl;
+
+        // 其余静态量与 `_hyperf` 一并放回 setUp 前的样子（trait）。
+        $this->restoreXhprofStatics($this->saved);
     }
 
     /** 替换请求时同步刷新 Hyperf Context，保证 $_hyperf=true 时 getRequest() 仍取到 fake */

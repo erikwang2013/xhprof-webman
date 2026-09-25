@@ -39,6 +39,7 @@ use ErikWang2013\Xhprof\Slim\XhprofMiddleware as SlimXhprofMiddleware;
 use ErikWang2013\Xhprof\Symfony\XhprofListener;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\Drupal\FakeConfigFactory;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\Drupal\FakeLoggerFactory;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakePsrResponse;
@@ -82,6 +83,8 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
  */
 class WiringTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<string, mixed> */
     private array $saved = [];
 
@@ -148,50 +151,6 @@ class WiringTest extends TestCase
         }
     }
 
-    private function snapshotXhprofStatics(): array
-    {
-        $hyperf = new \ReflectionProperty(CoreXhprof::class, '_hyperf');
-        $hyperf->setAccessible(true);   // PHP 8.0 需要；8.1+ 是 no-op
-
-        return [
-            // 私有静态、无 setter（生产上刻意不可逆）。漏了它，本进程其后所有测试都会
-            // 走 Hyperf 分支——观察点是反射探针量到的 false→true，不是推断。
-            '_hyperf' => $hyperf->getValue(),
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        $hyperf = new \ReflectionProperty(CoreXhprof::class, '_hyperf');
-        $hyperf->setAccessible(true);
-        // 双参（null 打头）：静态属性的单参形式在 PHP 8.3 起已废弃。
-        $hyperf->setValue(null, $s['_hyperf']);
-
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
-    }
 
     // ---------- 门面 / 入口类存在性 ----------
 
