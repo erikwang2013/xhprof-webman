@@ -43,6 +43,10 @@ class RedisAdapter implements CacheInterface
      * 触发路径真实：入口类在**每个请求**上、早于 enable 判断就构造本适配器；
      * 若在构造函数里连，Redis 挂掉会让整个应用每个请求 500，而不是只丢采样。
      * 真正取连接的调用点（落库）被 Core\XhprofProfiler::stop() 的兜底包住。
+     *
+     * 判据是 `=== null`，所以注入（`$redis` 子数组/注入实例）的客户端不会被这条路径接管：
+     * 未连接的实例得由调用方自己 connect()，否则第一条命令的行为交给 phpredis 决定
+     * （各版本不一致，别依赖）。
      */
     protected function redis(): mixed
     {

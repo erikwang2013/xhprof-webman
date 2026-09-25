@@ -19,10 +19,12 @@ declare(strict_types=1);
  *     原样透传会抛 TypeError。适配器必须自己兜。`set($k,$v,0)` 同理：phpredis 会报
  *     "EXPIRE can't be < 1" **且不发送命令**，所以「TTL 0」这条路必须走普通 SET。
  *  2) **`new RedisAdapter(new \Redis())` 并不会惰性建连**：惰性建连的判据是
- *     `$this->redis === null`，注入一个**未连接**的实例等于把这条兜底路径关掉，第一条
- *     命令就抛 `RedisException: Redis server went away` —— 而它在生产路径上被
- *     `XhprofProfiler::stop()` 的 Throwable 防线吞掉（只留一行日志），表现为**采样
- *     静默地永不落库**。本卡两个形态都钉住：注入的必须自己 connect，不注入的能自连。
+ *     `$this->redis === null`，注入一个**未连接**的实例等于把这条兜底路径关掉 —— 而它在
+ *     生产路径上被 `XhprofProfiler::stop()` 的 Throwable 防线吞掉（只留一行日志），表现为
+ *     **采样静默地永不落库**。注意「第一条命令因此失败」的具体形态**随 phpredis 版本变**
+ *     （本机 5.3.7 抛 `RedisException: Redis server went away`；CI 的构建直接按默认连上了
+ *     127.0.0.1:6379 并正常返回），所以本卡只钉我们的代码（注入的实例被原样使用、我们一次
+ *     `connect()` 都不调），不冻 phpredis 的行为：注入的必须自己 connect，不注入的能自连。
  *
  * 前置：Redis 必须真的在 127.0.0.1:6379 上（contracts.yml 里有 `services: redis`；
  * 本机常驻）。**连不上就 FAIL，绝不 SKIP** —— EXPECTED_SKIPS 是签字常量，SKIP 数必须
@@ -69,16 +71,6 @@ return static function (): array {
             $failures[] = $label . '：' . var_export($needle, true) . ' 不在 ' . var_export($haystack, true) . ' 里';
         }
     };
-    $expectThrows = static function (string $label, callable $fn) use (&$checks, &$failures): void {
-        $checks++;
-        try {
-            $fn();
-        } catch (\Throwable $e) {
-            return;
-        }
-        $failures[] = $label . '：没抛，但应当抛（这条是在钉住一个真实耦合，不是在钉住缺陷）';
-    };
-
     // ================= 0. 前置：真服务器必须可用（缺 → FAIL，不 SKIP）=================
     if (!extension_loaded('redis')) {
         return [
@@ -254,14 +246,40 @@ return static function (): array {
 
     // ================= 4. 惰性建连的两种形态 =================
     //
-    // 注入的实例**不会**被惰性建连（判据是 `=== null`，不是 `isConnected()`）。后果不是
-    // "慢一点"：第一条命令抛 RedisException，而它在生产路径上被 XhprofProfiler::stop()
-    // 的 Throwable 防线吞掉 → 采样静默地永不落库。两个形态都钉住。
-    $unconnected = new \ErikWang2013\Xhprof\Slim\Adapter\RedisAdapter(new \Redis());
-    $expectThrows(
-        '注入未连接的 new \Redis() 时第一条命令就抛 RedisException（惰性建连只看 === null）',
-        static fn () => $unconnected->get('anything')
-    );
+    // 注入的实例**不会**被惰性建连（判据是 `=== null`，不是 `isConnected()`）。
+    //
+    // 但**不要再把「第一条命令是否抛异常」冻成期望**——那是 phpredis 的行为，且随版本/构建
+    // 而变：本机 5.3.7 抛 `RedisException: Redis server went away`，CI 的构建却直接按默认
+    // 连上 127.0.0.1:6379 正常返回（同一个断言在两地一红一绿，正是把库的行为冻成期望的
+    // 典型症状；2026-09-25 真的在 CI 上红过一次）。所以这里只钉**我们的代码**：注入的客户端
+    // 被原样使用，且我们一次 connect() 都不调。探针把 get() 也接管掉，于是既不碰网络、
+    // 也不受 phpredis 内部行为影响 —— 在任何环境下都是同一个结论。
+    //
+    // 生产含义没变：调用方注入**未连接**的实例时，我们的惰性路径关着，落库失败会被
+    // XhprofProfiler::stop() 的 Throwable 防线吞掉 → 采样静默地永不落库，所以调用方必须
+    // 自己 connect()（四家直连适配器的注释里都写了这一条）。
+    $probe = new class extends \Redis {
+        public const SENTINEL = 'xhprof-probe-sentinel';
+
+        public int $connectCalls = 0;
+
+        public int $getCalls = 0;
+
+        public function connect($host, $port = 6379, $timeout = 0.0, $persistent_id = null, $retry_interval = 0, $read_timeout = 0.0, $context = null): bool
+        {
+            $this->connectCalls++;
+            return parent::connect($host, $port, $timeout, $persistent_id, $retry_interval, $read_timeout, $context);
+        }
+
+        public function get($key): mixed
+        {
+            $this->getCalls++;
+            return self::SENTINEL;
+        }
+    };
+    $injected = new \ErikWang2013\Xhprof\Slim\Adapter\RedisAdapter($probe);
+    $expect('注入的客户端被原样使用（命令落在它身上，不是被悄悄换掉）', $injected->get('anything'), \get_class($probe)::SENTINEL);
+    $expect('注入的实例上适配器不自己 connect（惰性建连的判据是 === null）', [$probe->connectCalls, $probe->getCalls], [0, 1]);
     $expect('不注入（new RedisAdapter()）时惰性建连可用：读得到刚写的键', (new \ErikWang2013\Xhprof\Slim\Adapter\RedisAdapter())->get($k2), 'v2');
 
     // ================= 5. 收尾：键的形态与清理 =================
