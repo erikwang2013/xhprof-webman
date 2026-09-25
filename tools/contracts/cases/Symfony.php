@@ -881,7 +881,11 @@ return static function (): array {
         foreach ($scenarios as $scenario => $want) {
             $child = __DIR__ . '/.symfony-shutdown-' . $scenario . '.php';
             file_put_contents($child, symfony_shutdown_child_script());
-            $proc = contracts_run_php([$child, $repoRoot, $scenario]);
+            // vendor 根要**显式传给**子进程：契约环是 matrix，6.4 腿那个 job 只装腿自己的
+            // vendor，主腿目录 tools/contracts/vendor 压根不存在 —— 子进程里拼死那个路径会
+            // fatal（Actions run 36137501177 就是这么红的）。传上面已经解析好的 $autoload，
+            // 子进程不必认识 CONTRACTS_DIR_OVERRIDE，也不必自己做路径拼接。
+            $proc = contracts_run_php([$child, $repoRoot, $scenario, $autoload]);
             @unlink($child);
             $decoded = json_decode(trim($proc['stdout']), true);
             $extExpect(
@@ -996,8 +1000,12 @@ namespace {
 
     $repo = $argv[1];
     $scenario = $argv[2];
+    // 腿感知：要 require 的 autoload 由父进程传进来（`--leg=symfony64` 时是
+    // legacy-symfony64/vendor/autoload.php）。**不要**在这里拼 $repo 下的固定路径 ——
+    // matrix job 里只有腿自己的那份 vendor，主腿目录不存在。
+    $autoload = $argv[3];
 
-    require $repo . '/tools/contracts/vendor/autoload.php';
+    require $autoload;
 
     spl_autoload_register(static function (string $class) use ($repo): void {
         $prefix = 'ErikWang2013\\Xhprof\\';
