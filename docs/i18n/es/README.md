@@ -1,12 +1,16 @@
-> **Traducción automática sin revisar.** Este documento es una traducción automática al español y no ha sido revisada por un hablante nativo; ante cualquier duda, la versión de referencia es la inglesa: [README.EN.md](../../../README.EN.md).
+> **Traducción automática sin revisar.** Este documento es una traducción automática al español y no ha sido revisada por un hablante nativo; ante cualquier duda, la versión de referencia es [la versión inglesa](../en/README.md).
 
-[中文](../../../README.md) · [English](../../../README.EN.md) · [한국어](../ko/README.md) · [Русский](../ru/README.md) · [Deutsch](../de/README.md) · [Français](../fr/README.md) · **Español** · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
+[中文](../../../README.md) · [English](../en/README.md) · [한국어](../ko/README.md) · [Русский](../ru/README.md) · [Deutsch](../de/README.md) · [Français](../fr/README.md) · **Español** · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
 
 # Perfilador de rendimiento XHProf
 
 Un plugin de perfilado de rendimiento de código compatible con webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla y Drupal.
 
 Recoge datos de perfilado mediante la extensión xhprof y los guarda en Redis. Los desarrolladores pueden consultar rápidamente informes de análisis de rendimiento desde el navegador para localizar cuellos de botella en el código.
+
+![Mascota del proyecto: pequeña llama](../../../docs/images/pet.svg)
+
+Esa misma llamita es también el icono del sitio y el icono de marca de la esquina superior izquierda de la página de informe (`src/html/pet.svg`, servido bajo el prefijo `assets_url`).
 
 **Registro de peticiones**
 
@@ -38,7 +42,7 @@ Recoge datos de perfilado mediante la extensión xhprof y los guarda en Redis. L
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Cópialo en `plugins/system/` e instálalo con Descubrir |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | módulo `xhprof` (`Drupal\XhprofMiddleware`) | Módulo estándar: basta con activarlo |
 
-Todas las clases de entrada viven bajo el prefijo de espacio de nombres `ErikWang2013\Xhprof\` (omitido arriba). De los seis frameworks nuevos, Drupal es la excepción — sirve la página de informe mediante rutas de módulo — mientras que las otras cinco clases de entrada **sirven la página de informe ellas mismas**, sin necesidad de controlador ni de registrar rutas.
+Todas las clases de entrada viven bajo el prefijo de espacio de nombres `ErikWang2013\Xhprof\` (omitido arriba).  Ninguno de los diez necesita que registres un controlador o una ruta: la página de informe y los recursos estáticos los sirve la propia clase de entrada (en el caso de Drupal, la ruta del módulo).
 
 Este paquete declara `php >= 8.0`, pero los componentes `yiisoft/*` de los que depende Yii3 exigen **PHP 8.1+**, así que **Yii3 no se puede usar en PHP 8.0**; Symfony 7.x y Drupal 11.x también necesitan una versión de PHP superior. La configuración paso a paso está en «Configuración por framework», más abajo.
 
@@ -74,37 +78,9 @@ return [
 ];
 ```
 
-**2. Crea el controlador**:
+**2. Página de informe y recursos estáticos** — **no hace falta controlador ni registrar rutas**: antes de que empiece el perfilado, el middleware inspecciona la ruta de la petición: un acierto en la ruta de informe `/xhprof` devuelve la página de informe al momento, y un acierto en la ruta de recursos (prefijo leído de la opción `assets_url`, por defecto `/xhprof-assets`) devuelve directamente el recurso estático.
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Registra las rutas** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. Configuración** — Consulta `config/plugin/aaron-dev/xhprof/xhprof.php`.
+**3. Configuración** — Consulta `config/plugin/aaron-dev/xhprof/xhprof.php`.
 
 ---
 
@@ -119,43 +95,9 @@ protected $middleware = [
 ];
 ```
 
-**2. Crea el controlador**:
+**2. Página de informe y recursos estáticos** — **no hace falta controlador ni registrar rutas**: antes de que empiece el perfilado, el middleware inspecciona la ruta de la petición: un acierto en la ruta de informe `/xhprof` devuelve la página de informe al momento, y un acierto en la ruta de recursos (prefijo leído de la opción `assets_url`, por defecto `/xhprof-assets`) devuelve directamente el recurso estático.
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Registra las rutas** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. Publica la configuración**:
+**3. Publica la configuración**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -175,44 +117,9 @@ return [
 ];
 ```
 
-**2. Crea el controlador**:
+**2. Página de informe y recursos estáticos** — **no hace falta controlador ni registrar rutas**: antes de que empiece el perfilado, el middleware inspecciona la ruta de la petición: un acierto en la ruta de informe `/xhprof` devuelve la página de informe al momento, y un acierto en la ruta de recursos (prefijo leído de la opción `assets_url`, por defecto `/xhprof-assets`) devuelve directamente el recurso estático.
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Registra las rutas** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. Configuración** — Copia `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` al `config/xhprof.php` del proyecto.
+**3. Configuración** — Copia `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` al `config/xhprof.php` del proyecto.
 
 ---
 
@@ -220,57 +127,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. Registro automático del middleware** — ConfigProvider añade el middleware a la cola de middlewares HTTP automáticamente.
 
-**2. Crea el controlador**:
+**2. Página de informe y recursos estáticos** — **no hace falta controlador ni registrar rutas**: antes de que empiece el perfilado, el middleware inspecciona la ruta de la petición: un acierto en la ruta de informe `/xhprof` devuelve la página de informe al momento, y un acierto en la ruta de recursos (prefijo leído de la opción `assets_url`, por defecto `/xhprof-assets`) devuelve directamente el recurso estático.
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-Cuando `Xhprof::index()` devuelve una cadena HTML, **no** la devuelvas directamente con `return`: el `CoreMiddleware::transferToResponse()` de Hyperf añade incondicionalmente `content-type: text/plain` a los valores de retorno de tipo cadena, de modo que el navegador muestra la página de informe como texto plano (verificado idéntico en 3.0.45 / 3.1.69 / 3.2.0). La respuesta explícita de arriba lo evita; si falla la autenticación, `index()` devuelve un objeto de respuesta ya enviado: basta con devolverlo tal cual.
-
-**3. Rutas de recursos estáticos** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. Publica la configuración**:
+**3. Publica la configuración**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -424,7 +283,7 @@ El directorio `joomla/` del paquete *es* el plugin: el manifiesto `xhprof.xml`, 
 
 **1. Activa el módulo** — `drupal/xhprof/` en el paquete es un módulo estándar de Drupal (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Colócalo en `modules/custom/xhprof/` de tu sitio y actívalo en la página «Ampliar» (o con `drush en xhprof`).
 
-**2. Página de informe** — Drupal es **el único de los diez frameworks que sirve la página de informe mediante rutas de módulo**: `xhprof.routing.yml` registra la ruta de informe `/xhprof` y un controlador del módulo la renderiza. Las otras cinco clases de entrada nuevas sirven la página de informe y los recursos estáticos ellas mismas y no registran ninguna ruta.
+**2. Página de informe y recursos estáticos** — Drupal es **el único de los diez frameworks que va por «módulo + rutas»**: `xhprof.routing.yml` registra la ruta de informe `/xhprof` y la de recursos `/xhprof-assets`, servidas por defecto por el controlador del módulo; las otras nueve clases de entrada cortocircuitan antes de empezar el perfilado y sirven la página de informe y los recursos estáticos sin registrar rutas. **Con un prefijo `assets_url` propio, los recursos pasan al middleware**: la ruta de recursos del módulo está fijada en `xhprof.routing.yml` (`/xhprof-assets/{file}`) y nunca casa con otro prefijo.
 
 **3. Configuración** — la configuración es configuración tipada a nivel de módulo: los valores por defecto están en `drupal/xhprof/config/install/xhprof.settings.yml`, con el esquema en `drupal/xhprof/config/schema/xhprof.schema.yml`. Consulta «Referencia de configuración» para ver los campos.
 
@@ -577,11 +436,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
-│   └── html/                     # report page assets (css / js / images)
+│   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
+├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages (`legacy-symfony64/` es el tramo 6.4)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -610,20 +469,18 @@ src/<Fw>/
 | Comportamiento de los adaptadores y del cableado de entrada | `tests/Unit/Adapter/*Test.php`: activado → guardado / desactivado → no guardado / excepción de negocio → guardado igualmente vía `finally` |
 | Los diez frameworks comparten un mismo conjunto de claves de configuración | test de paridad de configuración (conjuntos de claves, no byte a byte; los comentarios pueden diferir) |
 | Los dos README se reflejan mutuamente | test de paridad de README: compara la secuencia de encabezados `##` / `###` y el número de bloques de código |
-| Los métodos que llaman los adaptadores existen de verdad | bucle de verificación de `tools/contracts/` (con su propio job de CI): instala paquetes reales de framework y comprueba por reflexión que cada método / constante / función global existe **para los ocho frameworks del bucle** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf no están en el bucle, véase más abajo |
-| Semántica de los adaptadores | El mismo bucle instancia objetos reales de petición y respuesta y ejecuta los adaptadores, incluidas dos invariantes: `uri()` no lleva esquema ni host, y `withHeaders()` sigue aplicándose después de `file()` |
+| Los métodos que llaman los adaptadores existen de verdad | ciclo de verificación `tools/contracts/` (job de CI propio, **dos tramos**: el tramo principal instala los paquetes más recientes de cada framework y el proyecto aparte `tools/contracts/legacy-symfony64` ejecuta el mismo caso de Symfony contra 6.4): instala paquetes reales de los frameworks (`drupal/core` real para Drupal, dos paquetes de versión reales del CMS para Joomla) y comprueba por reflexión que existan todos los métodos / constantes / funciones globales **para los ocho frameworks del ciclo** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf no están en el ciclo — ver abajo |
+| Semántica de los adaptadores | El mismo ciclo instancia objetos reales de petición y respuesta y ejecuta los adaptadores, con dos invariantes: `uri()` no lleva scheme/host, y `withHeaders()` sigue aplicándose después de `file()`. El número de SKIP del ciclo es una constante congelada (2 en el tramo principal, 0 en el tramo 6.4) y ambos SKIP están en Joomla: la ruta de lectura real de `#__extensions.params` y la forma del instalador, y para ejecutar ambas hace falta una base de datos o un instalador |
 
 
-**No verificado automáticamente (no lo leas como «se probaron los seis»)**
+**No verificado automáticamente (no lo leas como «todo queda cubierto»)**
 
 | Elemento | Por qué no |
 |------|---------|
 | El **cableado** de cada framework (si el hook está realmente enganchado, si el evento se dispara de verdad) | Los tests unitarios usan stubs; el cableado hoy solo se puede confirmar con pruebas de humo manuales |
-| WordPress de principio a fin | El momento real de `plugins_loaded`, si `shutdown` se dispara ante un error fatal, y si el mu-plugin se carga, exigen un WordPress real |
-| El descubrimiento del plugin de Joomla y `$app->close()` | Requiere ejecutar Descubrir en un admin de Joomla real |
-| Si la prioridad de Drupal cae de verdad fuera de la caché de página | Requiere un kernel de Drupal arrancado |
+| Los dos subpuntos restantes de Joomla | Las dos cosas que el ciclo aún no alcanza, y ambas por el mismo motivo (necesitan base de datos o instalador): la ruta de lectura real de `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) y la forma del instalador (namespacemap escrito, `bootPlugin()` encuentra la clase) |
 | La autoconfiguración de `kernel.event_subscriber` de Symfony | Requiere una compilación real del contenedor |
-| Interferencia de estado estático en procesos de larga duración | Heredada de la arquitectura existente (lo mismo ocurre en Webman / Hyperf); sin cambios aquí |
+| Interferencia de estado estático en procesos de larga duración | Lado de Webman sin cambios (en Hyperf están aislados: los 9 valores de estado de render por petición pasan por el Context de la corrutina, fijados por `tests/Unit/Lib/RenderStateCoroutineTest.php` con una corrutina que cede de verdad) |
 | E/S real con Redis, renderizado en navegador, sobrecarga del perfilado bajo carga real | La E/S real con Redis **ya está en el bucle** (`cases/Redis.php`: phpredis real + una petición Slim real de extremo a extremo — petición → persistencia → lista → página del informe); el renderizado en navegador y la sobrecarga bajo carga real siguen fuera del alcance de los tests unitarios y del bucle |
 | Firmas y semántica de los adaptadores de ThinkPHP / Hyperf | estos dos no están en el bucle de verificación (que cubre ocho frameworks); sus stubs están escritos a mano en `tests/Stubs/framework-stubs.php`, sin comparación con paquetes reales |
 
@@ -641,7 +498,7 @@ El contrato `host()` significa «solo host, sin puerto» (R-2), y los diez frame
 
 **`assets_url` ahora admite un prefijo personalizado**
 
-El prefijo de recursos ya no es una constante fija: `src/Core/StaticController.php` casa las rutas de recursos contra la opción `assets_url` (por defecto `/xhprof-assets`, con o sin barra final). La limitación restante en un despliegue en subdirectorio es la de Drupal, más abajo. **Salvedad**: un prefijo propio funciona sin más en los cinco frameworks donde un middleware o una clase de entrada cortocircuita la ruta de los recursos (Yii3, Symfony, Slim, WordPress, Joomla); en Laravel, Hyperf, Webman y ThinkPHP la ruta de recursos, y en Drupal `xhprof.routing.yml`, los registras **tú** — cámbialos junto con `assets_url`, o las peticiones de recursos no llegarán a `StaticController` y el informe perderá los estilos y los scripts.
+El prefijo de recursos ya no es una constante fija: `src/Core/StaticController.php` casa las rutas de recursos contra la opción `assets_url` (por defecto `/xhprof-assets`, con o sin barra final). La limitación restante en un despliegue en subdirectorio es la de Drupal, más abajo. **Los diez frameworks siguen esa opción**: nueve clases de entrada cortocircuitan el camino de los recursos antes de empezar el perfilado y los sirven ellas mismas, mientras que Drupal sirve el prefijo por defecto con la ruta del módulo + controlador y entrega el prefijo propio al middleware. **Salvedad**: Laravel, Hyperf, Webman y ThinkPHP ya no necesitan controlador ni rutas — el middleware corre primero, así que las dos rutas registradas según las instrucciones antiguas quedan solo sombreadas: no dan error y ya nunca se alcanzan.
 
 **Limitación conocida: la guarda de ruta falla cuando Drupal vive en un subdirectorio**
 
@@ -649,7 +506,7 @@ Cuando Drupal está instalado bajo un subdirectorio (por ejemplo `/sites/app/xhp
 
 **Compatibilidad con Symfony 6.4**
 
-La compatibilidad con Symfony 6.4 se ha medido (así se corrigieron dos sobreajustes invisibles en 7.4: las propiedades de `Request` no llevan declaración de tipo nativa en 6.4, y el charset que añade `prepare()` difiere en mayúsculas/minúsculas), pero el bucle de verificación de CI solo ejecuta 7.4.
+La compatibilidad con Symfony 6.4 se ha medido (así se corrigieron dos sobreajustes invisibles en 7.4: las propiedades de `Request` no llevan declaración de tipo nativa en 6.4, y el charset que añade `prepare()` difiere en mayúsculas/minúsculas). **Los dos tramos corren en CI**: el tramo principal 7.x más el proyecto aparte `tools/contracts/legacy-symfony64`, que ejecuta el mismo archivo de caso sin copiarlo — y ambos tramos también están en el gate de tags.
 
 ---
 

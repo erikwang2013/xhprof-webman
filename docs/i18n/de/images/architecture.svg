@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf-Webman-Schichtenarchitektur</title>
-  <desc>Drei Schichtdiagramme: oben die 10 Framework-Eintragsklassen (4 bereits unterstützt + 6 in diesem Release neu), in der Mitte die 5 Interfaces in src/Core/Contract/, unten die 5 Klassen im Core. Das rote Band unten markiert die einzigen zwei im Core verbliebenen Kopplungen an Frameworks und hält fest, dass die 6 neuen Frameworks nie durch autoDetect laufen — alle nutzen die explizite Injektion über Xhprof::bootstrap(). Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original: README.EN.md.</desc>
+  <desc>Drei Schichtdiagramme: oben die 10 Framework-Eintragsklassen (4 bereits unterstützt + 6 in diesem Release neu), in der Mitte die 5 Interfaces in src/Core/Contract/, unten die 5 Klassen im Core. Das rote Band unten markiert die einzigen zwei im Core verbliebenen Kopplungen an Frameworks und hält fest, dass die 6 neuen Frameworks nie durch autoDetect laufen — alle nutzen die explizite Injektion über Xhprof::bootstrap(). Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

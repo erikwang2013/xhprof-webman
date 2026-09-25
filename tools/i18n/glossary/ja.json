@@ -3,8 +3,8 @@
         "lang": "ja",
         "name": "日本語",
         "dir": "ltr",
-        "notice": "> **機械翻訳。** この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は英語版 [README.EN.md](../../../README.EN.md) を正とします。",
-        "note": "翻訳者: Claude（Anthropic）による機械翻訳。翻訳元: README.EN.md および tools/i18n/glossary/en.json。翻訳日: 2026-09-25。用語は README.EN.md の英語表記に合わせ、図中では幅の制約から簡略表記を用いた箇所がある。母語話者による校閲は受けていない。"
+        "notice": "> **機械翻訳。** この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は [英語版](../en/README.md) を正とします。",
+        "note": "翻訳者: Claude（Anthropic）による機械翻訳。翻訳元: docs/i18n/en/README.md および tools/i18n/glossary/en.json。翻訳日: 2026-09-25。用語は docs/i18n/en/README.md の英語表記に合わせ、図中では幅の制約から簡略表記を用いた箇所がある。母語話者による校閲は受けていない。"
     },
     "architecture.title.1": "XHProf Webman 階層アーキテクチャ",
     "architecture.title.2": "10 入口 → 5 コントラクト → 1 Core：新規追加でも Core は不変",

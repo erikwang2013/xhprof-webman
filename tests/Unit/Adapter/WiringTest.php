@@ -150,7 +150,13 @@ class WiringTest extends TestCase
 
     private function snapshotXhprofStatics(): array
     {
+        $hyperf = new \ReflectionProperty(CoreXhprof::class, '_hyperf');
+        $hyperf->setAccessible(true);   // PHP 8.0 需要；8.1+ 是 no-op
+
         return [
+            // 私有静态、无 setter（生产上刻意不可逆）。漏了它，本进程其后所有测试都会
+            // 走 Hyperf 分支——观察点是反射探针量到的 false→true，不是推断。
+            '_hyperf' => $hyperf->getValue(),
             'request' => CoreXhprof::$request,
             'response' => CoreXhprof::$response,
             'config' => CoreXhprof::$config,
@@ -168,6 +174,11 @@ class WiringTest extends TestCase
 
     private function restoreXhprofStatics(array $s): void
     {
+        $hyperf = new \ReflectionProperty(CoreXhprof::class, '_hyperf');
+        $hyperf->setAccessible(true);
+        // 双参（null 打头）：静态属性的单参形式在 PHP 8.3 起已废弃。
+        $hyperf->setValue(null, $s['_hyperf']);
+
         CoreXhprof::$request = $s['request'];
         CoreXhprof::$response = $s['response'];
         CoreXhprof::$config = $s['config'];

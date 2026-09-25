@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  项目宠物：小火苗「焰焰」——取自 xhprof 的招牌视图（火焰图），放大镜代表「找热点」。
+  同一份图形的两个用途：这里（docs/images/，README 用）与 src/html/pet.svg（报告页当站点
+  图标与品牌图标用）。**改一处要同步另一处**。
+  配色与报告页 / 其它 docs 图同一套 GitHub 浅色（#f6f8fa 底、#cf222e 强调、#57606a 灰）。
+  刻意不含任何 <text> 节点：它不在 tools/i18n/lib.php 的 I18N_DOCS 里，
+  将来若要加进去（或加文案），必须先补进 extract.php 的清单并重跑生成器。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img">
+  <title>小火苗——xhprof 火焰图吉祥物</title>
+  <desc>浅灰圆底上的一只橙红色小火苗，火尖微倾、分叉，带笑脸与腮红，右上角悬着一枚蓝色放大镜，代表从火焰图里找出性能热点。</desc>
+
+  <defs>
+    <!-- 底部（焰心）最亮、焰尖最深：与真实火焰一致 -->
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ffb26b"/>
+      <stop offset="0.45" stop-color="#ef5350"/>
+      <stop offset="1" stop-color="#c9202f"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ffe9c9"/>
+      <stop offset="1" stop-color="#fff8ee"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#96d0ff" stop-opacity="0.45"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 底 -->
+  <circle cx="120" cy="120" r="112" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+
+  <!-- 火焰身体：左缘两道波浪，火尖浅分叉并向右倾 -->
+  <path d="M130 34
+           C 127 58 141 74 152 90
+           C 168 110 178 126 178 146
+           C 178 180 152 202 119 202
+           C 86 202 60 180 60 146
+           C 60 120 74 102 88 84
+           C 99 70 106 58 108 46
+           C 113 54 120 56 130 34 Z"
+        fill="url(#flame)"/>
+
+  <!-- 内焰（脸底）：圆弧收口——顶端留尖会与外焰的缺口连成「双峰」，这里刻意用圆顶 -->
+  <path d="M119 132
+           C 131 132 142 152 142 172
+           C 142 190 132 200 119 200
+           C 106 200 96 190 96 172
+           C 96 152 107 132 119 132 Z"
+        fill="url(#core)"/>
+
+  <!-- 腮红 -->
+  <ellipse cx="92" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
+  <ellipse cx="146" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
+
+  <!-- 眼睛 -->
+  <circle cx="103" cy="159" r="9" fill="#ffffff"/>
+  <circle cx="135" cy="159" r="9" fill="#ffffff"/>
+  <circle cx="103" cy="160" r="4.8" fill="#24292f"/>
+  <circle cx="135" cy="160" r="4.8" fill="#24292f"/>
+  <circle cx="101" cy="157.5" r="1.7" fill="#ffffff"/>
+  <circle cx="133" cy="157.5" r="1.7" fill="#ffffff"/>
+
+  <!-- 笑 -->
+  <path d="M110 174 Q119 183 128 174" fill="none" stroke="#24292f"
+        stroke-width="2.6" stroke-linecap="round"/>
+
+  <!-- 放大镜：找热点 -->
+  <line x1="205" y1="76" x2="221" y2="92" stroke="#0969da" stroke-width="8"
+        stroke-linecap="round"/>
+  <circle cx="191" cy="62" r="19" fill="url(#lens)" stroke="#0969da" stroke-width="6.5"/>
+  <path d="M182 56 a 12 12 0 0 1 9 -5" fill="none" stroke="#ffffff"
+        stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+</svg>

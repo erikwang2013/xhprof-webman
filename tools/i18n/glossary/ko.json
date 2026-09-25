@@ -3,8 +3,8 @@
         "lang": "ko",
         "name": "한국어",
         "dir": "ltr",
-        "notice": "> **기계 번역.** 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 [영문판](../../../README.EN.md)을 기준으로 하십시오.",
-        "note": "Translated from README.EN.md and tools/i18n/glossary/en.json by Claude (Anthropic) on 2026-09-25. Terminology follows README.EN.md; framework and product names, identifiers and paths were kept verbatim. This is an unreviewed machine translation — no native Korean speaker has checked it."
+        "notice": "> **기계 번역.** 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 [영문판](../en/README.md)을 기준으로 하십시오.",
+        "note": "Translated from docs/i18n/en/README.md and tools/i18n/glossary/en.json by Claude (Anthropic) on 2026-09-25. Terminology follows docs/i18n/en/README.md; framework and product names, identifiers and paths were kept verbatim. This is an unreviewed machine translation — no native Korean speaker has checked it."
     },
     "architecture.title.1": "XHProf Webman 계층형 아키텍처",
     "architecture.title.2": "프레임워크 진입점 10개 → 계약 5개 → Core 1개: 새 프레임워크는 Core를 건드리지 않음",

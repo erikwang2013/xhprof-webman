@@ -1,0 +1,3 @@
+# vendor 不入库（与主环同规矩，见仓库根的 .gitignore）。放这里而不是仓库根：
+# 根 .gitignore 的 `/tools/contracts/vendor/` 只匹配主环那一层，不会覆盖本目录。
+/vendor/

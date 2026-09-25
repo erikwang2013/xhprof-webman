@@ -451,6 +451,19 @@ namespace Symfony\Component\HttpFoundation {
         {
             return new \SplFileInfo($this->file);
         }
+
+        /**
+         * 真实类**覆写**父类并恒返回 false（symfony/http-foundation v7.4.19
+         * src/BinaryFileResponse.php:380-383）：正文由 sendContent() 从磁盘流出，
+         * 从不在对象里。桩此前直接继承 Response::getContent() 拿回 ''，于是
+         * 「资源响应的正文在 $res->getContent() 里」这种真包上必然失败的写法会恒绿
+         * ——Laravel 的 `response()->file()` 返回的正是这个类（illuminate/routing
+         * ResponseFactory::file()），是本包资源短路链的产物。
+         */
+        public function getContent(): string|false
+        {
+            return false;
+        }
     }
 }
 

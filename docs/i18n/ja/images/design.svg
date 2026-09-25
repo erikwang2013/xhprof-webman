@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>設計のトレードオフ：判断・理由・コスト</title>
-  <desc>5 つの主要な判断の対照表で、各項目は判断そのもの、それが得た利益、そして支払ったコストを並べる：Core は 5 つの契約のみに依存、入口クラスがレポートページを自前で配信、共有層は抽出しない、スタブは独立した検証ループが検証、autoDetect ではなく明示的注入。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は英語版 README.EN.md を正とします。</desc>
+  <desc>5 つの主要な判断の対照表で、各項目は判断そのもの、それが得た利益、そして支払ったコストを並べる：Core は 5 つの契約のみに依存、入口クラスがレポートページを自前で配信、共有層は抽出しない、スタブは独立した検証ループが検証、autoDetect ではなく明示的注入。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は 英語版 を正とします。</desc>
 
   <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
 

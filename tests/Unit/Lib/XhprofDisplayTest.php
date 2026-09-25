@@ -90,15 +90,20 @@ class XhprofDisplayTest extends TestCase
         Xhprof::$view_wtred = 3;
         Xhprof::$symbol_lookup_url = '';
 
-        XhprofDisplay::$sort_col = 'wt';
-        XhprofDisplay::$diff_mode = false;
-        XhprofDisplay::$display_calls = true;
-        XhprofDisplay::$metrics = null;
-        XhprofDisplay::$stats = [];
-        XhprofDisplay::$pc_stats = [];
-        XhprofDisplay::$totals = 0;
-        XhprofDisplay::$totals_1 = 0;
-        XhprofDisplay::$totals_2 = 0;
+        // 渲染状态是按请求的：$_hyperf 被 Hyperf 用例置位后（进程级、不可逆）它存在协程
+        // Context 里，直接写静态属性在那个模式下没人读。布置与断言一律走 XhprofDisplay
+        // 的存取器，本文件因此在两种进程模式下行为一致。
+        XhprofDisplay::set_render_state([
+            'sort_col' => 'wt',
+            'diff_mode' => false,
+            'display_calls' => true,
+            'metrics' => null,
+            'stats' => [],
+            'pc_stats' => [],
+            'totals' => 0,
+            'totals_1' => 0,
+            'totals_2' => 0,
+        ]);
         XhprofDisplay::$vwbar = 'class="vwbar"';
         XhprofDisplay::$vbar = 'class="vbar"';
         XhprofDisplay::$vbbar = 'class="vbbar"';
@@ -198,7 +203,7 @@ class XhprofDisplayTest extends TestCase
     {
         self::assertSame('class="vbar"', XhprofDisplay::get_print_class(5, false));
         self::assertSame('class="vbbar"', XhprofDisplay::get_print_class(5, true));
-        XhprofDisplay::$diff_mode = true;
+        XhprofDisplay::set_render_state(['diff_mode' => true]);
         self::assertSame('class="vgbar"', XhprofDisplay::get_print_class(-5, true));
         self::assertSame('class="vrbar"', XhprofDisplay::get_print_class(5, true));
         self::assertSame('class="vbar"', XhprofDisplay::get_print_class(5, false));
@@ -225,7 +230,7 @@ class XhprofDisplayTest extends TestCase
     public function statDescriptionSwitchesInDiffMode(): void
     {
         self::assertSame('总耗时<br>(微秒)', XhprofDisplay::stat_description('wt'));
-        XhprofDisplay::$diff_mode = true;
+        XhprofDisplay::set_render_state(['diff_mode' => true]);
         self::assertSame('Incl. Wall<br>Diff<br>(microsec)', XhprofDisplay::stat_description('wt'));
         self::assertSame('Incl. Wall<br>Diff<br>(microsec)', XhprofDisplay::stat_description('wt'));
     }
@@ -233,7 +238,7 @@ class XhprofDisplayTest extends TestCase
     #[Test]
     public function sortCbkSortsByFnAlphabetically(): void
     {
-        XhprofDisplay::$sort_col = 'fn';
+        XhprofDisplay::set_render_state(['sort_col' => 'fn']);
         $arr = [['fn' => 'b()'], ['fn' => 'A()'], ['fn' => 'b()']];
         usort($arr, [XhprofDisplay::class, 'sort_cbk']);
         self::assertSame('A()', $arr[0]['fn']);
@@ -242,7 +247,7 @@ class XhprofDisplayTest extends TestCase
     #[Test]
     public function sortCbkSortsByMetricDescending(): void
     {
-        XhprofDisplay::$sort_col = 'wt';
+        XhprofDisplay::set_render_state(['sort_col' => 'wt']);
         $arr = [['fn' => 'a', 'wt' => 5], ['fn' => 'b', 'wt' => 10], ['fn' => 'c', 'wt' => 5]];
         usort($arr, [XhprofDisplay::class, 'sort_cbk']);
         self::assertSame('b', $arr[0]['fn']);
@@ -252,8 +257,7 @@ class XhprofDisplayTest extends TestCase
     #[Test]
     public function sortCbkUsesAbsoluteValuesInDiffMode(): void
     {
-        XhprofDisplay::$sort_col = 'wt';
-        XhprofDisplay::$diff_mode = true;
+        XhprofDisplay::set_render_state(['sort_col' => 'wt', 'diff_mode' => true]);
         $arr = [['fn' => 'a', 'wt' => 5], ['fn' => 'b', 'wt' => -10]];
         usort($arr, [XhprofDisplay::class, 'sort_cbk']);
         self::assertSame('b', $arr[0]['fn']);
@@ -566,10 +570,12 @@ class XhprofDisplayTest extends TestCase
             ['fn' => 'c()', 'ct' => 1, 'wt' => 80, 'excl_wt' => 80],
             ['fn' => 'd()', 'ct' => 1, 'wt' => 70, 'excl_wt' => 70],
         ];
-        XhprofDisplay::$stats = ['fn', 'ct', 'wt'];
-        XhprofDisplay::$metrics = ['wt'];
-        XhprofDisplay::$totals = ['ct' => 4, 'wt' => 340];
-        XhprofDisplay::$sort_col = 'wt';
+        XhprofDisplay::set_render_state([
+            'stats' => ['fn', 'ct', 'wt'],
+            'metrics' => ['wt'],
+            'totals' => ['ct' => 4, 'wt' => 340],
+            'sort_col' => 'wt',
+        ]);
 
         $limited = XhprofDisplay::print_flat_data([], 'title', $data, 2);
         self::assertStringContainsString('a()', $limited);

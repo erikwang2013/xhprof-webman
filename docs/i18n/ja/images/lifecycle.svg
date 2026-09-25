@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>計測される 1 リクエストのライフサイクル</title>
-  <desc>上半分は計測対象リクエストの 8 段階：リクエスト到着、入口クラスがレポートページとアセットパスを先に判定（命中なら短絡し計測しない）、Xhprof::bootstrap が 5 アダプタを注入、isEnabled と extension_loaded の二重判定、xhprofStart、業務処理、finally 内の xhprofStop、save_run による Redis への書き込み。下半分は 5 本のレーンで、PSR-15 (Yii3 / Slim)、Symfony、WordPress、Joomla、Drupal それぞれの計測開始 / 終了点と shutdown フォールバックを色帯で示す。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は英語版 README.EN.md を正とします。</desc>
+  <desc>上半分は計測対象リクエストの 8 段階：リクエスト到着、入口クラスがレポートページとアセットパスを先に判定（命中なら短絡し計測しない）、Xhprof::bootstrap が 5 アダプタを注入、isEnabled と extension_loaded の二重判定、xhprofStart、業務処理、finally 内の xhprofStop、save_run による Redis への書き込み。下半分は 5 本のレーンで、PSR-15 (Yii3 / Slim)、Symfony、WordPress、Joomla、Drupal それぞれの計測開始 / 終了点と shutdown フォールバックを色帯で示す。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は 英語版 を正とします。</desc>
 
   <defs>
     <marker id="lc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">

@@ -18,6 +18,7 @@ use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
+use ErikWang2013\Xhprof\Core\StaticController as CoreStaticController;
 use ErikWang2013\Xhprof\Core\Xhprof as CoreXhprof;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\ConfigAdapter;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\LogAdapter;
@@ -424,5 +425,211 @@ class ThinkphpTest extends TestCase
         $adapter = new RedisAdapter();
 
         $this->assertInstanceOf(CacheInterface::class, $adapter);
+    }
+
+    // ---------- 报告页 / 资源短路：不需要用户在 route/*.php 里注册任何路由 ----------
+
+    /**
+     * 落库观测点：think 的 redis store。适配器优先直连底层 \Redis handler（桩里
+     * `Cache::store('redis')->handler()` 给的 ThinkFakeHandler **不是** \Redis，
+     * 于是走 fallback 写进 CacheStore 自己），两处都取才与 WiringTest 同一口径。
+     *
+     * @return array<string, mixed>
+     */
+    private function storeData(): array
+    {
+        $store = Cache::store('redis');
+
+        return $store->data + $store->handler()->data;
+    }
+
+    /**
+     * 报告页：入口类在业务 handler 之前短路，用户注册的路由（= handler）根本不会被走到。
+     *
+     * `ignore_url_arr` 必须挪开默认的 `['/xhprof']`：XhprofLib::isIgnore() 是 **子串** 匹配，
+     * URI 里含 '/xhprof' 就整个不落库，于是"报告页没被采样"这条断言会被默认配置**顺手**
+     * 满足——把短路挪到 xhprofStart() 之后也照样绿（判别力为零）。挪开之后，落不落库只由
+     * 「有没有跑过 xhprofStart/xhprofStop」决定，这条断言才真的能红。
+     */
+    #[Test]
+    public function reportPageIsServedWithoutAnyUserRoute(): void
+    {
+        Config::$data = [
+            'xhprof' => ['enable' => true, 'ignore_url_arr' => ['/never-matches']],
+        ];
+
+        $called = false;
+        $res = (new Middleware())->handle(
+            new Request([], ['uri' => '/xhprof?run=abc']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response('business');
+            }
+        );
+
+        $this->assertFalse($called, '报告页必须在业务 handler（= 用户注册的路由）之前短路');
+        $this->assertSame(200, $res->getCode());
+        // think\Response 的 header 是受保护的 $header，取用只能走 getHeader()
+        // （topthink/framework 8.1.4 src/think/Response.php:63）。
+        $this->assertSame('text/html; charset=UTF-8', $res->getHeader('Content-Type'));
+        $this->assertSame('no-cache, private', $res->getHeader('Cache-Control'));
+        $body = (string) $res->getContent();
+        $this->assertStringContainsString('XHProf 性能分析报告', $body);
+        $this->assertStringContainsString('/xhprof-assets', $body, '报告页资源链接走默认前缀');
+        $this->assertSame([], $this->storeData(), '报告页本身不该被采样落库');
+    }
+
+    /** 默认前缀（配置里不写 assets_url）下的资源请求：入口类接管并真读出包内文件。 */
+    #[Test]
+    public function assetRequestIsServedUnderTheDefaultPrefix(): void
+    {
+        Config::$data = [
+            'xhprof' => ['enable' => true, 'ignore_url_arr' => ['/never-matches']],
+        ];
+
+        $called = false;
+        $res = (new Middleware())->handle(
+            new Request([], ['uri' => '/xhprof-assets/css/xhprof.css']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response('business');
+            }
+        );
+
+        $this->assertFalse($called, '资源请求必须在业务 handler 之前短路');
+        $this->assertSame(200, $res->getCode());
+        $this->assertSame('text/css', $res->getHeader('Content-Type'), 'Content-Type 由 Core 按扩展名钉住');
+        // think 的 file() 把内容读进响应对象（Adapter 里 StaticController::readFile()），
+        // 所以正文可以直接断言 —— 与 Laravel/Webman 的「正文在磁盘上」不同。
+        $this->assertStringContainsString(
+            '--xp-bg: #f6f8fa',
+            (string) $res->getContent(),
+            '必须真的读到 src/html/css/xhprof.css 的内容'
+        );
+        $this->assertSame([], $this->storeData(), '资源请求不该被采样落库');
+    }
+
+    /**
+     * 自定义前缀：改配置就够了，**不需要**去动路由文件（改动前这条路必须由用户自己
+     * 在 route/app.php 里注册 `/static/xhprof/<path>`，否则请求落不到 serve()）。
+     */
+    #[Test]
+    public function assetRequestIsServedUnderACustomPrefixWithoutTouchingRoutes(): void
+    {
+        Config::$data = [
+            'xhprof' => ['enable' => true, 'assets_url' => '/static/xhprof', 'ignore_url_arr' => ['/never-matches']],
+        ];
+
+        $called = false;
+        $res = (new Middleware())->handle(
+            new Request([], ['uri' => '/static/xhprof/css/xhprof.css']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response('business');
+            }
+        );
+
+        $this->assertFalse($called, '配置前缀下的请求被入口类接管');
+        $this->assertSame(200, $res->getCode());
+        $this->assertSame('text/css', $res->getHeader('Content-Type'));
+        $this->assertStringContainsString('--xp-bg: #f6f8fa', (string) $res->getContent());
+        $this->assertSame([], $this->storeData());
+    }
+
+    /**
+     * 近似路径不被接管，且照常当业务请求采样落库。
+     *
+     * 同样要挪开 `ignore_url_arr`：`/xhprof-assets-nope` 含子串 '/xhprof'，默认配置下
+     * 「没落库」是 isIgnore() 给的，不是短路给的——那份断言同样会被顺手满足。
+     */
+    #[Test]
+    public function nearMissAssetPathIsStillABusinessRequest(): void
+    {
+        Config::$data = [
+            'xhprof' => ['enable' => true, 'ignore_url_arr' => ['/never-matches']],
+        ];
+
+        $called = false;
+        $res = (new Middleware())->handle(
+            new Request([], ['uri' => '/xhprof-assets-nope']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response('business');
+            }
+        );
+
+        $this->assertTrue($called, '前缀必须带尾斜杠：/xhprof-assets-nope 是业务路径');
+        $this->assertSame('business', $res->getContent());
+
+        // 断言「落库的是本次采样数据」而不是只断言 key 存在（后者把 stop() 改成
+        // save_run([]) 也照样绿，照 WiringTest::assertRunSaved 的口径）。
+        $data = $this->storeData();
+        $this->assertCount(1, $data['xhprof:run_id'] ?? []);
+        $log = unserialize((string) $data['xhprof:xhprof_log:' . $data['xhprof:run_id'][0]]);
+        $this->assertIsArray($log);
+        $this->assertArrayHasKey('main()', $log, '普通业务请求照常采样落库（含 main() 帧）');
+    }
+
+    /**
+     * 与 LaravelTest / Yii3Test / DrupalTest 同一组边界：入口类的短路判定与 Core 的
+     * serve() 判定必须同源（两家共用 Core\MiddlewareTrait，这一组两票制覆盖两边）。
+     *
+     * 分叉的后果不是报错而是**静默**：报告页 CSS/JS 全空、业务路由也拿不到那些路径。
+     * 单跑 serve() 或单跑 handle() 都看不出来，只有同一条路径问两次才成立。
+     */
+    public static function assetsUrlBoundaries(): iterable
+    {
+        yield '没有配置' => [null, '/xhprof-assets/css/xhprof.css', true];
+        yield '配置 = 默认值' => ['/xhprof-assets', '/xhprof-assets/css/xhprof.css', true];
+        yield '配置带尾斜杠' => ['/xhprof-assets/', '/xhprof-assets/css/xhprof.css', true];
+        yield '自定义前缀' => ['/static/xhprof', '/static/xhprof/css/xhprof.css', true];
+        yield '自定义前缀 + 尾斜杠' => ['/static/xhprof/', '/static/xhprof/css/xhprof.css', true];
+        // 判别力来源：配了自定义前缀后**老路径不再被认**（否则同一份文件有两个 URL）
+        yield '自定义前缀 + 老路径' => ['/static/xhprof', '/xhprof-assets/css/xhprof.css', false];
+        yield 'CDN 绝对 URL' => ['https://cdn.test/xhprof-assets', '/xhprof-assets/css/xhprof.css', false];
+        // 空串 = 不启用资源短路（两边都一个都不认，不能一边回落成默认前缀）
+        yield '配置成空串' => ['', '/xhprof-assets/css/xhprof.css', false];
+        yield '配置成 /' => ['/', '/css/xhprof.css', true];
+        // 尾斜杠是「近似路径不算资源」的唯一来源
+        yield '近似路径' => [null, '/xhprof-assets-nope', false];
+        yield '近似路径（自定义前缀）' => ['/static/xhprof', '/static/xhprof-nope', false];
+    }
+
+    #[Test]
+    #[DataProvider('assetsUrlBoundaries')]
+    public function guardAndServeAgreeOnWhichPathsAreAssets(?string $assetsUrl, string $path, bool $isAsset): void
+    {
+        $config = ['enable' => true];
+        if ($assetsUrl !== null) {
+            $config['assets_url'] = $assetsUrl;
+        }
+        Config::$data = ['xhprof' => $config];
+
+        // 第 1 票：入口类短路 —— 业务 handler 没被调用 ⇔ 认作资源
+        $called = false;
+        (new Middleware())->handle(
+            new Request([], ['uri' => $path]),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response('business');
+            }
+        );
+        $this->assertSame(
+            $isAsset,
+            !$called,
+            "入口类对 $path 的判定（assets_url = " . var_export($assetsUrl, true) . '）'
+        );
+
+        // 第 2 票：Core 自己的判定 —— 真读出包内 css ⇔ 认作资源。放在 handle() 之后，
+        // 因为 serve() 读的是 bootstrap 写进去的那份配置。
+        $served = CoreStaticController::serve(
+            new RequestAdapter(new Request([], ['uri' => $path])),
+            new ResponseAdapter()
+        )->send();
+        $this->assertSame(
+            $isAsset,
+            str_contains((string) $served->getContent(), '--xp-bg: #f6f8fa'),
+            "Core serve() 对 $path 的判定（assets_url = " . var_export($assetsUrl, true) . '）'
+        );
     }
 }

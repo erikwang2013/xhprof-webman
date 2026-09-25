@@ -316,7 +316,7 @@ $failed = 0;
 
 // The machine-translation notice is not optional for a translated locale.
 // Language agents supply their own wording in _meta.notice; 'en' is a source
-// language of this project (README.EN.md) and must not carry one.
+// language of this project (tools/i18n/readme/en.md) and must not carry one.
 $notice = $meta['notice'] ?? null;
 if ($lang === 'en') {
     if ($notice !== null && $notice !== '') {
@@ -450,9 +450,10 @@ foreach (I18N_DOCS as $doc) {
 // README for the locale: link rewriting + machine-translation notice
 // ---------------------------------------------------------------------------
 
-$readmeSource = $lang === 'en'
-    ? I18N_REPO . '/README.EN.md'
-    : i18n_input_root() . "/readme/$lang.md";
+// Every locale renders from its own body source, 'en' included.  English used
+// to be the one exception: it read the repository-root README.EN.md, which made
+// it the only locale whose source was not in the readme/ tree.
+$readmeSource = i18n_input_root() . "/readme/$lang.md";
 
 if (!is_file($readmeSource)) {
     fwrite(STDERR, "missing README source: $readmeSource\n");

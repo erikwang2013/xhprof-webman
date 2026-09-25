@@ -3,8 +3,8 @@
         "lang": "de",
         "name": "Deutsch",
         "dir": "ltr",
-        "notice": "> **Maschinelle Übersetzung.** Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original: [README.EN.md](../../../README.EN.md).",
-        "note": "Maschinell übersetzt von Claude (Anthropic) am 2026-09-25 aus README.EN.md und tools/i18n/glossary/en.json (Englisch, Pilotsprache dieses Werkzeugsatzes). Terminologie folgt README.EN.md. Nicht von einem Muttersprachler geprüft."
+        "notice": "> **Maschinelle Übersetzung.** Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist [das englische Original](../en/README.md).",
+        "note": "Maschinell übersetzt von Claude (Anthropic) am 2026-09-25 aus docs/i18n/en/README.md und tools/i18n/glossary/en.json (Englisch, Pilotsprache dieses Werkzeugsatzes). Terminologie folgt docs/i18n/en/README.md. Nicht von einem Muttersprachler geprüft."
     },
     "architecture.title.1": "XHProf-Webman-Schichtenarchitektur",
     "architecture.title.2": "10 Framework-Einträge → 5 Verträge → 1 Core: neue Frameworks ändern Core nicht",

@@ -550,14 +550,211 @@ PROBE);
     $expect('止点的优先级是 PHP_INT_MAX（WP_Hook 里真的落在最高一档）', $obs['hooks']['shutdown_priorities'], [$obs['hooks']['php_int_max']]);
     $expect('shutdown 上恰好一个回调（不会重复注册）', $obs['hooks']['shutdown_callback_count'], 1);
 
-    if ($failures !== []) {
+    $l2Checks = $checks;
+
+    // ================= L3：真 WordPress 引导（SQLite 后端） =================
+    //
+    // L2-lite 跑的是**核心函数**，没有站点、没有引导——所以「mu-plugin 真的被加载了吗」
+    // 「plugins_loaded 到底什么时候烧」「致命错误下 shutdown 动作还来不来」这三问它答不了
+    // （README 的「未自动化验证」表里就是这三条）。要答就得让真 wp-settings.php 跑起来，
+    // 而它必须读 active_plugins 选项 → 必须有数据库。
+    //
+    // 走 SQLite：`wordpress/sqlite-database-integration`（官方插件，composer 锁版本）提供
+    // `wp-content/db.php` drop-in，把 MySQL 方言翻译到 SQLite——于是 `wp_install()` 与真引导
+    // 都不需要外部服务。**没有假 $wpdb**：真 WP 核心 + 真 drop-in + 真 `wp_install()`，
+    // 数据库就是那个 SQLite 文件。
+    //
+    // 观测只能从进程外拿：探针是**普通 mu-plugin / 普通插件**（WP 自己的加载顺序决定谁先谁后），
+    // 它们只记录时点事实，不改本包行为。三条断言链：
+    //   ① mu-plugin 被收进并 include（且此刻普通插件还没加载、plugins_loaded 还没烧）
+    //   ② do_action('plugins_loaded') 真的调到本包的处理器（正对照：普通插件 @10 的回调同轮也跑了）
+    //   ③ 致命错误下 shutdown 止点照样执行，且采样真的落了库（Redis 里本进程新增一条 run）
+    $sqlitePkg = contracts_dir() . '/vendor/wordpress/sqlite-database-integration';
+    if (!is_file($sqlitePkg . '/wp-includes/sqlite/db.php')) {
         return [
             'status' => 'FAIL',
-            'detail' => count($failures) . '/' . $checks . " 项 L2-lite 断言失败（真 WP 核心源码，WordPress "
-                . basename(dirname($wpRoot)) . '）：' . "\n  - " . implode("\n  - ", $failures),
+            'detail' => 'tools/contracts/vendor 里没有 wordpress/sqlite-database-integration'
+                . '（真 WP 引导的 SQLite drop-in），先跑 composer install -d tools/contracts',
             'skips' => 0,
         ];
     }
+
+    // 落库断言读真 Redis。前置与 Redis 卡同一台（contracts.yml 的 services: redis），
+    // 缺了是 FAIL 而不是 SKIP：EXPECTED_SKIPS 是签字常量，不许随环境漂移。
+    $redis = new \Redis();
+    try {
+        $redis->connect('127.0.0.1', 6379, 1.0);
+        $redis->ping();
+    } catch (\Throwable $e) {
+        return [
+            'status' => 'FAIL',
+            'detail' => '连不上 127.0.0.1:6379 的 Redis（本卡 L3 落库断言的前置，与 Redis 卡同一台）：'
+                . $e->getMessage(),
+            'skips' => 0,
+        ];
+    }
+
+    $site = sys_get_temp_dir() . '/xhprof-contract-wpboot-' . getmypid();
+    // 夹具收尾：挂 shutdown 覆盖所有退出路径（成功、提前 return 的 FAIL、异常都算）。
+    // FAIL 时留着不删——那是唯一能进现场复现的东西，路径写进 detail。
+    $keepSite = false;
+    register_shutdown_function(static function () use ($site, &$keepSite): void {
+        if (!$keepSite) {
+            wordpress_rmdir_recursive($site);
+        }
+    });
+
+    /** 子进程 stderr 先剔掉本机 Xdebug 的 ini 噪音再截断——归因时不被它淹没。 */
+    $diag = static function (string $text, int $limit = 600): string {
+        $clean = trim((string) preg_replace('/^Xdebug:.*$/m', '', $text));
+
+        return strlen($clean) > $limit ? substr($clean, 0, $limit) . '…' : $clean;
+    };
+    $buildError = wordpress_build_site($site, $wpRoot, $repoRoot, $sqlitePkg);
+    if ($buildError !== null) {
+        return ['status' => 'FAIL', 'detail' => '真 WP 站点建不出来：' . $buildError, 'skips' => 0];
+    }
+
+    // 夹具确实用了**仓库里那份**真 mu-plugin 与**composer 包里那份**真 drop-in：
+    // 站点是生成的，但这两件必须是原件的字节。
+    $muSource = $repoRoot . '/wordpress/xhprof-webman.php';
+    $expect('L3 夹具用的是仓库里那份真 mu-plugin（字节一致，没有另写一份）',
+        md5_file($site . '/wp-content/mu-plugins/xhprof-webman.php'), md5_file($muSource));
+    $expect('L3 夹具用的是 composer 包里那份真 SQLite drop-in（db.copy 原样）',
+        md5_file($site . '/wp-content/db.php'), md5_file($sqlitePkg . '/db.copy'));
+
+    /** 起一次真引导，返回观测快照（探针在 shutdown 里写盘）。 */
+    $bootObserve = static function (string $mode) use ($site, $redis, $diag, &$failures, &$checks): array {
+        $out = $site . '/obs-' . $mode . '.json';
+        @unlink($out);
+        // 引导前的最新 run_id：止点落库断言靠它做「本进程新增」的差分（不是"有个 run 就算过"）。
+        $headBefore = (string) $redis->lIndex('xhprof:run_id', 0);
+        $run = contracts_run_php([$site . '/boot.php', $mode, $out, $headBefore]);
+        $checks++;
+        if (!is_file($out)) {
+            $failures[] = "真引导（{$mode}）没写出观测文件（exit {$run['code']}）："
+                . $diag((string) ($run['stderr'] !== '' ? $run['stderr'] : $run['stdout']));
+
+            return ['__run' => $run, '__obs' => []];
+        }
+        $obs = json_decode((string) file_get_contents($out), true);
+
+        return [
+            '__run' => $run,
+            '__obs' => is_array($obs) ? $obs : [],
+        ];
+    };
+
+    $install = $bootObserve('install');
+    if (($install['__run']['code'] ?? -1) !== 0
+        || !str_contains((string) ($install['__run']['stdout'] ?? ''), 'blog_installed=yes')
+    ) {
+        $keepSite = true;
+
+        return [
+            'status' => 'FAIL',
+            'detail' => '真 wp_install()（SQLite 后端）没成功：exit ' . ($install['__run']['code'] ?? '?')
+                . '；stdout=' . trim((string) ($install['__run']['stdout'] ?? ''))
+                . '；stderr=' . $diag((string) ($install['__run']['stderr'] ?? ''))
+                . "；夹具留在 {$site}",
+            'skips' => 0,
+        ];
+    }
+
+    $life = $bootObserve('normal');
+    $fatal = $bootObserve('fatal');
+    $lifeObs = $life['__obs'];
+    $fatalObs = $fatal['__obs'];
+
+    // ---- ① mu-plugin 真的被 WP 收进并 include（mu-plugins 阶段）----
+    $expect('L3 WP 把本包的 mu-plugin 收进了 mu-plugins 列表（真的被 include 了）',
+        $lifeObs['mu_phase']['mu_plugins_order'] ?? null, ['xhprof-webman.php', 'zz-contracts-fatal.php', 'zz-contracts-probe.php']);
+    $expect('L3 mu-plugin 加载时还没到 muplugins_loaded（时点在 WP 引导早期）',
+        $lifeObs['mu_phase']['did_muplugins_loaded'] ?? null, 0);
+    $expect('L3 mu-plugin 加载时 plugins_loaded 还没烧（更早）',
+        $lifeObs['mu_phase']['did_plugins_loaded'] ?? null, 0);
+    $expect('L3 mu-plugin 加载时普通插件还没被 include（:471 在 :560 之前）',
+        $lifeObs['mu_phase']['probe_plugin_loaded'] ?? null, false);
+    $expect('L3 mu-plugin 在 mu-plugins 阶段就把处理器挂上了 plugins_loaded@PHP_INT_MIN',
+        $lifeObs['mu_phase']['min_bucket'] ?? null,
+        ['ErikWang2013\\Xhprof\\Wordpress\\XhprofPlugin::onPluginsLoaded']);
+
+    // ---- ② plugins_loaded 的时点与顺序 ----
+    $expect('L3 正对照：探针普通插件确实被 include 了（否则下面那条是空转）',
+        $lifeObs['plugin_phase']['did_muplugins_loaded'] ?? null, 1);
+    $expect('L3 普通插件被 include 时采样还没起（plugins_loaded 未触发）',
+        $lifeObs['plugin_phase']['xhprof_config_yet'] ?? null, false);
+    $expect('L3 普通插件 include 时 plugins_loaded 计数器仍是 0',
+        $lifeObs['plugin_phase']['did_plugins_loaded'] ?? null, 0);
+    $expect('L3 do_action(plugins_loaded) 真的调用了本包处理器（配置经真链路进 Xhprof::$config）',
+        $lifeObs['after_xhprof_at_min']['config_is_wordpress_adapter'] ?? null, true);
+    $expect('L3 处理器运行时 plugins_loaded 正在分发中（did_action=1）',
+        $lifeObs['after_xhprof_at_min']['did_plugins_loaded'] ?? null, 1);
+    $expect('L3 普通插件的 plugins_loaded 回调在同一轮 do_action 里也跑了（窗口开在普通插件之前）',
+        $lifeObs['plugins_loaded_priority10']['config_set'] ?? null, true);
+    $expect('L3 真引导走到了 wp_loaded（wp-settings.php 全程跑完）',
+        $lifeObs['boot_phase']['did_wp_loaded'] ?? null, 1);
+    $expect('L3 引导的是真安装过的站点（选项表里有 active_plugins）',
+        $lifeObs['boot_phase']['active_plugins'] ?? null, ['contracts-probe/contracts-probe.php']);
+
+    // ---- ③ shutdown 生命周期的两个落点：正常路径 & 致命错误 ----
+    $expect('L3 正常路径：WP 自己触发了 shutdown 动作', $lifeObs['shutdown_phase']['did_shutdown_action'] ?? null, 1);
+    $expect('L3 正常路径：本包的 shutdown 止点真的执行了（stopped=true）',
+        $lifeObs['shutdown_phase']['xhprof_stopped'] ?? null, true);
+    $expect('L3 正常路径：止点落库了（本进程在 Redis 里新增一条 run，不只是"列表里有东西"）',
+        $lifeObs['shutdown_phase']['run_saved'] ?? null, true);
+    $expect('L3 正常路径：落库的 run_id 是 16 位小写十六进制（与 get_run() 白名单同形）',
+        preg_match('/^[a-f0-9]{16}$/', (string) ($lifeObs['shutdown_phase']['head_run_id'] ?? '')), 1);
+
+    $expect('L3 致命错误：子进程 exit 255（真 fatal，不是被 catch 的异常）',
+        $fatal['__run']['code'] ?? null, 255);
+    $expect('L3 致命错误：stderr 里就是那条真错误',
+        str_contains((string) ($fatal['__run']['stderr'] ?? ''), 'Uncaught Error: Call to undefined function contracts_probe_undefined_function_call()'),
+        true);
+    $expect('L3 致命错误发生在采样窗口**之内**（plugins_loaded/wp_loaded 都已发生）',
+        [$fatalObs['fatal_phase']['did_plugins_loaded'] ?? null, $fatalObs['fatal_phase']['did_wp_loaded'] ?? null], [1, 1]);
+    $expect('L3 致命错误下 WP 照样触发 shutdown 动作', $fatalObs['shutdown_phase']['did_shutdown_action'] ?? null, 1);
+    $expect('L3 致命错误下本包的 shutdown 止点照样执行（这就是「WordPress 上的 finally」）',
+        $fatalObs['shutdown_phase']['xhprof_stopped'] ?? null, true);
+    $expect('L3 致命错误下采样仍然落库（止点不是空转）',
+        $fatalObs['shutdown_phase']['run_saved'] ?? null, true);
+
+    // 收尾：把本卡在默认前缀下写进去的 run 删干净（三条：install/正常/致命），
+    // 只按 run_id 精确删，绝不动 xhprof:run_id 里别人的数据（多项目共用一台 Redis）。
+    $removed = 0;
+    foreach ([$install, $life, $fatal] as $one) {
+        $obs = $one['__obs']['shutdown_phase'] ?? [];
+        // 只删「本次真的新落了库」的那条。run_saved=false 的腿（install 腿不模拟请求，
+        // 止点本就该空转）手里那个 head_run_id 是引导前就在列表里的**别人的** run——
+        // 按它 lRem 等于替别人删数据。实测过：修 REQUEST_URI 之前三条腿的 run_saved
+        // 全是 false，收尾照样"删掉 3 条"，删的是引导前的旧 id。
+        if (($obs['run_saved'] ?? false) !== true) {
+            continue;
+        }
+        $rid = (string) ($obs['head_run_id'] ?? '');
+        if ($rid === '') {
+            continue;
+        }
+        // phpredis 的参数序是 (key, value, count) —— 与 redis-cli 的 LREM key count value 相反。
+        // 计数取 lRem 的返回值（真的删掉几条），不再自增——自增会把"没删到"记成"删掉了"。
+        $removed += (int) $redis->lRem('xhprof:run_id', $rid, 1);
+        $redis->del('xhprof:request_log:' . $rid, 'xhprof:xhprof_log:' . $rid);
+    }
+    $expect('L3 收尾：正常/致命两条腿写进去的 run 键都按 id 精确删掉了（不给 Redis 留垃圾）', $removed, 2);
+
+    if ($failures !== []) {
+        $keepSite = true;
+
+        return [
+            'status' => 'FAIL',
+            'detail' => count($failures) . '/' . $checks . " 项断言失败（L2-lite 真 WP 核心源码 + L3 真 WP 引导，"
+                . 'WordPress ' . basename($wpRoot) . "）：\n  - " . implode("\n  - ", $failures)
+                . "\n（L3 夹具留在 {$site}，可进去复现）",
+            'skips' => 0,
+        ];
+    }
+
+    wordpress_rmdir_recursive($site);
 
     return [
         'status' => 'PASS',
@@ -566,13 +763,307 @@ PROBE);
             . implode('、', WORDPRESS_EXPECTED_FUNCTIONS) . '）在真实 wordpress-stubs 中逐一存在，'
             . '参数名/可选性/默认值/返回类型与 tests/Stubs/Framework/Wordpress.php 逐字段一致；'
             . 'php-stubs 的函数体是空壳（实测 wp_unslash/is_ssl → null），故 L2 不拿它跑。'
-            . ' L2-lite：' . $checks . ' 项断言跑在真 WordPress 核心源码上（'
+            . ' L2-lite：' . $l2Checks . ' 项断言跑在真 WordPress 核心源码上（'
             . 'wp_unslash 的递归/透传经 get()/all()/uri() 三个调用点、is_ssl 的九种 $_SERVER 组合经 url()、'
-            . 'status_header 的状态行经真过滤器、add_action/do_action/WP_Hook 的真调度与优先级），'
-            . '缓存外的链路无假件。',
+            . 'status_header 的状态行经真过滤器、add_action/do_action/WP_Hook 的真调度与优先级）。'
+            . ' L3：' . ($checks - $l2Checks) . ' 项断言跑在**真引导的 WordPress 站点**上'
+            . '（真核心 + 官方 SQLite drop-in + 真 wp_install()，无 MySQL、无假 $wpdb）：'
+            . 'mu-plugin 进 mu-plugins 列表且此刻普通插件/plugins_loaded 都还没到；'
+            . 'do_action(plugins_loaded) 真调到本包处理器（正对照：普通插件 @10 同轮也跑了）；'
+            . '正常与**致命错误**两条路径下 WP 都触发了 shutdown 动作、本包止点都执行了、'
+            . '采样都真的落了库（Redis 里按 run_id 差分验证，跑完按 id 删净）。',
         'skips' => 0,
     ];
 };
+
+/**
+ * 建一个真 WordPress 站点（真核心 + SQLite drop-in + 真 mu-plugin + 只读探针）。
+ *
+ * 站点树就在临时目录里（真核心 68MB 复制一份 0.3s，换来 vendor 只读、随用随删）；
+ * 探针文件由本函数生成，仓库里那份 mu-plugin 与 composer 包里那份 drop-in 都是**原样复制**。
+ *
+ * @return string|null 失败原因，null = 建好了
+ */
+function wordpress_build_site(string $site, string $wpRoot, string $repoRoot, string $sqlitePkg): ?string
+{
+    if (!file_exists($wpRoot . '/wp-settings.php') || !file_exists($sqlitePkg . '/load.php')) {
+        return "源目录不完整：{$wpRoot} / {$sqlitePkg}";
+    }
+
+    foreach (['', '/vendor', '/wp-content', '/wp-content/mu-plugins', '/wp-content/plugins/contracts-probe'] as $sub) {
+        if (!mkdir($site . $sub, 0777, true) && !is_dir($site . $sub)) {
+            return "建不出目录 {$site}{$sub}";
+        }
+    }
+
+    wordpress_copy_tree($wpRoot, $site);
+    wordpress_copy_tree($sqlitePkg, $site . '/wp-content/plugins/sqlite-database-integration');
+    copy($sqlitePkg . '/db.copy', $site . '/wp-content/db.php');
+    copy($repoRoot . '/wordpress/xhprof-webman.php', $site . '/wp-content/mu-plugins/xhprof-webman.php');
+
+    // 站级 composer 自动加载器的等价物（真安装里由 composer 生成）：本包的 PSR-4 前缀。
+    // mu-plugin 只认 ABSPATH.'vendor/autoload.php' 这一个路径（包内文件里写明了这条上限）。
+    $autoload = <<<'PHP'
+<?php
+// 契约环夹具：站级 composer 自动加载器的等价物，只注册本包的 PSR-4 前缀。
+$repoRoot = '%REPO%';
+spl_autoload_register(static function (string $class) use ($repoRoot): void {
+    $prefix = 'ErikWang2013\\Xhprof\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = $repoRoot . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+PHP;
+    file_put_contents($site . '/vendor/autoload.php', str_replace('%REPO%', $repoRoot, $autoload));
+
+    // wp-config.php：与 wp-config-sample.php 同形，只是 DB 常量给一组"反正也连不上"的值
+    // ——真数据库由 wp-content/db.php 这个 SQLite drop-in 提供，它不看这些常量。
+    file_put_contents($site . '/wp-config.php', <<<'PHP'
+<?php
+// 契约环夹具：真 wp-load.php → 真 wp-settings.php，与线上同一条引导路径。
+define('DB_NAME', 'wordpress');
+define('DB_USER', 'root');
+define('DB_PASSWORD', '');
+define('DB_HOST', 'localhost');
+define('DB_CHARSET', 'utf8mb4');
+define('DB_COLLATE', '');
+$table_prefix = 'wp_';
+
+define('AUTH_KEY', 'contracts-fixture-key-1');
+define('SECURE_AUTH_KEY', 'contracts-fixture-key-2');
+define('LOGGED_IN_KEY', 'contracts-fixture-key-3');
+define('NONCE_KEY', 'contracts-fixture-key-4');
+define('AUTH_SALT', 'contracts-fixture-salt-1');
+define('SECURE_AUTH_SALT', 'contracts-fixture-salt-2');
+define('LOGGED_IN_SALT', 'contracts-fixture-salt-3');
+define('NONCE_SALT', 'contracts-fixture-salt-4');
+
+define('WP_DEBUG', true);
+define('WP_DEBUG_DISPLAY', true);
+define('WP_HOME', 'http://xhprof-contract.test');
+define('WP_SITEURL', 'http://xhprof-contract.test');
+
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', __DIR__ . '/' );
+}
+require_once ABSPATH . 'wp-settings.php';
+PHP);
+
+    // 引导脚本：argv = 1=install|normal|fatal 2=观测输出文件 3=引导前最新 run_id。
+    // 观测输出由探针在 shutdown 里写（见下面 zz-contracts-probe.php），所以这里不写文件。
+    file_put_contents($site . '/boot.php', <<<'PHP'
+<?php
+// 契约环夹具：真 WordPress 引导。install 走 WP_INSTALLING + wp_install()，其余是正常引导。
+$mode = $argv[1] ?? 'normal';
+
+if ($mode === 'install') {
+    define('WP_INSTALLING', true);
+    require __DIR__ . '/wp-load.php';
+    require ABSPATH . 'wp-admin/includes/upgrade.php';
+    if (!is_blog_installed()) {
+        wp_install('Xhprof Contract Fixture', 'admin', 'admin@xhprof-contract.test', true, '', 'password');
+    }
+    update_option('active_plugins', ['contracts-probe/contracts-probe.php']);
+    echo 'blog_installed=' . (is_blog_installed() ? 'yes' : 'no'), "\n";
+    exit(0);
+}
+
+// 正常/致命两条腿模拟一次真实 HTTP 请求最少的三个超全局。**不是装饰**：CLI 下
+// $_SERVER['REQUEST_URI'] 为空 -> RequestAdapter::uri() 返回 '' -> XhprofLib::isIgnore()
+// 的 empty($request_uri) 分支返回 false -> XHProfRunsDefault::save_run() 第一道门
+// `if (!isIgnore()) return false` 早退，止点跑了但一条 run 都不会落库。
+// （实测：同一夹具同一次引导，只切这一个变量，run_id 列表长度 270 → 271 / 270 → 270。）
+// 真 WP 的 web 请求里这个变量必然存在；install 腿不设——那是装库不是请求，
+// 且留空恰好保证安装过程不产生采样。
+$_SERVER['REQUEST_URI'] = '/index.php';
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_SERVER['HTTP_HOST'] = 'contract-fixture.test';
+
+$t0 = microtime(true);
+require __DIR__ . '/wp-load.php';
+$GLOBALS['contracts_probe']['boot_phase'] = [
+    'boot_ms' => (int) round((microtime(true) - $t0) * 1000),
+    'did_wp_loaded' => did_action('wp_loaded'),
+    'active_plugins' => get_option('active_plugins'),
+    'request_uri' => $_SERVER['REQUEST_URI'],
+];
+PHP);
+
+    file_put_contents($site . '/wp-content/plugins/contracts-probe/contracts-probe.php', <<<'PHP'
+<?php
+/**
+ * Plugin Name: Contracts Probe
+ * Description: 契约环探针：普通（非 mu）插件，只记录 plugins_loaded 的时点。
+ * Version: 1.0.0
+ */
+
+defined('ABSPATH') || exit;
+
+define('CONTRACTS_PROBE_PLUGIN_FILE_LOADED', __FILE__);
+
+$GLOBALS['contracts_probe']['plugin_phase'] = [
+    'did_plugins_loaded' => did_action('plugins_loaded'),
+    'did_muplugins_loaded' => did_action('muplugins_loaded'),
+    'xhprof_config_yet' => ErikWang2013\Xhprof\Core\Xhprof::$config !== null,
+];
+
+add_action('plugins_loaded', function (): void {
+    $GLOBALS['contracts_probe']['plugins_loaded_priority10'] = [
+        'did_plugins_loaded' => did_action('plugins_loaded'),
+        'config_set' => ErikWang2013\Xhprof\Core\Xhprof::$config !== null,
+    ];
+}, 10);
+PHP);
+
+    // mu-plugin 阶段的探针：字母序在 xhprof-webman.php 之后（'x' < 'z'），所以本文件被
+    // include 时那份真 mu-plugin 已经跑过 register() —— 这正是「谁先谁后」的证据。
+    file_put_contents($site . '/wp-content/mu-plugins/zz-contracts-probe.php', <<<'PHP'
+<?php
+// 契约环探针（夹具的一部分，不是 WP 的一部分）：只记录时点事实，不改本包行为。
+defined('ABSPATH') || exit;
+
+$GLOBALS['contracts_probe'] = $GLOBALS['contracts_probe'] ?? [];
+
+function contracts_probe_plugin_instance(): ?object
+{
+    $bucket = $GLOBALS['wp_filter']['plugins_loaded']->callbacks[PHP_INT_MIN] ?? [];
+    foreach ($bucket as $entry) {
+        $fn = $entry['function'];
+        if (is_array($fn) && is_object($fn[0])) {
+            return $fn[0];
+        }
+    }
+
+    return null;
+}
+
+$GLOBALS['contracts_probe']['mu_phase'] = [
+    'did_muplugins_loaded' => did_action('muplugins_loaded'),
+    'did_plugins_loaded' => did_action('plugins_loaded'),
+    'probe_plugin_loaded' => defined('CONTRACTS_PROBE_PLUGIN_FILE_LOADED'),
+    'min_bucket' => array_map(
+        static function (array $entry): string {
+            $fn = $entry['function'];
+
+            return is_array($fn) ? get_class($fn[0]) . '::' . $fn[1] : get_debug_type($fn);
+        },
+        array_values($GLOBALS['wp_filter']['plugins_loaded']->callbacks[PHP_INT_MIN] ?? [])
+    ),
+    'mu_plugins_order' => array_map('basename', wp_get_mu_plugins()),
+];
+
+// 同优先级(PHP_INT_MIN)、注册更晚 → WP_Hook 按注册顺序 FIFO，本回调在真 mu-plugin 之后运行：
+// 它跑了就说明本包处理器没抛异常地跑完了。
+add_action('plugins_loaded', function (): void {
+    $GLOBALS['contracts_probe']['after_xhprof_at_min'] = [
+        'config_is_wordpress_adapter' => is_object(ErikWang2013\Xhprof\Core\Xhprof::$config)
+            && get_class(ErikWang2013\Xhprof\Core\Xhprof::$config) === 'ErikWang2013\Xhprof\Wordpress\Adapter\ConfigAdapter',
+        'did_plugins_loaded' => did_action('plugins_loaded'),
+    ];
+    // 在 plugins_loaded 里注册 → 必然晚于本包在它自己的 plugins_loaded 回调里注册的止点，
+    // 于是同优先级(PHP_INT_MAX)下 FIFO 保证本回调在止点**之后**运行（能看见 stopped 的结果）。
+    add_action('shutdown', 'contracts_probe_shutdown_observer', PHP_INT_MAX);
+}, PHP_INT_MIN);
+
+function contracts_probe_shutdown_observer(): void
+{
+    $argv = $_SERVER['argv'] ?? [];
+    $out = (string) ($argv[2] ?? '');
+
+    $instance = contracts_probe_plugin_instance();
+    $stopped = is_object($instance)
+        ? (new ReflectionProperty($instance, 'stopped'))->getValue($instance)
+        : null;
+
+    $headBefore = (string) ($argv[3] ?? '');
+    $head = null;
+    $redisError = null;
+    try {
+        $r = new Redis();
+        $r->connect('127.0.0.1', 6379, 1.0);
+        $head = (string) $r->lIndex('xhprof:run_id', 0);
+    } catch (Throwable $e) {
+        $redisError = $e->getMessage();
+    }
+
+    $probe = $GLOBALS['contracts_probe'] ?? [];
+    $probe['shutdown_phase'] = [
+        'did_shutdown_action' => did_action('shutdown'),
+        'xhprof_stopped' => $stopped,
+        'head_run_id' => $head,
+        'head_before' => $headBefore,
+        'run_saved' => $head !== null && $head !== '' && $head !== $headBefore,
+        'redis_error' => $redisError,
+    ];
+
+    if ($out !== '') {
+        file_put_contents($out, json_encode($probe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+}
+PHP);
+
+    // 致命错误探针：只在 argv[1]==='fatal' 时于 wp_loaded（采样窗口之内）制造一次真 fatal。
+    file_put_contents($site . '/wp-content/mu-plugins/zz-contracts-fatal.php', <<<'PHP'
+<?php
+// 契约环探针：跟着引导模式走，只在 fatal 模式触发。
+defined('ABSPATH') || exit;
+
+if (($_SERVER['argv'][1] ?? '') !== 'fatal') {
+    return;
+}
+
+add_action('wp_loaded', function (): void {
+    $GLOBALS['contracts_probe']['fatal_phase'] = [
+        'did_plugins_loaded' => did_action('plugins_loaded'),
+        'did_wp_loaded' => did_action('wp_loaded'),
+    ];
+    // 真·致命错误：调用不存在的函数（PHP 8 下是未捕获的 Error → fatal，exit 255）。
+    contracts_probe_undefined_function_call();
+}, 5);
+PHP);
+
+    return null;
+}
+
+/** 递归复制目录树（WP 核心 2913 个文件实测 0.26s）。 */
+function wordpress_copy_tree(string $src, string $dst): void
+{
+    @mkdir($dst, 0777, true);
+    foreach (scandir($src) ?: [] as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+        if (is_dir($src . '/' . $entry)) {
+            wordpress_copy_tree($src . '/' . $entry, $dst . '/' . $entry);
+        } else {
+            copy($src . '/' . $entry, $dst . '/' . $entry);
+        }
+    }
+}
+
+/** 递归删除（夹具收尾；失败不抛——它只是清理）。 */
+function wordpress_rmdir_recursive(string $dir): void
+{
+    if (!is_dir($dir)) {
+        return;
+    }
+    foreach (scandir($dir) ?: [] as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+        $path = $dir . '/' . $entry;
+        if (is_dir($path)) {
+            wordpress_rmdir_recursive($path);
+        } else {
+            @unlink($path);
+        }
+    }
+    @rmdir($dir);
+}
 
 /**
  * 扫出一段 PHP 源码里调用的**全局**函数名。

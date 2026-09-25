@@ -1,12 +1,16 @@
-> **기계 번역.** 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 [영문판](../../../README.EN.md)을 기준으로 하십시오.
+> **기계 번역.** 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 [영문판](../en/README.md)을 기준으로 하십시오.
 
-[中文](../../../README.md) · [English](../../../README.EN.md) · **한국어** · [Русский](../ru/README.md) · [Deutsch](../de/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
+[中文](../../../README.md) · [English](../en/README.md) · **한국어** · [Русский](../ru/README.md) · [Deutsch](../de/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
 
 # XHProf 성능 프로파일러
 
 webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 과 호환되는 코드 성능 프로파일링 플러그인입니다.
 
 xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니다. 개발자는 브라우저로 성능 분석 보고서를 빠르게 열어 코드의 성능 병목을 찾아낼 수 있습니다.
+
+![프로젝트 펫: 작은 불꽃](../../../docs/images/pet.svg)
+
+같은 작은 불꽃이 보고서 페이지의 사이트 아이콘과 왼쪽 위 브랜드 아이콘이기도 합니다(`src/html/pet.svg`, `assets_url` 접두사로 제공).
 
 **요청 기록**
 
@@ -38,7 +42,7 @@ xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | `plugins/system/` 로 복사 후 Discover로 설치 |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` 모듈 (`Drupal\XhprofMiddleware`) | 표준 모듈, 활성화만 하면 됨 |
 
-진입 클래스는 모두 `ErikWang2013\Xhprof\` 네임스페이스 접두사 아래에 있습니다(위 표에서는 생략했습니다). 신규 6개 프레임워크 중 Drupal은 예외로, 모듈 라우트를 통해 보고서 페이지를 제공합니다. 나머지 다섯 진입 클래스는 **보고서 페이지를 직접 제공**하므로 컨트롤러도 라우트 등록도 필요하지 않습니다.
+진입 클래스는 모두 `ErikWang2013\Xhprof\` 네임스페이스 접두사 아래에 있습니다(위 표에서는 생략했습니다).  열 개 중 어느 것도 컨트롤러나 라우트 등록을 요구하지 않습니다. 보고서 페이지와 정적 리소스는 진입 클래스가 직접 제공합니다(Drupal의 경우 모듈 라우트가 제공합니다).
 
 이 패키지는 `php >= 8.0` 을 선언하지만, Yii3가 의존하는 `yiisoft/*` 컴포넌트는 **PHP 8.1 이상**을 요구하므로 **PHP 8.0에서는 Yii3를 사용할 수 없습니다**. Symfony 7.x와 Drupal 11.x도 마찬가지로 더 높은 PHP 버전이 필요합니다. 단계별 설정 방법은 아래 "프레임워크 설정"에 있습니다.
 
@@ -74,37 +78,9 @@ return [
 ];
 ```
 
-**2. 컨트롤러 생성**:
+**2. 보고서 페이지와 정적 리소스** — **컨트롤러도 라우트 등록도 필요하지 않습니다**. 프로파일링이 시작되기 전에 미들웨어가 요청 경로를 확인해 보고서 경로 `/xhprof` 에 맞으면 보고서 페이지를 그대로 반환하고, 리소스 경로(접두사는 `assets_url` 설정에서 읽으며 기본값 `/xhprof-assets`)에 맞으면 정적 리소스를 곧바로 반환합니다.
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. 라우트 등록** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. 설정** — `config/plugin/aaron-dev/xhprof/xhprof.php` 를 참고하십시오.
+**3. 설정** — `config/plugin/aaron-dev/xhprof/xhprof.php` 를 참고하십시오.
 
 ---
 
@@ -119,43 +95,9 @@ protected $middleware = [
 ];
 ```
 
-**2. 컨트롤러 생성**:
+**2. 보고서 페이지와 정적 리소스** — **컨트롤러도 라우트 등록도 필요하지 않습니다**. 프로파일링이 시작되기 전에 미들웨어가 요청 경로를 확인해 보고서 경로 `/xhprof` 에 맞으면 보고서 페이지를 그대로 반환하고, 리소스 경로(접두사는 `assets_url` 설정에서 읽으며 기본값 `/xhprof-assets`)에 맞으면 정적 리소스를 곧바로 반환합니다.
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. 라우트 등록** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. 설정 파일 배포**:
+**3. 설정 파일 배포**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -175,44 +117,9 @@ return [
 ];
 ```
 
-**2. 컨트롤러 생성**:
+**2. 보고서 페이지와 정적 리소스** — **컨트롤러도 라우트 등록도 필요하지 않습니다**. 프로파일링이 시작되기 전에 미들웨어가 요청 경로를 확인해 보고서 경로 `/xhprof` 에 맞으면 보고서 페이지를 그대로 반환하고, 리소스 경로(접두사는 `assets_url` 설정에서 읽으며 기본값 `/xhprof-assets`)에 맞으면 정적 리소스를 곧바로 반환합니다.
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. 라우트 등록** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. 설정** — `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` 를 프로젝트의 `config/xhprof.php` 로 복사합니다.
+**3. 설정** — `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` 를 프로젝트의 `config/xhprof.php` 로 복사합니다.
 
 ---
 
@@ -220,57 +127,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. 미들웨어 자동 등록** — ConfigProvider가 HTTP 미들웨어 큐에 미들웨어를 자동으로 추가합니다.
 
-**2. 컨트롤러 생성**:
+**2. 보고서 페이지와 정적 리소스** — **컨트롤러도 라우트 등록도 필요하지 않습니다**. 프로파일링이 시작되기 전에 미들웨어가 요청 경로를 확인해 보고서 경로 `/xhprof` 에 맞으면 보고서 페이지를 그대로 반환하고, 리소스 경로(접두사는 `assets_url` 설정에서 읽으며 기본값 `/xhprof-assets`)에 맞으면 정적 리소스를 곧바로 반환합니다.
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-`Xhprof::index()`가 HTML 문자열을 반환할 때는 **그대로** `return`하면 안 됩니다. Hyperf의 `CoreMiddleware::transferToResponse()`는 문자열 반환값에 무조건 `content-type: text/plain`을 붙이므로, 브라우저가 리포트 페이지를 일반 텍스트로 표시합니다(3.0.45 / 3.1.69 / 3.2.0 세 버전에서 동일한 동작을 실측했습니다). 위처럼 응답을 명시적으로 구성하면 이를 피할 수 있습니다. 인증에 실패하면 `index()`는 이미 전송된 응답 객체를 반환하므로 그대로 반환하면 됩니다.
-
-**3. 정적 리소스 라우트** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. 설정 파일 배포**:
+**3. 설정 파일 배포**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -424,7 +283,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. 모듈 활성화** — 패키지의 `drupal/xhprof/` 는 표준 Drupal 모듈입니다(`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). 사이트의 `modules/custom/xhprof/` 에 놓은 뒤 "확장" 페이지에서 활성화하십시오(`drush en xhprof` 도 가능합니다).
 
-**2. 보고서 페이지** — Drupal은 **열 개 프레임워크 중 유일하게 모듈 라우트로 보고서 페이지를 제공합니다**. `xhprof.routing.yml` 이 보고서 경로 `/xhprof` 를 등록하고 모듈 컨트롤러가 이를 렌더링합니다. 나머지 신규 다섯 프레임워크는 보고서 페이지와 정적 리소스를 직접 제공하며 라우트를 등록하지 않습니다.
+**2. 보고서 페이지와 정적 리소스** — Drupal은 **열 개 프레임워크 중 유일하게 «모듈 + 라우트» 형태를 씁니다**: `xhprof.routing.yml` 이 보고서 경로 `/xhprof` 와 리소스 경로 `/xhprof-assets` 를 등록하고 기본적으로 모듈 컨트롤러가 제공합니다. 나머지 아홉 진입 클래스는 프로파일링 전에 직접 단축 처리해 보고서 페이지와 정적 리소스를 제공하며 라우트를 등록하지 않습니다. **`assets_url` 을 사용자 지정 접두사로 바꾸면 리소스는 미들웨어가 제공합니다**: 모듈 리소스 라우트의 path는 `xhprof.routing.yml` 에 고정되어 있어(`/xhprof-assets/{file}`) 다른 접두사와는 절대 맞지 않습니다.
 
 **3. 설정** — 설정은 모듈 수준의 타입 지정 config입니다. 기본값은 `drupal/xhprof/config/install/xhprof.settings.yml` 에 있고 스키마는 `drupal/xhprof/config/schema/xhprof.schema.yml` 에 있습니다. 각 필드는 "설정 레퍼런스"를 참고하십시오.
 
@@ -577,11 +436,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
-│   └── html/                     # report page assets (css / js / images)
+│   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
+├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages (`legacy-symfony64/` is the 6.4 leg)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -610,20 +469,18 @@ src/<Fw>/
 | 어댑터와 진입 배선 동작 | `tests/Unit/Adapter/*Test.php`: 활성화 → 저장 / 비활성화 → 저장 안 함 / 비즈니스 예외 → `finally` 로 여전히 저장 |
 | 열 프레임워크가 하나의 설정 키 집합을 공유 | config parity 테스트(키 집합 기준이며 바이트 단위가 아님, 주석은 달라도 됨) |
 | 두 README가 서로 대응 | README parity 테스트: `##` / `###` 제목 순서와 코드 블록 수를 비교 |
-| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡): 실제 프레임워크 패키지를 설치하고 **루프에 들어간 8개 프레임워크**(Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman)에 대해 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다. ThinkPHP / Hyperf는 루프 밖입니다(아래 참조) |
-| 어댑터의 의미 | 같은 루프가 실제 요청·응답 객체를 만들어 어댑터를 실행하며, 두 가지 불변식(`uri()` 에 스킴/호스트가 없을 것, `file()` 뒤에도 `withHeaders()` 가 적용될 것)까지 확인 |
+| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡, **두 개의 leg**: 메인 leg는 각 프레임워크의 최신 패키지를 설치하고, 별도 `tools/contracts/legacy-symfony64` 프로젝트가 같은 Symfony case를 6.4에 대해 실행합니다): 실제 프레임워크 패키지를 설치하고(Drupal은 실제 `drupal/core`, Joomla는 실제 CMS 릴리스 패키지 두 개) 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다 — **루프에 들어간 8개 프레임워크**(Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman)에 대해. ThinkPHP / Hyperf는 루프 밖입니다(아래 참조) |
+| 어댑터의 의미 | 같은 루프가 실제 request·response 객체를 만들어 어댑터를 실행하며, 두 불변식(`uri()` 에 scheme/host가 없을 것, `file()` 뒤에도 `withHeaders()` 가 적용될 것)을 확인합니다. 루프의 SKIP 수는 동결된 상수(메인 leg 2, 6.4 leg 0)이며 둘 다 Joomla에 있습니다: `#__extensions.params` 의 실제 읽기 경로와 설치 프로그램 형태이고, 둘 다 실행하려면 데이터베이스나 설치 프로그램이 필요합니다 |
 
 
-**자동으로 검증되지 않은 것 ("여섯 개 모두 테스트했다"로 읽지 마십시오)**
+**자동으로 검증되지 않은 항목(«모두 커버되었다»로 읽지 마십시오)**
 
 | 항목 | 이유 |
 |------|---------|
 | 각 프레임워크의 **배선**(훅이 실제로 붙는지, 이벤트가 실제로 발생하는지) | 단위 테스트는 스텁을 쓰므로, 배선은 현재 수동 스모크 테스트로만 확인할 수 있습니다 |
-| WordPress 종단 간 | 실제 `plugins_loaded` 시점, 치명적 오류에서 `shutdown` 이 발생하는지, mu-plugin이 로드되는지는 모두 실제 WordPress가 필요합니다 |
-| Joomla 플러그인 발견과 `$app->close()` | 실제 Joomla 관리자에서 Discover를 실행해야 합니다 |
-| Drupal의 우선순위가 실제로 페이지 캐시 바깥에 놓이는지 | 부팅된 Drupal 커널이 필요합니다 |
+| Joomla의 남은 두 하위 항목 | 루프가 아직 닿지 못하는 두 가지이며, 둘 다 이유가 같습니다(데이터베이스나 설치 프로그램이 필요): `#__extensions.params` 의 실제 읽기 경로(`PluginHelper::getPlugin()` → `bootPlugin()`)와 설치 프로그램 형태(namespacemap 이 기록되고 `bootPlugin()` 이 클래스를 찾을 수 있을 것) |
 | Symfony의 `kernel.event_subscriber` 자동 구성 | 실제 컨테이너 컴파일이 필요합니다 |
-| 장수명 프로세스에서의 정적 상태 간섭 | 기존 아키텍처에서 물려받은 문제입니다(Webman / Hyperf도 마찬가지). 이번에 바뀌지 않았습니다 |
+| 장수명 프로세스에서의 정적 상태 간섭 | Webman 쪽은 미변경 (Hyperf 쪽은 격리됨: 렌더링 시점의 9개 값이 요청별로 코루틴 Context를 거치며, `tests/Unit/Lib/RenderStateCoroutineTest.php` 가 실제로 양보하는 코루틴으로 고정한다) |
 | 실제 Redis I/O, 브라우저 렌더링, 실제 부하에서의 프로파일링 오버헤드 | 실제 Redis I/O는 **이제 검증 루프 안에 있습니다**(`cases/Redis.php`: 실제 phpredis + 실제 Slim 요청을 끝에서 끝까지 — 요청 → 저장 → 목록 페이지 → 보고서 페이지). 브라우저 렌더링과 실제 부하에서의 오버헤드는 여전히 단위 테스트와 루프의 범위 밖입니다 |
 | ThinkPHP / Hyperf 어댑터의 시그니처와 시맨틱스 | 이 두 프레임워크는 검증 루프에 들어 있지 않습니다(루프는 8개 프레임워크를 커버합니다). 스텁은 패키지 안의 `tests/Stubs/framework-stubs.php`에 손으로 작성되어 있고, 실제 패키지와의 대조가 없습니다 |
 
@@ -641,7 +498,7 @@ src/<Fw>/
 
 **`assets_url` 이 사용자 정의 접두사를 지원합니다**
 
-정적 리소스 접두사는 더 이상 하드코딩된 상수가 아닙니다: `src/Core/StaticController.php` 가 `assets_url` 설정값으로 리소스 경로를 맞춥니다(기본값 `/xhprof-assets`, 끝 슬래시는 있어도 없어도 됩니다). 하위 디렉터리 배포에서 남는 제한은 아래 Drupal 항목을 참고하십시오. **경계**: 미들웨어/엔트리 클래스가 자원 경로를 직접 단축 처리하는 다섯 곳(Yii3, Symfony, Slim, WordPress, Joomla)에서는 사용자 지정 접두사가 그대로 동작합니다. Laravel, Hyperf, Webman, ThinkPHP의 자원 라우트 path와 Drupal의 `xhprof.routing.yml`은 **사용자**가 등록하는 것이므로 `assets_url`을 바꿀 때 그쪽도 함께 바꿔야 합니다. 그렇지 않으면 자원 요청이 `StaticController`에 도달하지 못해 보고서 페이지가 스타일과 스크립트를 잃습니다.
+정적 리소스 접두사는 더 이상 하드코딩된 상수가 아닙니다: `src/Core/StaticController.php` 가 `assets_url` 설정값으로 리소스 경로를 맞춥니다(기본값 `/xhprof-assets`, 끝 슬래시는 있어도 없어도 됩니다). 하위 디렉터리 배포에서 남는 제한은 아래 Drupal 항목을 참고하십시오. **열 개 프레임워크 모두 이 설정을 따릅니다**: 아홉 개 진입 클래스는 프로파일링 전에 리소스 경로를 직접 단축 처리해 제공하고, Drupal은 기본 접두사를 모듈 라우트 + 컨트롤러로, 사용자 지정 접두사를 미들웨어로 제공합니다. **경계**: Laravel, Hyperf, Webman, ThinkPHP는 이제 컨트롤러도 라우트도 필요하지 않습니다 — 미들웨어가 먼저 실행되므로 예전 안내대로 등록한 컨트롤러와 두 라우트는 그저 가려질 뿐입니다: 오류가 나지 않고 다시는 도달하지 않습니다.
 
 **알려진 제한: Drupal이 하위 디렉터리에 있으면 경로 가드가 실패**
 
@@ -649,7 +506,7 @@ Drupal을 하위 디렉터리(예: `/sites/app/xhprof`)에 설치하면 기본 �
 
 **Symfony 6.4 호환성**
 
-Symfony 6.4 호환성은 실측으로 확인했습니다(7.4에서는 보이지 않던 과적합 두 가지를 이 과정에서 고쳤습니다: 6.4에서는 `Request` 프로퍼티에 네이티브 타입 선언이 없고, `prepare()` 가 붙이는 charset의 대소문자가 다릅니다). 다만 CI 검증 루프는 7.4만 실행합니다.
+Symfony 6.4 호환성은 실측으로 확인했습니다(7.4에서는 보이지 않던 과적합 두 가지를 이 과정에서 고쳤습니다: 6.4에서는 `Request` 프로퍼티에 네이티브 타입 선언이 없고, `prepare()` 가 붙이는 charset의 대소문자가 다릅니다). **두 leg 모두 CI에서 실행됩니다**: 메인 7.x leg와 별도 `tools/contracts/legacy-symfony64` 프로젝트가 같은 case 파일을 복사하지 않고 실행하며, 두 leg 모두 tag 게이트에 들어 있습니다.
 
 ---
 

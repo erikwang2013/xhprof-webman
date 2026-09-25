@@ -51,8 +51,8 @@ const TMP_LANG = 'zz';
  * regression that the delivery tree cannot show; see tools/i18n/README.md.
  *
  * Because the depth differs, the English fixture below is *generated* here
- * rather than copied in: the delivered README carries links written for the
- * delivery location, and in this tree they point one level too high.
+ * rather than copied in: the delivered body source carries links written for
+ * the delivery location, and in this tree they point one level too high.
  *
  * The pid in the last segment matters as much as the depth.  Two selftests
  * started at once (an agent and a human, a local run and CI) used to share this
@@ -138,7 +138,7 @@ function tmp(string $rel = '', string $lang = TMP_LANG): string
  * Scope, spelled out because a future edit that narrows it would quietly stop
  * guarding while this comment still claims it does:
  *
- *   repo root, top-level files only   README.md, README.EN.md, composer.json, .gitignore, …
+ *   repo root, top-level files only   README.md, composer.json, .gitignore, …
  *   docs/i18n/**                      the delivery directory
  *   tools/i18n/**                     this toolchain
  *
@@ -199,6 +199,18 @@ $resetEn = static function (): void {
     copy(I18N_DIR . '/glossary/' . SRC_LANG . '.json', SCRATCH_INPUT . '/glossary/' . SRC_LANG . '.json');
 };
 $resetEn();
+
+/**
+ * The English **body source** too, for the same reason as the glossary copy:
+ * generating a locale reads `readme/<lang>.md`, and since the English README
+ * moved under `docs/` that is true of `en` as well — it used to be read from
+ * the repository root, so this file did not have to exist here.
+ *
+ * Copied from the delivered source rather than written out, so the fixture
+ * cannot drift from the text the real tree ships; only the *output* is
+ * generated at this depth (see SCRATCH_OUT above).
+ */
+copy(I18N_DIR . '/readme/' . SRC_LANG . '.md', SCRATCH_INPUT . '/readme/' . SRC_LANG . '.md');
 
 // The scratch output root mirrors docs/i18n: the language switcher in every
 // generated README links to each sibling locale, and check.php resolves those

@@ -769,6 +769,48 @@ class DrupalTest extends TestCase
         }
     }
 
+    /** @return iterable<string, array{?string, string, bool}> */
+    public static function customAssetsPrefixProvider(): iterable
+    {
+        yield '默认前缀（无配置）：仍交给模块路由' => [null, '/xhprof-assets/css/xhprof.css', false];
+        yield '默认前缀（显式）：同上' => ['/xhprof-assets', '/xhprof-assets/css/xhprof.css', false];
+        yield '自定义前缀：中间件自己服务' => ['/static/xhprof', '/static/xhprof/css/xhprof.css', true];
+        yield '自定义前缀 + 尾斜杠：同上' => ['/static/xhprof/', '/static/xhprof/css/xhprof.css', true];
+        yield '自定义前缀 + 老路径：模块路由那条，中间件不接管' => ['/static/xhprof', '/xhprof-assets/css/xhprof.css', false];
+        yield '空串（不启用）：不接管' => ['', '/xhprof-assets/css/xhprof.css', false];
+        yield '自定义前缀 + 同名兄弟路径：不接管' => ['/static/xhprof', '/static/xhprof-nope/x.js', false];
+    }
+
+    /**
+     * 自定义 `assets_url` 前缀下的资源由**中间件**服务。
+     *
+     * 模块的资源路由 path 写死在 `xhprof.routing.yml`（`/xhprof-assets/{file}`），匹配不到
+     * 别的前缀 —— 不接管的话报告页会静默丢样式与脚本。默认前缀**不接管**：仍走模块路由 +
+     * Controller，保留 Drupal「用路由器提供报告页/资源」的既有设计（那两处不是死代码）。
+     */
+    #[Test]
+    #[\PHPUnit\Framework\Attributes\DataProvider('customAssetsPrefixProvider')]
+    public function customAssetsPrefixIsServedByTheMiddleware(?string $assetsUrl, string $path, bool $servedByMiddleware): void
+    {
+        $config = ['enable' => true, 'ignore_url_arr' => []];
+        if ($assetsUrl !== null) {
+            $config['assets_url'] = $assetsUrl;
+        }
+
+        $kernel = $this->kernel();
+        $response = $this->middleware($kernel, new FakeCache(), $config)->handle($this->subdirectoryRequest($path));
+
+        if ($servedByMiddleware) {
+            $this->assertInstanceOf(BinaryFileResponse::class, $response, '资源必须由中间件真读出来，而不是空响应');
+            $this->assertSame($this->cssFile(), $response->getFile()->getPathname());
+            $this->assertSame([], $kernel->calls, '接管了就不该再落到内层 kernel');
+            return;
+        }
+
+        $this->assertSame([HttpKernelInterface::MAIN_REQUEST], $kernel->calls, '不接管时必须原样透传');
+        $this->assertSame('business', $response->getContent());
+    }
+
     #[Test]
     public function subRequestAloneSamplesNothing(): void
     {

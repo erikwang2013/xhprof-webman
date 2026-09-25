@@ -1024,11 +1024,24 @@ namespace Hyperf\HttpServer\Contract {
         public function getServerParams(): array;
     }
 
+    /**
+     * 真包（hyperf/http-server src/Contract/ResponseInterface.php:22-71）里**没有**这三个
+     * withX：那张表只有 json/xml/raw/html/redirect/download/write/withCookie。三条 withX
+     * 是 PSR-7 的面，由 `Hyperf\HttpServer\Response`（:48 `implements PsrResponseInterface,
+     * ResponseInterface`）从 PSR-7 那边带来 —— 本包适配器调的正是这三条，所以桩保留它们。
+     *
+     * 但**不能带返回类型**：真包的 withBody/withHeader/withStatus 声明在类上（:381/:321/:415）
+     * 且返回 MessageInterface / PsrResponseInterface，而这个 `self` 是指本接口 —— 子类无法
+     * 同时满足两者（返回类型必须同时是 MessageInterface 与本接口的子类型），PHP 的检查是
+     * `Declaration of ... must be compatible with ...` 的加载期 Fatal。
+     */
     interface ResponseInterface
     {
-        public function withBody(mixed $body): self;
-        public function withHeader(string $key, mixed $value): self;
-        public function withStatus(int $status): self;
+        public function withBody(\Psr\Http\Message\StreamInterface $body);
+
+        public function withHeader($name, $value);
+
+        public function withStatus(int $status);
     }
 }
 
@@ -1122,32 +1135,47 @@ namespace Hyperf\HttpServer {
      * 这样 `$res->headers[...]` 在桩上和在真包上得到的是同一种失败（Undefined property），
      * 而不是桩自己造一个「Cannot access private property」出来。
      */
-    class Response implements \Hyperf\HttpServer\Contract\ResponseInterface
+    /**
+     * 真包：hyperf/http-server src/Response.php:48
+     * `class Response implements PsrResponseInterface, ResponseInterface` —— 它**就是**一个
+     * PSR-7 响应（`Hyperf\HttpServer\Contract\ResponseInterface` 自己不继承 PSR-7，见
+     * src/Contract/ResponseInterface.php:22，两者是并列的两个 implements）。
+     *
+     * 桩此前只声明了那个 Contract，于是「入口类短路后把本响应 return 出去」在桩上是
+     * `TypeError: Return value must be of type Psr\Http\Message\ResponseInterface`
+     * —— 而 process() 的返回类型正是 PSR-7，真包上这条回归永远绿不了。
+     *
+     * 逐字照抄真包声明（行号为 src/Response.php）：
+     *   - 四个 mutator 的**静态**返回类型是 MessageInterface / PsrResponseInterface，
+     *     运行时返回的却是新实例（:321/:340/:355/:381/:415 都经 call() 造新对象，不是 $this）
+     *   - withStatus($code, $reasonPhrase = '') 的 $code **没有** int 类型（:415）
+     *   - getBody() 给 StreamInterface（:365），withBody() 收 StreamInterface（:381）
+     */
+    class Response implements \Psr\Http\Message\ResponseInterface, \Hyperf\HttpServer\Contract\ResponseInterface
     {
+        private string $protocolVersion = '1.1';
+
         /** PSR-7：头一律是「名字 → 值数组」，getHeader() 缺省给空数组而不是 null */
         private array $headerValues = [];
+
         private int $status = 200;
-        private mixed $body = null;
 
-        public function withBody(mixed $body): self
+        private string $reasonPhrase = '';
+
+        /** 真包构造出来的响应总有正文流（空流也是流），所以这里不等价于 null */
+        private ?\Psr\Http\Message\StreamInterface $body = null;
+
+        /** ：210 */
+        public function getProtocolVersion(): string
         {
-            $new = clone $this;
-            $new->body = $body;
-            return $new;
+            return $this->protocolVersion;
         }
 
-        /** 真包 withHeader($name, $value) 是**替换**该头的值（追加用 withAddedHeader()） */
-        public function withHeader(string $key, mixed $value): self
+        /** ：226 */
+        public function withProtocolVersion($version): \Psr\Http\Message\MessageInterface
         {
             $new = clone $this;
-            $new->headerValues[$key] = is_array($value) ? array_values($value) : [(string) $value];
-            return $new;
-        }
-
-        public function withStatus(int $status): self
-        {
-            $new = clone $this;
-            $new->status = $status;
+            $new->protocolVersion = (string) $version;
             return $new;
         }
 
@@ -1157,22 +1185,92 @@ namespace Hyperf\HttpServer {
             return $this->headerValues;
         }
 
-        /** ：282 —— PSR-7 规定：没有这个头返回**空数组** */
-        public function getHeader(string $name): array
+        /** ：265 —— 头名大小写不敏感 */
+        public function hasHeader($name): bool
         {
-            return $this->headerValues[$name] ?? [];
+            foreach (array_keys($this->headerValues) as $key) {
+                if (strcasecmp($key, (string) $name) === 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * ：282 —— PSR-7 规定：没有这个头返回**空数组**。
+         * 桩此前是 `$this->headerValues[$name] ?? []`（**大小写敏感**的裸下标），
+         * 于是 `getHeader('x-a')` 在桩上给 []、在真包上给 ['1']。
+         */
+        public function getHeader($name): array
+        {
+            foreach ($this->headerValues as $key => $values) {
+                if (strcasecmp($key, (string) $name) === 0) {
+                    return $values;
+                }
+            }
+            return [];
         }
 
         /** ：303 —— 多个值用 ', ' 连接 */
-        public function getHeaderLine(string $name): string
+        public function getHeaderLine($name): string
         {
-            return implode(', ', $this->headerValues[$name] ?? []);
+            return implode(', ', $this->getHeader($name));
+        }
+
+        /** ：321 —— 真包 withHeader($name, $value) 是**替换**该头的值（追加用 withAddedHeader()） */
+        public function withHeader($name, $value): \Psr\Http\Message\MessageInterface
+        {
+            $new = clone $this;
+            foreach (array_keys($new->headerValues) as $key) {
+                if (strcasecmp($key, (string) $name) === 0) {
+                    unset($new->headerValues[$key]);
+                }
+            }
+            $new->headerValues[(string) $name] = is_array($value) ? array_values($value) : [(string) $value];
+            return $new;
+        }
+
+        /** ：340 */
+        public function withAddedHeader($name, $value): \Psr\Http\Message\MessageInterface
+        {
+            $new = clone $this;
+            $existing = $new->getHeader($name);
+            foreach (array_keys($new->headerValues) as $key) {
+                if (strcasecmp($key, (string) $name) === 0) {
+                    unset($new->headerValues[$key]);
+                }
+            }
+            $new->headerValues[(string) $name] = array_merge(
+                $existing,
+                is_array($value) ? array_values($value) : [(string) $value]
+            );
+            return $new;
+        }
+
+        /** ：355 */
+        public function withoutHeader($name): \Psr\Http\Message\MessageInterface
+        {
+            $new = clone $this;
+            foreach (array_keys($new->headerValues) as $key) {
+                if (strcasecmp($key, (string) $name) === 0) {
+                    unset($new->headerValues[$key]);
+                }
+            }
+            return $new;
         }
 
         /** ：365 */
-        public function getBody(): mixed
+        public function getBody(): \Psr\Http\Message\StreamInterface
         {
-            return $this->body;
+            return $this->body ??= new SwooleStream('');
+        }
+
+        /** ：381 */
+        public function withBody(\Psr\Http\Message\StreamInterface $body): \Psr\Http\Message\MessageInterface
+        {
+            $new = clone $this;
+            $new->body = $body;
+            return $new;
         }
 
         /** ：393 */
@@ -1180,22 +1278,40 @@ namespace Hyperf\HttpServer {
         {
             return $this->status;
         }
+
+        /** ：415 —— $code 真的没有 int 类型（PSR-7 的 withStatus(int ...) 由重写放宽） */
+        public function withStatus($code, $reasonPhrase = ''): \Psr\Http\Message\ResponseInterface
+        {
+            $new = clone $this;
+            $new->status = (int) $code;
+            $new->reasonPhrase = (string) $reasonPhrase;
+            return $new;
+        }
+
+        /** ：432 */
+        public function getReasonPhrase(): string
+        {
+            return $this->reasonPhrase;
+        }
     }
 }
 
 namespace Hyperf\HttpMessage\Stream {
-    class SwooleStream
+    /**
+     * 真包：hyperf/http-message src/Stream/SwooleStream.php:21
+     * `class SwooleStream implements StreamInterface, Stringable` —— 它是 PSR-7 的流，
+     * 这正是 `Hyperf\HttpServer\Response::withBody(StreamInterface $body)`（src/Response.php:381）
+     * 收得下 `new SwooleStream($html)` 的原因。
+     *
+     * 桩此前是个只带 __toString() 的裸类，而 PSR-7 版的 Response 桩要声明
+     * `getBody(): StreamInterface`，两者对不上。直接复用 Psr7.php 里那份 FakeStream
+     * （同一条 PSR-7 流语义，不另写第二份）。
+     */
+    class SwooleStream extends \ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeStream
     {
-        private string $content;
-
         public function __construct(string $content = '')
         {
-            $this->content = $content;
-        }
-
-        public function __toString(): string
-        {
-            return $this->content;
+            parent::__construct($content);
         }
     }
 }

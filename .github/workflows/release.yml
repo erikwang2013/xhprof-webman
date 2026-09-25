@@ -59,7 +59,13 @@ jobs:
       # 「提交只破坏契约环」或「只破坏某语言的门禁」时，tag 与 Release 照常产生，
       # Packagist 随之发布坏版本。两道门禁在 tag 之前补跑（下面的命令与那两个
       # workflow 逐字一致，只是不再按 workflow 隔离）。
-      - name: Contract checks must pass before tagging
+      # 两条腿，与 contracts.yml 的 matrix 同一组：README 声明 Symfony 支持 `^6.4|^7.0`，
+      # 而一个 composer 项目里装不下两版（laravel/framework v11 要 symfony/http-foundation
+      # ^7.2），所以 6.4 是**独立嵌套项目** tools/contracts/legacy-symfony64，跑的是同一份
+      # cases/Symfony.php（`--leg=symfony64` 只换 vendor 根，不复制 case）。
+      # **两条腿都必须在 tag 之前过**：只留 7.x 那条，这道门禁就漏掉半个矩阵 —— 而上一轮
+      # 正是靠 6.4 才抓出两条只在 7.4 上成立的过拟合断言。
+      - name: Contract checks must pass before tagging（main 腿）
         # 故意不加 --ignore-platform-reqs（与 contracts.yml 一致）：PHP 或扩展不满足时
         # 这里就该炸，而不是装出一套残缺依赖让环在下面假装通过。本 job 的 PHP 8.3 与
         # xhprof/redis 已满足 tools/contracts/composer.json 的 php >= 8.2 与扩展要求。
@@ -68,7 +74,16 @@ jobs:
         # 用同一个 service 容器 —— 少这一块，环会在 tag 之前必然失败、Release 永远发不出去。
         run: |
           composer install -d tools/contracts --no-interaction --prefer-dist
-          php tools/contracts/run.php
+          php tools/contracts/run.php --leg=main
+      # if: always() 不是装饰：main 腿红的时候这条腿**仍然要跑**并打印自己的结论，不然
+      # 一条腿的红会把另一条腿的结论盖掉（掩盖结论等于少跑一条腿）。
+      # 两条腿的红都会让 job 失败，而下面打 tag / 发 Release 是默认的 if: success()，
+      # 于是 tag 门禁就是「两条腿都过」——这正是要的。
+      - name: Contract checks must pass before tagging（Symfony 6.4 腿）
+        if: always()
+        run: |
+          composer install -d tools/contracts/legacy-symfony64 --no-interaction --prefer-dist
+          php tools/contracts/run.php --leg=symfony64
       - name: Every locale must pass its own gate before tagging
         # 语言清单与 i18n.yml 的 for 列表逐字一致；两条清单都由
         # tests/Unit/Docs/I18nWorkflowTest.php 与 I18n::AVAILABLE 机械对齐，

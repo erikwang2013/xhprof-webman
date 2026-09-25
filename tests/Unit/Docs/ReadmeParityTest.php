@@ -14,17 +14,23 @@ use PHPUnit\Framework\TestCase;
  * 代码块的数量与语言标记序列、表格的列数序列——这些都与语言无关。新章节只加在中文里、
  * 新增代码块忘了翻译、表格少一列，都会在这里红。
  *
+ * 英文那份读的是**手写源** `tools/i18n/readme/en.md`：产物 `docs/i18n/en/README.md`
+ * 由生成器从它生成（前面注入切换器、链接加 `../` 前缀），拿产物比结构是假红。
+ *
  * 只比结构不比字数：翻译时句子长短不同是正常的，不该红。
  */
 class ReadmeParityTest extends TestCase
 {
     /**
      * 防「正则匹配不到 → 两个空列表相等 → 假绿」。
-     * 数值取当前结构的下界（实测 22 个标题、25 个代码块、7 张表）。
+     * 数值取当前结构的下界（实测 23 个标题、17 个代码块、7 张表），比实测低 2~5。
+     *
+     * 2026-09-25：代码块 25 → 17（四家的注册示例删掉了，守卫随之从 20 降到 15，
+     * 与实测的间距保持为 2，和另外两条同量级）。文档再瘦身时请一起改这里。
      */
     private const MIN_HEADINGS = 20;
 
-    private const MIN_FENCES = 20;
+    private const MIN_FENCES = 15;
 
     private const MIN_TABLES = 5;
 
@@ -103,7 +109,7 @@ class ReadmeParityTest extends TestCase
     public function theTwoReadmesHaveTheSameHeadingStructure(): void
     {
         $zh = $this->headingLevels('README.md');
-        $en = $this->headingLevels('README.EN.md');
+        $en = $this->headingLevels('tools/i18n/readme/en.md');
 
         $this->assertGreaterThanOrEqual(self::MIN_HEADINGS, count($zh), '中文 README 的标题数异常少，先确认解析规则没失效');
         $this->assertSame($zh, $en, '中英 README 的标题层级序列不一致：新章节要两边都加，层级也要一致');
@@ -113,7 +119,7 @@ class ReadmeParityTest extends TestCase
     public function theTwoReadmesHaveTheSameCodeBlocks(): void
     {
         $zh = $this->fenceLanguages('README.md');
-        $en = $this->fenceLanguages('README.EN.md');
+        $en = $this->fenceLanguages('tools/i18n/readme/en.md');
 
         $this->assertGreaterThanOrEqual(self::MIN_FENCES, count($zh), '中文 README 的代码块数异常少，先确认解析规则没失效');
         $this->assertSame(
@@ -127,7 +133,7 @@ class ReadmeParityTest extends TestCase
     public function theTwoReadmesHaveTheSameTableShapes(): void
     {
         $zh = $this->tableColumns('README.md');
-        $en = $this->tableColumns('README.EN.md');
+        $en = $this->tableColumns('tools/i18n/readme/en.md');
 
         $this->assertGreaterThanOrEqual(self::MIN_TABLES, count($zh), '中文 README 的表格数异常少，先确认解析规则没失效');
         $this->assertSame($zh, $en, '中英 README 的表格列数序列不一致：表格增删列要两边同步');

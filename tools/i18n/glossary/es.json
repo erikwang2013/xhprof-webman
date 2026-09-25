@@ -3,8 +3,8 @@
         "lang": "es",
         "name": "Español",
         "dir": "ltr",
-        "notice": "> **Traducción automática sin revisar.** Este documento es una traducción automática al español y no ha sido revisada por un hablante nativo; ante cualquier duda, la versión de referencia es la inglesa: [README.EN.md](../../../README.EN.md).",
-        "note": "Machine-translated from README.EN.md and tools/i18n/glossary/en.json on 2026-09-25 by an automated agent (Claude Code); terminology follows the English source. Not reviewed by a native Spanish speaker."
+        "notice": "> **Traducción automática sin revisar.** Este documento es una traducción automática al español y no ha sido revisada por un hablante nativo; ante cualquier duda, la versión de referencia es [la versión inglesa](../en/README.md).",
+        "note": "Machine-translated from docs/i18n/en/README.md and tools/i18n/glossary/en.json on 2026-09-25 by an automated agent (Claude Code); terminology follows the English source. Not reviewed by a native Spanish speaker."
     },
     "architecture.title.1": "Arquitectura por capas de XHProf Webman",
     "architecture.title.2": "10 entradas de framework → 5 contratos → 1 Core: los frameworks nuevos no tocan Core",

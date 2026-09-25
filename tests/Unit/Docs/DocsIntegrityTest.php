@@ -225,7 +225,11 @@ class DocsIntegrityTest extends TestCase
     {
         $root = dirname(__DIR__, 3);
 
-        foreach (['README.md', 'README.EN.md'] as $file) {
+        // 英文源 `tools/i18n/readme/en.md` 不在这里：手写源里只有它**有**产物，
+        // 而 `check.php --lang=en` 会把产物里的每一条链接按文件系统解析一遍（缺文件即
+        // FAIL），等于已经守着了。仓库根这份中文源没有任何产物，没有别的检查看得见它
+        // ——这正是本用例存在的理由。
+        foreach (['README.md'] as $file) {
             $r = self::linkProblems((string) file_get_contents($root . '/' . $file), $root);
 
             // 先钉住解析本身在干活：正则失效时下面那条「没有坏链接」会平凡成立

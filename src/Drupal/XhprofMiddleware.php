@@ -8,6 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\SamplingGuard;
+use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
 use ErikWang2013\Xhprof\Drupal\Adapter\ConfigAdapter;
@@ -15,6 +16,7 @@ use ErikWang2013\Xhprof\Drupal\Adapter\LogAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\RedisAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Drupal\Adapter\ResponseAdapter;
+use ErikWang2013\Xhprof\Drupal\Adapter\RoutedPathRequestAdapter;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -97,6 +99,19 @@ class XhprofMiddleware implements HttpKernelInterface
             $enabled = false;
         }
 
+        // 自定义 `assets_url` 前缀：模块资源路由的 path 写死在 xhprof.routing.yml
+        // （'/xhprof-assets/{file}'），永远匹配不到别的前缀 —— 那一路由本中间件自己服务，
+        // 否则报告页会静默丢掉样式与脚本（十家里只有 Drupal 是「路由固定」这一形态）。
+        // 默认前缀**不接管**：仍旧由模块路由 + Controller 服务，保留 Drupal 用路由器提供
+        // 报告页/资源的既有设计（routing.yml 与 Controller 因此不是死代码）。
+        // 两条路的判定同源：都用下面 assetsPrefix() 归一化出来的那个前缀。
+        if ($this->servesCustomAssetsPrefix($request)) {
+            return StaticController::serve(
+                new RoutedPathRequestAdapter($request),
+                new ResponseAdapter(new Response())
+            )->send();
+        }
+
         if ($enabled) {
             Xhprof::xhprofStart();
         }
@@ -128,20 +143,47 @@ class XhprofMiddleware implements HttpKernelInterface
             return true;
         }
 
-        // 前缀从配置归一化，口径与 Core\StaticController::uriPrefix() 及另外 5 家入口类
-        // （Slim/Symfony/WordPress/Joomla/Yii3 的短路前缀）完全一致：先取原始串再 rtrim
-        // （先 rtrim 再判空会把 '/' 归成空串），空串/非字符串 = 不启用资源短路、一个都不认。
-        // 必须与 StaticController 同源，否则「守卫认的」与「serve() 认的」是两批路径。
-        // 已知边界：Drupal 的资源路由写死在 xhprof.routing.yml（'/xhprof-assets/{file}'），
-        // 不会跟着 assets_url 走 —— 配了自定义前缀时资源请求落不到控制器上（空 200）。
+        // 前缀从配置归一化，口径与 Core\StaticController::uriPrefix() 及另外 9 家入口类
+        // 完全一致（见 assetsPrefix()）；必须与 StaticController 同源，否则「守卫认的」与
+        // 「serve() 认的」是两批路径。
+        $prefix = self::assetsPrefix();
+        if ($prefix === '') {
+            return false;
+        }
+
+        return str_starts_with($path, $prefix);
+    }
+
+    /**
+     * 归一化后的资源前缀（带尾斜杠）；`''` = 不启用。
+     *
+     * 口径与 `Core\StaticController::uriPrefix()` 及各入口类一致：先取原始串再 rtrim，
+     * 空串/非字符串 = 不启用（先 rtrim 再判空会把 `'/'` 归成空串，与入口类分叉）。
+     * 未 bootstrap 时 getConfig() 为 null，用默认值。
+     */
+    private static function assetsPrefix(): string
+    {
         $cfg = Xhprof::getConfig();
         $assetsUrl = $cfg !== null
             ? $cfg->get('xhprof.assets_url', self::DEFAULT_ASSETS_URL)
             : self::DEFAULT_ASSETS_URL;
         if (!is_string($assetsUrl) || $assetsUrl === '') {
+            return '';
+        }
+
+        return rtrim($assetsUrl, '/') . '/';
+    }
+
+    /**
+     * 自定义前缀下的资源请求：中间件自己服务（默认前缀交给模块路由，见 handle() 里的注释）。
+     */
+    private function servesCustomAssetsPrefix(Request $request): bool
+    {
+        $prefix = self::assetsPrefix();
+        if ($prefix === '' || $prefix === self::DEFAULT_ASSETS_URL . '/') {
             return false;
         }
 
-        return str_starts_with($path, rtrim($assetsUrl, '/') . '/');
+        return str_starts_with(rtrim($request->getPathInfo(), '/'), $prefix);
     }
 }

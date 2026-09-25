@@ -3,8 +3,8 @@
         "lang": "id",
         "name": "Bahasa Indonesia",
         "dir": "ltr",
-        "notice": "> **Terjemahan mesin.** Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah versi bahasa Inggris: [README.EN.md](../../../README.EN.md).",
-        "note": "Machine-translated by Claude (Anthropic) from README.EN.md and tools/i18n/glossary/en.json on 2026-09-25; terminology follows the English source. Not reviewed by a native speaker. Indonesian technical borrowings (framework, middleware, adapter, request, route, profiling, stub, parity) are kept as English loanwords; grammatical words, verbs and the README prose are Indonesian."
+        "notice": "> **Terjemahan mesin.** Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah [versi bahasa Inggris](../en/README.md).",
+        "note": "Machine-translated by Claude (Anthropic) from docs/i18n/en/README.md and tools/i18n/glossary/en.json on 2026-09-25; terminology follows the English source. Not reviewed by a native speaker. Indonesian technical borrowings (framework, middleware, adapter, request, route, profiling, stub, parity) are kept as English loanwords; grammatical words, verbs and the README prose are Indonesian."
     },
     "architecture.title.1": "Arsitektur Berlapis XHProf Webman",
     "architecture.title.2": "10 entri framework → 5 kontrak → 1 Core: framework baru tidak mengubah Core",

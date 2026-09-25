@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Многослойная архитектура XHProf Webman</title>
-  <desc>Три слоя диаграммы: верхний — 10 классов входа фреймворков (4 уже поддерживаются + 6 новых в этом релизе), средний — 5 интерфейсов в src/Core/Contract/, нижний — 5 классов Core. Красная полоса внизу отмечает две последние связи с фреймворками, оставшиеся в Core, и указывает, что 6 новых фреймворков не проходят через autoDetect — все используют явное внедрение через Xhprof::bootstrap(). Машинный перевод. Этот документ переведён автоматически и не проверен носителем языка; при расхождениях верен английский оригинал — README.EN.md.</desc>
+  <desc>Три слоя диаграммы: верхний — 10 классов входа фреймворков (4 уже поддерживаются + 6 новых в этом релизе), средний — 5 интерфейсов в src/Core/Contract/, нижний — 5 классов Core. Красная полоса внизу отмечает две последние связи с фреймворками, оставшиеся в Core, и указывает, что 6 новых фреймворков не проходят через autoDetect — все используют явное внедрение через Xhprof::bootstrap(). Машинный перевод. Этот документ переведён автоматически и не проверен носителем языка; при расхождениях верен английский оригинал.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

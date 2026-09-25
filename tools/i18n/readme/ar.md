@@ -4,6 +4,10 @@
 
 تجمع بيانات التنميط عبر إضافة xhprof وتخزّنها في Redis. ويستطيع المطوّرون الوصول سريعًا من المتصفح إلى تقارير تحليل الأداء لتحديد مواضع الاختناق في أداء الشيفرة.
 
+![حيوان المشروع الأليف: شعلة صغيرة](docs/images/pet.svg)
+
+الشعلة الصغيرة نفسها هي أيضًا أيقونة الموقع وأيقونة العلامة في أعلى اليسار (`src/html/pet.svg`‎، تُقدَّم تحت بادئة `assets_url`‎).
+
 **سجل الطلبات**
 
 ![سجل الطلبات](docs/images/runs-list.png)
@@ -34,7 +38,7 @@
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | انسخه إلى `plugins/system/`‎، وثبّته عبر Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | وحدة `xhprof` (`Drupal\XhprofMiddleware`) | وحدة قياسية، اكتفِ بتفعيلها |
 
-تقع فئات المدخل جميعها تحت بادئة مساحة الأسماء `ErikWang2013\Xhprof\`‎ (المحذوفة من الجدول أعلاه). ومن بين الأطر الستة الجديدة تُعدّ Drupal الاستثناء — فهي تخدم صفحة التقرير عبر مسارات الوحدة — في حين أن فئات المدخل الخمس الأخرى **تخدم صفحة التقرير بنفسها**، دون كتابة متحكم أو تسجيل مسار.
+تقع فئات المدخل جميعها تحت بادئة مساحة الأسماء `ErikWang2013\Xhprof\`‎ (المحذوفة من الجدول أعلاه).  ولا يحتاج أيٌّ من العشرة إلى تسجيل متحكم أو مسار: فصفحة التقرير والموارد الساكنة يتولّاها صنف الدخول بنفسه (وفي حالة Drupal يتولّاها مسار الوحدة).
 
 تعلن هذه الحزمة عن `php >= 8.0`، لكن مكوّنات `yiisoft/*` التي يعتمد عليها Yii3 تشترط **PHP 8.1 أو أحدث**، لذا **لا يمكن استخدام Yii3 على PHP 8.0**؛ وكذلك يحتاج Symfony 7.x و Drupal 11.x إلى إصدار PHP أعلى. وخطوات الإعداد التفصيلية في «إعداد كل إطار» أدناه.
 
@@ -70,37 +74,9 @@ return [
 ];
 ```
 
-**2. أنشئ المتحكم**:
+**2. صفحة التقرير والموارد الساكنة** — **لا حاجة إلى تسجيل متحكم أو مسار**: قبل بدء التنميط يفحص الوسيط مسار الطلب: عند مطابقة مسار التقرير `/xhprof` يعيد صفحة التقرير فورًا، وعند مطابقة مسار الموارد (البادئة تُقرأ من الخيار `assets_url`، والافتراضية `/xhprof-assets`) يعيد المورد الساكن مباشرةً.
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. سجّل المسارات** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. الإعدادات** — انظر `config/plugin/aaron-dev/xhprof/xhprof.php`.
+**3. الإعدادات** — انظر `config/plugin/aaron-dev/xhprof/xhprof.php`.
 
 ---
 
@@ -115,43 +91,9 @@ protected $middleware = [
 ];
 ```
 
-**2. أنشئ المتحكم**:
+**2. صفحة التقرير والموارد الساكنة** — **لا حاجة إلى تسجيل متحكم أو مسار**: قبل بدء التنميط يفحص الوسيط مسار الطلب: عند مطابقة مسار التقرير `/xhprof` يعيد صفحة التقرير فورًا، وعند مطابقة مسار الموارد (البادئة تُقرأ من الخيار `assets_url`، والافتراضية `/xhprof-assets`) يعيد المورد الساكن مباشرةً.
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. سجّل المسارات** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. انشر ملف الإعدادات**:
+**3. انشر ملف الإعدادات**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -171,44 +113,9 @@ return [
 ];
 ```
 
-**2. أنشئ المتحكم**:
+**2. صفحة التقرير والموارد الساكنة** — **لا حاجة إلى تسجيل متحكم أو مسار**: قبل بدء التنميط يفحص الوسيط مسار الطلب: عند مطابقة مسار التقرير `/xhprof` يعيد صفحة التقرير فورًا، وعند مطابقة مسار الموارد (البادئة تُقرأ من الخيار `assets_url`، والافتراضية `/xhprof-assets`) يعيد المورد الساكن مباشرةً.
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. سجّل المسارات** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. الإعدادات** — انسخ `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` إلى `config/xhprof.php` في مشروعك.
+**3. الإعدادات** — انسخ `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` إلى `config/xhprof.php` في مشروعك.
 
 ---
 
@@ -216,57 +123,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. تسجيل الوسيط تلقائيًا** — يضيف ConfigProvider الوسيط تلقائيًا إلى قائمة وسطاء HTTP.
 
-**2. أنشئ المتحكم**:
+**2. صفحة التقرير والموارد الساكنة** — **لا حاجة إلى تسجيل متحكم أو مسار**: قبل بدء التنميط يفحص الوسيط مسار الطلب: عند مطابقة مسار التقرير `/xhprof` يعيد صفحة التقرير فورًا، وعند مطابقة مسار الموارد (البادئة تُقرأ من الخيار `assets_url`، والافتراضية `/xhprof-assets`) يعيد المورد الساكن مباشرةً.
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-عندما يعيد `Xhprof::index()`‎ سلسلة HTML، **لا** تُرجعه مباشرةً عبر `return`: فـ `CoreMiddleware::transferToResponse()`‎ في Hyperf يضيف `content-type: text/plain`‎ بلا شرط إلى القيم المُعادة من نوع سلسلة، فيعرض المتصفح صفحة التقرير كنصّ عادي (قيس السلوك نفسه في الإصدارات 3.0.45 / 3.1.69 / 3.2.0). والاستجابة الصريحة أعلاه تتجاوز ذلك؛ وعند فشل المصادقة يعيد `index()`‎ كائن استجابة سبق إرساله — فأعِده كما هو.
-
-**3. مسارات الموارد الساكنة** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. انشر ملف الإعدادات**:
+**3. انشر ملف الإعدادات**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -420,7 +279,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. فعّل الوحدة** — مجلد `drupal/xhprof/`‎ في الحزمة وحدة Drupal قياسية (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). ضعها في `modules/custom/xhprof/`‎ بموقعك، ثم فعّلها من صفحة «Extend» (أو بالأمر `drush en xhprof`).
 
-**2. صفحة التقرير** — Drupal هي **الإطار الوحيد من الأطر العشرة الذي يخدم صفحة التقرير عبر مسارات الوحدة**: فملف `xhprof.routing.yml` يسجّل مسار التقرير `/xhprof` ويعرضه متحكم الوحدة. أما الأطر الخمسة الجديدة الأخرى فتخدم صفحة التقرير والموارد الساكنة بنفسها ولا تسجّل أي مسار.
+**2. صفحة التقرير والموارد الساكنة** — Drupal هي **الإطار الوحيد من الأطر العشرة الذي يخدم صفحة التقرير عبر مسارات الوحدة**: فملف `xhprof.routing.yml` يسجّل مسار التقرير `/xhprof` ومسار الموارد `/xhprof-assets`، ويعرضهما متحكم الوحدة افتراضيًا؛ أما الأطر التسعة الأخرى فتخدم صفحة التقرير والموارد الساكنة بنفسها قبل بدء التنميط ولا تسجّل أي مسار. **ومع بادئة `assets_url` مخصّصة يتولّى الوسيط خدمة الموارد**: فمسار موارد الوحدة مكتوب في `xhprof.routing.yml` (`/xhprof-assets/{file}`) ولا يطابق بادئة أخرى.
 
 **3. الإعدادات** — الإعدادات هنا إعدادات مُهيّأة على مستوى الوحدة: القيم الافتراضية في `drupal/xhprof/config/install/xhprof.settings.yml`، والمخطط في `drupal/xhprof/config/schema/xhprof.schema.yml`. وانظر «مرجع الإعدادات» لمعرفة الحقول.
 
@@ -573,11 +432,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
-│   └── html/                     # report page assets (css / js / images)
+│   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
+├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages (`legacy-symfony64/` هي ساق 6.4)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -606,20 +465,18 @@ src/<Fw>/
 | سلوك المحوّلات وتوصيل فئات المدخل | `tests/Unit/Adapter/*Test.php`: مفعّل → يُحفظ / معطّل → لا يُحفظ / استثناء في منطق العمل → يُحفظ رغم ذلك عبر `finally` |
 | الأطر العشرة كلها تتشارك مجموعة مفاتيح إعدادات واحدة | اختبار تكافؤ الإعدادات (مجموعات المفاتيح لا التطابق الحرفي؛ فالتعليقات قد تختلف) |
 | ملفا README يطابق أحدهما الآخر | اختبار تكافؤ README: يقارن تسلسل عناوين `##` / `###` وعدد كتل الشيفرة |
-| الدوال التي تستدعيها المحوّلات موجودة فعلًا | حلقة التحقق في `tools/contracts/`‎ (ولها مهمة CI خاصة): تثبّت حزم الأطر الحقيقية وتتحقق عبر الانعكاس من وجود كل دالة وثابت ودالة عامة **للأطر الثمانية المشمولة في الحلقة** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman)؛ أما ThinkPHP / Hyperf فغير مشمولين بالحلقة، انظر أدناه |
-| دلالات المحوّلات | الحلقة نفسها تنشئ كائنات طلب واستجابة حقيقية وتشغّل المحوّلات، بما في ذلك ثابتان: أن `uri()`‎ لا تحمل مخطّطًا ولا مضيفًا، وأن `withHeaders()`‎ تظل سارية بعد `file()`‎ |
+| الدوال التي تستدعيها المحوّلات موجودة فعلًا | حلقة التحقق في `tools/contracts/` (ولها مهمة CI خاصة، **ساقان**: الساق الرئيسية تثبّت أحدث حزمة لكل إطار، ومشروع `tools/contracts/legacy-symfony64` المنفصل يشغّل حالة Symfony نفسها على 6.4): تثبّت حزم الأطر الحقيقية (Drupal بـ`drupal/core` الحقيقي، وJoomla بحزمتَي إصدار CMS حقيقيتين) وتتحقق عبر الانعكاس من وجود كل دالة وثابت ودالة عامة **للأطر الثمانية المشمولة في الحلقة** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman)؛ أما ThinkPHP / Hyperf فغير مشمولين بالحلقة، انظر أدناه |
+| دلالات المحوّلات | الحلقة نفسها تنشئ كائنات طلب واستجابة حقيقية وتشغّل المحوّلات، مع ثابتين: `uri()` بلا scheme/host، و`withHeaders()` يظل ساريًا بعد `file()`. وعدد SKIP في الحلقة ثابت مُجمّد (2 في الساق الرئيسية، و0 في ساق 6.4)، وكلاهما في Joomla: مسار القراءة الحقيقي لـ`#__extensions.params` وشكل المُثبِّت، وكلاهما يحتاج قاعدة بيانات أو مُثبِّتًا ليُشغَّل |
 
 
-**غير مُتحقَّق منه آليًا (لا تقرأ هذا على أنه «اختبار الأطر الستة جميعًا»)**
+**غير مُتحقَّق منه آليًا (لا تقرأ هذا على أنه «كل شيء مُغطّى»)**
 
 | البند | لماذا لا |
 |------|---------|
 | **توصيل** كل إطار (هل الخُطّاف موصول فعلًا، وهل يقع الحدث فعلًا) | اختبارات الوحدة تستخدم بدائل وهمية؛ والتوصيل لا يمكن تأكيده حاليًا إلا باختبارات دخانية يدوية |
-| WordPress من طرف إلى طرف | توقيت `plugins_loaded` الفعلي، وهل يقع `shutdown` عند خطأ فادح، وهل تُحمَّل إضافة mu — كل ذلك يحتاج WordPress حقيقيًا |
-| اكتشاف إضافة Joomla و `$app->close()`‎ | يحتاج تشغيل Discover في لوحة تحكم Joomla حقيقية |
-| هل تقع أولوية Drupal فعلًا خارج ذاكرة التخزين المؤقت للصفحات | يحتاج نواة Drupal مُقلَعة |
+| البندان المتبقيان في Joomla | البندان اللذان لا تصل إليهما الحلقة بعد، وللسبب نفسه (يحتاجان قاعدة بيانات أو مُثبِّتًا): مسار القراءة الحقيقي لـ`#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) وشكل المُثبِّت (خريطة الأسماء namespacemap مكتوبة، و`bootPlugin()` يجد الصنف) |
 | التهيئة التلقائية لـ `kernel.event_subscriber` في Symfony | يحتاج ترجمة حاوية حقيقية |
-| تشابك الحالة الساكنة في العمليات طويلة العمر | موروث من البنية القائمة (والأمر نفسه ينطبق على Webman / Hyperf)؛ ولم يتغير هنا |
+| تشابك الحالة الساكنة في العمليات طويلة العمر | جانب Webman لم يُغيَّر (جانب Hyperf معزول: القيم التسع لحالة العرض لكل طلب تمر عبر Context الكوروتين، و`tests/Unit/Lib/RenderStateCoroutineTest.php` يثبّتها بكوروتين يتنازل فعلاً) |
 | إدخال/إخراج Redis الحقيقي، وعرض المتصفح، وكلفة التنميط تحت حمل حقيقي | إدخال/إخراج Redis الحقيقي **دخل حلقة التحقق** (`cases/Redis.php`: phpredis حقيقي + طلب Slim حقيقي من الطرفين — طلب → تخزين → صفحة القائمة → صفحة التقرير)؛ أما عرض المتصفح وكلفة التنميط تحت حمل حقيقي فتبقى خارج نطاق اختبارات الوحدة وحلقة التحقق |
 | توقيعات محوّلي ThinkPHP / Hyperf ودلالاتهما | هذان ليسا في حلقة التحقق (فالحلقة تغطي ثمانية أطر)؛ وستَباتها (stubs) مكتوبة يدويًا داخل الحزمة في `tests/Stubs/framework-stubs.php`‎، دون مقارنة بحزم حقيقية |
 
@@ -637,7 +494,7 @@ src/<Fw>/
 
 **صار `assets_url` يدعم بادئة مخصّصة**
 
-لم تعد بادئة الموارد ثابتًا مكتوبًا في الكود: فـ`src/Core/StaticController.php` يطابق مسارات الموارد مع خيار `assets_url` (الافتراضي `/xhprof-assets`، والشرطة المائلة الأخيرة اختيارية). أما القيد المتبقي عند النشر في مجلد فرعي فهو قيد Drupal الوارد أدناه. **حدّ**: تعمل البادئة المخصّصة مباشرةً على الأُطر الخمسة التي يتجاوز فيها الوسيط أو صنف الدخول مسار الأصول بنفسه (Yii3 وSymfony وSlim وWordPress وJoomla)؛ أما مسار الأصول في Laravel وHyperf وWebman وThinkPHP، وملف `xhprof.routing.yml` في Drupal، فيسجّلها **أنت** — غيّرها مع `assets_url`، وإلا فلن تصل طلبات الأصول إلى `StaticController` ويفقد تقرير الصفحة تنسيقاته وسكربتاته.
+لم تعد بادئة الموارد ثابتًا مكتوبًا في الكود: فـ`src/Core/StaticController.php` يطابق مسارات الموارد مع خيار `assets_url` (الافتراضي `/xhprof-assets`، والشرطة المائلة الأخيرة اختيارية). أما القيد المتبقي عند النشر في مجلد فرعي فهو قيد Drupal الوارد أدناه. **عشرة أطر تتبع هذا الخيار جميعًا**: تسع فئات مدخل تقصّر مسار الموارد بنفسها قبل بدء التنميط وتخدمه، أما Drupal فيخدم البادئة الافتراضية عبر مسار الوحدة + Controller ويسلّم البادئة المخصّصة إلى الوسيط. **حدّ**: Laravel وHyperf وWebman وThinkPHP لم تعد تحتاج متحكمًا ولا مسارين — فالوسيط يعمل أولًا، والمساران المسجّلان حسب تعليمات النسخة القديمة صارا محجوبين فقط: لا يرفعان خطأً ولا يُصابان بعد الآن.
 
 **قيد معروف: حارس المسار يفشل عندما يكون Drupal في مجلد فرعي**
 
@@ -645,7 +502,7 @@ src/<Fw>/
 
 **توافق Symfony 6.4**
 
-قيس توافق Symfony 6.4 (وهكذا أُصلح إفراطان في التخصيص لا يظهران على 7.4: خصائص `Request` لا تحمل تصريح نوع أصليًا على 6.4، ومجموعة المحارف التي يضيفها `prepare()`‎ تختلف في حالة الأحرف)، لكن حلقة التحقق في CI لا تشغّل إلا 7.4.
+قيس توافق Symfony 6.4 (وهكذا أُصلح إفراطان في التخصيص لا يظهران على 7.4: خصائص `Request` لا تحمل تصريح نوع أصليًا على 6.4، ومجموعة المحارف التي يضيفها `prepare()` تختلف في حالة الأحرف). **الساقان كلتاهما داخل CI**: الساق الرئيسية 7.x زائد مشروع `tools/contracts/legacy-symfony64` المنفصل الذي يشغّل الملف نفسه من الحالات (دون نسخه)، والساقان معًا داخل بوابة الوسم أيضًا.
 
 ---
 

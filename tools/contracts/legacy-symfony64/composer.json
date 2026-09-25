@@ -1,0 +1,17 @@
+{
+    "name": "erikwang2013/xhprof-contracts-symfony64",
+    "description": "契约验证环的第二条腿：只装 Symfony 6.4（卡里声明 ^6.4|^7.0 的另一半）。与主环共用同一份 cases/Symfony.php，只换 vendor 根（run.php --leg=symfony64）。symfony/error-handler 与 symfony/var-dumper 是 http-kernel 的传递依赖、约束写的是 ^6.4|^7.0，不显式钉就会解析到 7.4 —— 那样这条腿就不是纯 6.4 线，而它的全部价值就在「这是 6.4」这句话上，故一并钉住。",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "symfony/error-handler": "^6.4",
+        "symfony/event-dispatcher": "^6.4",
+        "symfony/http-foundation": "^6.4",
+        "symfony/http-kernel": "^6.4",
+        "symfony/var-dumper": "^6.4"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

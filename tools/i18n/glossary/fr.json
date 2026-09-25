@@ -3,8 +3,8 @@
         "lang": "fr",
         "name": "Français",
         "dir": "ltr",
-        "notice": "> **Traduction automatique.** Ce document a été traduit automatiquement et n'a pas été relu par un traducteur natif ; en cas de divergence, la version anglaise ([README.EN.md](../../../README.EN.md)) fait foi.",
-        "note": "Machine translation into French, produced by the i18n agent from README.EN.md and tools/i18n/glossary/en.json on 2026-09-25. Unreviewed by a native speaker. Terminology: Adaptateur for the Adapter classes, contrat for contract, framework kept as-is, 'pris en charge' for supported."
+        "notice": "> **Traduction automatique.** Ce document a été traduit automatiquement et n'a pas été relu par un traducteur natif ; en cas de divergence, [la version anglaise](../en/README.md) fait foi.",
+        "note": "Machine translation into French, produced by the i18n agent from docs/i18n/en/README.md and tools/i18n/glossary/en.json on 2026-09-25. Unreviewed by a native speaker. Terminology: Adaptateur for the Adapter classes, contrat for contract, framework kept as-is, 'pris en charge' for supported."
     },
     "architecture.title.1": "Architecture en couches XHProf Webman",
     "architecture.title.2": "10 entrées de framework → 5 contrats → 1 Core : ajouter un framework ne touche pas Core",

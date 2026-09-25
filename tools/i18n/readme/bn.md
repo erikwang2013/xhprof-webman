@@ -4,6 +4,10 @@ webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joo
 
 xhprof এক্সটেনশনের মাধ্যমে প্রোফাইলিং ডেটা সংগ্রহ করে Redis-এ সংরক্ষণ করে। ডেভেলপাররা ব্রাউজার দিয়ে দ্রুত পারফরম্যান্স বিশ্লেষণ রিপোর্ট দেখে কোডের পারফরম্যান্স বটলনেক চিহ্নিত করতে পারেন।
 
+![প্রকল্পের পোষ্য: ছোট শিখা](docs/images/pet.svg)
+
+একই ছোট শিখাটিই রিপোর্ট পেজের সাইট আইকন ও উপরের-বাম কোণের ব্র্যান্ড আইকন (`src/html/pet.svg`, `assets_url` উপসর্গে পরিবেশিত)।
+
 **রিকোয়েস্ট লগ**
 
 ![রিকোয়েস্ট লগ](docs/images/runs-list.png)
@@ -34,7 +38,7 @@ xhprof এক্সটেনশনের মাধ্যমে প্রোফ�
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | `plugins/system/`-এ কপি করুন, Discover দিয়ে ইনস্টল করুন |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` মডিউল (`Drupal\XhprofMiddleware`) | স্ট্যান্ডার্ড মডিউল, শুধু চালু করুন |
 
-সব এন্ট্রি ক্লাসই `ErikWang2013\Xhprof\` নেমস্পেস প্রিফিক্সের অধীনে থাকে (উপরে বাদ দেওয়া হয়েছে)। ছয়টি নতুন ফ্রেমওয়ার্কের মধ্যে Drupal ব্যতিক্রম — এটি মডিউল রুটের মাধ্যমে রিপোর্ট পেজ পরিবেশন করে — বাকি পাঁচটি এন্ট্রি ক্লাস **নিজেরাই রিপোর্ট পেজ পরিবেশন করে**, কোনো কন্ট্রোলার বা রুট নিবন্ধনের প্রয়োজন হয় না।
+সব এন্ট্রি ক্লাসই `ErikWang2013\Xhprof\` নেমস্পেস প্রিফিক্সের অধীনে থাকে (উপরে বাদ দেওয়া হয়েছে)।  দশটির কোনোটিতেই আপনাকে কন্ট্রোলার বা রুট নিবন্ধন করতে হবে না: রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট এন্ট্রি ক্লাস নিজেই পরিবেশন করে (Drupal-এর ক্ষেত্রে মডিউল রুট)।
 
 এই প্যাকেজটি `php >= 8.0` ঘোষণা করে, কিন্তু Yii3 যে `yiisoft/*` কম্পোনেন্টগুলোর উপর নির্ভর করে সেগুলোর জন্য **PHP 8.1+** দরকার, তাই **PHP 8.0-তে Yii3 ব্যবহার করা যায় না**; একইভাবে Symfony 7.x ও Drupal 11.x-এরও বেশি PHP সংস্করণ লাগে। ধাপে ধাপে সেটআপ নিচের "ফ্রেমওয়ার্ক কনফিগারেশন"-এ আছে।
 
@@ -70,37 +74,9 @@ return [
 ];
 ```
 
-**২. কন্ট্রোলার তৈরি করুন**:
+**২. রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট** — **কোনো কন্ট্রোলার বা রুট নিবন্ধন লাগে না**: প্রোফাইলিং শুরুর আগে মিডলওয়্যার রিকোয়েস্ট পাথ পরীক্ষা করে: রিপোর্ট পাথ `/xhprof`-এ মিললে সঙ্গে সঙ্গে রিপোর্ট পেজ ফেরত দেয়, আর অ্যাসেট পাথ (প্রিফিক্স `assets_url` অপশন থেকে পড়া হয়, ডিফল্ট `/xhprof-assets`) -এ মিললে সোজা স্ট্যাটিক অ্যাসেট ফেরত দেয়।
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**৩. রুট নিবন্ধন করুন** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**৪. কনফিগারেশন** — `config/plugin/aaron-dev/xhprof/xhprof.php` দেখুন।
+**৩. কনফিগারেশন** — `config/plugin/aaron-dev/xhprof/xhprof.php` দেখুন।
 
 ---
 
@@ -115,43 +91,9 @@ protected $middleware = [
 ];
 ```
 
-**২. কন্ট্রোলার তৈরি করুন**:
+**২. রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট** — **কোনো কন্ট্রোলার বা রুট নিবন্ধন লাগে না**: প্রোফাইলিং শুরুর আগে মিডলওয়্যার রিকোয়েস্ট পাথ পরীক্ষা করে: রিপোর্ট পাথ `/xhprof`-এ মিললে সঙ্গে সঙ্গে রিপোর্ট পেজ ফেরত দেয়, আর অ্যাসেট পাথ (প্রিফিক্স `assets_url` অপশন থেকে পড়া হয়, ডিফল্ট `/xhprof-assets`) -এ মিললে সোজা স্ট্যাটিক অ্যাসেট ফেরত দেয়।
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**৩. রুট নিবন্ধন করুন** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**৪. কনফিগ প্রকাশ করুন**:
+**৩. কনফিগ প্রকাশ করুন**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -171,44 +113,9 @@ return [
 ];
 ```
 
-**২. কন্ট্রোলার তৈরি করুন**:
+**২. রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট** — **কোনো কন্ট্রোলার বা রুট নিবন্ধন লাগে না**: প্রোফাইলিং শুরুর আগে মিডলওয়্যার রিকোয়েস্ট পাথ পরীক্ষা করে: রিপোর্ট পাথ `/xhprof`-এ মিললে সঙ্গে সঙ্গে রিপোর্ট পেজ ফেরত দেয়, আর অ্যাসেট পাথ (প্রিফিক্স `assets_url` অপশন থেকে পড়া হয়, ডিফল্ট `/xhprof-assets`) -এ মিললে সোজা স্ট্যাটিক অ্যাসেট ফেরত দেয়।
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**৩. রুট নিবন্ধন করুন** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**৪. কনফিগারেশন** — `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` প্রকল্পের `config/xhprof.php`-এ কপি করুন।
+**৩. কনফিগারেশন** — `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` প্রকল্পের `config/xhprof.php`-এ কপি করুন।
 
 ---
 
@@ -216,57 +123,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **১. মিডলওয়্যারের স্বয়ংক্রিয় নিবন্ধন** — ConfigProvider স্বয়ংক্রিয়ভাবে HTTP মিডলওয়্যার কিউতে মিডলওয়্যার যোগ করে।
 
-**২. কন্ট্রোলার তৈরি করুন**:
+**২. রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট** — **কোনো কন্ট্রোলার বা রুট নিবন্ধন লাগে না**: প্রোফাইলিং শুরুর আগে মিডলওয়্যার রিকোয়েস্ট পাথ পরীক্ষা করে: রিপোর্ট পাথ `/xhprof`-এ মিললে সঙ্গে সঙ্গে রিপোর্ট পেজ ফেরত দেয়, আর অ্যাসেট পাথ (প্রিফিক্স `assets_url` অপশন থেকে পড়া হয়, ডিফল্ট `/xhprof-assets`) -এ মিললে সোজা স্ট্যাটিক অ্যাসেট ফেরত দেয়।
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-`Xhprof::index()` যখন HTML স্ট্রিং ফেরায়, তখন সেটি **সরাসরি** `return` করবেন না: Hyperf-এর `CoreMiddleware::transferToResponse()` স্ট্রিং রিটার্ন ভ্যালুতে শর্তহীনভাবে `content-type: text/plain` যোগ করে, ফলে ব্রাউজার রিপোর্ট পেজটি সাধারণ টেক্সট হিসেবে দেখায় (3.0.45 / 3.1.69 / 3.2.0 — তিনটি সংস্করণেই একই আচরণ মাপা হয়েছে)। উপরের স্পষ্ট রেসপন্স এটিকে এড়িয়ে যায়; প্রমাণীকরণ ব্যর্থ হলে `index()` এমন একটি রেসপন্স অবজেক্ট ফেরায় যা ইতিমধ্যেই পাঠানো হয়েছে — সেটি যেমন আছে তেমনই ফেরত দিন।
-
-**৩. স্ট্যাটিক অ্যাসেট রুট** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**৪. কনফিগ প্রকাশ করুন**:
+**৩. কনফিগ প্রকাশ করুন**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -420,7 +279,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **১. মডিউল চালু করুন** — প্যাকেজের `drupal/xhprof/` একটি স্ট্যান্ডার্ড Drupal মডিউল (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`)। এটি আপনার সাইটের `modules/custom/xhprof/`-এ রাখুন, তারপর "Extend" পেজে (বা `drush en xhprof` দিয়ে) চালু করুন।
 
-**২. রিপোর্ট পেজ** — দশটি ফ্রেমওয়ার্কের মধ্যে Drupal **একমাত্র যেটি মডিউল রুটের মাধ্যমে রিপোর্ট পেজ পরিবেশন করে**: `xhprof.routing.yml` রিপোর্ট পাথ `/xhprof` নিবন্ধন করে আর একটি মডিউল কন্ট্রোলার সেটি রেন্ডার করে। বাকি পাঁচটি নতুন ফ্রেমওয়ার্ক নিজেরাই রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট পরিবেশন করে এবং কোনো রুট নিবন্ধন করে না।
+**২. রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট** — দশটি ফ্রেমওয়ার্কের মধ্যে Drupal **একমাত্র যেটি মডিউল + রুট পথে চলে**: `xhprof.routing.yml` রিপোর্ট পাথ `/xhprof` ও অ্যাসেট পাথ `/xhprof-assets` নিবন্ধন করে, আর ডিফল্টভাবে মডিউল Controller সেগুলো পরিবেশন করে; বাকি নয়টি এন্ট্রি ক্লাস প্রোফাইলিং শুরুর আগে নিজেরাই শর্ট-সার্কিট করে রিপোর্ট পেজ ও স্ট্যাটিক অ্যাসেট পরিবেশন করে, কোনো রুট নিবন্ধন ছাড়াই। **কাস্টম `assets_url` প্রিফিক্স হলে অ্যাসেট মিডলওয়্যার নিজে পরিবেশন করে**: মডিউলের অ্যাসেট রুটের path `xhprof.routing.yml`-এ লেখা (`/xhprof-assets/{file}`), তাই অন্য প্রিফিক্সে কখনও মেলে না।
 
 **৩. কনফিগারেশন** — কনফিগারেশন মডিউল-স্তরের টাইপড কনফিগ: ডিফল্টগুলো `drupal/xhprof/config/install/xhprof.settings.yml`-এ, স্কিমা `drupal/xhprof/config/schema/xhprof.schema.yml`-এ। ফিল্ডগুলোর জন্য "কনফিগারেশন রেফারেন্স" দেখুন।
 
@@ -573,11 +432,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
-│   └── html/                     # report page assets (css / js / images)
+│   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
+├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages (`legacy-symfony64/` হলো 6.4 লেগ)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -606,20 +465,18 @@ src/<Fw>/
 | অ্যাডাপ্টার ও এন্ট্রি-ওয়্যারিংয়ের আচরণ | `tests/Unit/Adapter/*Test.php`: চালু → সংরক্ষিত / বন্ধ → সংরক্ষিত নয় / বিজনেস এক্সেপশন → `finally`-এর মাধ্যমে তবুও সংরক্ষিত |
 | দশটি ফ্রেমওয়ার্কই একই কনফিগ কী সেট শেয়ার করে | config parity টেস্ট (কী সেট, বাইট-প্রতি-বাইট নয়; কমেন্ট আলাদা হতে পারে) |
 | দুটি README পরস্পরের প্রতিচ্ছবি | README parity টেস্ট: `##` / `###` শিরোনামের ক্রম ও কোড ব্লকের সংখ্যা তুলনা করে |
-| অ্যাডাপ্টার যে মেথডগুলো ডাকে সেগুলো সত্যিই আছে | `tools/contracts/` verification loop (নিজস্ব CI জব): আসল ফ্রেমওয়ার্ক প্যাকেজ ইনস্টল করে রিফ্লেকশনের মাধ্যমে যাচাই করে যে প্রতিটি মেথড / ধ্রুবক / গ্লোবাল ফাংশন আছে — **লুপে থাকা আটটি ফ্রেমওয়ার্কের** জন্য (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf লুপে নেই, নিচে দেখুন |
-| অ্যাডাপ্টারের সিমান্টিক্স | একই লুপ আসল রিকোয়েস্ট ও রেসপন্স অবজেক্ট তৈরি করে অ্যাডাপ্টার চালায়, দুটি ইনভ্যারিয়েন্টসহ: `uri()`-তে স্কিম/হোস্ট থাকে না, আর `file()`-এর পরেও `withHeaders()` প্রয়োগ হয় |
+| অ্যাডাপ্টার যে মেথডগুলো ডাকে সেগুলো সত্যিই আছে | `tools/contracts/` ভেরিফিকেশন লুপ (আলাদা CI job, **দুটি লেগ**: মূল লেগ প্রতিটি ফ্রেমওয়ার্কের সর্বশেষ প্যাকেজ ইনস্টল করে, আর আলাদা `tools/contracts/legacy-symfony64` প্রজেক্ট একই Symfony case 6.4-এর বিরুদ্ধে চালায়): আসল ফ্রেমওয়ার্ক প্যাকেজ ইনস্টল করে (Drupal-এর জন্য আসল `drupal/core`, Joomla-র জন্য দুটি আসল CMS রিলিজ প্যাকেজ) এবং রিফ্লেকশনের মাধ্যমে নিশ্চিত করে যে প্রতিটি মেথড / কনস্ট্যান্ট / গ্লোবাল ফাংশন আছে **লুপের আটটি ফ্রেমওয়ার্কে** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf লুপে নেই — নিচে দেখুন |
+| অ্যাডাপ্টারের সিমান্টিক্স | লুপটি নিজেই আসল রিকোয়েস্ট ও রেসপন্স অবজেক্ট বানিয়ে অ্যাডাপ্টার চালায়, দুটি ইনভ্যারিয়েন্টসহ: `uri()`-এ scheme/host নেই, আর `file()`-এর পরেও `withHeaders()` কার্যকর থাকে। লুপের SKIP সংখ্যা একটি হিমায়িত ধ্রুবক (মূল লেগে 2, 6.4 লেগে 0) এবং দুটোই Joomla-তে: `#__extensions.params`-এর আসল পড়ার পথ আর ইনস্টলারের গঠন — দুটোই চালাতে ডেটাবেস বা ইনস্টলার লাগে |
 
 
-**স্বয়ংক্রিয়ভাবে যাচাই করা হয় না (এটিকে "ছয়টিই পরীক্ষিত" বলে পড়বেন না)**
+**স্বয়ংক্রিয়ভাবে অযাচাইকৃত (এটাকে «সবকিছু কভার হয়ে গেছে» ভেবো না)**
 
 | বিষয় | কেন নয় |
 |------|---------|
 | প্রতিটি ফ্রেমওয়ার্কের **ওয়্যারিং** (হুকটি সত্যিই লাগানো আছে কি, ইভেন্টটি সত্যিই নড়ে কি) | ইউনিট টেস্ট স্টাব ব্যবহার করে; ওয়্যারিং এই মুহূর্তে কেবল ম্যানুয়াল স্মোক টেস্টেই নিশ্চিত করা যায় |
-| WordPress শেষ থেকে শেষ পর্যন্ত | প্রকৃত `plugins_loaded`-এর সময়, ফ্যাটাল এররে `shutdown` নড়ে কি না, আর mu-plugin লোড হয় কি না — সবকিছুর জন্য আসল WordPress দরকার |
-| Joomla প্লাগইন আবিষ্কার ও `$app->close()` | আসল Joomla অ্যাডমিনে Discover চালানো দরকার |
-| Drupal-এর প্রায়োরিটি সত্যিই পেজ ক্যাশের বাইরে পড়ে কি না | বুট করা একটি Drupal কার্নেল দরকার |
+| Joomla-এর বাকি দুটি বিষয় | দুটি জিনিস যা লুপ এখনও ধরতে পারে না, আর দুটোর কারণও এক (ডেটাবেস বা ইনস্টলার লাগে): `#__extensions.params`-এর আসল পড়ার পথ (`PluginHelper::getPlugin()` → `bootPlugin()`) আর ইনস্টলারের গঠন (namespacemap লেখা আছে, `bootPlugin()` ক্লাস খুঁজে পায়) |
 | Symfony-র `kernel.event_subscriber` স্বয়ংক্রিয়-কনফিগারেশন | আসল কন্টেইনার কম্পাইল দরকার |
-| দীর্ঘকাল চলা প্রসেসে স্ট্যাটিক স্টেটের ক্রসটক | বিদ্যমান আর্কিটেকচার থেকে উত্তরাধিকারসূত্রে পাওয়া (Webman / Hyperf-েও একই); এখানে অপরিবর্তিত |
+| দীর্ঘকাল চলা প্রসেসে স্ট্যাটিক স্টেটের ক্রসটক | Webman-এর দিকটি অপরিবর্তিত (Hyperf-এর দিকে আলাদা করা হয়েছে: রেন্ডার-কালের ৯টি মান প্রতি-অনুরোধে করুটিন Context দিয়ে যায়, আর `tests/Unit/Lib/RenderStateCoroutineTest.php` সত্যিকারের yield করা করুটিন দিয়ে সেগুলো পিন করে) |
 | প্রকৃত Redis I/O, ব্রাউজার রেন্ডারিং, আসল লোডে প্রোফাইলিং ওভারহেড | প্রকৃত Redis I/O **এখন verification loop-এ আছে** (`cases/Redis.php`: আসল phpredis + আসল Slim রিকোয়েস্ট — অনুরোধ → সংরক্ষণ → তালিকা পেজ → রিপোর্ট পেজ); ব্রাউজার রেন্ডারিং ও আসল লোডে ওভারহেড আগের মতোই ইউনিট টেস্ট ও লুপের পরিধির বাইরে |
 | ThinkPHP / Hyperf-এর অ্যাডাপ্টার সিগনেচার ও সিম্যান্টিক্স | এই দুটি verification loop-এ নেই (লুপ আটটি ফ্রেমওয়ার্ক কভার করে); তাদের স্টাব প্যাকেজের ভিতরে `tests/Stubs/framework-stubs.php`-এ হাতে লেখা, আসল প্যাকেজের সঙ্গে কোনো মিলিয়ে দেখা নেই |
 
@@ -637,7 +494,7 @@ src/<Fw>/
 
 **`assets_url` এখন কাস্টম প্রিফিক্স সমর্থন করে**
 
-স্ট্যাটিক অ্যাসেট প্রিফিক্স আর হার্ডকোড করা ধ্রুবক নয়: `src/Core/StaticController.php` `assets_url` অপশনের সঙ্গে অ্যাসেট পাথ মেলায় (ডিফল্ট `/xhprof-assets`, শেষের স্ল্যাশ থাকুক বা না থাকুক)। সাবডিরেক্টরিতে ডিপ্লয় করলে বাকি সীমাবদ্ধতা নিচের Drupal-এর। **সীমা**: যে পাঁচটি ফ্রেমওয়ার্কে মিডলওয়্যার বা এন্ট্রি ক্লাসই রিসোর্স পাথ শর্ট-সার্কিট করে (Yii3, Symfony, Slim, WordPress, Joomla), সেখানে নিজের প্রিফিক্স সরাসরি কাজ করে; Laravel, Hyperf, Webman ও ThinkPHP-এ রিসোর্স রুটের path আর Drupal-এ `xhprof.routing.yml` **আপনি** রেজিস্টার করেন — `assets_url` বদলালে সেগুলোও বদলান, নইলে রিসোর্স অনুরোধ `StaticController`-এ পৌঁছবে না এবং রিপোর্ট পেজ তার স্টাইল ও স্ক্রিপ্ট হারাবে।
+স্ট্যাটিক অ্যাসেট প্রিফিক্স আর হার্ডকোড করা ধ্রুবক নয়: `src/Core/StaticController.php` `assets_url` অপশনের সঙ্গে অ্যাসেট পাথ মেলায় (ডিফল্ট `/xhprof-assets`, শেষের স্ল্যাশ থাকুক বা না থাকুক)। সাবডিরেক্টরিতে ডিপ্লয় করলে বাকি সীমাবদ্ধতা নিচের Drupal-এর। **দশটি ফ্রেমওয়ার্কই এই অপশন অনুসরণ করে**: নয়টি এন্ট্রি ক্লাস প্রোফাইলিং শুরুর আগে নিজেরাই রিসোর্স পাথ শর্ট-সার্কিট করে পরিবেশন করে, আর Drupal ডিফল্ট প্রিফিক্স মডিউল রুট + Controller দিয়ে এবং কাস্টম প্রিফিক্স মিডলওয়্যারের হাতে দিয়ে পরিবেশন করে। **সীমা**: Laravel, Hyperf, Webman, ThinkPHP-এ আর কন্ট্রোলার বা রুট লাগে না — মিডলওয়্যার আগে চলে, তাই পুরোনো নির্দেশনা অনুযায়ী নিবন্ধিত কন্ট্রোলার আর দুটি রুট কেবল ছায়াচ্ছন্ন: কোনো ত্রুটি দেয় না, আর কখনও হিটও হয় না।
 
 **জ্ঞাত সীমাবদ্ধতা: Drupal সাবডিরেক্টরিতে থাকলে পাথ গার্ড ব্যর্থ হয়**
 
@@ -645,7 +502,7 @@ Drupal সাবডিরেক্টরিতে (যেমন `/sites/app/xhpr
 
 **Symfony 6.4 সামঞ্জস্য**
 
-Symfony 6.4 সামঞ্জস্য মাপা হয়েছে (এভাবেই 7.4-এ অদৃশ্য দুটি অতিরিক্ত-ফিট ধরা পড়েছিল: 6.4-এ `Request` প্রপার্টিতে কোনো নেটিভ টাইপ ডিক্লারেশন থাকে না, আর `prepare()` যে charset যোগ করে তার কেস আলাদা), কিন্তু CI verification loop কেবল 7.4 চালায়।
+Symfony 6.4 সামঞ্জস্য মাপা হয়েছে (এভাবেই 7.4-এ অদৃশ্য দুটি অতিরিক্ত-ফিট ধরা পড়েছিল: 6.4-এ `Request` প্রপার্টিতে কোনো নেটিভ টাইপ ডিক্লারেশন থাকে না, আর `prepare()` যে charset যোগ করে তার কেস আলাদা)। **দুটি লেগই CI-তে চলে**: মূল 7.x লেগ এবং আলাদা `tools/contracts/legacy-symfony64` প্রজেক্ট, যা একই case ফাইল কপি না করেই চালায় — আর দুটি লেগই tag গেটেও আছে।
 
 ---
 

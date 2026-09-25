@@ -204,6 +204,136 @@ class XhprofDisplay
   public static $metrics = null;
 
   /**
+   * 本次请求的渲染状态：`$stats`/`$pc_stats`/`$totals`/`$totals_1`/`$totals_2`/
+   * `$sort_col`/`$metrics`/`$diff_mode`/`$display_calls` 这九个量是**按请求**算出来的
+   * （见 XhprofLib::init_metrics() 与 profiler_report()），却存在进程级静态属性里——
+   * Hyperf 常驻 worker 里两个协程并发渲染时互相覆盖。
+   *
+   * 覆盖是**可达**的，不是理论风险：单 run 报告的渲染链在 `init_metrics()` 写完、
+   * 列头/行渲染读之前，还有一次真 I/O —— `full_report()` 里的
+   * `XhprofLib::getRequestLog()`（一次 Redis GET）。协程在那里让出，隔壁请求把这九个量
+   * 覆盖成它自己的，本请求接着渲染出的就是**另一份数据的列头配自己的行**：表头多出
+   * 本 run 没采集的指标列、行渲染对未采集指标报 `Undefined array key`、百分比分母
+   * 换成别人的 totals、行序按别人的排序列重排。复现见
+   * tests/Unit/Lib/RenderStateCoroutineTest.php（让出点钉在那次 request_log 读上）。
+   *
+   * 隔离方式与 `I18n::$locale` 同一套：Hyperf 下读写 `\Hyperf\Context\Context`
+   * （每协程一份存储），其余框架仍读写上面那些静态属性——那些框架一个请求一个进程，
+   * 静态属性本来就是请求级的。**这里只隔离了这九个量**：`$descriptions`/
+   * `$sortable_columns`/`$format_cbk`/`$diff_descriptions` 与 `$vwbar`/`$vbar`/
+   * `$vbbar`/`$vrbar`/`$vgbar` 是常量（每次请求写入的值都相同），继续共享。
+   *
+   * **绕过本类读写 `$stats` 等属性（含测试夹具、`XhprofLib` 之外的调用方）在 Hyperf 下
+   * 会静默失效**：写进去没人读（读的是 Context），读出来是别人或上一次的值。新增写入点
+   * 请走 set_render_state()。
+   */
+  private const RENDER_KEY = 'xhprof.display';
+
+  /** Hyperf 协程环境且 Context 类真的在（与 I18n::inCoroutineContext() 同一套判定）。 */
+  private static function in_coroutine_context(): bool
+  {
+    return Xhprof::isHyperfContext() && class_exists(\Hyperf\Context\Context::class);
+  }
+
+  /**
+   * 取本协程的渲染状态量。Hyperf 下读本协程的 Context（没写过就是下面那个默认值），
+   * 其余框架读静态属性——两条路的默认值逐字相同。
+   *
+   * @return mixed
+   */
+  private static function state(string $name, mixed $default)
+  {
+    if (self::in_coroutine_context()) {
+      $state = \Hyperf\Context\Context::get(self::RENDER_KEY);
+      return is_array($state) && array_key_exists($name, $state) ? $state[$name] : $default;
+    }
+    return self::$$name;
+  }
+
+  /**
+   * 写本协程的渲染状态（**只更新传入的键**）。Hyperf 下写 Context，其余框架写静态属性。
+   *
+   * 键名与属性名逐个对应（`'stats' => self::$stats`）：这是本类内部契约，拼错在两条路上
+   * 都会当场炸（非 Hyperf 是 `self::$$name` 的 Error，Hyperf 是下面那句异常）——
+   * 静默写进一个没人读的键正是这次要消灭的那类 bug。
+   *
+   * @param array<string, mixed> $values
+   */
+  public static function set_render_state(array $values): void
+  {
+    foreach ($values as $name => $value) {
+      if (!property_exists(self::class, (string) $name)) {
+        throw new \InvalidArgumentException("XhprofDisplay::set_render_state(): unknown render state key '$name'");
+      }
+    }
+    if (self::in_coroutine_context()) {
+      $state = \Hyperf\Context\Context::get(self::RENDER_KEY);
+      \Hyperf\Context\Context::set(self::RENDER_KEY, $values + (is_array($state) ? $state : array()));
+      return;
+    }
+    foreach ($values as $name => $value) {
+      self::$$name = $value;
+    }
+  }
+
+  /** @return list<string> 本次请求要显示的列（`fn`, `ct`, `Calls%`, 各指标及 I/E 百分比列） */
+  public static function stats(): array
+  {
+    return (array) self::state('stats', array());
+  }
+
+  /** @return list<string> 与 stats() 同源，但去掉 I/E 百分比列（父/子表的 colspan 用它） */
+  public static function pc_stats(): array
+  {
+    return (array) self::state('pc_stats', array());
+  }
+
+  /** @return array<string, int>|int 本次 run 的合计值（百分比的分母），未采样时为 0 */
+  public static function totals()
+  {
+    return self::state('totals', 0);
+  }
+
+  /** @return array<string, int>|int diff 报告里 run1 的合计值 */
+  public static function totals_1()
+  {
+    return self::state('totals_1', 0);
+  }
+
+  /** @return array<string, int>|int diff 报告里 run2 的合计值 */
+  public static function totals_2()
+  {
+    return self::state('totals_2', 0);
+  }
+
+  /**
+   * 本次请求的排序列。初值是字面量 `wt`，**不是**上一次请求留下的值——
+   * 常驻 worker 下继承排序列会让 sort_cbk 取到本次 run 没采集的指标。
+   */
+  public static function sort_col(): string
+  {
+    return (string) self::state('sort_col', 'wt');
+  }
+
+  /** @return list<string>|null 本次 run 实际采集到的指标（ut/st/samples 永不采集） */
+  public static function metrics(): ?array
+  {
+    $metrics = self::state('metrics', null);
+    return is_array($metrics) ? $metrics : null;
+  }
+
+  public static function diff_mode(): bool
+  {
+    return (bool) self::state('diff_mode', false);
+  }
+
+  /** 有没有采集调用次数（`wt` 存在即视为有），决定表里有没有 Calls 两列 */
+  public static function display_calls(): bool
+  {
+    return (bool) self::state('display_calls', true);
+  }
+
+  /**
    * Generate references to required stylesheets & javascript.
    *
    * If the calling script (such as index.php) resides in
@@ -243,7 +373,12 @@ class XhprofDisplay
     if (empty($ui_dir_url_path)) $ui_dir_url_path = rtrim(dirname(Xhprof::getRequest()->url()), '/\\');
 
     // style sheets
-    $echo_page = "<link href='$ui_dir_url_path/css/xhprof.css' rel='stylesheet' " .
+    // 站点图标 = 项目宠物（同一份图形在 docs/images/pet.svg，改一处要同步另一处）。
+    // 与下面的 css/js 一样属于**资源链接**：不参与 `?token=`/`?lang=` 的传播，
+    // 故和它们放在一起（XhprofTest 那条「每个内部链接都要带 token」只看跳到报告页
+    // 自身的链接，资源链接不在其列）。
+    $echo_page = "<link href='$ui_dir_url_path/pet.svg' rel='icon' type='image/svg+xml' />";
+    $echo_page .= "<link href='$ui_dir_url_path/css/xhprof.css' rel='stylesheet' " .
       " type='text/css' />";
     $echo_page .= "<link href='$ui_dir_url_path/css/bootstrap.css' rel='stylesheet' " .
       " type='text/css' />";
@@ -370,8 +505,8 @@ class XhprofDisplay
 
   public static function sort_cbk($a, $b)
   {
-    $sort_col = XhprofDisplay::$sort_col;
-    $diff_mode = XhprofDisplay::$diff_mode;
+    $sort_col = XhprofDisplay::sort_col();
+    $diff_mode = XhprofDisplay::diff_mode();
     if ($sort_col == "fn") {
       $left = strtoupper($a["fn"]);
       $right = strtoupper($b["fn"]);
@@ -408,7 +543,7 @@ class XhprofDisplay
   public static function stat_description($stat)
   {
     $diff_descriptions = XhprofDisplay::$diff_descriptions;
-    $diff_mode = XhprofDisplay::$diff_mode;
+    $diff_mode = XhprofDisplay::diff_mode();
     // 非 diff 模式走词表；diff 模式仍用 $diff_descriptions 的英文字面量
     // （diff 列头这次没纳入翻译范围，行为保持不变）。
     $result = $diff_mode ? ($diff_descriptions[$stat] ?? '') : XhprofDisplay::col_text($stat);
@@ -429,7 +564,7 @@ class XhprofDisplay
     $totals_1 = 0;
     $totals_2 = 0;
 
-    $diff_mode = XhprofDisplay::$diff_mode;
+    $diff_mode = XhprofDisplay::diff_mode();
     $base_path = XhprofDisplay::base_path();
 
     if (!empty($rep_symbol)) {
@@ -437,15 +572,17 @@ class XhprofDisplay
       if ($diff_mode) $run2_data = XhprofLib::xhprof_trim_run($run2_data, array($rep_symbol));
     }
     $symbol_tab = XhprofLib::xhprof_compute_flat_info($run1_data, $totals);
-    XhprofDisplay::$totals = $totals;
+    XhprofDisplay::set_render_state(array('totals' => $totals));
     if ($diff_mode) {
       $run_delta = XhprofLib::xhprof_compute_diff($run1_data, $run2_data);
       $symbol_tab  = XhprofLib::xhprof_compute_flat_info($run_delta, $totals);
       $symbol_tab1 = XhprofLib::xhprof_compute_flat_info($run1_data, $totals_1);
       $symbol_tab2 = XhprofLib::xhprof_compute_flat_info($run2_data, $totals_2);
-      XhprofDisplay::$totals = $totals;
-      XhprofDisplay::$totals_1 = $totals_1;
-      XhprofDisplay::$totals_2 = $totals_2;
+      XhprofDisplay::set_render_state(array(
+        'totals' => $totals,
+        'totals_1' => $totals_1,
+        'totals_2' => $totals_2,
+      ));
     }
     // 模板 + 两个**已转义**的参数（run_id 来自查询串、描述来自缓存）
     $run1_txt = '<b>' . sprintf(
@@ -567,7 +704,7 @@ class XhprofDisplay
         // 用零值行代替 null：既消除下游海量 "array offset on null" warning，
         // 又让 diff 语义正确——run1 未出现即 0，差额正是 run2 的实际值。
         $zero = array('ct' => 0);
-        foreach (XhprofDisplay::$metrics as $metric) {
+        foreach (XhprofDisplay::metrics() as $metric) {
           $zero[$metric] = 0;
           $zero["excl_" . $metric] = 0;
         }
@@ -612,7 +749,7 @@ class XhprofDisplay
     $vbbar = XhprofDisplay::$vbbar;
     $vrbar = XhprofDisplay::$vrbar;
     $vgbar = XhprofDisplay::$vgbar;
-    $diff_mode = XhprofDisplay::$diff_mode;
+    $diff_mode = XhprofDisplay::diff_mode();
 
     if ($bold) {
       if ($diff_mode) {
@@ -666,11 +803,11 @@ class XhprofDisplay
    */
   public static function print_function_info($url_params, $info, int $row_index = 0)
   {
-    $totals = XhprofDisplay::$totals;
-    $sort_col = XhprofDisplay::$sort_col;
-    $metrics = XhprofDisplay::$metrics;
+    $totals = XhprofDisplay::totals();
+    $sort_col = XhprofDisplay::sort_col();
+    $metrics = XhprofDisplay::metrics();
     $format_cbk = XhprofDisplay::$format_cbk;
-    $display_calls = XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::display_calls();
     $base_path = XhprofDisplay::base_path();
 
     $echo_page = "";
@@ -826,7 +963,7 @@ class XhprofDisplay
   public static function print_flat_data($url_params, $title, $flat_data, $limit)
   {
 
-    $stats = XhprofDisplay::$stats;
+    $stats = XhprofDisplay::stats();
     $sortable_columns = XhprofDisplay::$sortable_columns;
     $vwbar = XhprofDisplay::$vwbar;
     $base_path = XhprofDisplay::base_path();
@@ -895,14 +1032,14 @@ class XhprofDisplay
   public static function full_report($url_params, $symbol_tab, $run1, $run2)
   {
     $vwbar = XhprofDisplay::$vwbar;
-    $totals = XhprofDisplay::$totals;
-    $totals_1 = XhprofDisplay::$totals_1;
-    $totals_2 = XhprofDisplay::$totals_2;
-    $metrics = XhprofDisplay::$metrics;
-    $diff_mode = XhprofDisplay::$diff_mode;
-    $sort_col = XhprofDisplay::$sort_col;
+    $totals = XhprofDisplay::totals();
+    $totals_1 = XhprofDisplay::totals_1();
+    $totals_2 = XhprofDisplay::totals_2();
+    $metrics = XhprofDisplay::metrics();
+    $diff_mode = XhprofDisplay::diff_mode();
+    $sort_col = XhprofDisplay::sort_col();
     $format_cbk = XhprofDisplay::$format_cbk;
-    $display_calls = XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::display_calls();
     $base_path = XhprofDisplay::base_path();
 
     $echo_page = '<div class="xp-main">';
@@ -1059,10 +1196,10 @@ class XhprofDisplay
    */
   public static function pc_info($info, $base_ct, $base_info, $parent)
   {
-    $sort_col = XhprofDisplay::$sort_col;
-    $metrics = XhprofDisplay::$metrics;
+    $sort_col = XhprofDisplay::sort_col();
+    $metrics = XhprofDisplay::metrics();
     $format_cbk = XhprofDisplay::$format_cbk;
-    $display_calls = XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::display_calls();
     $type = "Child";
     if ($parent) $type = "Parent";
     $echo_page = "";
@@ -1111,7 +1248,7 @@ class XhprofDisplay
     $title = I18n::plain($parent
       ? ($many ? 'pc.parentMany' : 'pc.parent')
       : ($many ? 'pc.childMany' : 'pc.child'));
-    $colspan = count(XhprofDisplay::$pc_stats);
+    $colspan = count(XhprofDisplay::pc_stats());
     $echo_page = "<tr class=\"xp-pc-section-title\"><td colspan=\"{$colspan}\">";
     $echo_page .= "<b>" . $title . "</b>";
     $echo_page .= "</td></tr>";
@@ -1174,14 +1311,14 @@ class XhprofDisplay
   ) {
     $vwbar = XhprofDisplay::$vwbar;
     $vbar = XhprofDisplay::$vbar;
-    $totals = XhprofDisplay::$totals;
-    $pc_stats = XhprofDisplay::$pc_stats;
+    $totals = XhprofDisplay::totals();
+    $pc_stats = XhprofDisplay::pc_stats();
     $sortable_columns = XhprofDisplay::$sortable_columns;
-    $metrics = XhprofDisplay::$metrics;
-    $diff_mode = XhprofDisplay::$diff_mode;
+    $metrics = XhprofDisplay::metrics();
+    $diff_mode = XhprofDisplay::diff_mode();
     $format_cbk = XhprofDisplay::$format_cbk;
-    $sort_col = XhprofDisplay::$sort_col;
-    $display_calls = XhprofDisplay::$display_calls;
+    $sort_col = XhprofDisplay::sort_col();
+    $display_calls = XhprofDisplay::display_calls();
     $base_path = XhprofDisplay::base_path();
 
     $echo_page = '<div class="xp-main"><div class="xp-card">';

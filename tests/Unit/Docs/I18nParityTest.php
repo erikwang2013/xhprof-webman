@@ -7,25 +7,35 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Docs;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
+// 切换器那一行的判据必须与生成器**同源**：另写一套正则迟早分叉，分叉的那一侧就是
+// 没人守的那一侧（本仓库已有一次中英各写一套、结果英文那份无人守的教训）。
+require_once dirname(__DIR__, 3) . '/tools/i18n/lib.php';
+
 /**
  * 多语言 README 的结构一致性。
  *
  * 这里**只**断言骨架：标题数量与层级序列、代码围栏数、表格行数。**它不、也不能**
  * 断言译文是否读得通——没有任何脚本能判断含义、语域或自然度，本文件不假装可以。
  *
- * 存在的理由：13 份译文由 12 个独立 agent 从 `README.EN.md` 译出，**一旦有人改了
- * 英文源而漏改某一份译文**，译文就会与源结构性脱节，而那种脱节在人工抽查里
- * 几乎发现不了（每一份单看都自洽）。这条测试让它机械可发现。
+ * 存在的理由：12 份译文由独立 agent 从英文**源**译出，**一旦有人改了英文源而漏改
+ * 某一份译文**，译文就会与源结构性脱节，而那种脱节在人工抽查里几乎发现不了
+ * （每一份单看都自洽）。这条测试让它机械可发现。
+ *
+ * 基线读的是手写源，不是产物：
+ *   * 中文源 = 仓库根 `README.md`；
+ *   * 英文源 = `tools/i18n/readme/en.md`（**不是**产物 `docs/i18n/en/README.md`——
+ *     产物经生成器改写：链接前缀 `../`、前面注入切换器，拿它当基线会造出大片假红）。
  *
  * 行数刻意**不**断言：各语言的机器翻译声明长短不同（1–2 行），行数天然有差。
  */
 class I18nParityTest extends TestCase
 {
-    /** @return string[] 仓库根到各 README 的相对路径 */
+    /** @return string[] 仓库根到各 README 的相对路径（中文源 + 英文源 + 12 份产物） */
     private static function readmes(): array
     {
         $root = dirname(__DIR__, 3);
-        $files = [$root . '/README.md', $root . '/README.EN.md'];
+        // 两份手写源排在前面，$files[0] 是基线；12 份产物由 glob 收进来。
+        $files = [$root . '/README.md', $root . '/tools/i18n/readme/en.md'];
         foreach (glob($root . '/docs/i18n/*/README.md') ?: [] as $f) {
             $files[] = $f;
         }
@@ -57,7 +67,7 @@ class I18nParityTest extends TestCase
     public function allReadmesShareTheSameStructure(): void
     {
         $files = self::readmes();
-        $this->assertGreaterThanOrEqual(14, count($files), '至少应有 2 份根 README + 12 份译文');
+        $this->assertGreaterThanOrEqual(14, count($files), '至少应有 2 份手写源 + 12 份产物');
 
         [$refLevels, $refFences, $refRows] = self::shape($files[0]);
 
@@ -80,15 +90,15 @@ class I18nParityTest extends TestCase
     }
 
     /**
-     * 根 README 的语言切换器必须**恰好**列出实际存在的译文，不多不少。
+     * 仓库根 README 的语言切换器必须**恰好**列出 `docs/i18n/` 下实际存在的语言条目，
+     * 不多不少。
      *
-     * 两条方向都要拦：写了不存在的语言 → 读者点进去是 404；加了译文却忘了挂链接
+     * 两条方向都要拦：写了不存在的语言 → 读者点进去是 404；加了目录却忘了挂链接
      * → 那份译文没有任何入口。后者尤其隐蔽，因为文件在盘上、测试全绿。
      *
-     * **`en` 目录除外**：`docs/i18n/en/` 是英文试点，同时充当 `tools/i18n/check.php`
-     * 的**宽度/重叠基线**（它读 `docs/i18n/en/images/`）。切换器里 English 那一项指向
-     * 仓库根的 `./README.EN.md`，所以这个目录不是「一个可切换的语言条目」。
-     * 本测试第一次跑就红在这里——它当时抓到的正是这个未挂链接的目录，不是误报。
+     * 根那份切换器是全仓库唯一**手写**的（其余 12 份由生成器写），所以只有它需要这条
+     * 测试。`en` 自英文 README 搬进 `docs/` 之后就是普通的一员：English 那一项指向
+     * `./docs/i18n/en/README.md`，不再指向已删除的仓库根 `README.EN.md`。
      */
     #[Test]
     public function rootSwitcherListsExactlyTheLocalesThatExist(): void
@@ -96,51 +106,57 @@ class I18nParityTest extends TestCase
         $root = dirname(__DIR__, 3);
         $switcher = self::switcherLine($root . '/README.md');
         $onDisk = self::localeDirs($root);
-        $this->assertNotEmpty($onDisk, 'docs/i18n/ 下没有任何译文，夹具已失效');
+        $this->assertNotEmpty($onDisk, 'docs/i18n/ 下没有任何语言条目，夹具已失效');
 
-        $this->assertSame([], self::switcherProblems($switcher, $onDisk, 'zh'));
+        $this->assertSame([], self::switcherProblems($switcher, $onDisk));
     }
 
     /**
-     * `README.EN.md` 那一行切换器必须与中文那份**互为镜像**。
+     * 每一份产物的切换器必须**逐字**是语言表算出来的那一行。
      *
-     * **这条补的是一个真实漏掉的档**：上面的用例只读 `README.md`，
-     * `everyLocaleReadmeCarriesTheLanguageSwitcher` 又显式跳过 `en`（它是基线目录而非
-     * 译文），于是**英文根 README 的切换器一个检查都没有**——新增一门语言时，
-     * 只改中文那份、忘了英文那份，13 条链接里少一条，全部门禁照样绿，
-     * 而读英文的（外国）读者恰恰是最依赖切换器的那批人。
+     * 判据与生成器**同源**（`i18n_language_switcher()`，见文件顶部 require）：另写一套
+     * 正则迟早分叉，分叉的那一侧就是没人守的那一侧。这条接替了「英文根 README 的切换器
+     * 与中文互为镜像」——英文 README 现在住在 `docs/i18n/en/` 里、由同一张表生成，
+     * 镜像关系不再靠两份手写文档对齐，而靠这一行相等。
      *
-     * 判据与中文那份共用 `switcherProblems()`：列出的语言 = `docs/i18n/` 下实际存在的
-     * 译文（不含 `en` 自己），另有指向另一份根 README 的入口，且不链自己。
+     * 它同时是「产物落后于工具链」的探测器：语言表改了（加一门语言、改个自称）而某一份
+     * 产物没重跑，这里就红——而读英文的（外国）读者恰恰是最依赖切换器的那批人。
      */
     #[Test]
-    public function theEnglishRootSwitcherIsTheMirrorOfTheChineseOne(): void
+    public function everyLocaleReadmeCarriesTheSwitcherTheLanguageTableDescribes(): void
     {
         $root = dirname(__DIR__, 3);
-        $switcher = self::switcherLine($root . '/README.EN.md');
-        $onDisk = self::localeDirs($root);
-        $this->assertNotEmpty($onDisk, 'docs/i18n/ 下没有任何译文，夹具已失效');
+        $checked = 0;
 
-        $this->assertSame([], self::switcherProblems($switcher, $onDisk, 'en'));
+        foreach (glob($root . '/docs/i18n/*/README.md') ?: [] as $f) {
+            $lang = basename(dirname($f));
+            // 前后各补一个换行再找整行：切换器既可能在第一行（无声明），也可能在
+            // 声明之后（第 3 行），用「整行相等」把两种情况一起管住。
+            $this->assertStringContainsString(
+                "\n" . i18n_language_switcher($lang) . "\n",
+                "\n" . (string) file_get_contents($f),
+                "docs/i18n/{$lang}/README.md 的切换器不是语言表算出来的那一行——"
+                . '要么产物落后于 tools/i18n/lib.php（重跑 generate.php --lang=' . $lang . '），要么有人手改了它'
+            );
+            $checked++;
+        }
+
+        // 没有这一句，docs/i18n/ 为空时本测试会平凡通过
+        $this->assertGreaterThanOrEqual(12, $checked, '受检产物少于 12 份，夹具已失效');
     }
 
     /**
-     * 切换器行的判据本体（中文那份与英文那份**同一条规则**，两份 README 只是 `$selfCode`
-     * 不同）：中英各写一套正则迟早分叉，而分叉的那一侧就是没人守的那一侧。
+     * 切换器行的判据本体：列出的语言 = `docs/i18n/` 下实际存在的语言条目，自己那条
+     * 加粗不链接，也不链自己。
      *
-     * @param string[] $localeDirs docs/i18n/ 下实际存在的语言码（不含 en）
-     * @param string $selfCode 'zh' 或 'en'——这一行所在 README 自己代表的语言条目
+     * @param string[] $localeDirs docs/i18n/ 下实际存在的语言码（含 en）
      * @return list<string> 不合格之处；空数组 = 这一行是合格的
      */
-    private static function switcherProblems(string $line, array $localeDirs, string $selfCode): array
+    private static function switcherProblems(string $line, array $localeDirs): array
     {
         if ($line === '') {
             return ['找不到切换器那一行（含 `](./docs/i18n/` 与 ` · ` 的那一行）'];
         }
-
-        $selfRoot = $selfCode === 'zh' ? './README.md' : './README.EN.md';
-        $otherEntry = $selfCode === 'zh' ? '[English](./README.EN.md)' : '[中文](./README.md)';
-        $selfEndonym = $selfCode === 'zh' ? '**中文**' : '**English**';
 
         $problems = [];
 
@@ -149,29 +165,26 @@ class I18nParityTest extends TestCase
         sort($linked);
         if ($linked !== $localeDirs) {
             $problems[] = sprintf(
-                '切换器列出的语言与 docs/i18n/ 下实际存在的译文不一致：漏了 [%s]，多了 [%s]',
+                '切换器列出的语言与 docs/i18n/ 下实际存在的条目不一致：漏了 [%s]，多了 [%s]',
                 implode(', ', array_diff($localeDirs, $linked)),
                 implode(', ', array_diff($linked, $localeDirs))
             );
         }
 
-        if (!str_contains($line, $otherEntry)) {
-            $problems[] = "切换器里没有另一份根 README 的入口 {$otherEntry}";
+        if (!str_contains($line, '**中文**')) {
+            $problems[] = '切换器没有把自己标成 **中文**（当前页应当是加粗、不链接的）';
         }
-        if (!str_contains($line, $selfEndonym)) {
-            $problems[] = "切换器没有把自己标成 {$selfEndonym}（当前页应当是加粗、不链接的）";
-        }
-        if (str_contains($line, "({$selfRoot})")) {
-            $problems[] = "切换器链到了自己（{$selfRoot}）";
+        if (str_contains($line, '(./README.md)')) {
+            $problems[] = '切换器链到了自己（./README.md）';
         }
 
         return $problems;
     }
 
     /**
-     * `docs/i18n/` 下实际存在的语言码，**不含 `en`**：那个目录是英文试点，同时充当
-     * `tools/i18n/check.php` 的宽度/重叠基线，切换器里 English 那一项指向仓库根的
-     * `./README.EN.md`，所以它不是「一个可切换的语言条目」。
+     * `docs/i18n/` 下实际存在的语言码，**含 `en`**：英文 README 搬进 `docs/` 之后，
+     * 它和其余 11 份一样是切换器里的一个语言条目（`./docs/i18n/en/README.md`），
+     * 不再是「仓库根那份英文 README 的影子」。
      *
      * @return list<string>
      */
@@ -179,16 +192,18 @@ class I18nParityTest extends TestCase
     {
         $codes = [];
         foreach (glob($root . '/docs/i18n/*/README.md') ?: [] as $f) {
-            $lang = basename(dirname($f));
-            if ($lang !== 'en') {
-                $codes[] = $lang;
-            }
+            $codes[] = basename(dirname($f));
         }
         sort($codes);
         return $codes;
     }
 
-    /** 取出根 README 里那一行切换器（它以加粗的当前页自称开头，含指向 docs/i18n/ 的链接） */
+    /**
+     * 取出根 README 里那一行切换器（它以加粗的当前页自称开头，含指向 docs/i18n/ 的链接）。
+     *
+     * 只用于仓库根那份手写切换器；产物那份由 `everyLocaleReadmeCarriesTheSwitcher…`
+     * 逐字比对，不需要在这里找行。
+     */
     private static function switcherLine(string $path): string
     {
         foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
@@ -255,7 +270,20 @@ class I18nParityTest extends TestCase
         return $missing;
     }
 
-    /** @return array<string, string> 语言码 => 译文正文（不含 en：那是基线，不是译文） */
+    /**
+     * 英文**源**正文（手写的那份）。产物 `docs/i18n/en/README.md` **不是**它：产物的
+     * 链接被生成器改写过（加 `../` 前缀）、前面还注入了切换器，拿产物当基线会造出
+     * 大片假红。
+     */
+    private static function englishSource(string $root): string
+    {
+        return (string) file_get_contents($root . '/tools/i18n/readme/en.md');
+    }
+
+    /**
+     * @return array<string, string> 语言码 => 产物正文（含 en：它的产物同样是生成出来的，
+     *                             源码里的标识符一个都不能丢，理由见上面的用例）
+     */
     private static function translations(string $root): array
     {
         $out = [];
@@ -283,7 +311,7 @@ class I18nParityTest extends TestCase
     public function everyTranslationKeepsTheIdentifiersOfTheEnglishSource(): void
     {
         $root = dirname(__DIR__, 3);
-        $source = (string) file_get_contents($root . '/README.EN.md');
+        $source = self::englishSource($root);
         $identifiers = self::invariantIdentifiers($source);
         $this->assertGreaterThan(100, count($identifiers), '英文源里解析出的标识符少于 100 个，判据或夹具已失效');
 
@@ -311,7 +339,7 @@ class I18nParityTest extends TestCase
     public function theIdentifierGateGoesRedWhenAParagraphIsDropped(): void
     {
         $root = dirname(__DIR__, 3);
-        $source = (string) file_get_contents($root . '/README.EN.md');
+        $source = self::englishSource($root);
         $translations = self::translations($root);
         $this->assertGreaterThanOrEqual(11, count($translations), '受检译文少于 11 份，夹具已失效');
         $this->assertSame([], self::missingIdentifiers($source, $translations), '真实译文必须先干净，否则下面的红说明不了任何事');
@@ -340,10 +368,10 @@ class I18nParityTest extends TestCase
     }
 
     /**
-     * 检查有效性的证明：拿**真实那一行**在内存里改一处（去掉一条语言链接 / 删掉另一份根
-     * README 的入口），`switcherProblems()` 必须报出来；没改过的两份必须报空。
+     * 检查有效性的证明：拿**真实那一行**（仓库根那份手写的）在内存里改一处，
+     * `switcherProblems()` 必须报出来；没改过的必须报空。
      *
-     * 不落盘改 README*.md：那是别的 agent 正在写的文件。
+     * 不落盘改 README.md：那是别的 agent 正在写的文件。
      */
     #[Test]
     public function theSwitcherGateGoesRedOnABrokenSwitcherLine(): void
@@ -351,32 +379,34 @@ class I18nParityTest extends TestCase
         $root = dirname(__DIR__, 3);
         $onDisk = self::localeDirs($root);
         $zh = self::switcherLine($root . '/README.md');
-        $en = self::switcherLine($root . '/README.EN.md');
 
         // 夹具本身必须先合格，否则下面的红说明不了任何事
-        $this->assertSame([], self::switcherProblems($zh, $onDisk, 'zh'));
-        $this->assertSame([], self::switcherProblems($en, $onDisk, 'en'));
+        $this->assertSame([], self::switcherProblems($zh, $onDisk));
 
         // (1) 少一条语言链接（新增一门语言时只改了另一份 README 的样子）
-        $broken = preg_replace('# · \[한국어\]\(\./docs/i18n/ko/README\.md\)#u', '', $en, 1, $n);
-        $this->assertSame(1, $n, '英文切换器里找不到 한국어 那一条，夹具已失效');
-        $problems = self::switcherProblems((string) $broken, $onDisk, 'en');
+        $broken = preg_replace('# · \[한국어\]\(\./docs/i18n/ko/README\.md\)#u', '', $zh, 1, $n);
+        $this->assertSame(1, $n, '切换器里找不到 한국어 那一条，夹具已失效');
+        $problems = self::switcherProblems((string) $broken, $onDisk);
         $this->assertNotSame([], $problems);
         $this->assertStringContainsString('ko', implode("\n", $problems), '漏掉的语言要出现在报错里');
 
-        // (2) 少了另一份根 README 的入口（中英互跳的那一条）
-        $problems = self::switcherProblems(str_replace('[中文](./README.md)', '[中文](./zh/README.md)', $en), $onDisk, 'en');
-        $this->assertNotSame([], $problems);
-        $this->assertStringContainsString('[中文](./README.md)', implode("\n", $problems));
-
-        // (3) 链到自己（当前页那条本该是加粗的）
-        $problems = self::switcherProblems(str_replace('**中文**', '[中文](./README.md)', $zh), $onDisk, 'zh');
+        // (2) 链到自己（当前页那条本该是加粗的）
+        $problems = self::switcherProblems(str_replace('**中文**', '[中文](./README.md)', $zh), $onDisk);
         $this->assertNotSame([], $problems);
         $this->assertStringContainsString('自己', implode("\n", $problems));
+
+        // (3) English 那一项还指着已删除的仓库根 README.EN.md —— 本次搬移最可能的
+        //     残留形态：文件搬走了，链接没跟着改，读者点进去是 404。
+        $stale = str_replace('[English](./docs/i18n/en/README.md)', '[English](./README.EN.md)', $zh);
+        $this->assertNotSame($zh, $stale, '切换器里没有 English 那一条，夹具已失效');
+        $problems = self::switcherProblems($stale, $onDisk);
+        $this->assertNotSame([], $problems);
+        $this->assertStringContainsString('en', implode("\n", $problems), '漏掉的 en 要出现在报错里');
     }
 
     /**
-     * 每一份译文 README 都必须自带语言切换器。
+     * 每一份产物 README 都必须自带语言切换器（`en` 也算一份：它是产物，不再是仓库根
+     * 那份英文 README 的影子）。
      *
      * **这条补的是一个真实漏掉的档**：一份在「生成器开始注入切换器」之前产出的译文，
      * 它自身的 6 条链接（`./images/*.svg`、`../../../docs/*.png`…）照样解析得动，
@@ -384,7 +414,8 @@ class I18nParityTest extends TestCase
      * `i18n-ru` 就是这样发现自己的交付落后了工具一个特性（靠起了一份 /tmp 副本做实验）。
      *
      * 判据用「至少 10 条指向兄弟语言的链接」而不是精确值：语言数量会增加，
-     * 精确值会让新增一门语言时这条测试变成维护负担。
+     * 精确值会让新增一门语言时这条测试变成维护负担。（切换器那一行的**内容**由
+     * `everyLocaleReadmeCarriesTheSwitcherTheLanguageTableDescribes` 逐字比对。）
      */
     #[Test]
     public function everyLocaleReadmeCarriesTheLanguageSwitcher(): void
@@ -394,9 +425,6 @@ class I18nParityTest extends TestCase
 
         foreach (glob($root . '/docs/i18n/*/README.md') ?: [] as $f) {
             $lang = basename(dirname($f));
-            if ($lang === 'en') {
-                continue;   // 基线目录，不是语言条目
-            }
             $body = file_get_contents($f) ?: '';
             // 统计指向**其它**语言的链接：排除指向自身的那一条
             preg_match_all('#\(\.\./([a-z0-9-]+)/README\.md\)#', $body, $m);
@@ -412,6 +440,6 @@ class I18nParityTest extends TestCase
         }
 
         // 没有这一句，docs/i18n/ 为空时本测试会平凡通过
-        $this->assertGreaterThanOrEqual(11, $checked, '受检译文少于 11 份，夹具已失效');
+        $this->assertGreaterThanOrEqual(12, $checked, '受检产物少于 12 份，夹具已失效');
     }
 }

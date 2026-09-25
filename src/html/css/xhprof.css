@@ -69,11 +69,12 @@ body {
   color: var(--xp-accent);
 }
 
+/* 品牌图标 = 项目宠物（src/html/pet.svg，与 docs/images/pet.svg 是同一份图形）。
+   url() 相对**本文件**解析，所以配了哪个 assets_url 前缀都不用改这里。 */
 .xp-brand-icon {
   width: 24px;
   height: 24px;
-  background: linear-gradient(135deg, #2ea043 0%, #56d364 100%);
-  border-radius: 6px;
+  background: url('../pet.svg') center / contain no-repeat;
 }
 
 .xp-nav-links {

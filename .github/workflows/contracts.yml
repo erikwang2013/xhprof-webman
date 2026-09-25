@@ -4,6 +4,13 @@ name: Contracts
 # 与 ci.yml 分开是刻意的：环需要一台装了真实包的机器（`tools/contracts/vendor`），
 # 而 ci.yml 的 test job 跑的是零运行依赖的单测，两者的失败含义完全不同。
 # 也因此 `tools/` 不进 ci.yml 的 `find src tests` —— ci.yml 保持零改动。
+#
+# 两条腿（matrix）：README 声明 Symfony 支持 `^6.4|^7.0`，而一个 composer 项目里装不下两版
+# （laravel/framework v11 要求 symfony/http-foundation ^7.2），所以 6.4 那条腿是**独立嵌套
+# 项目** tools/contracts/legacy-symfony64，跑的是同一份 cases/Symfony.php —— run.php
+# `--leg=symfony64` 只把 vendor 根换过去，不复制 case 文件。
+# 两条腿都必须在：只跑 7.x 时，一条只在 6.4 上不成立的断言（6.4 的属性没有原生类型声明、
+# prepare() 补的 charset 大小写不同）永远不会被看见 —— 上一轮就是靠手工探针才抓到的。
 
 on:
   push:
@@ -12,12 +19,31 @@ on:
 
 jobs:
   contracts:
-    name: 契约验证环（桩 vs 真实包）
+    name: 契约验证环（${{ matrix.leg }}）
     runs-on: ubuntu-latest
+
+    strategy:
+      # 一条腿红不取消另一条：两条腿的结论要各自看得到。掩盖另一条腿的结论，
+      # 等于少跑一条腿。
+      fail-fast: false
+      matrix:
+        include:
+          # 主腿：cases/*.php 全部，用 tools/contracts/vendor（当前 Symfony 7.4 线）。
+          - leg: main
+            install_dir: tools/contracts
+          # 第二腿：Symfony 6.4 线，只跑 Symfony.php（别的 case 与 Symfony 的版本矩阵无关，
+          # 主腿已用各自的最新包跑过）。它没装 symfony/mime，于是恰好走到 MIME 陷阱的**另一
+          # 条分支**（不钉 Content-Type 时 prepare() 直接抛 LogicException）—— 与主腿的
+          # 「有 mime、按内容嗅探」互补，两条腿合起来才把那个陷阱的两个分支都钉住。
+          - leg: symfony64
+            install_dir: tools/contracts/legacy-symfony64
+
     # cases/Redis.php 是**真 Redis 端到端**（业务请求 → 落库 → 报告页读回），前置就是
     # 127.0.0.1:6379 上有一个真服务器。用 service container 而不是 step 里现装：
     # 生命周期跟着 job 走，且 health-cmd 保证跑 case 时它**已经在监听**——那个 case
     # 连不上时是 FAIL 不是 SKIP（SKIP 数是冻结常量，不许随环境漂移）。
+    # service 是 job 级的、两条腿共用这一份定义：6.4 腿只跑 Symfony.php 用不到 redis，
+    # 但删掉它主腿那个 case 就必然 FAIL，所以这里对两条腿都保留。
     services:
       redis:
         image: redis:7
@@ -32,20 +58,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          # tools/contracts/composer.json 要求 php >= 8.2（对齐 ci.yml 的 test job）。
+          # 两个 tools/contracts*/composer.json 都要求 php >= 8.2（对齐 ci.yml 的 test job）。
           # 不写死版本的话，runner 默认 PHP 变了会变成"环在某天开始失败"的噪声。
           php-version: '8.3'
           # 必须显式装 xhprof（与 ci.yml 一致）。理由不是"多测一点"：几个 case 在缺
           # ext-xhprof 时会把采样类断言**诚实地计入 SKIP**而不是静默通过，于是
-          # run.php 的 SKIP 总数会随环境漂移（本机 9 → 无扩展 13），而 EXPECTED_SKIPS
-          # 是一个冻结常量 —— 它一旦随环境变化，这道签字闸门就失去意义。
+          # run.php 的 SKIP 总数会随环境漂移（本机两条腿合计 8；缺扩展时仅 Symfony 一个
+          # case 就会多出 36），而两条腿的期望 SKIP 都是冻结常量 —— 它们一旦随环境变化，
+          # 这道签字闸门就失去意义。
           extensions: xhprof, redis
           coverage: none
       # 故意**不加** --ignore-platform-reqs：PHP 或扩展不满足时这里就该炸，
       # 而不是装出一套残缺依赖让环在下面假装通过。
+      # 两腿各自 install 自己那份 composer.lock（都在仓库里），所以"这条腿装了什么"
+      # 是可复核的，不会随上游发包漂移。
       - name: Install contract dependencies
-        run: composer install -d tools/contracts --no-interaction --prefer-dist
-      # 环自带三道闸：任一 FAIL 非零退出；SKIP 数必须等于冻结常量（否则"验不过就标
-      # skip"会静默变绿）；某个 case 加载期崩溃时仍会打印其余 case 的结论。
+        run: composer install -d ${{ matrix.install_dir }} --no-interaction --prefer-dist
+      # 环自带四道闸：任一 FAIL 非零退出；SKIP 数必须等于**该腿**的冻结常量（否则"验不过
+      # 就标 skip"会静默变绿）；腿的版本身份要与它自己的 composer.lock 相符（否则 6.4 腿
+      # 的 vendor 被换成 7.x 时会悄悄变成主腿的副本）；某个 case 加载期崩溃时仍会打印
+      # 其余 case 的结论。腿名写错是直接报错，不会静默回落到主腿。
       - name: Run contract checks
-        run: php tools/contracts/run.php
+        run: php tools/contracts/run.php --leg=${{ matrix.leg }}

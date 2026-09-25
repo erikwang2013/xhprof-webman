@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Design-Abwägungen: Entscheidung, Grund und Kosten</title>
-  <desc>Eine Gegenüberstellung von fünf Schlüsselentscheidungen, jede mit der Entscheidung selbst, dem eingebrachten Nutzen und den entstandenen Kosten: Core hängt nur von 5 Verträgen ab, Eintragsklassen bedienen die Report-Seite selbst, es wird keine gemeinsame Schicht herausgezogen, Stubs werden von einem unabhängigen Verifikationszyklus geprüft, und die sechs neuen Frameworks nutzen explizite Injektion statt autoDetect. Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original: README.EN.md.</desc>
+  <desc>Eine Gegenüberstellung von fünf Schlüsselentscheidungen, jede mit der Entscheidung selbst, dem eingebrachten Nutzen und den entstandenen Kosten: Core hängt nur von 5 Verträgen ab, Eintragsklassen bedienen die Report-Seite selbst, es wird keine gemeinsame Schicht herausgezogen, Stubs werden von einem unabhängigen Verifikationszyklus geprüft, und die sechs neuen Frameworks nutzen explizite Injektion statt autoDetect. Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original.</desc>
 
   <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
 

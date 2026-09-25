@@ -13,8 +13,10 @@ use PHPUnit\Framework\TestCase;
  *
  * **两套清单不是同一个东西**，所以这里比的是"报告页的 locale 去掉源语言"：
  *   * 报告页有 13 个 locale（`I18n::AVAILABLE`），源语言是 `zh_CN`；
- *   * docs 只有 12 份译文（`docs/i18n/<lang>/README.md`），**没有 zh_CN 的译文**——
- *     中文是源，源就是仓库根那份 `README.md` 本身，不需要也不应该再译一份。
+ *   * docs 有 12 个目录（`docs/i18n/<lang>/README.md`），**没有 zh_CN**——中文是源，
+ *     源就是仓库根那份 `README.md` 本身，不需要也不应该再译一份。
+ *     `en` 在 docs 里**有**目录，但它是生成产物（正文源是 `tools/i18n/readme/en.md`），
+ *     不是译文；本测试对这条不敏感，两种身份都要求 `en` 出现在 `for lang` 列表里。
  * 于是 docs 门禁要跑的是「AVAILABLE 去掉 zh_CN」之后的 12 个。
  *
  * 存在的理由：`tools/i18n/check.php` 是唯一比对 SVG 文本与术语表的工具，而它的语言

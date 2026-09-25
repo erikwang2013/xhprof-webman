@@ -49,15 +49,20 @@ class XhprofLibTest extends TestCase
         Xhprof::$view_wtred = 3;
         Xhprof::$symbol_lookup_url = '';
 
-        XhprofDisplay::$sort_col = 'wt';
-        XhprofDisplay::$diff_mode = false;
-        XhprofDisplay::$display_calls = true;
-        XhprofDisplay::$metrics = null;
-        XhprofDisplay::$stats = [];
-        XhprofDisplay::$pc_stats = [];
-        XhprofDisplay::$totals = 0;
-        XhprofDisplay::$totals_1 = 0;
-        XhprofDisplay::$totals_2 = 0;
+        // 渲染状态是**按请求**的：$_hyperf 被 Hyperf 用例置位后（进程级、不可逆），
+        // 它存在协程 Context 里，直接写静态属性在那个模式下没人读。布置与断言一律走
+        // XhprofDisplay 的存取器，本文件因此在两种进程模式下行为一致。
+        XhprofDisplay::set_render_state([
+            'sort_col' => 'wt',
+            'diff_mode' => false,
+            'display_calls' => true,
+            'metrics' => null,
+            'stats' => [],
+            'pc_stats' => [],
+            'totals' => 0,
+            'totals_1' => 0,
+            'totals_2' => 0,
+        ]);
         XhprofDisplay::$vwbar = 'class="vwbar"';
         XhprofDisplay::$vbar = 'class="vbar"';
         XhprofDisplay::$vbbar = 'class="vbbar"';
@@ -111,15 +116,15 @@ class XhprofLibTest extends TestCase
         $data = ['main()' => ['wt' => 100, 'mu' => 10]];
         XhprofLib::init_metrics($data, null, null, false);
 
-        self::assertSame(['wt', 'mu'], XhprofDisplay::$metrics);
+        self::assertSame(['wt', 'mu'], XhprofDisplay::metrics());
         self::assertSame(
             ['fn', 'ct', 'Calls%', 'wt', 'IWall%', 'excl_wt', 'EWall%', 'mu', 'IMUse%', 'excl_mu', 'EMUse%'],
-            XhprofDisplay::$stats
+            XhprofDisplay::stats()
         );
-        self::assertSame(['fn', 'ct', 'Calls%', 'wt', 'IWall%', 'mu', 'IMUse%'], XhprofDisplay::$pc_stats);
-        self::assertSame('wt', XhprofDisplay::$sort_col);
-        self::assertTrue(XhprofDisplay::$display_calls);
-        self::assertTrue(XhprofDisplay::$diff_mode === false);
+        self::assertSame(['fn', 'ct', 'Calls%', 'wt', 'IWall%', 'mu', 'IMUse%'], XhprofDisplay::pc_stats());
+        self::assertSame('wt', XhprofDisplay::sort_col());
+        self::assertTrue(XhprofDisplay::display_calls());
+        self::assertTrue(XhprofDisplay::diff_mode() === false);
     }
 
     #[Test]
@@ -127,7 +132,7 @@ class XhprofLibTest extends TestCase
     {
         // 该 run 必须真的采集过 mu，否则属于"按不存在的指标排序"（旧实现会放行并崩在 sort_cbk）
         XhprofLib::init_metrics(['main()' => ['wt' => 100, 'mu' => 10]], null, 'mu', false);
-        self::assertSame('mu', XhprofDisplay::$sort_col);
+        self::assertSame('mu', XhprofDisplay::sort_col());
     }
 
     #[Test]
@@ -135,24 +140,24 @@ class XhprofLibTest extends TestCase
     {
         // ut/st/samples 在本扩展的 flags 下永不采集，白名单不能放行
         XhprofLib::init_metrics(['main()' => ['wt' => 100, 'mu' => 10]], null, 'ut', false);
-        self::assertSame('wt', XhprofDisplay::$sort_col);
+        self::assertSame('wt', XhprofDisplay::sort_col());
         self::assertStringContainsString('Invalid Sort Key ut specified in URL', $this->logger->errors[0]);
     }
 
     #[Test]
     public function initMetricsDoesNotInheritSortColFromPreviousRequest(): void
     {
-        // 常驻 worker 下静态跨请求存活：不带 sort 的请求不能被上一请求的排序列污染
-        XhprofDisplay::$sort_col = 'mu';
+        // 常驻 worker 下渲染状态跨请求存活：不带 sort 的请求不能被上一请求的排序列污染
+        XhprofDisplay::set_render_state(['sort_col' => 'mu']);
         XhprofLib::init_metrics(['main()' => ['wt' => 100, 'mu' => 10]], null, null, false);
-        self::assertSame('wt', XhprofDisplay::$sort_col);
+        self::assertSame('wt', XhprofDisplay::sort_col());
     }
 
     #[Test]
     public function initMetricsWithInvalidSortLogsErrorAndKeepsDefault(): void
     {
         XhprofLib::init_metrics(['main()' => ['wt' => 100]], null, 'bogus', false);
-        self::assertSame('wt', XhprofDisplay::$sort_col);
+        self::assertSame('wt', XhprofDisplay::sort_col());
         self::assertStringContainsString('Invalid Sort Key bogus specified in URL', $this->logger->errors[0]);
     }
 
@@ -160,12 +165,12 @@ class XhprofLibTest extends TestCase
     public function initMetricsWithoutWtFallsBackToSamplesAndHidesCalls(): void
     {
         XhprofLib::init_metrics(['main()' => ['samples' => 5]], null, null, false);
-        self::assertSame('samples', XhprofDisplay::$sort_col);
-        self::assertFalse(XhprofDisplay::$display_calls);
+        self::assertSame('samples', XhprofDisplay::sort_col());
+        self::assertFalse(XhprofDisplay::display_calls());
         // 无 wt 时仍会为存在的 samples 指标追加统计列
         self::assertSame(
             ['fn', 'samples', 'ISamples%', 'excl_samples', 'ESamples%'],
-            XhprofDisplay::$stats
+            XhprofDisplay::stats()
         );
     }
 
@@ -173,7 +178,7 @@ class XhprofLibTest extends TestCase
     public function initMetricsWithRepSymbolStripsExclPrefixFromSortCol(): void
     {
         XhprofLib::init_metrics(['main()' => ['wt' => 100]], 'foo()', 'excl_wt', false);
-        self::assertSame('wt', XhprofDisplay::$sort_col);
+        self::assertSame('wt', XhprofDisplay::sort_col());
     }
 
     #[Test]

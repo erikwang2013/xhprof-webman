@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Tests\Unit\Adapter;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use support\Redis;
@@ -15,6 +16,7 @@ use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
 use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
 use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
+use ErikWang2013\Xhprof\Core\StaticController as CoreStaticController;
 use ErikWang2013\Xhprof\Core\Xhprof as CoreXhprof;
 use ErikWang2013\Xhprof\Tests\Stubs\Registry;
 use ErikWang2013\Xhprof\Webman\Adapter\ConfigAdapter;
@@ -350,6 +352,208 @@ class WebmanTest extends TestCase
             $this->assertSame('', $res->rawBody(), "uri=$uri 应返回空 body");
             $this->assertNull($res->file);
         }
+    }
+
+    // ---------- 报告页 / 资源短路：不需要用户在 config/route.php 里注册任何路由 ----------
+
+    /** 插件配置树的完整路径（与 configGetResolvesPluginPrefixedTree 同一形状）。 */
+    private function setPluginConfig(array $xhprof): void
+    {
+        Registry::$webmanConfig = ['plugin' => ['aaron-dev' => ['xhprof' => ['xhprof' => $xhprof]]]];
+    }
+
+    /**
+     * 取响应正文。**Webman 的资源响应不能读 rawBody()**：文件内容由 __toString()/
+     * ResponseEmitter 在发送时从磁盘流出，不进响应对象（workerman 5.2.2 :56 的
+     * `$file` 是本包用到的那条路），路径在 `$res->file['file']`（:434）。
+     */
+    private function bodyOf(Response $res): string
+    {
+        if (is_array($res->file) && isset($res->file['file'])) {
+            return (string) file_get_contents($res->file['file']);
+        }
+
+        return (string) $res->rawBody();
+    }
+
+    /**
+     * 报告页：入口类在业务 handler 之前短路，用户注册的路由（= handler）根本不会被走到。
+     *
+     * `ignore_url_arr` 必须挪开默认的 `['/xhprof']`：XhprofLib::isIgnore() 是 **子串** 匹配，
+     * URI 里含 '/xhprof' 就整个不落库，于是"报告页没被采样"这条断言会被默认配置**顺手**
+     * 满足——把短路挪到 xhprofStart() 之后也照样绿（判别力为零）。挪开之后，落不落库只由
+     * 「有没有跑过 xhprofStart/xhprofStop」决定，这条断言才真的能红。
+     */
+    #[Test]
+    public function reportPageIsServedWithoutAnyUserRoute(): void
+    {
+        $this->setPluginConfig(['enable' => true, 'ignore_url_arr' => ['/never-matches']]);
+
+        $called = false;
+        $res = (new XhprofMiddleware())->process(
+            new Request([], ['uri' => '/xhprof?run=abc']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response(200, [], 'business');
+            }
+        );
+
+        $this->assertFalse($called, '报告页必须在业务 handler（= 用户注册的路由）之前短路');
+        $this->assertSame(200, $res->getStatusCode());
+        // workerman 的响应不带默认 Content-Type，缺了浏览器按纯文本渲染报告页。
+        $this->assertSame('text/html; charset=UTF-8', $res->getHeader('Content-Type'));
+        $this->assertSame('no-cache, private', $res->getHeader('Cache-Control'));
+        $body = (string) $res->rawBody();
+        $this->assertStringContainsString('XHProf 性能分析报告', $body);
+        $this->assertStringContainsString('/xhprof-assets', $body, '报告页资源链接走默认前缀');
+        $this->assertSame([], Redis::$store, '报告页本身不该被采样落库');
+    }
+
+    /** 默认前缀（配置里不写 assets_url）下的资源请求：入口类接管并真读出包内文件。 */
+    #[Test]
+    public function assetRequestIsServedUnderTheDefaultPrefix(): void
+    {
+        $this->setPluginConfig(['enable' => true, 'ignore_url_arr' => ['/never-matches']]);
+
+        $called = false;
+        $res = (new XhprofMiddleware())->process(
+            new Request([], ['uri' => '/xhprof-assets/css/xhprof.css']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response(200, [], 'business');
+            }
+        );
+
+        $this->assertFalse($called, '资源请求必须在业务 handler 之前短路');
+        $this->assertSame(200, $res->getStatusCode());
+        $this->assertSame('text/css', $res->getHeader('Content-Type'), 'Content-Type 由 Core 按扩展名钉住');
+        $this->assertStringContainsString(
+            '--xp-bg: #f6f8fa',
+            $this->bodyOf($res),
+            '必须真的读到 src/html/css/xhprof.css 的内容'
+        );
+        $this->assertSame([], Redis::$store, '资源请求不该被采样落库');
+    }
+
+    /**
+     * 自定义前缀：改配置就够了，**不需要**去动路由文件（改动前这条路必须由用户自己
+     * 在 config/route.php 里注册 `/static/xhprof/<path>`，否则请求落不到 serve()）。
+     */
+    #[Test]
+    public function assetRequestIsServedUnderACustomPrefixWithoutTouchingRoutes(): void
+    {
+        $this->setPluginConfig([
+            'enable' => true, 'assets_url' => '/static/xhprof', 'ignore_url_arr' => ['/never-matches'],
+        ]);
+
+        $called = false;
+        $res = (new XhprofMiddleware())->process(
+            new Request([], ['uri' => '/static/xhprof/css/xhprof.css']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response(200, [], 'business');
+            }
+        );
+
+        $this->assertFalse($called, '配置前缀下的请求被入口类接管');
+        $this->assertSame(200, $res->getStatusCode());
+        $this->assertSame('text/css', $res->getHeader('Content-Type'));
+        $this->assertStringContainsString('--xp-bg: #f6f8fa', $this->bodyOf($res));
+        $this->assertSame([], Redis::$store);
+    }
+
+    /**
+     * 近似路径不被接管，且照常当业务请求采样落库。
+     *
+     * 同样要挪开 `ignore_url_arr`：`/xhprof-assets-nope` 含子串 '/xhprof'，默认配置下
+     * 「没落库」是 isIgnore() 给的，不是短路给的——那份断言同样会被顺手满足。
+     */
+    #[Test]
+    public function nearMissAssetPathIsStillABusinessRequest(): void
+    {
+        $this->setPluginConfig(['enable' => true, 'ignore_url_arr' => ['/never-matches']]);
+
+        $called = false;
+        $res = (new XhprofMiddleware())->process(
+            new Request([], ['uri' => '/xhprof-assets-nope']),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response(200, [], 'business');
+            }
+        );
+
+        $this->assertTrue($called, '前缀必须带尾斜杠：/xhprof-assets-nope 是业务路径');
+        $this->assertSame('business', $res->rawBody());
+
+        // 断言「落库的是本次采样数据」而不是只断言 key 存在（后者把 stop() 改成
+        // save_run([]) 也照样绿，照 WiringTest::assertRunSaved 的口径）。
+        $this->assertCount(1, Redis::$store['xhprof:run_id'] ?? []);
+        $log = unserialize((string) Redis::$store['xhprof:xhprof_log:' . Redis::$store['xhprof:run_id'][0]]);
+        $this->assertIsArray($log);
+        $this->assertArrayHasKey('main()', $log, '普通业务请求照常采样落库（含 main() 帧）');
+    }
+
+    /**
+     * 与 LaravelTest / ThinkphpTest / Yii3Test / DrupalTest 同一组边界：入口类的短路判定
+     * 与 Core 的 serve() 判定必须同源。
+     *
+     * 分叉的后果不是报错而是**静默**：报告页 CSS/JS 全空、业务路由也拿不到那些路径。
+     * 单跑 serve() 或单跑 process() 都看不出来，只有同一条路径问两次才成立。
+     */
+    public static function assetsUrlBoundaries(): iterable
+    {
+        yield '没有配置' => [null, '/xhprof-assets/css/xhprof.css', true];
+        yield '配置 = 默认值' => ['/xhprof-assets', '/xhprof-assets/css/xhprof.css', true];
+        yield '配置带尾斜杠' => ['/xhprof-assets/', '/xhprof-assets/css/xhprof.css', true];
+        yield '自定义前缀' => ['/static/xhprof', '/static/xhprof/css/xhprof.css', true];
+        yield '自定义前缀 + 尾斜杠' => ['/static/xhprof/', '/static/xhprof/css/xhprof.css', true];
+        // 判别力来源：配了自定义前缀后**老路径不再被认**（否则同一份文件有两个 URL）
+        yield '自定义前缀 + 老路径' => ['/static/xhprof', '/xhprof-assets/css/xhprof.css', false];
+        yield 'CDN 绝对 URL' => ['https://cdn.test/xhprof-assets', '/xhprof-assets/css/xhprof.css', false];
+        // 空串 = 不启用资源短路（两边都一个都不认，不能一边回落成默认前缀）
+        yield '配置成空串' => ['', '/xhprof-assets/css/xhprof.css', false];
+        yield '配置成 /' => ['/', '/css/xhprof.css', true];
+        // 尾斜杠是「近似路径不算资源」的唯一来源
+        yield '近似路径' => [null, '/xhprof-assets-nope', false];
+        yield '近似路径（自定义前缀）' => ['/static/xhprof', '/static/xhprof-nope', false];
+    }
+
+    #[Test]
+    #[DataProvider('assetsUrlBoundaries')]
+    public function guardAndServeAgreeOnWhichPathsAreAssets(?string $assetsUrl, string $path, bool $isAsset): void
+    {
+        $config = ['enable' => true];
+        if ($assetsUrl !== null) {
+            $config['assets_url'] = $assetsUrl;
+        }
+        $this->setPluginConfig($config);
+
+        // 第 1 票：入口类短路 —— 业务 handler 没被调用 ⇔ 认作资源
+        $called = false;
+        (new XhprofMiddleware())->process(
+            new Request([], ['uri' => $path]),
+            function (Request $r) use (&$called): Response {
+                $called = true;
+                return new Response(200, [], 'business');
+            }
+        );
+        $this->assertSame(
+            $isAsset,
+            !$called,
+            "入口类对 $path 的判定（assets_url = " . var_export($assetsUrl, true) . '）'
+        );
+
+        // 第 2 票：Core 自己的判定 —— 真读出包内 css ⇔ 认作资源。放在 process() 之后，
+        // 因为 serve() 读的是 bootstrap 写进去的那份配置。
+        $served = CoreStaticController::serve(
+            new RequestAdapter(new Request([], ['uri' => $path])),
+            new ResponseAdapter(new Response(200))
+        )->send();
+        $this->assertSame(
+            $isAsset,
+            str_contains($this->bodyOf($served), '--xp-bg: #f6f8fa'),
+            "Core serve() 对 $path 的判定（assets_url = " . var_export($assetsUrl, true) . '）'
+        );
     }
 
     #[Test]

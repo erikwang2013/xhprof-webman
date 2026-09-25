@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Compromis de conception : décision, raison et coût</title>
-  <desc>Un comparatif de cinq décisions clés, chacune listant la décision, le bénéfice qu'elle a apporté et le coût qu'elle a occasionné : Core ne dépend que de 5 contrats, les classes d'entrée servent elles-mêmes la page de rapport, aucune couche partagée n'est extraite, les stubs sont vérifiés par une boucle de vérification indépendante, et les six nouveaux frameworks utilisent l'injection explicite plutôt qu'autoDetect. Traduction automatique. Ce document a été traduit automatiquement et n'a pas été relu par un traducteur natif ; en cas de divergence, la version anglaise (README.EN.md) fait foi.</desc>
+  <desc>Un comparatif de cinq décisions clés, chacune listant la décision, le bénéfice qu'elle a apporté et le coût qu'elle a occasionné : Core ne dépend que de 5 contrats, les classes d'entrée servent elles-mêmes la page de rapport, aucune couche partagée n'est extraite, les stubs sont vérifiés par une boucle de vérification indépendante, et les six nouveaux frameworks utilisent l'injection explicite plutôt qu'autoDetect. Traduction automatique. Ce document a été traduit automatiquement et n'a pas été relu par un traducteur natif ; en cas de divergence, la version anglaise fait foi.</desc>
 
   <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
 

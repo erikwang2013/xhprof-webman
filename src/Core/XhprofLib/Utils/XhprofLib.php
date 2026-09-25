@@ -111,12 +111,17 @@ class XhprofLib
       $pc_stats[] = $metric;
       $pc_stats[] = "I" . $desc[0] . "%";
     }
-    XhprofDisplay::$metrics = $metrics;
-    XhprofDisplay::$stats = $stats;
-    XhprofDisplay::$pc_stats = $pc_stats;
-    XhprofDisplay::$diff_mode = $diff_report;
-    XhprofDisplay::$sort_col = $sort_col;
-    XhprofDisplay::$display_calls = $display_calls;
+    // 这六个量是按请求算的，写进 XhprofDisplay 的**本协程**渲染状态里
+    // （Hyperf 下是协程 Context，其余框架是静态属性，见该方法的注释）。
+    XhprofDisplay::set_render_state(array(
+      'metrics' => $metrics,
+      'stats' => $stats,
+      'pc_stats' => $pc_stats,
+      'diff_mode' => $diff_report,
+      'sort_col' => $sort_col,
+      'display_calls' => $display_calls,
+    ));
+    // 下面五个每次请求写入的值都相同（常量），故意不进协程隔离。
     XhprofDisplay::$vwbar = 'class="vwbar"';
     XhprofDisplay::$vbar = 'class="vbar"';
     XhprofDisplay::$vbbar = 'class="vbbar"';
@@ -347,7 +352,7 @@ class XhprofLib
   public static function xhprof_compute_flat_info($raw_data, &$overall_totals)
   {
 
-    $display_calls = XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::display_calls();
     $metrics = XhprofLib::xhprof_get_metrics($raw_data);
     $overall_totals = array(
       "ct" => 0,
@@ -392,7 +397,7 @@ class XhprofLib
    */
   public static function xhprof_compute_diff($xhprof_data1, $xhprof_data2)
   {
-    $display_calls = XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::display_calls();
 
     // use the second run to decide what metrics we will do the diff on
     $metrics = XhprofLib::xhprof_get_metrics($xhprof_data2);
@@ -419,7 +424,7 @@ class XhprofLib
 
   public static function xhprof_compute_inclusive_times($raw_data)
   {
-    $display_calls = XhprofDisplay::$display_calls;
+    $display_calls = XhprofDisplay::display_calls();
     $metrics = XhprofLib::xhprof_get_metrics($raw_data);
     $symbol_tab = array();
     if(false==is_array($raw_data)) return $symbol_tab;

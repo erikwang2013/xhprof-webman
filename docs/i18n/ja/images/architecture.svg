@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman 階層アーキテクチャ</title>
-  <desc>3 層の図：上層は 10 のフレームワーク入口クラス（対応済み 4 つ + 本リリースの新規 6 つ）、中層は src/Core/Contract/ の 5 インターフェース、下層は Core の 5 クラス。最下部に Core に残るフレームワークとの結合 2 箇所を赤で示し、6 つの新フレームワークは autoDetect を通らず、すべて明示的注入 Xhprof::bootstrap() を通ることを注記する。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は英語版 README.EN.md を正とします。</desc>
+  <desc>3 層の図：上層は 10 のフレームワーク入口クラス（対応済み 4 つ + 本リリースの新規 6 つ）、中層は src/Core/Contract/ の 5 インターフェース、下層は Core の 5 クラス。最下部に Core に残るフレームワークとの結合 2 箇所を赤で示し、6 つの新フレームワークは autoDetect を通らず、すべて明示的注入 Xhprof::bootstrap() を通ることを注記する。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は 英語版 を正とします。</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

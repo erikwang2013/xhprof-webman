@@ -4,6 +4,10 @@ Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPH
 
 Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pengembang dapat dengan cepat membuka laporan analisis performa melalui browser untuk menemukan hambatan performa kode.
 
+![Maskot proyek: nyala api kecil](docs/images/pet.svg)
+
+Api kecil yang sama juga menjadi ikon situs dan ikon merek di kiri atas halaman report (`src/html/pet.svg`, disajikan di bawah prefiks `assets_url`).
+
 **Riwayat Request**
 
 ![Riwayat Request](docs/images/runs-list.png)
@@ -34,7 +38,7 @@ Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pen
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Salin ke `plugins/system/`, pasang lewat Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | modul `xhprof` (`Drupal\XhprofMiddleware`) | Modul standar, cukup diaktifkan |
 
-Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihilangkan di atas). Dari keenam framework baru, Drupal adalah pengecualian — ia melayani halaman report lewat route modul — sedangkan lima kelas entri lainnya **melayani halaman report sendiri**, tanpa perlu controller atau pendaftaran route.
+Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihilangkan di atas).  Tidak satu pun dari sepuluh yang meminta Anda mendaftarkan controller atau route: halaman report dan aset statis dilayani oleh kelas entri itu sendiri (pada Drupal, oleh route modul).
 
 Paket ini mendeklarasikan `php >= 8.0`, tetapi komponen `yiisoft/*` yang diandalkan Yii3 mensyaratkan **PHP 8.1+**, jadi **Yii3 tidak bisa dipakai di PHP 8.0**; Symfony 7.x dan Drupal 11.x juga butuh versi PHP yang lebih tinggi. Langkah pemasangan terperinci ada di "Konfigurasi Framework" di bawah.
 
@@ -70,37 +74,9 @@ return [
 ];
 ```
 
-**2. Buat controller**:
+**2. Halaman report dan aset statis** — **tidak perlu controller atau pendaftaran route**: sebelum profiling dimulai middleware memeriksa path request: kecocokan pada path report `/xhprof` langsung mengembalikan halaman report, dan kecocokan pada path aset (prefiks dibaca dari opsi `assets_url`, default `/xhprof-assets`) langsung mengembalikan aset statisnya.
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Daftarkan route** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. Konfigurasi** — Lihat `config/plugin/aaron-dev/xhprof/xhprof.php`.
+**3. Konfigurasi** — Lihat `config/plugin/aaron-dev/xhprof/xhprof.php`.
 
 ---
 
@@ -115,43 +91,9 @@ protected $middleware = [
 ];
 ```
 
-**2. Buat controller**:
+**2. Halaman report dan aset statis** — **tidak perlu controller atau pendaftaran route**: sebelum profiling dimulai middleware memeriksa path request: kecocokan pada path report `/xhprof` langsung mengembalikan halaman report, dan kecocokan pada path aset (prefiks dibaca dari opsi `assets_url`, default `/xhprof-assets`) langsung mengembalikan aset statisnya.
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Daftarkan route** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. Publikasikan konfigurasi**:
+**3. Publikasikan konfigurasi**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -171,44 +113,9 @@ return [
 ];
 ```
 
-**2. Buat controller**:
+**2. Halaman report dan aset statis** — **tidak perlu controller atau pendaftaran route**: sebelum profiling dimulai middleware memeriksa path request: kecocokan pada path report `/xhprof` langsung mengembalikan halaman report, dan kecocokan pada path aset (prefiks dibaca dari opsi `assets_url`, default `/xhprof-assets`) langsung mengembalikan aset statisnya.
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Daftarkan route** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. Konfigurasi** — Salin `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` ke `config/xhprof.php` proyek.
+**3. Konfigurasi** — Salin `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` ke `config/xhprof.php` proyek.
 
 ---
 
@@ -216,57 +123,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. Pendaftaran middleware otomatis** — ConfigProvider otomatis menambahkan middleware ke antrean middleware HTTP.
 
-**2. Buat controller**:
+**2. Halaman report dan aset statis** — **tidak perlu controller atau pendaftaran route**: sebelum profiling dimulai middleware memeriksa path request: kecocokan pada path report `/xhprof` langsung mengembalikan halaman report, dan kecocokan pada path aset (prefiks dibaca dari opsi `assets_url`, default `/xhprof-assets`) langsung mengembalikan aset statisnya.
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-Saat `Xhprof::index()` mengembalikan string HTML, **jangan** langsung `return`: `CoreMiddleware::transferToResponse()` milik Hyperf tanpa syarat menambahkan `content-type: text/plain` pada nilai kembalian berupa string, sehingga browser menampilkan halaman report sebagai teks biasa (terukur sama pada 3.0.45 / 3.1.69 / 3.2.0). Respons eksplisit di atas menghindarinya; bila autentikasi gagal, `index()` mengembalikan objek respons yang sudah terkirim — kembalikan saja apa adanya.
-
-**3. Route aset statis** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. Publikasikan konfigurasi**:
+**3. Publikasikan konfigurasi**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -420,7 +279,7 @@ Direktori `joomla/` di paket *adalah* pluginnya: manifes `xhprof.xml`, `services
 
 **1. Aktifkan modul** — `drupal/xhprof/` di dalam paket adalah modul Drupal standar (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Letakkan di `modules/custom/xhprof/` situs Anda, lalu aktifkan di halaman "Extend" (atau dengan `drush en xhprof`).
 
-**2. Halaman report** — Drupal adalah **satu-satunya dari sepuluh framework yang melayani halaman report lewat route modul**: `xhprof.routing.yml` mendaftarkan path report `/xhprof` dan sebuah controller modul yang merendernya. Lima framework baru lainnya melayani halaman report dan aset statisnya sendiri dan tidak mendaftarkan route apa pun.
+**2. Halaman report dan aset statis** — Drupal adalah **satu-satunya dari sepuluh framework yang lewat jalur «modul + route»**: `xhprof.routing.yml` mendaftarkan path report `/xhprof` dan path aset `/xhprof-assets`, yang secara default dilayani controller modul; sembilan kelas entri lainnya memintas sendiri sebelum profiling dimulai dan melayani halaman report beserta aset statisnya tanpa mendaftarkan route. **Dengan prefiks `assets_url` kustom, aset dilayani middleware**: path route aset modul ditulis mati di `xhprof.routing.yml` (`/xhprof-assets/{file}`) dan tidak akan pernah cocok dengan prefiks lain.
 
 **3. Konfigurasi** — konfigurasinya adalah config bertipe tingkat modul: nilai default ada di `drupal/xhprof/config/install/xhprof.settings.yml`, dengan skemanya di `drupal/xhprof/config/schema/xhprof.schema.yml`. Lihat "Referensi Konfigurasi" untuk daftar kolomnya.
 
@@ -573,11 +432,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # implementasi adapter Redis bersama
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 4 framework yang sudah ada
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 6 framework baru
-│   └── html/                     # aset halaman report (css / js / images)
+│   └── html/                     # aset halaman report (css / js / images / pet.svg ikon situs dan ikon merek)
 ├── wordpress/                    # berkas bootstrap mu-plugin (dengan header plugin)
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifes)
 ├── drupal/xhprof/                # modul Drupal standar (info / routing / services + controller)
-├── tools/contracts/              # loop verifikasi mandiri: signature dan semantik terhadap paket framework asli
+├── tools/contracts/              # loop verifikasi mandiri: signature dan semantik terhadap paket framework asli (`legacy-symfony64/` adalah leg 6.4)
 ├── tools/i18n/                   # rantai alat terjemahan untuk README dan ketiga SVG (generate / check / selftest)
 ├── docs/i18n/                    # 12 hasil terjemahan (Inggris, Korea, Rusia, Jerman, Prancis, Spanyol, Portugis, Arab, Hindi, Bengali, Indonesia, Jepang)
 ├── tests/                        # PHPUnit: test adapter, test wiring, test Core, paritas struktural di 14 README
@@ -606,20 +465,18 @@ src/<Fw>/
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
 | Kesepuluh framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
-| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri): memasang paket framework asli dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk delapan framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
-| Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, termasuk dua invarian: `uri()` tidak membawa skema/host, dan `withHeaders()` tetap berlaku setelah `file()` |
+| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk delapan framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
+| Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, dengan dua invarian: `uri()` tidak membawa scheme/host, dan `withHeaders()` tetap berlaku setelah `file()`. Jumlah SKIP loop adalah konstanta beku (2 di leg utama, 0 di leg 6.4) dan keduanya ada di Joomla: jalur baca asli `#__extensions.params` dan bentuk installer, keduanya butuh database atau installer untuk dijalankan |
 
 
-**Tidak diverifikasi secara otomatis (jangan dibaca sebagai "keenamnya sudah diuji")**
+**Tidak diverifikasi otomatis (jangan baca ini sebagai «semuanya sudah tercakup»)**
 
 | Butir | Kenapa tidak |
 |------|---------|
 | **Wiring** setiap framework (apakah hook-nya benar-benar terpasang, apakah event-nya benar-benar menyala) | Unit test memakai stub; wiring saat ini hanya bisa dipastikan lewat smoke test manual |
-| WordPress secara menyeluruh | Waktu `plugins_loaded` yang sebenarnya, apakah `shutdown` menyala pada fatal error, dan apakah mu-plugin-nya dimuat, semuanya membutuhkan WordPress asli |
-| Penemuan plugin Joomla dan `$app->close()` | Membutuhkan menjalankan Discover di admin Joomla asli |
-| Apakah prioritas Drupal benar-benar mendarat di luar page cache | Membutuhkan kernel Drupal yang sudah di-boot |
+| Dua sub-item Joomla yang tersisa | Dua hal yang masih belum terjangkau loop, dan keduanya karena alasan yang sama (butuh database atau installer): jalur baca asli `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) dan bentuk installer (namespacemap tertulis, `bootPlugin()` menemukan kelasnya) |
 | Konfigurasi otomatis `kernel.event_subscriber` Symfony | Membutuhkan kompilasi container asli |
-| Cakap-silang state statis di proses berjalan lama | Diwarisi dari arsitektur yang ada (hal yang sama juga berlaku untuk Webman / Hyperf); tidak diubah di sini |
+| Cakap-silang state statis di proses berjalan lama | Sisi Webman tidak diubah (di Hyperf sudah diisolasi: 9 nilai state render per permintaan melewati Context coroutine, dipatok oleh `tests/Unit/Lib/RenderStateCoroutineTest.php` dengan coroutine yang benar-benar menyerahkan kendali) |
 | I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | I/O Redis asli **kini ada di dalam loop** (`cases/Redis.php`: phpredis asli + permintaan Slim asli dari awal sampai akhir — permintaan → penyimpanan → halaman daftar → halaman laporan); rendering browser dan overhead di bawah beban nyata tetap di luar cakupan unit test dan loop |
 | Signature dan semantik adapter untuk ThinkPHP / Hyperf | keduanya tidak masuk loop verifikasi (loop mencakup delapan framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
 
@@ -637,7 +494,7 @@ Kontrak `host()` berarti "hanya host, tanpa port" (R-2), dan kesepuluh framework
 
 **`assets_url` kini mendukung prefiks khusus**
 
-Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Batas**: prefiks kustom langsung berfungsi pada lima framework yang memintas jalur aset di middleware/kelas entri (Yii3, Symfony, Slim, WordPress, Joomla); pada Laravel, Hyperf, Webman, dan ThinkPHP jalur rute aset, dan pada Drupal `xhprof.routing.yml`, didaftarkan oleh **Anda** — ubah bersama `assets_url`, jika tidak permintaan aset tidak sampai ke `StaticController` dan halaman laporan kehilangan gaya serta skrip.
+Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Kesepuluh framework mengikuti opsi ini**: sembilan kelas entri memintas jalur aset sendiri sebelum profiling dimulai dan melayaninya, sedangkan Drupal melayani prefiks default lewat route modul + controller dan menyerahkan prefiks kustom ke middleware. **Batas**: Laravel, Hyperf, Webman, dan ThinkPHP tidak lagi perlu controller atau route — middleware berjalan lebih dulu, jadi controller dan dua route yang didaftarkan menurut petunjuk lama hanya tertutupi: tidak error dan tidak pernah lagi tersentuh.
 
 **Keterbatasan yang diketahui: penjaga path gagal kalau Drupal berada di subdirektori**
 
@@ -645,7 +502,7 @@ Kalau Drupal dipasang di bawah subdirektori (misalnya `/sites/app/xhprof`), penj
 
 **Kompatibilitas Symfony 6.4**
 
-Kompatibilitas Symfony 6.4 sudah diukur (dari situlah dua over-fit yang tak terlihat di 7.4 diperbaiki: properti `Request` tidak membawa deklarasi tipe native di 6.4, dan charset yang ditambahkan `prepare()` berbeda huruf besar-kecilnya), tetapi loop verifikasi CI hanya menjalankan 7.4.
+Kompatibilitas Symfony 6.4 sudah diukur (dari situlah dua over-fit yang tak terlihat di 7.4 diperbaiki: properti `Request` tidak membawa deklarasi tipe native di 6.4, dan charset yang ditambahkan `prepare()` berbeda huruf besar-kecilnya). **Kedua leg berjalan di CI**: leg utama 7.x plus proyek terpisah `tools/contracts/legacy-symfony64`, yang menjalankan file case yang sama tanpa menyalinnya — dan kedua leg juga ada di gate tag.
 
 ---
 

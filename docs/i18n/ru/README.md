@@ -1,12 +1,16 @@
-> **Машинный перевод.** Этот документ переведён автоматически и не проверен носителем языка; при расхождениях верен английский оригинал — [README.EN.md](../../../README.EN.md).
+> **Машинный перевод.** Этот документ переведён автоматически и не проверен носителем языка; при расхождениях верен [английский оригинал](../en/README.md).
 
-[中文](../../../README.md) · [English](../../../README.EN.md) · [한국어](../ko/README.md) · **Русский** · [Deutsch](../de/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
+[中文](../../../README.md) · [English](../en/README.md) · [한국어](../ko/README.md) · **Русский** · [Deutsch](../de/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Português](../pt/README.md) · [العربية](../ar/README.md) · [हिन्दी](../hi/README.md) · [বাংলা](../bn/README.md) · [Bahasa Indonesia](../id/README.md) · [日本語](../ja/README.md)
 
 # Профайлер производительности XHProf
 
 Плагин профилирования производительности кода, совместимый с webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla и Drupal.
 
 Собирает данные профилирования через расширение xhprof и складывает их в Redis. Разработчик быстро открывает отчёты об анализе производительности в браузере и находит узкие места в коде.
+
+![Талисман проекта: маленькое пламя](../../../docs/images/pet.svg)
+
+Тот же маленький огонёк — это ещё и иконка сайта, и иконка бренда в левом верхнем углу страницы отчёта (`src/html/pet.svg`, отдаётся под префиксом `assets_url`).
 
 **Журнал запросов**
 
@@ -38,7 +42,7 @@
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Скопировать в `plugins/system/`, установить через «Обнаружение» |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | модуль `xhprof` (`Drupal\XhprofMiddleware`) | Обычный модуль, достаточно включить |
 
-Все классы входа лежат под префиксом пространства имён `ErikWang2013\Xhprof\` (в таблице он опущен). Из шести новых фреймворков исключение составляет Drupal — он отдаёт страницу отчёта через маршруты модуля, — а остальные пять классов входа **сами отдают страницу отчёта**, без контроллера и без регистрации маршрутов.
+Все классы входа лежат под префиксом пространства имён `ErikWang2013\Xhprof\` (в таблице он опущен).  Ни одному из десяти не нужно, чтобы вы регистрировали контроллер или маршрут: страницу отчёта и статические ресурсы отдаёт сам класс входа (в случае Drupal — маршрут модуля).
 
 Пакет объявляет `php >= 8.0`, но компоненты `yiisoft/*`, на которые опирается Yii3, требуют **PHP 8.1+**, поэтому **на PHP 8.0 Yii3 не работает**; Symfony 7.x и Drupal 11.x тоже требуют более высокую версию PHP. Пошаговая настройка — в разделе «Настройка фреймворков» ниже.
 
@@ -74,37 +78,9 @@ return [
 ];
 ```
 
-**2. Создайте контроллер**:
+**2. Страница отчёта и статические ресурсы** — **контроллер и маршруты не нужны**: до старта профилирования middleware смотрит на путь запроса: попадание в путь отчёта `/xhprof` сразу отдаёт страницу отчёта, попадание в путь ресурсов (префикс читается из параметра `assets_url`, по умолчанию `/xhprof-assets`) сразу отдаёт статический ресурс.
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Зарегистрируйте маршруты** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. Настройка** — см. `config/plugin/aaron-dev/xhprof/xhprof.php`.
+**3. Настройка** — см. `config/plugin/aaron-dev/xhprof/xhprof.php`.
 
 ---
 
@@ -119,43 +95,9 @@ protected $middleware = [
 ];
 ```
 
-**2. Создайте контроллер**:
+**2. Страница отчёта и статические ресурсы** — **контроллер и маршруты не нужны**: до старта профилирования middleware смотрит на путь запроса: попадание в путь отчёта `/xhprof` сразу отдаёт страницу отчёта, попадание в путь ресурсов (префикс читается из параметра `assets_url`, по умолчанию `/xhprof-assets`) сразу отдаёт статический ресурс.
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Зарегистрируйте маршруты** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. Опубликуйте конфигурацию**:
+**3. Опубликуйте конфигурацию**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -175,44 +117,9 @@ return [
 ];
 ```
 
-**2. Создайте контроллер**:
+**2. Страница отчёта и статические ресурсы** — **контроллер и маршруты не нужны**: до старта профилирования middleware смотрит на путь запроса: попадание в путь отчёта `/xhprof` сразу отдаёт страницу отчёта, попадание в путь ресурсов (префикс читается из параметра `assets_url`, по умолчанию `/xhprof-assets`) сразу отдаёт статический ресурс.
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Зарегистрируйте маршруты** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. Настройка** — скопируйте `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` в `config/xhprof.php` проекта.
+**3. Настройка** — скопируйте `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` в `config/xhprof.php` проекта.
 
 ---
 
@@ -220,57 +127,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. Автоматическая регистрация middleware** — ConfigProvider сам добавляет middleware в очередь HTTP-middleware.
 
-**2. Создайте контроллер**:
+**2. Страница отчёта и статические ресурсы** — **контроллер и маршруты не нужны**: до старта профилирования middleware смотрит на путь запроса: попадание в путь отчёта `/xhprof` сразу отдаёт страницу отчёта, попадание в путь ресурсов (префикс читается из параметра `assets_url`, по умолчанию `/xhprof-assets`) сразу отдаёт статический ресурс.
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-Когда `Xhprof::index()` возвращает HTML-строку, **не** возвращайте её напрямую через `return`: `CoreMiddleware::transferToResponse()` в Hyperf безусловно добавляет `content-type: text/plain` к строковым возвращаемым значениям, и браузер показывает страницу отчёта как обычный текст (проверено: в 3.0.45 / 3.1.69 / 3.2.0 поведение одинаково). Явная сборка ответа выше обходит это; при неудачной аутентификации `index()` возвращает уже отправленный объект ответа — верните его как есть.
-
-**3. Маршруты статических ресурсов** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. Опубликуйте конфигурацию**:
+**3. Опубликуйте конфигурацию**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -424,7 +283,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. Включите модуль** — `drupal/xhprof/` в пакете это обычный модуль Drupal (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Положите его в `modules/custom/xhprof/` своего сайта и включите на странице «Расширить» (или командой `drush en xhprof`).
 
-**2. Страница отчёта** — Drupal это **единственный из десяти фреймворков, который отдаёт страницу отчёта через маршруты модуля**: `xhprof.routing.yml` регистрирует путь отчёта `/xhprof`, а отрисовывает его контроллер модуля. Остальные пять новых фреймворков сами отдают страницу отчёта и статические ресурсы и маршрутов не регистрируют.
+**2. Страница отчёта и статические ресурсы** — Drupal это **единственный из десяти фреймворков, идущий путём «модуль + маршруты»**: `xhprof.routing.yml` регистрирует путь отчёта `/xhprof` и путь ресурсов `/xhprof-assets`, по умолчанию их отдаёт контроллер модуля; остальные девять классов входа сами замыкают эти пути до старта профилирования и отдают страницу отчёта и статические ресурсы, не регистрируя маршрутов. **При своём префиксе `assets_url` ресурсы берёт на себя middleware**: path маршрута ресурсов модуля жёстко прописан в `xhprof.routing.yml` (`/xhprof-assets/{file}`) и никогда не совпадёт с другим префиксом.
 
 **3. Настройка** — это типизированная конфигурация уровня модуля: значения по умолчанию лежат в `drupal/xhprof/config/install/xhprof.settings.yml`, схема — в `drupal/xhprof/config/schema/xhprof.schema.yml`. Поля описаны в разделе «Справочник по конфигурации».
 
@@ -577,11 +436,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # общая реализация Redis-адаптеров всех фреймворков
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 4 существующих фреймворка
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 6 новых фреймворков
-│   └── html/                     # статические ресурсы страницы отчёта (css / js / images)
+│   └── html/                     # статические ресурсы страницы отчёта (css / js / images / pet.svg иконка сайта и иконка бренда)
 ├── wordpress/                    # bootstrap-файл mu-plugin (с plugin header)
 ├── joomla/                       # плагин Joomla (CMSPlugin + манифест)
 ├── drupal/xhprof/                # стандартный модуль Drupal (info / routing / services + Controller)
-├── tools/contracts/              # независимый контур верификации: сверяет сигнатуры и семантику с настоящими пакетами фреймворков
+├── tools/contracts/              # независимый контур верификации: сверяет сигнатуры и семантику с настоящими пакетами фреймворков (`legacy-symfony64/` is the 6.4 leg)
 ├── tools/i18n/                   # цепочка инструментов перевода README и трёх SVG (генерация / проверка / самопроверка)
 ├── docs/i18n/                    # 12 переведённых артефактов (английский, корейский, русский, немецкий, французский, испанский, португальский, арабский, хинди, бенгальский, индонезийский, японский)
 ├── tests/                        # PHPUnit: тесты адаптеров, связывания, Core и структурный паритет всех 14 README
@@ -610,20 +469,18 @@ src/<Fw>/
 | Поведение адаптеров и связывания классов входа | `tests/Unit/Adapter/*Test.php`: включено → сохранено / выключено → не сохранено / исключение в бизнес-логике → всё равно сохранено через `finally` |
 | Все десять фреймворков используют один набор ключей конфигурации | тест паритета конфигурации (наборы ключей, не побайтово; комментарии могут отличаться) |
 | Два README зеркальны друг другу | тест паритета README: сравнивает последовательность заголовков `##` / `###` и число блоков кода |
-| Методы, которые вызывают адаптеры, действительно существуют | контур верификации `tools/contracts/` (отдельная задача CI): ставит настоящие пакеты фреймворков и через рефлексию утверждает, что каждый метод / константа / глобальная функция существует — **для восьми фреймворков в контуре** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf в контур не входят, см. ниже |
-| Семантика адаптеров | Тот же контур создаёт настоящие объекты запроса и ответа и прогоняет через них адаптеры, включая два инварианта: `uri()` не несёт схему и хост, а `withHeaders()` применяется и после `file()` |
+| Методы, которые вызывают адаптеры, действительно существуют | контур верификации `tools/contracts/` (отдельная задача CI, **две ноги**: основная нога ставит самые свежие пакеты каждого фреймворка, а отдельный проект `tools/contracts/legacy-symfony64` прогоняет тот же case Symfony против 6.4): ставит настоящие пакеты фреймворков (настоящий `drupal/core` для Drupal, два настоящих релизных пакета CMS для Joomla) и через рефлексию утверждает, что каждый метод / константа / глобальная функция существует — **для восьми фреймворков в контуре** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf в контур не входят — см. ниже |
+| Семантика адаптеров | Тот же контур создаёт настоящие объекты запроса и ответа и прогоняет через них адаптеры, включая два инварианта: `uri()` не несёт scheme/host, а `withHeaders()` применяется и после `file()`. Число SKIP в контуре — замороженная константа (2 на основной ноге, 0 на ноге 6.4), и оба SKIP в Joomla: настоящий путь чтения `#__extensions.params` и форма установщика — чтобы их прогнать, нужна база данных или установщик |
 
 
-**Не проверено автоматически (не читайте это как «все шесть протестированы»)**
+**Не проверено автоматически (не читайте это как «всё покрыто»)**
 
 | Пункт | Почему нет |
 |------|---------|
 | **Связывание** каждого фреймворка (действительно ли хук подключён, действительно ли событие срабатывает) | Юнит-тесты используют заглушки; связывание сейчас можно подтвердить только ручными смоук-тестами |
-| WordPress от начала до конца | Реальное время `plugins_loaded`, срабатывает ли `shutdown` при фатальной ошибке и загружается ли mu-plugin — всё это требует настоящего WordPress |
-| Обнаружение плагина Joomla и `$app->close()` | Требует запуска обнаружения в реальной админке Joomla |
-| Действительно ли приоритет Drupal оказывается вне кеша страниц | Требует загруженного ядра Drupal |
+| Два оставшихся подпункта Joomla | Две вещи, до которых контур по-прежнему не дотягивается, и обе по одной причине (нужна база данных или установщик): настоящий путь чтения `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) и форма установщика (namespacemap записан, `bootPlugin()` находит класс) |
 | Автоконфигурация `kernel.event_subscriber` в Symfony | Требует реальной компиляции контейнера |
-| Перекрёстное влияние статического состояния в долгоживущих процессах | Унаследовано от существующей архитектуры (то же верно для Webman / Hyperf); здесь не менялось |
+| Перекрёстное влияние статического состояния в долгоживущих процессах | Сторона Webman не изменена (на стороне Hyperf изолировано: 9 значений состояния рендера на запрос идут через Context корутины, и `tests/Unit/Lib/RenderStateCoroutineTest.php` закрепляет их корутиной, которая действительно отдаёт управление) |
 | Реальный ввод-вывод Redis, отрисовка в браузере, накладные расходы профилирования под настоящей нагрузкой | Реальный ввод-вывод Redis **теперь в контуре** (`cases/Redis.php`: настоящий phpredis + настоящий запрос Slim от начала до конца — запрос → сохранение → список → страница отчёта); отрисовка в браузере и накладные расходы под настоящей нагрузкой по-прежнему вне области юнит-тестов и контура |
 | Сигнатуры и семантика адаптеров для ThinkPHP / Hyperf | эти две не входят в контур верификации (он охватывает восемь фреймворков); их заглушки написаны вручную внутри пакета, в `tests/Stubs/framework-stubs.php`, без сверки с настоящими пакетами |
 
@@ -641,7 +498,7 @@ src/<Fw>/
 
 **`assets_url` теперь поддерживает произвольный префикс**
 
-Префикс статических ресурсов больше не жёстко прописанная константа: `src/Core/StaticController.php` сопоставляет пути ресурсов со значением параметра `assets_url` (по умолчанию `/xhprof-assets`, завершающий слэш необязателен). Остальное ограничение при развёртывании в подкаталоге описано ниже, в пункте про Drupal. **Граница**: свой префикс работает сразу на пяти фреймворках, где middleware или входной класс сам замыкает путь к ресурсам (Yii3, Symfony, Slim, WordPress, Joomla); в Laravel, Hyperf, Webman и ThinkPHP путь маршрута ресурсов, а в Drupal — `xhprof.routing.yml`, регистрируете **вы** — меняйте их вместе с `assets_url`, иначе запросы к ресурсам не дойдут до `StaticController` и страница отчёта потеряет стили и скрипты.
+Префикс статических ресурсов больше не жёстко прописанная константа: `src/Core/StaticController.php` сопоставляет пути ресурсов со значением параметра `assets_url` (по умолчанию `/xhprof-assets`, завершающий слэш необязателен). Остальное ограничение при развёртывании в подкаталоге описано ниже, в пункте про Drupal. **Все десять фреймворков следуют этому параметру**: девять классов входа сами замыкают путь ресурсов до старта профилирования и отдают их, а Drupal отдаёт префикс по умолчанию через маршрут модуля + контроллер, а свой префикс передаёт middleware. **Граница**: Laravel, Hyperf, Webman и ThinkPHP больше не нуждаются в контроллере и маршрутах — middleware выполняется первым, поэтому контроллер и два маршрута, зарегистрированные по старым инструкциям, лишь затенены: они не дают ошибки и больше никогда не достигаются.
 
 **Известное ограничение: защита по пути не срабатывает, когда Drupal стоит в подкаталоге**
 
@@ -649,7 +506,7 @@ src/<Fw>/
 
 **Совместимость с Symfony 6.4**
 
-Совместимость с Symfony 6.4 измерена (именно так были исправлены две переподгонки, невидимые на 7.4: свойства `Request` на 6.4 не несут объявления нативного типа, а кодировка, добавляемая `prepare()`, отличается регистром), но контур верификации в CI запускается только на 7.4.
+Совместимость с Symfony 6.4 измерена (именно так были исправлены две переподгонки, невидимые на 7.4: свойства `Request` на 6.4 не несут объявления нативного типа, а кодировка, добавляемая `prepare()`, отличается регистром). **Обе ноги идут в CI**: основная нога 7.x плюс отдельный проект `tools/contracts/legacy-symfony64`, который прогоняет тот же файл case без копирования, — и обе ноги также входят в tag-гейт.
 
 ---
 

@@ -5,29 +5,34 @@ declare(strict_types=1);
 /**
  * Joomla 契约卡（Joomla 4.4 / 5.x 系统插件）。
  *
- * 本卡的可验证面被环的依赖集**切成两半**，两半的结论必须分开放，不许混着说：
- *
- *  可安装（真 L0 + 真 L1 + 真 L2，用 composer 里的真实包）：
- *    joomla/input 3.0.x、joomla/registry 3.0.x、joomla/uri 3.0.x、joomla/event 3.0.x
- *    → Joomla\Input\Input、Joomla\Registry\Registry、Joomla\Uri\UriHelper、
- *      Joomla\Event\{Priority, Dispatcher, DispatcherInterface, EventInterface, SubscriberInterface}
- *
- *  不可安装（诚实 SKIP，理由在 §3 用干净子进程钉成可复核的事实）：
- *    `Joomla\CMS\*` 整个命名空间只存在于 CMS 仓库，没有任何 composer 包提供它。
+ * 本卡的可验证面**全部**建立在真实包上：环的 composer 里既有四个独立小包
+ * （joomla/event、joomla/input、joomla/registry、joomla/uri），也钉了两个**完整 CMS
+ * 发布包**（JOOMLA_CMS_PACKAGES：5.2.2 与 4.4.14，官方 Full_Package zip，版本 + sha1）。
+ * 两个 CMS 包故意不声明 autoload —— 环自己的进程绝不能自动加载到 Joomla\CMS\*（会与桩
+ * 的同名声明在加载期对撞），只有本卡起的子进程显式 require 它们的 vendor/autoload.php。
  *
  * 覆盖手法（沿用 WordPress 卡确立的**扫描方向**）：
  *   1) 语法：src/Joomla/**、joomla/** 每个文件都要编译通过；
  *   2) 冻结清单 ↔ 源码扫描**双向相等**：源码里用到的每个框架成员都必须在清单里，
  *      清单里每条也必须在源码里真的用到。多一个 = 有人加了没核对过的调用；
  *      少一个 = 调用点被删了（或扫描器坏了，那也是坏消息）；
- *   3) L0 桩保真：tests/Stubs/Framework/Joomla.php 对**可安装**那几个类的声明
- *      （我们用到的那部分）与真实包逐字段一致 —— 单测全靠这份桩，桩漂了单测证明不了任何事。
- *      两个子进程各 dump 一次再比，dump 逻辑同一段代码（不是两套）；
- *   4) L2：用**真实** Input / Registry / UriHelper 跑 src/Joomla/Adapter/**，并用
- *      **真实** Dispatcher 真的 addSubscriber() + dispatch() 一次报告页请求。
+ *   3) L0 桩保真，两段：
+ *      §4 可安装侧：与四个小包逐字段**精确相等**；
+ *      §8 CMS 侧：与两个完整 CMS 包按「桩可更窄、不可更宽」比，差异集**按版本冻结**
+ *         （多一条少一条都 FAIL），桩对 CMSApplicationInterface 的**合成**
+ *         单独核对真身（兄弟接口与三个具体应用类上确有）；
+ *   4) L2 语义，三处：
+ *      §5 可安装侧：真实 Input / Registry / UriHelper / Dispatcher 驱动 src/Joomla/Adapter/**；
+ *      §9 **真 CMS 端到端**：真 SiteApplication + 真事件类 + 真 Dispatcher + 本包入口类，
+ *         跑报告页 / 鉴权失败 / 静态资源 / 常开采样四种请求，断言正文、响应头、真 exit()、
+ *         以及 4.4 双次 onAfterRespond 下的幂等；
+ *      §10 真 Log 通路：真 Joomla\CMS\Log\Log + 本包 LogAdapter（回调 logger 看级别与分类）；
+ *   5) §6 采样（ext-xhprof 门控）、§11 provider 协议 + 安装形态、§12 分发点静态钉（版本相关）。
  *
- * 采样类断言需要 ext-xhprof：本机与 ci.yml 有、contracts.yml 没有。缺扩展时它们
- * **计入 skips**（不伪装成通过），run.php 会因 skips ≠ 冻结期望而红 —— 这是故意的：
+ * 仍然不可验证的只剩 2 条（JOOMLA_SKIPS_DECLARED），理由在 §11 的 detail 里逐条量过。
+ *
+ * 环境相关：采样类断言要 ext-xhprof，报告页正文/头要 ext-redis。缺哪个就把对应的声明数
+ * 计入 skips（不伪装成通过），run.php 会因 skips ≠ 冻结期望而红 —— 这是故意的：
  * 那条红是要人显式决定「给 contracts.yml 装扩展」还是「接受这批断言在 CI 上不验」。
  */
 
@@ -81,10 +86,17 @@ const JOOMLA_MEMBERS = [
 ];
 
 /**
- * 冻结：JOOMLA_MEMBERS 里**能在环里真核对**的那部分。
+ * 冻结：JOOMLA_MEMBERS 里**能在环里真核对**的那部分，分两个子集、走两段核对：
  *
- * §4 会把它们逐个反射比对（真实包侧 vs 桩侧）；不在这个子集里的（`app:*`、`this:*`、
- * `parent:*`、`Log:*`、`PluginHelper:*`、`Factory:*`）都是 CMS 侧，理由见 §3 与 SKIP 1/2/4。
+ *  - 可安装侧：本文件的 L0 反射比对（joomla_member_diff，逐字段精确相等）覆盖
+ *    joomla/event、joomla/input、joomla/registry、joomla/uri 四个真实包；
+ *  - CMS 侧（JOOMLA_CMS_VERIFIABLE）：§8 对**两个真实 CMS 发布包**反射比对，
+ *    方向「桩可更窄、不可更宽」。这一半在 2026-09-25 之前整段是 SKIP，现在两个包
+ *    钉进了 composer.json（版本 + sha1）。
+ *
+ * `app:setHeader`/`app:sendHeaders` 也在下面：桩把这两个方法**合成**到了
+ * CMSApplicationInterface 上，真实 CMS 里它们在 Joomla\Application\WebApplicationInterface
+ * （§8 的合成项核对单独验「接口上没有 + 兄弟接口/具体应用类上确有 + 桩的型别只更窄」）。
  */
 const JOOMLA_MEMBERS_VERIFIABLE = [
     'input:get', 'input:getArray', 'input:getMethod', 'input:server',
@@ -92,6 +104,106 @@ const JOOMLA_MEMBERS_VERIFIABLE = [
     'registry:get', 'Registry:__construct',
     'UriHelper:parse_url',
     'Priority:MIN', 'Priority:NORMAL',
+];
+
+/** 冻结：CMS 侧的 `接收者:成员`（§8 逐个反射核对；与 §2 的清单双向自检，防止这里漂） */
+const JOOMLA_CMS_VERIFIABLE = [
+    'app:getInput', 'app:setHeader', 'app:sendHeaders', 'app:close',
+    'this:getApplication', 'parent:__construct', 'plugin:setApplication',
+    'Log:add', 'Log:ERROR', 'PluginHelper:getPlugin', 'Factory:getApplication',
+];
+
+/**
+ * 钉住的两个真实 CMS 发布包：`版本 => tools/contracts/vendor 下的相对路径`。
+ *
+ * 都是官方 **Full_Package** zip（不是 update/patch 包）：只有完整包自带可用的
+ * `libraries/vendor/autoload.php`（GitHub 上 tag 的 tar 包里没有 libraries/vendor，
+ * 实测 API 查 `libraries/vendor?ref=5.2.2` 404）。Joomla\CMS\* 不在 packagist 上，
+ * 只能这么钉进 composer。
+ *
+ * 两个包在 composer.json 里**故意不声明 autoload**：环自己的进程不许自动加载到真实
+ * Joomla\CMS\*（会与桩的同名声明在加载期对撞），只有本卡起的子进程显式 require。
+ */
+const JOOMLA_CMS_PACKAGES = [
+    '5.2.2' => 'joomla/cms-full-package-5',
+    '4.4.14' => 'joomla/cms-full-package-4',
+];
+
+/**
+ * L0 反射规格：CMS 侧的类型 → **桩与真实包两侧都反射**的成员。
+ *
+ * 桩侧这些成员必须全部落在 tests/Stubs/Framework/Joomla.php 里（declaring 类即 FQN）；
+ * 真实侧除 JOOMLA_CMS_REAL_MISSING 里那两条外也必须都在。
+ */
+const JOOMLA_CMS_SHARED_SPEC = [
+    'Joomla\CMS\Plugin\CMSPlugin' => ['__construct', 'setApplication', 'getApplication'],
+    'Joomla\CMS\Application\CMSApplicationInterface' => ['getInput', 'setHeader', 'sendHeaders', 'close'],
+    'Joomla\CMS\Log\Log' => ['add'],
+];
+
+/**
+ * 只在**真实包侧**核对存在的成员（桩里没有这些类：PluginHelper/Factory 只出现在
+ * joomla/services/provider.php，本卡不加载那个文件 —— provider 协议由 §11 单独核对）。
+ *
+ * WebApplicationInterface/ApplicationInterface 与三个具体应用类是**合成项的出处**：
+ * 桩断言 CMSApplicationInterface 有 setHeader/sendHeaders/close，就得证明真实 CMS 的
+ * 应用对象上真的有（否则桩的合成是幻觉，单测会替生产代码背书一个不存在的能力）。
+ */
+const JOOMLA_CMS_REAL_SPEC = [
+    'Joomla\CMS\Plugin\PluginHelper' => ['getPlugin', 'importPlugin', 'isEnabled'],
+    'Joomla\CMS\Factory' => ['getApplication'],
+    'Joomla\Application\WebApplicationInterface' => ['setHeader', 'sendHeaders'],
+    'Joomla\Application\ApplicationInterface' => ['close'],
+    'Joomla\CMS\Application\SiteApplication' => ['setHeader', 'sendHeaders', 'close', 'getInput'],
+    'Joomla\CMS\Application\AdministratorApplication' => ['setHeader', 'sendHeaders', 'close', 'getInput'],
+    'Joomla\CMS\Application\ApiApplication' => ['setHeader', 'sendHeaders', 'close', 'getInput'],
+];
+
+/** 冻结：桩合成的两个方法 → 真身所在的接口（§8 逐个核对「接口上没有、兄弟接口上有」） */
+const JOOMLA_CMS_SYNTHESIS = [
+    'setHeader' => 'Joomla\Application\WebApplicationInterface',
+    'sendHeaders' => 'Joomla\Application\WebApplicationInterface',
+];
+
+/**
+ * 冻结：合成项真身的**参数个数**（实测 `setHeader($name, $value, $replace = false)` /
+ * `sendHeaders()`，两个版本同形）。无型别不等于「签名是空的」：0 参数的方法算出来的
+ * 签名只有返回那一格，「全都无型别」就退化成恒真 —— 参数个数必须单独钉住。
+ */
+const JOOMLA_CMS_SYNTHESIS_ARITY = ['setHeader' => 3, 'sendHeaders' => 0];
+
+/**
+ * 冻结：真实侧 dump 里**应当且只应当缺失**的成员（= 合成项，由 §8 单独核对）。
+ * 精确相等：多一条（真实包少了我们断言的能力）少一条（合成项消失，桩该改成不合成）都 FAIL。
+ */
+const JOOMLA_CMS_REAL_MISSING = [
+    'Joomla\CMS\Application\CMSApplicationInterface::setHeader',
+    'Joomla\CMS\Application\CMSApplicationInterface::sendHeaders',
+];
+
+/**
+ * 冻结：每个版本**允许且必须出现**的差异（精确相等 —— 多一条是桩漂了/包换了，
+ * 少一条是这条差异的依据消失了，两种都要人重看一遍）。差异串由 joomla_cms_compare() 生成。
+ *
+ * 5.2.2 是 0 条：桩的 CMS 侧声明与 5.2.2 **逐字段一致**（含 CMSPlugin::__construct）。
+ * 4.4.14 只差 1 条：4.4 的 `__construct(&$subject, $config = [])` 第一个参数**按引用**
+ * 且无型别，桩是 `DispatcherInterface $dispatcher`（= 5.x 的形状，本包的目标版本）。
+ * 桩无法建模「调用点必须传变量」这件事，代价由 joomla/services/provider.php「先用变量接住
+ * 容器结果再传」的写法兜住 —— §9 在 4.4.14 上真的 new 了一次入口类，证明这条兜得住。
+ */
+const JOOMLA_CMS_EXPECTED_DIFFS = [
+    '5.2.2' => [],
+    '4.4.14' => ['Joomla\CMS\Plugin\CMSPlugin::__construct.p0.byRef'],
+];
+
+/**
+ * 冻结：CMS 侧成员的声明出处（FQN → 允许的 declaring 文件名）。防止反射到别处的同名声明：
+ * 桩侧必须落在 Joomla.php 且 declaring 类就是 FQN；真实侧必须是 CMS 自己的那几个文件。
+ */
+const JOOMLA_CMS_DECLARING = [
+    'Joomla\CMS\Plugin\CMSPlugin' => ['CMSPlugin.php'],
+    'Joomla\CMS\Application\CMSApplicationInterface' => ['CMSApplicationInterface.php', 'ApplicationInterface.php'],
+    'Joomla\CMS\Log\Log' => ['Log.php'],
 ];
 
 /**
@@ -113,10 +225,14 @@ const JOOMLA_DUMP_SPEC = [
 ];
 
 /**
- * 冻结：CMS 侧的触碰点。环里这些类**必须装不上**——§3 会起一个只加载真实包的子进程
- * 逐个 `class_exists()` 复核。哪天它们中的任何一个能被装了（比如有人把 joomla/cms
- * 加进 composer.json），本 case 立刻 FAIL 要求把对应 SKIP 升级成真核对，
- * 而不是让一句可能已经过期的「装不上」永久躺在 SKIP 理由里。
+ * 冻结：CMS 侧的触碰点。§3 起两个子进程，两个方向都要成立：
+ *
+ *  (A) 环自己的 autoloader（tools/contracts/vendor/autoload.php）**必须看不见**这些类。
+ *      两个 CMS 包在 composer.json 里故意不声明 autoload；哪天有人加上，环进程就会加载
+ *      真实的 Joomla\CMS\*，与 tests/Stubs/Framework/Joomla.php 的同名声明对撞 —— 桩里那些
+ *      声明都在 class_exists 守卫里，真实类会**先赢**，单测于是悄悄改测真实包（这正是要防的）。
+ *  (B) 每个钉住的包**自己的** libraries/vendor/autoload.php 必须看得见，且
+ *      Joomla\CMS\Version 必须报出钉住的那个版本 —— 钉的是这两个包，不是「某个能装的 CMS」。
  */
 const JOOMLA_CMS_TOUCHPOINTS = [
     'Joomla\CMS\Plugin\CMSPlugin',
@@ -124,15 +240,52 @@ const JOOMLA_CMS_TOUCHPOINTS = [
     'Joomla\CMS\Log\Log',
     'Joomla\CMS\Plugin\PluginHelper',
     'Joomla\CMS\Factory',
-    // 这个类**不存在**是 getSubscribedEvents() 用字面量事件名的唯一原因（见入口类注释）
-    'Joomla\CMS\Event\Application\ApplicationEvents',
 ];
 
-/** 冻结：CMS 侧不可验证的子项数（每个都在 §6 的 detail 里逐条写明理由） */
-const JOOMLA_SKIPS_DECLARED = 5;
+/**
+ * 单独一条：**两个版本都期望它不存在**。入口类用字面量事件名而不是
+ * `Joomla\CMS\Event\Application\ApplicationEvents::*`，前提就是这个类不存在
+ * （写常量会让插件在装载时「类找不到」直接致命）。哪天 Joomla 真加了它，这里红，
+ * 提醒人重新评估「字面量 vs 常量」的取舍。
+ */
+const JOOMLA_CMS_ABSENT = 'Joomla\CMS\Event\Application\ApplicationEvents';
 
-/** 冻结：需要 ext-xhprof 的断言数（缺扩展时按这个数计入 skips，末尾自检漂移） */
-const JOOMLA_EXT_CHECKS_DECLARED = 4;
+/** 端到端跑四种请求：报告页 / 鉴权失败 / 静态资源 / 常开采样（§9） */
+const JOOMLA_E2E_MODES = ['report', 'deny', 'assets', 'sample'];
+
+/**
+ * 冻结：两个版本派发 onAfterInitialise 时用的事件对象类（§9 观测、§12 源码钉，两处呼应）。
+ * 5.x 用有型别的 AfterInitialiseEvent；4.4 用通用的 Joomla\Event\Event。入口类只管监听
+ * **名字**，所以两者都能收 —— 但这条差异必须有人钉住，否则「4.4 也能跑」就成了没依据的说法。
+ */
+const JOOMLA_CMS_EVENT_CLASS = [
+    '5.2.2' => 'Joomla\CMS\Event\Application\AfterInitialiseEvent',
+    '4.4.14' => 'Joomla\Event\Event',
+];
+
+/**
+ * 冻结：**仍然不可验证**的子项数。由 5 降到 2（2026-09-25 解冻三条）：
+ *   [SKIP A] `#__extensions.params` 的真实读取路径（PluginHelper::getPlugin → bootPlugin）
+ *   [SKIP B] 安装器形态（namespacemap 被写过、bootPlugin 找得到类）
+ * 两条的理由都在**干净子进程里量到了抛点**（§11 的容器协议 + §11c 的 SQLite 近路与
+ * 安装后目录形态下的 bootPlugin），不是散文；分别对应原先的 SKIP 3 与 SKIP 4。
+ * 原 SKIP 1（CMS 类语义）、SKIP 2（裸名分发点）、SKIP 5（4.4 vs 5.x 构造器差异）
+ * 已解冻成 §8/§9/§12 的真断言。
+ */
+const JOOMLA_SKIPS_DECLARED = 2;
+
+/**
+ * 冻结：需要 ext-xhprof 的断言数（缺扩展时按这个数计入 skips，末尾自检漂移）。
+ * §6 的 4 条（本进程采样通路）+ §9 sample 模式的 6 条（2 版本 × 3：恰好落一条/有 main()/覆盖标记）。
+ */
+const JOOMLA_EXT_CHECKS_DECLARED = 10;
+
+/**
+ * 冻结：需要 ext-redis 的断言数（同上）。报告页正文与它的头在缺扩展时走的是本包自己的
+ * 500 拒绝页（src/Core/Xhprof.php:121 的硬守卫，无注入点），环绕不过去也不该绕；
+ * 缺扩展时这部分计入 skips，其余（退出/不落库/派发/监听器）在两种环境下都真跑。
+ */
+const JOOMLA_REDIS_CHECKS_DECLARED = 8;
 
 /** 采样标记：证明落库的数据覆盖到本次请求里真的跑过的代码 */
 if (!function_exists('xhprof_joomla_marker')) {
@@ -241,15 +394,19 @@ return static function (): array {
         ];
     }
 
-    // ================= §3 CMS 侧「装不上」的前提必须在环里成立 =================
-    // 这是 SKIP 1/2/4 的理由本身。理由若不成立（真能装上了），SKIP 就该升级成真核对。
+    // ================= §3 CMS 侧的两条前提（两个方向，各起子进程） =================
+    // 两个方向都必须成立，缺一条下面的 §8/§9 就是在验别的东西：
+    //   (A) 环自己的 autoloader **看不见** CMS —— 看得见就意味着真实类会与桩对撞并先赢，
+    //       单测会悄悄改测真实包（这正是这张卡最该防的事）；
+    //   (B) 每个**钉住的包自己**必须看得见，且版本号对得上 —— 钉的是这两个包，不是「某个 CMS」。
 
+    // ---- (A) 环的 autoloader：CMS 全部看不见，正对照必须看得见 ----
     // 探针要问的 FQN **直接由 JOOMLA_CMS_TOUCHPOINTS 生成**，不在这儿手抄第二份：
     // 手抄副本会在清单改人名时静默漂移。回退验证 C5 就是这么抓出来的 —— 清单里把一个
-    // 触碰点换成真装得上的类，探针却仍去问原来那些名字，于是照样 PASS，SKIP 理由成了摆设。
+    // 触碰点换成真装得上的类，探针却仍去问原来那些名字，于是照样 PASS，前提成了摆设。
     // 'control' 是正对照：探针必须看得见一个**确实装得上**的类（真实包里的 Priority）。
-    // 否则「CMS 全部 false」分不清是「CMS 装不上」还是「autoload 压根没加载成功」——
-    // 后者会让整条 SKIP 理由变成假象（C10 就是把这个控制点改坏来验它真会红）。
+    // 否则「CMS 全部 false」分不清是「CMS 不该被看见」还是「autoload 压根没加载成功」——
+    // 后者会让整条前提变成假象（C10 就是把这个控制点改坏来验它真会红）。
     $probe = 'require ' . var_export($autoload, true) . ";\n"
         . "echo json_encode([\n"
         . "    'cms' => array_map(static fn (string \$f): bool => class_exists(\$f) || interface_exists(\$f), "
@@ -262,7 +419,7 @@ return static function (): array {
         || !is_array($absentDecoded['cms']) || count($absentDecoded['cms']) !== count(JOOMLA_CMS_TOUCHPOINTS)) {
         return [
             'status' => 'FAIL',
-            'detail' => 'CMS 前提探针没有给出预期 JSON（exit ' . $absent['code'] . '）：'
+            'detail' => '隔离探针没有给出预期 JSON（exit ' . $absent['code'] . '）：'
                 . trim($absent['stderr'] !== '' ? $absent['stderr'] : $absent['stdout']),
             'skips' => 0,
         ];
@@ -270,26 +427,118 @@ return static function (): array {
     if (($absentDecoded['control'] ?? false) !== true) {
         return [
             'status' => 'FAIL',
-            'detail' => 'CMS 前提探针的**正对照**失败：连真实包里的 Joomla\Event\Priority 都看不见，'
+            'detail' => '隔离探针的**正对照**失败：连真实包里的 Joomla\Event\Priority 都看不见，'
                 . '说明探针没真加载到 vendor/autoload.php —— 这种状态下「CMS 全部 class_exists=false」'
-                . '是假象而不是事实，SKIP 1/2/4 的理由不成立，先修探针',
+                . '是假象而不是事实，先修探针',
             'skips' => 0,
         ];
     }
-    $installable = [];
+    $visibleToRing = [];
     foreach (JOOMLA_CMS_TOUCHPOINTS as $i => $fqn) {
         if ($absentDecoded['cms'][$i] === true) {
-            $installable[] = $fqn;
+            $visibleToRing[] = $fqn;
         }
     }
-    if ($installable !== []) {
+    if ($visibleToRing !== []) {
         return [
             'status' => 'FAIL',
-            'detail' => '这些 CMS 类现在**装得上**了：' . implode('、', $installable)
-                . ' —— 「环里没有 CMS、只能标 SKIP」的前提失效，请把 SKIP 1/2/4 升级成对真实 CMS 的核对'
-                . '（或显式说明为何仍然不可验），不要留着过期的理由继续 SKIP',
+            'detail' => '环自己的 autoloader 现在看得见这些 CMS 类：' . implode('、', $visibleToRing)
+                . ' —— 两个 CMS 发布包在 composer.json 里故意不声明 autoload。加上 autoload 后，'
+                . '环进程里的真实 Joomla\CMS\* 会与 tests/Stubs/Framework/Joomla.php 的同名声明对撞'
+                . '（桩的声明都在 class_exists 守卫里，真实类先赢），单测会**静默**改测真实包。'
+                . '要么去掉那个 autoload，要么把桩改成显式只在本包测试里生效，别在两者之间含糊',
             'skips' => 0,
         ];
+    }
+
+    // ---- (B) 每个钉住的包自己：触碰点都在（ApplicationEvents 除外），版本号 == 钉住的版本 ----
+    $cmsPackagesSeen = [];
+    foreach (JOOMLA_CMS_PACKAGES as $pinnedVersion => $package) {
+        $packageRoot = contracts_dir() . '/vendor/' . $package;
+        $pkgAutoload = $packageRoot . '/libraries/vendor/autoload.php';
+        if (!is_file($pkgAutoload)) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package}（{$pinnedVersion}）没装：找不到 {$pkgAutoload}。"
+                    . '先跑 composer install -d tools/contracts（不要加 --ignore-platform-reqs）',
+                'skips' => 0,
+            ];
+        }
+
+        $cmsProbe = contracts_run_php([
+            '-r', joomla_cms_probe_script(),
+            $pkgAutoload,
+            json_encode(JOOMLA_CMS_TOUCHPOINTS, JSON_THROW_ON_ERROR),
+            JOOMLA_CMS_ABSENT,
+        ]);
+        $cmsDecoded = json_decode(trim($cmsProbe['stdout']), true);
+        if (!is_array($cmsDecoded) || !isset($cmsDecoded['present'], $cmsDecoded['absent'], $cmsDecoded['version'])) {
+            // CMS 类文件里有 `defined('_JEXEC') or die;`：探针若忘了先定义常量，子进程会
+            // 静默 die（exit 0 + 空 stdout）。这里必须**响亮**地红，不能当成「类不存在」。
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package} 的可见性探针没有给出预期 JSON（exit {$cmsProbe['code']}）："
+                    . trim($cmsProbe['stderr'] !== '' ? $cmsProbe['stderr'] : $cmsProbe['stdout'])
+                    . ' —— 空 stdout 通常是探针没在 require 之前定义 _JEXEC/JPATH_*，CMS 的文件被 '
+                    . "`defined('_JEXEC') or die` 提前终止了",
+                'skips' => 0,
+            ];
+        }
+        if (($cmsDecoded['package_dir'] ?? null) !== $package) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package} 探针实际加载的是 {$cmsDecoded['package_dir']}，"
+                    . '包目录与清单对不上（版本标签被换错了？）',
+                'skips' => 0,
+            ];
+        }
+        if ($cmsDecoded['version'] !== $pinnedVersion) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package} 报出的 Joomla 版本是 {$cmsDecoded['version']}，钉的是 {$pinnedVersion}"
+                    . ' —— 「按版本冻结的差异集」失去依据，先对齐 composer.json 与本文件',
+                'skips' => 0,
+            ];
+        }
+        $missingTouchpoints = [];
+        foreach ($cmsDecoded['present'] as $fqn => $present) {
+            if ($present !== true) {
+                $missingTouchpoints[] = $fqn;
+            }
+        }
+        if ($missingTouchpoints !== []) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package} 里看不见这些类：" . implode('、', $missingTouchpoints)
+                    . '（CMS 改命名空间了？还是包被换成了不带这些文件的版本？）',
+                'skips' => 0,
+            ];
+        }
+        if ($cmsDecoded['absent'] !== false) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package} 里居然有 " . JOOMLA_CMS_ABSENT
+                    . ' —— 入口类「事件名用字面量」的前提失效（那条注释直接引用了它不存在的实测），'
+                    . '请重新评估「字面量 vs 常量」并更新 src/Joomla/Extension/Xhprof.php 的注释',
+                'skips' => 0,
+            ];
+        }
+        // 版本相关的结构差异（实测）：两个版本的 libraries/bootstrap.php 都用一个常量拼出
+        // loader.php 的路径，但 4.4 用的是 `JPATH_PLATFORM . '/loader.php'`（该常量在 4.4 的
+        // bootstrap 里默认成 __DIR__ = libraries/），5.x 换成了 `JPATH_LIBRARIES . '/loader.php'`
+        // —— 5.x 的 bootstrap 只定义、不拼接 JPATH_PLATFORM。这条钉的是「两个包确实是两个世代」，
+        // 也防版本标签被换错（把两个包换成同一份内容，这条立刻红）。
+        $platformAsPath = $cmsDecoded['bootstrap_uses_platform_as_path'] ?? null;
+        if ($platformAsPath !== ($pinnedVersion === '4.4.14')) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package}：bootstrap.php 里 `JPATH_PLATFORM . '/…'` 这种拼法 = "
+                    . var_export($platformAsPath, true) . "，与 {$pinnedVersion} 的预期不符"
+                    . '（4.4 拼 JPATH_PLATFORM、5.x 拼 JPATH_LIBRARIES，实测）—— 包或版本标签对不上',
+                'skips' => 0,
+            ];
+        }
+        $cmsPackagesSeen[$pinnedVersion] = $cmsDecoded + ['package' => $package];
     }
 
     // ================= §4 L0：桩 vs 真实包（两个子进程） =================
@@ -637,13 +886,494 @@ return static function (): array {
         $extExpect('L2 采样：请求结束后采样已停（再 stop 一次无害）', xhprof_disable(), null);
     }
 
+    // ================= §8 L0：桩 vs 两个真实 CMS 包（每个包一个子进程） =================
+    // 与 §4 同一手法：桩与真实包不能在同一个进程里共存（同名 FQN 加载期对撞），
+    // dump 逻辑是**同一段代码**（joomla_dump_script），比较在**本进程**做。
+    // 方向：桩可更窄、不许更宽；差异集**按版本冻结**（JOOMLA_CMS_EXPECTED_DIFFS）：
+    // 多一条是桩漂了或包换了，少一条是那条差异的依据消失了 —— 两种都要人重看一遍。
+
+    $cmsSpecJson = json_encode(JOOMLA_CMS_SHARED_SPEC, JSON_THROW_ON_ERROR);
+    $cmsAllSpecJson = json_encode(JOOMLA_CMS_SHARED_SPEC + JOOMLA_CMS_REAL_SPEC, JSON_THROW_ON_ERROR);
+
+    $stubCmsRun = contracts_run_php(['-r', 'require ' . var_export($stub, true) . ";\n" . $dumpScript, $cmsSpecJson]);
+    $stubCms = json_decode(trim($stubCmsRun['stdout']), true);
+    if (!is_array($stubCms) || ($stubCms['missing'] ?? []) !== []) {
+        return [
+            'status' => 'FAIL',
+            'detail' => '桩侧 CMS 反射子进程没有给出完整 JSON（exit ' . $stubCmsRun['code'] . '）：'
+                . trim($stubCmsRun['stderr'] !== '' ? $stubCmsRun['stderr'] : $stubCmsRun['stdout'])
+                . '；缺失=' . json_encode($stubCms['missing'] ?? null, JSON_UNESCAPED_UNICODE),
+            'skips' => 0,
+        ];
+    }
+    // 桩侧每个成员的声明出处必须是那个桩文件 —— 防「反射到别处的同名声明」
+    foreach (JOOMLA_CMS_SHARED_SPEC as $fqn => $members) {
+        foreach ($members as $member) {
+            $file = $stubCms['types'][$fqn]['files'][$member] ?? '?';
+            if ($file !== 'Joomla.php') {
+                return [
+                    'status' => 'FAIL',
+                    'detail' => "{$fqn}::{$member} 的桩声明来自 {$file}，"
+                        . '不是 tests/Stubs/Framework/Joomla.php（桩文件被改名/搬走了？）',
+                    'skips' => 0,
+                ];
+            }
+        }
+    }
+
+    $cmsRealDumps = [];
+    foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
+        $pkgDir = contracts_dir() . '/vendor/' . $package;
+        $cmsRun = contracts_run_php([
+            '-r',
+            joomla_cms_boot_script($pkgDir . '/libraries/vendor/autoload.php', $pkgDir . '/libraries', $siteRoot) . $dumpScript,
+            $cmsAllSpecJson,
+        ]);
+        $cmsReal = json_decode(trim($cmsRun['stdout']), true);
+        if (!is_array($cmsReal) || !isset($cmsReal['types'])) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "{$package} 反射子进程没有给出 JSON（exit {$cmsRun['code']}）："
+                    . trim($cmsRun['stderr'] !== '' ? $cmsRun['stderr'] : $cmsRun['stdout'])
+                    . ' —— 空 stdout 通常是漏了 _JEXEC/JPATH_* 定义，CMS 文件被提前 die 掉了',
+                'skips' => 0,
+            ];
+        }
+        $cmsRealDumps[$version] = $cmsReal;
+
+        // 真实侧「缺失」必须**精确等于**冻结的合成项：多一条 = 我们断言的能力真实包没有，
+        // 少一条 = 合成项消失了（桩该停止合成，改成与真实一致的写法）
+        $realMissing = $cmsReal['missing'];
+        sort($realMissing);
+        $expectedMissing = JOOMLA_CMS_REAL_MISSING;
+        sort($expectedMissing);
+        $expect(
+            "§8 {$version} 真实侧缺失项精确等于冻结的合成项",
+            $realMissing,
+            $expectedMissing
+        );
+
+        $cmsDiffs = [];
+        $cmsNotes = [];
+        foreach (JOOMLA_CMS_SHARED_SPEC as $fqn => $members) {
+            if (!isset($cmsReal['types'][$fqn])) {
+                $cmsDiffs[] = "{$fqn}.missing";
+                continue;
+            }
+            joomla_cms_compare($stubCms['types'][$fqn], $cmsReal['types'][$fqn], $fqn, JOOMLA_CMS_REAL_MISSING, $cmsDiffs, $cmsNotes);
+
+            // 真实侧声明出处：必须是 CMS 自己的那几个文件（防反射到 vendor 里的同名副本）。
+            // 合成项本来就没有声明（在 missing 里），由下面那条断言单独钉。
+            foreach ($members as $member) {
+                if (in_array("{$fqn}::{$member}", JOOMLA_CMS_REAL_MISSING, true)) {
+                    continue;
+                }
+                $file = $cmsReal['types'][$fqn]['files'][$member] ?? '?';
+                if (!in_array($file, JOOMLA_CMS_DECLARING[$fqn], true)) {
+                    $cmsDiffs[] = "{$fqn}::{$member}.declaring({$file})";
+                }
+            }
+        }
+        sort($cmsDiffs);
+        $expectedCmsDiffs = JOOMLA_CMS_EXPECTED_DIFFS[$version];
+        sort($expectedCmsDiffs);
+        $expect(
+            "§8 {$version} 差异集精确等于冻结值（多一条少一条都算漂）",
+            $cmsDiffs,
+            $expectedCmsDiffs
+        );
+
+        // §8b 合成项的真身：桩断言 CMSApplicationInterface 有 setHeader/sendHeaders，
+        // 真实 CMS 的接口上确实没有（上面 missing 那条），但真身必须在兄弟接口上存在、
+        // 参数个数与冻结值一致、且参数与返回**全无型别**（最宽）—— 桩写了型别，只能是更窄，
+        // 不会替生产背书假能力。
+        foreach (JOOMLA_CMS_SYNTHESIS as $member => $sibling) {
+            $sig = [];
+            foreach ($cmsReal['types'][$sibling]['methods'][$member]['params'] as $p) {
+                $sig[] = $p['type'];
+            }
+            $sig[] = $cmsReal['types'][$sibling]['methods'][$member]['return'];
+            $expect(
+                "§8b {$version} 合成项 {$member}：真身 {$sibling} 的 " . JOOMLA_CMS_SYNTHESIS_ARITY[$member]
+                    . ' 个参数与返回全无型别（桩只能更窄）',
+                [count($sig), array_values(array_filter($sig, static fn ($t): bool => $t !== null))],
+                [JOOMLA_CMS_SYNTHESIS_ARITY[$member] + 1, []]
+            );
+        }
+    }
+
+    // §8c 比较器正对照：把桩快照的副本改坏，比较器必须报出对应的两条。
+    // 一个从没红过的比较器不是检查（Drupal 卡同款做法）。两条改动落在两个不同的比较分叉上：
+    // 常量值（精确相等那一支）与参数型别（方向比较那一支）。
+    $mutant = $stubCms;
+    $mutant['types']['Joomla\CMS\Log\Log']['constants']['ERROR'] = '16';
+    $mutant['types']['Joomla\CMS\Plugin\CMSPlugin']['methods']['setApplication']['params'][0]['type'] = 'stdClass';
+    $mutantDiffs = [];
+    $mutantNotes = [];
+    foreach (JOOMLA_CMS_SHARED_SPEC as $fqn => $_members) {
+        joomla_cms_compare($mutant['types'][$fqn], $cmsRealDumps['5.2.2']['types'][$fqn], $fqn, JOOMLA_CMS_REAL_MISSING, $mutantDiffs, $mutantNotes);
+    }
+    sort($mutantDiffs);
+    $expect(
+        '§8c 比较器正对照：改坏桩快照后必须报出这两处差异',
+        $mutantDiffs,
+        ['Joomla\CMS\Log\Log::ERROR.constant', 'Joomla\CMS\Plugin\CMSPlugin::setApplication.p0.type']
+    );
+
+    // ================= §9 L2：真 CMS 端到端（每版本四个请求） =================
+    // 真 SiteApplication + 真 CMSPlugin + 真事件类 + 真 Dispatcher + 本包入口类。
+    // 这一段是 SKIP 1/2 解冻的**主体**：close() 在真实 CMS 里是不是 exit()、setHeader/
+    // sendHeaders 落到真实应用上是什么样、4.4 双次 onAfterRespond 下幂等守卫顶不顶得住，
+    // 全都在这里以「子进程真的跑了」的形式回答，不再靠源码阅读。
+    // 报告页正文/响应头要 ext-redis（src/Core/Xhprof.php:121 的硬守卫），缺扩展时计入 skips。
+    $redis = extension_loaded('redis');
+    $redisChecks = 0;
+    $redisFailures = [];
+    $redisExpect = static function (string $label, mixed $actual, mixed $expected) use (&$redisChecks, &$redisFailures): void {
+        $redisChecks++;
+        if ($actual !== $expected) {
+            $redisFailures[] = $label . '：得到 ' . var_export($actual, true) . '，期望 ' . var_export($expected, true);
+        }
+    };
+    $skips += $redis ? 0 : JOOMLA_REDIS_CHECKS_DECLARED;
+
+    $e2eScript = joomla_e2e_script();
+    foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
+        $pkgDir = contracts_dir() . '/vendor/' . $package;
+        foreach (JOOMLA_E2E_MODES as $mode) {
+            $e2eRun = contracts_run_php(['-r', $e2eScript, $pkgDir, $repoRoot, $siteRoot, $mode]);
+            $obs = joomla_e2e_observe($e2eRun['stderr']);
+            if ($obs === null) {
+                return [
+                    'status' => 'FAIL',
+                    'detail' => "§9 {$version}/{$mode} 端到端子进程没有给出观测行（exit {$e2eRun['code']}）："
+                        . trim($e2eRun['stderr'] !== '' ? $e2eRun['stderr'] : $e2eRun['stdout']),
+                    'skips' => 0,
+                ];
+            }
+            $label = "§9 {$version}/{$mode}";
+            $body = $e2eRun['stdout'];
+
+            $expect("{$label} 子进程正常结束", $e2eRun['code'], 0);
+            // 采样模式是**正对照**：它不 close()，所以标记必须出现。其余三种请求都该在
+            // 派发之后被 close() 掐断（真实 CMS 里 close() = exit()），标记不许出现。
+            $expect(
+                "{$label} " . ($mode === 'sample' ? '没有 close()、脚本跑到底（正对照）' : '在派发后被真实 close() 掐断（= exit）'),
+                [str_contains($body, 'AFTER-INITIALISE-DISPATCH'), str_contains($body, 'END-OF-SCRIPT')],
+                $mode === 'sample' ? [true, true] : [false, false]
+            );
+            if ($mode !== 'sample') {
+                // 采样关闭（enable=false）或请求被 close() 掐断：一条都不许落。
+                // sample 模式落没落由下面 ext 门控的「恰好一条」负责，这里不比（自比是恒真）。
+                $expect("{$label} 常驻采样以外的请求不落库", $obs['cache_runs'], []);
+            }
+
+            if ($mode === 'sample') {
+                // 4.4 里 onAfterRespond 有**两个**分发点（CMSApplication.php:332 与
+                // WebApplication.php:188），同一请求可能各来一次 —— 幂等守卫就是为它准备的。
+                $expect("{$label} 两次 onAfterRespond 都真的派发了", $obs['on_after_respond_count'], 2);
+                if ($ext) {
+                    $extExpect("{$label} 幂等：两次 onAfterRespond 只落一条", count($obs['cache_runs']), 1);
+                    $extExpect("{$label} 落库数据是本次采样（有 main()）", $obs['run_has_main'], true);
+                    $extExpect("{$label} 采样窗口覆盖到本次请求里跑过的代码", $obs['run_covers_marker'], true);
+                }
+            }
+
+            if ($mode === 'assets') {
+                // 静态资源是**唯一**一条路：正文、两个响应头、真 exit 都在，且不依赖 ext-redis。
+                $expect(
+                    "{$label} 真实应用上的响应头逐字（Content-Type + Cache-Control，都由 setHeader 落）",
+                    $obs['headers'],
+                    ['Content-Type: text/css', 'Cache-Control: public, max-age=86400']
+                );
+                $expect("{$label} 正文是真实样式表（StaticController 读出来的那份）", str_starts_with($body, '/**') && str_contains($body, ':root'), true);
+                $expect("{$label} 真实应用上四个方法都在（桩的合成不是幻觉）", $obs['has_method'], ['setHeader', 'sendHeaders', 'close', 'getInput']);
+                $expect("{$label} 入口类是真实 CMSPlugin 的子类", [$obs['plugin_is_cms_plugin'], $obs['plugin_parent']], [true, 'Joomla\CMS\Plugin\CMSPlugin']);
+                $expect("{$label} 注入的 dispatcher 就是插件持有的那个", $obs['dispatcher_identity'], true);
+                $expect("{$label} getApplication() 是 protected（与桩同形）", $obs['get_application_visibility'], 'protected');
+                $expect("{$label} setApplication() 之前 getApplication() 为 null", $obs['application_before_set'], true);
+                $expect("{$label} setApplication() 之后拿到同一个应用", $obs['application_after_set_is_app'], true);
+                $expect(
+                    "{$label} registerListeners() 前后每个事件恰好 +1 个监听器",
+                    [$obs['listener_count_before'], $obs['listener_count_initialise'], $obs['listener_count_respond']],
+                    [1, 2, 2]
+                );
+                $expect("{$label} 输入是真实 Joomla\CMS\Input\Input", $obs['input_class'], 'Joomla\CMS\Input\Input');
+                $expect("{$label} 分发的是真实 CMS 的事件对象", $obs['dispatched'][0] ?? null, 'onAfterInitialise:' . JOOMLA_CMS_EVENT_CLASS[$version]);
+            }
+
+            if ($redis && ($mode === 'report' || $mode === 'deny')) {
+                // 报告页 / 鉴权失败：正文与头（缺 ext-redis 时走本包自己的 500 拒绝页，
+                // 那是另一种响应，不是这里要钉的形状）
+                if ($mode === 'report') {
+                    $redisExpect("{$label} 正文是真实报告页（zh_CN，语言由配置钉死）", str_starts_with($body, '<html lang="zh-CN">'), true);
+                    $redisExpect("{$label} 报告页响应头逐字", $obs['headers'], ['Cache-Control: no-cache, private', 'Content-Type: text/html; charset=UTF-8']);
+                } else {
+                    $redisExpect("{$label} token 不符时正文是拒绝页", $body, '403 Forbidden');
+                    $redisExpect("{$label} token 不符时 Status 头是 403", $obs['headers'], ['Status: 403']);
+                }
+            }
+        }
+    }
+
+    // ================= §10 L2：真 Log 通路（本包 LogAdapter → 真 Joomla\CMS\Log\Log） =================
+    // 桩里的 Log 只记数组；真实 Log 是静态注册表 + 回调 logger。这里在子进程里用**真** Log
+    // 跑本包适配器，钉住四件事在真实类上成立：级别是位掩码 8、分类是 'xhprof'、message 原样、
+    // context 一路带到 LogEntry。§4 的反射比对只能证明「常量值对得上」，证明不了这条通路。
+    foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
+        $pkgDir = contracts_dir() . '/vendor/' . $package;
+        $logRun = contracts_run_php([
+            '-r',
+            joomla_cms_boot_script($pkgDir . '/libraries/vendor/autoload.php', $pkgDir . '/libraries', $siteRoot)
+                . joomla_repo_autoload_script($repoRoot)
+                . joomla_log_script(),
+        ]);
+        $logObs = json_decode(trim($logRun['stdout']), true);
+        if (!is_array($logObs) || !isset($logObs['entry'])) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "§10 {$version} 真 Log 子进程没有给出 JSON（exit {$logRun['code']}）："
+                    . trim($logRun['stderr'] !== '' ? $logRun['stderr'] : $logRun['stdout']),
+                'skips' => 0,
+            ];
+        }
+        $expect(
+            "§10 {$version} LogAdapter 的调用被真实 Log 的回调 logger 收到，且是 LogEntry",
+            $logObs['entry'],
+            [
+                'class' => 'Joomla\CMS\Log\LogEntry',
+                'message' => 'xhprof 契约：真 Log 通路',
+                'priority' => 8,
+                'category' => 'xhprof',
+                'context' => ['k' => 'v'],
+            ]
+        );
+    }
+
+    // ================= §11 provider 协议 + 安装形态（SKIP A/B：静态钉 + 实测阻塞） =================
+    // (1) 静态：manifest ↔ 别名文件 ↔ CMS 的 namespacemap 机制，三者必须自洽；
+    // (2) 实测：provider 在**真容器**上 register() 成功，但服务**取不出来** —— 卡在真实 CMS
+    //     未启动与 #__extensions 要数据库。这两条就是剩下两个 SKIP 的理由（下面逐条断言）。
+    $manifestPath = $repoRoot . '/joomla/xhprof.xml';
+    $aliasPath = $repoRoot . '/joomla/src/Extension/Xhprof.php';
+    $providerPath = $repoRoot . '/joomla/services/provider.php';
+    foreach ([$manifestPath, $aliasPath, $providerPath] as $required) {
+        if (!is_file($required)) {
+            return ['status' => 'FAIL', 'detail' => "插件安装形态缺文件：{$required}", 'skips' => 0];
+        }
+    }
+    $manifestXml = @simplexml_load_string((string) file_get_contents($manifestPath));
+    if ($manifestXml === false) {
+        return ['status' => 'FAIL', 'detail' => 'joomla/xhprof.xml 解析不了（不是合法 XML）', 'skips' => 0];
+    }
+    $manifestNamespace = (string) ($manifestXml->namespace ?? '');
+    $expect(
+        '§11 manifest 的扩展类型/分组/升级方式与 Joomla 约定一致',
+        [(string) $manifestXml['type'], (string) $manifestXml['group'], (string) $manifestXml['method'], (string) $manifestXml->namespace['path']],
+        ['plugin', 'system', 'upgrade', 'src']
+    );
+    // 别名文件把 Joomla 惯例的类名指向包里的实现：目标类名必须**正好**是
+    // manifest 的 <namespace> + \Extension\Xhprof（安装器把这些文件拷进
+    // plugins/system/xhprof/，CMS 的 namespacemap 插件据此注册前缀），
+    // 而别名源必须真的在包里声明。两边任何一处改名都要在这里红。
+    $aliasSource = (string) file_get_contents($aliasPath);
+    $aliasTarget = null;
+    if (preg_match('/class_alias\(\s*\\\\?([A-Za-z0-9_\\\\]+)::class\s*,\s*\'([^\']+)\'\s*\)/', $aliasSource, $m) === 1) {
+        $aliasTarget = [$m[1], $m[2]];
+    }
+    $expect(
+        '§11 别名文件：源 = 包里声明的入口类，目标 = manifest namespace + \Extension\Xhprof',
+        $aliasTarget,
+        ['ErikWang2013\\Xhprof\\Joomla\\Extension\\Xhprof', $manifestNamespace . '\\Extension\\Xhprof']
+    );
+    $expect(
+        '§11 manifest namespace 指向的类在包里真的声明了（别名源）',
+        str_contains((string) file_get_contents($repoRoot . '/src/Joomla/Extension/Xhprof.php'), 'namespace ErikWang2013\Xhprof\Joomla\Extension;'),
+        true
+    );
+    // CMS 自己的 namespace 映射机制：插件类型走 JPATH_PLUGINS + manifest 里的 <namespace>
+    // （libraries/namespacemap.php 由核心插件 plg_extension_namespacemap 生成/读取）。
+    // 也就是说「bootPlugin 找得到类」这件事**依赖安装器写过的东西**，不是自动的 —— 这正是
+    // SKIP B 的机制依据（下面 runtime 部分量的是它的后果）。
+    foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
+        $namespaceMap = contracts_dir() . '/vendor/' . $package . '/libraries/namespacemap.php';
+        $mapSource = is_file($namespaceMap) ? (string) file_get_contents($namespaceMap) : '';
+        $expect(
+            "§11 {$version} CMS 的插件 namespace 映射走 JPATH_PLUGINS + manifest namespace",
+            [str_contains($mapSource, "getNamespaces('plugin')"), str_contains($mapSource, 'JPATH_PLUGINS')],
+            [true, true]
+        );
+    }
+    // runtime：provider 协议成立，但服务取不出来 —— 抛点就是理由本身
+    $providerScript = joomla_provider_script();
+    foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
+        $pkgDir = contracts_dir() . '/vendor/' . $package;
+        $providerRun = contracts_run_php([
+            '-r',
+            joomla_cms_boot_script($pkgDir . '/libraries/vendor/autoload.php', $pkgDir . '/libraries', $siteRoot)
+                . $providerScript,
+            $providerPath,
+            $repoRoot,
+        ]);
+        $providerObs = json_decode(trim($providerRun['stdout']), true);
+        if (!is_array($providerObs)) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "§11 {$version} provider 子进程没有给出 JSON（exit {$providerRun['code']}）："
+                    . trim($providerRun['stderr'] !== '' ? $providerRun['stderr'] : $providerRun['stdout'])
+                    . ' —— provider.php 第一行是 `defined(\'_JEXEC\') or die`，没定义常量就会静默 die',
+                'skips' => 0,
+            ];
+        }
+        $expect(
+            "§11 {$version} provider 实现的是真实 ServiceProviderInterface，register() 在真容器上不抛；"
+                . '没装（无 namespacemap）时容器找不到插件类',
+            [$providerObs['instanceof'], $providerObs['registered'], $providerObs['register_error'], $providerObs['unmapped_error']],
+            [
+                true,
+                true,
+                null,
+                'Error: Class "Joomla\\Plugin\\System\\Xhprof\\Extension\\Xhprof" not found',
+            ]
+        );
+        // 补上 namespacemap 之后：类找得到（且真身就是我们包里那个），但服务仍取不出来 ——
+        // 三条路径（容器取插件 / Factory 要应用 / PluginHelper 读参数）都是**同一个**实测异常。
+        // 字符串逐字断言：哪天它能跑了，这里红，两个 SKIP 就该重估。
+        $expect(
+            "§11 {$version} 补上 namespacemap 后类可加载（真身是我们的入口类），但取插件仍卡在 CMS 未启动",
+            [$providerObs['mapped_is_ours'], $providerObs['container_error'], $providerObs['factory_error'], $providerObs['pluginhelper_error']],
+            [
+                true,
+                'Exception: Failed to start application',
+                'Exception: Failed to start application',
+                'Exception: Failed to start application',
+            ]
+        );
+    }
+
+    // ================= §11c SKIP A 的 SQLite 近路：有界试探 =================
+    // 「不用数据库」这条近路是真的试过的，不是没想过：真 sqlite 驱动、真 #__extensions 表、
+    // 真 params 行（enable/auth_token），再看 PluginHelper::getPlugin() 能不能读出来。
+    // 各步抛点原样上报 —— 这就是 SKIP A 的机器可核实理由（不是散文）。
+    // §11c 的后两条另给 SKIP B 的实测：装好的样子 bootPlugin 也拿不到插件（provider 里「类不存在」）。
+    $sqliteScript = joomla_sqlite_probe_script();
+    foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
+        $pkgDir = contracts_dir() . '/vendor/' . $package;
+        $sqliteRun = contracts_run_php(['-r', $sqliteScript, $pkgDir, $siteRoot, $repoRoot]);
+        $sqliteObs = json_decode(trim($sqliteRun['stdout']), true);
+        if (!is_array($sqliteObs) || !isset($sqliteObs['steps']['db'])) {
+            return [
+                'status' => 'FAIL',
+                'detail' => "§11c {$version} SQLite 近路探针没有给出 JSON（exit {$sqliteRun['code']}）："
+                    . trim($sqliteRun['stderr'] !== '' ? $sqliteRun['stderr'] : $sqliteRun['stdout'])
+                    . ' —— 引子里漏了常量会让 4.4 的 bootstrap.php 直接致命',
+                'skips' => 0,
+            ];
+        }
+        $sqlite = $sqliteObs['steps'];
+        // 正对照：库和行真建出来了（否则「读不到」是夹具自己没搭好，不是 CMS 的边界）
+        $expect(
+            "§11c {$version} 近路的正对照：真 sqlite 驱动 + 真 #__extensions 行（含 params）建出来了",
+            [$sqlite['db']['ok'], $sqlite['db']['data']],
+            [true, 1]
+        );
+        // 两个抛点：容器不许覆盖 DatabaseInterface（这是 protected key）；就算绕过它，
+        // 读插件参数仍死在 session —— 都发生在读 #__extensions 之前
+        $expect(
+            "§11c {$version} SQLite 近路断在哪（逐字）：容器 protected key，然后 PluginHelper 卡在 session",
+            [$sqlite['container']['error'], $sqlite['pluginhelper']['error']],
+            [
+                'Joomla\DI\Exception\ProtectedKeyException: Key Joomla\\Database\\DatabaseInterface is protected and can\'t be overwritten.',
+                'RuntimeException: A Joomla\\Session\\SessionInterface object has not been set.',
+            ]
+        );
+        // SKIP B 的最强形式：manifest 与 services/ 都按安装后的样子摆好了，bootPlugin 仍然拿不到插件 ——
+        // provider.php 里 `$plugin = new Xhprof(` 当场丢出
+        // `Class "Joomla\Plugin\System\Xhprof\Extension\Xhprof" not found`：那个类只在安装器写过
+        // namespacemap 之后才存在（§11 已实测：手工补上 map 类就能加载）。抛点逐字钉（两个版本同）。
+        $expect(
+            "§11c {$version} 装好的样子 bootPlugin 也拿不到插件：provider.php 当场说类不存在（安装器没写 namespacemap）",
+            [$sqlite['bootInstalled']['ok'], $sqlite['bootInstalled']['data']],
+            [true, 'Error: Class "Joomla\\Plugin\\System\\Xhprof\\Extension\\Xhprof" not found @ joomla/services/provider.php']
+        );
+    }
+
+    // ================= §12 分发点静态钉（裸名事件名，逐版本） =================
+    // 入口类用字面量事件名的**依据**就在这些行里。钉的是两件事：
+    //  (1) 裸名（不是 ApplicationEvents 常量，那个类两个版本都没有 —— §3B 已实测）；
+    //  (2) 5.x 用**有型别**的事件类派发、4.4 用通用 Joomla\Event\Event（§9 的 dispatched 观测
+    //      与之呼应：一个是 AfterInitialiseEvent，一个是 Event）。
+    $dispatchPins = [
+        '5.2.2' => [
+            'libraries/src/Application/CMSApplication.php' => [
+                "new AfterInitialiseEvent('onAfterInitialise', ['subject' => \$this])",
+                "new AfterRespondEvent('onAfterRespond', ['subject' => \$this])",
+                // 这行是插件在生产里的**装载点**：CMS 自己调 importPlugin('system', …)
+                "PluginHelper::importPlugin('system', null, true, \$this->getDispatcher());",
+            ],
+        ],
+        '4.4.14' => [
+            'libraries/src/Application/CMSApplication.php' => [
+                "\$this->triggerEvent('onAfterInitialise');",
+                "\$this->getDispatcher()->dispatch('onAfterRespond');",
+            ],
+            'libraries/src/Application/WebApplication.php' => [
+                "\$this->triggerEvent('onAfterRespond');",
+            ],
+        ],
+    ];
+    $cmsEventNames = [];
+    foreach ($dispatchPins as $version => $files) {
+        $hits = [];
+        $names = [];
+        foreach ($files as $relFile => $needles) {
+            $source = (string) file_get_contents(contracts_dir() . '/vendor/' . JOOMLA_CMS_PACKAGES[$version] . '/' . $relFile);
+            foreach ($needles as $needle) {
+                if (str_contains($source, $needle)) {
+                    $hits[] = $needle;
+                }
+            }
+            if (preg_match_all("/(?:dispatchEvent|triggerEvent|dispatch)\(\s*'(onAfter[A-Za-z]+)'/", $source, $m) > 0) {
+                foreach ($m[1] as $name) {
+                    $names[$name] = true;
+                }
+            }
+        }
+        $expect("§12 {$version} 分发点原文都在（{$relFile}）", count($hits), count(array_merge(...array_values($files))));
+        $cmsEventNames[$version] = array_keys($names);
+        sort($cmsEventNames[$version]);
+    }
+    // 两个裸名必须都在 CMS 自己分发的名字集合里 —— 这一条把入口类的字面量与真实分发点绑在
+    // 一起：Joomla 改名 → 这里红 → 入口类的 getSubscribedEvents() 必须跟着改。
+    $expect(
+        '§12 入口类订阅的裸名事件名都在真实 CMS 的分发点里（5.2.2）',
+        array_values(array_filter(['onAfterInitialise', 'onAfterRespond'], static fn (string $n): bool => in_array($n, $cmsEventNames['5.2.2'], true))),
+        ['onAfterInitialise', 'onAfterRespond']
+    );
+    $expect(
+        '§12 入口类订阅的裸名事件名都在真实 CMS 的分发点里（4.4.14）',
+        array_values(array_filter(['onAfterInitialise', 'onAfterRespond'], static fn (string $n): bool => in_array($n, $cmsEventNames['4.4.14'], true))),
+        ['onAfterInitialise', 'onAfterRespond']
+    );
+    $expect(
+        '§12 入口类 getSubscribedEvents() 的键与上面两个裸名一致',
+        array_keys(\ErikWang2013\Xhprof\Joomla\Extension\Xhprof::getSubscribedEvents()),
+        ['onAfterInitialise', 'onAfterRespond']
+    );
+
+    // ---- 扩展门控的自检（声明数 ≠ 实际跑数就是漂了）与合并 ----
     if ($ext && $extChecks !== JOOMLA_EXT_CHECKS_DECLARED) {
         $failures[] = '扩展相关检查数漂移：实际跑了 ' . $extChecks . ' 条，声明 ' . JOOMLA_EXT_CHECKS_DECLARED
             . ' 条（声明值决定缺扩展时记多少 skip）';
         $checks++;
     }
-    $checks += $extChecks;
-    foreach ($extFailures as $f) {
+    if ($redis && $redisChecks !== JOOMLA_REDIS_CHECKS_DECLARED) {
+        $failures[] = 'ext-redis 相关检查数漂移：实际跑了 ' . $redisChecks . ' 条，声明 ' . JOOMLA_REDIS_CHECKS_DECLARED
+            . ' 条（声明值决定缺扩展时记多少 skip）';
+        $checks++;
+    }
+    $checks += $extChecks + $redisChecks;
+    foreach (array_merge($extFailures, $redisFailures) as $f) {
         $failures[] = $f;
     }
 
@@ -674,31 +1404,31 @@ return static function (): array {
     }
 
     $verifiable = count(JOOMLA_MEMBERS_VERIFIABLE);
+    $cmsVerifiable = count(JOOMLA_CMS_VERIFIABLE);
 
     return [
         'status' => 'PASS',
         'detail' => $note . '；' . $phpFiles . ' 个源文件语法通过；'
-            . '源码用到的 ' . count(JOOMLA_MEMBERS) . ' 个框架成员与冻结清单双向相等，'
-            . '其中 ' . $verifiable . ' 个可安装侧的成员在真实包里反射比对了签名与常量（桩逐字段一致）；'
-            . '真实 Input/Registry/UriHelper/Dispatcher 驱动的 ' . $checks . ' 项 L2 断言全部通过。'
-            . ' [SKIP 1] CMS 侧类（CMSPlugin / CMSApplicationInterface / Log / PluginHelper / Factory /'
-            . ' ApplicationEvents 全部）：Joomla\CMS\* 只在 CMS 仓库里，没有任何 composer 包提供'
-            . '（§3 用干净子进程实测 class_exists 全为 false），故 CMSPlugin 的构造器/'
-            . 'getApplication/setApplication、setHeader/sendHeaders/close 的真实语义、Log 常量真值'
-            . '只能用 tests/Stubs/Framework/Joomla.php 代跑，桩的忠实性无法在本环自证'
-            . '（环里 close() 是被桩记下来的，真实 CMS 里它是 exit()）。'
-            . ' [SKIP 2] CMS 的分发点本身：CMSApplication 用 \'onAfterInitialise\'/\'onAfterRespond\''
-            . ' 这两个裸名分发（5.4-dev 源码 :813 / :347）无法在环里重放；本环只验到'
-            . '「真实 Joomla\Event\Dispatcher 认这两个名字」，验不到「CMS 真的这么发」。'
-            . ' [SKIP 3] 插件参数来源：#__extensions.params + PluginHelper::getPlugin() 要数据库与 CMS；'
-            . '本卡因此改从包内 config/xhprof.php + 站点根 xhprof.php 读配置（README 里写明的取舍），'
-            . '该取舍的代价（管理员无法在后台改配置）在环里量不出来。'
-            . ' [SKIP 4] 插件安装形态：joomla/xhprof.xml 的 folder plugin="xhprof" 约定、'
-            . 'services/provider.php 的 DI 注册与 Joomla 的自动加载，都要安装器/容器才能真跑；'
-            . '本环只做了语法与结构核对。'
-            . ' [SKIP 5] 4.4 与 5.x 的 CMSPlugin::__construct 差异（4.4：必填且按引用；'
-            . '5.x：可省且 PluginHelper::import() 自注入）：两个版本都装不上，"一个签名两边都成立"'
-            . '只能靠源码证据，跑不了。',
+            . '源码用到的 ' . count(JOOMLA_MEMBERS) . ' 个框架成员与冻结清单双向相等'
+            . '（可安装侧 ' . $verifiable . ' 个、CMS 侧 ' . $cmsVerifiable . ' 个）；'
+            . '两个真实 CMS 发布包（5.2.2 / 4.4.14，composer 钉死版本）全程参与：'
+            . '可安装侧签名与常量逐字段一致，CMS 侧的桩与 5.2.2 差异 0 条、与 4.4.14 恰好 1 条'
+            . '（4.4 的 CMSPlugin::__construct 首参按引用 —— 已冻结并解释）；'
+            . '真 SiteApplication + 真 CMSPlugin + 真事件类跑了 4 模式 × 2 版本共 8 个请求'
+            . '（报告页/鉴权失败/静态资源/常开采样，真 exit、真响应头、真落库）；'
+            . '真 Joomla\CMS\Log\Log 上验通本包 LogAdapter，provider 在真容器上 register() 成功；'
+            . '本文件 ' . $checks . ' 项断言全部通过。'
+            . ' 仍然不可验证的只剩 2 条（都在干净子进程里量到了抛点，不是散文）：'
+            . ' [SKIP A] 插件参数的真实读取路径：`#__extensions.params` 要数据库与已启动的 CMS ——'
+            . ' 子进程里三条路径（容器取 PluginInterface / Factory::getApplication /'
+            . ' PluginHelper::getPlugin）逐字都是 `Exception: Failed to start application`'
+            . '（Factory.php:158，两个版本同）；SQLite 近路走不通（DatabaseInterface 是容器的'
+            . ' protected key，且 CMS 自己还要 SessionInterface；真 sqlite 驱动 + 真 #__extensions'
+            . ' 行当正对照，证明这不是夹具没搭好）。'
+            . ' [SKIP B] 安装器形态（namespacemap 被写过、bootPlugin 找得到类）：'
+            . ' 要真安装器写 namespacemap —— 目录按装好的样子摆齐后 bootPlugin 仍拿不到插件'
+            . '（provider.php 当场 `Class "Joomla\Plugin\System\Xhprof\Extension\Xhprof" not found`；'
+            . '§11 另静态钉住机制 + 容器协议的实测抛点）。',
         'skips' => $skips,
     ];
 };
@@ -858,6 +1588,7 @@ foreach ($spec as $fqn => $members) {
 
     $out['types'][$fqn] = [
         'kind' => $rc->isInterface() ? 'interface' : 'class',
+        'abstract' => $rc->isAbstract(),
         'extends' => $extends,
         'constants' => $constants,
         'methods' => $methods,
@@ -900,4 +1631,697 @@ function joomla_member_diff(array $a, array $b, string $path, array &$out): void
             $out[] = $path . '.' . $key . ': 只在真实包里存在';
         }
     }
+}
+
+/**
+ * §3(B) 探针：在**干净子进程**里只装这一个 CMS 包，量四件事 ——
+ *  (1) 包自己的 autoloader 看不看得见 Joomla\CMS\* 触碰点；
+ *  (2) JOOMLA_CMS_ABSENT 确实不存在（入口类「事件名用字面量」的前提）；
+ *  (3) 载入的确实是清单里那个包目录、版本号对得上；
+ *  (4) bootstrap.php 里 JPATH_PLATFORM 的用法（4.4 当**路径**拼 loader.php、5.x 只定义不用）
+ *      —— 两个世代的结构差异，也防两个包被换成同一份内容还不自知。
+ *
+ * CMS 的类文件里有 `defined('_JEXEC') or die;`，常量必须在 require autoload **之前**定义，
+ * 否则子进程静默 die（exit 0 + 空 stdout）—— 调用方把「没 JSON」当响亮 FAIL 处理。
+ *
+ * argv: [1]=libraries/vendor/autoload.php [2]=触碰点 JSON [3]=期望不存在的类
+ */
+function joomla_cms_probe_script(): string
+{
+    return <<<'PHP'
+$autoload = $argv[1];
+$touchpoints = json_decode($argv[2], true);
+$absent = $argv[3];
+
+$packageDir = null;
+$split = explode('/vendor/', $autoload, 2);
+if (isset($split[1])) {
+    $rest = explode('/', $split[1]);
+    $packageDir = ($rest[0] ?? '?') . '/' . ($rest[1] ?? '?');
+}
+$libraries = dirname(dirname($autoload));
+
+define('_JEXEC', 1);
+define('JPATH_ROOT', sys_get_temp_dir());
+define('JPATH_SITE', sys_get_temp_dir());
+define('JPATH_ADMINISTRATOR', sys_get_temp_dir() . '/administrator');
+define('JPATH_PLUGINS', sys_get_temp_dir() . '/plugins');
+define('JPATH_BASE', sys_get_temp_dir());
+define('JPATH_LIBRARIES', $libraries);
+define('JPATH_PLATFORM', 1);
+
+require $autoload;
+
+$present = [];
+foreach ($touchpoints as $fqn) {
+    $present[$fqn] = class_exists($fqn) || interface_exists($fqn);
+}
+
+$bootstrap = $libraries . '/bootstrap.php';
+$bootstrapSource = is_file($bootstrap) ? (string) file_get_contents($bootstrap) : '';
+
+echo json_encode([
+    'package_dir' => $packageDir,
+    'version' => Joomla\CMS\Version::MAJOR_VERSION . '.' . Joomla\CMS\Version::MINOR_VERSION . '.' . Joomla\CMS\Version::PATCH_VERSION,
+    'present' => $present,
+    'absent' => class_exists($absent) || interface_exists($absent),
+    // 「当路径用」= 把常量拼进字符串（`JPATH_PLATFORM . '/loader.php'`），不是只看有没有定义
+    'bootstrap_uses_platform_as_path' => str_contains($bootstrapSource, "JPATH_PLATFORM . '"),
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+PHP;
+}
+
+/**
+ * 给子进程用的引子：先定义 CMS 类文件要的 JPATH_* / _JEXEC，再 require 真实包的 autoloader。
+ *
+ * `JPATH_PLATFORM` 固定给 1：这里只**加载类**，不跑 bootstrap.php；4.4 的 bootstrap.php 会
+ * 把它当路径拼 loader.php（§3B 的 bootstrap_uses_platform_as_path 钉的就是这件事），
+ * 但那一步在这段引子里不会执行 —— 真正在 4.4 上跑完整 bootstrap 要 configuration.php。
+ */
+function joomla_cms_boot_script(string $autoloadPath, string $librariesDir, string $root): string
+{
+    return "define('_JEXEC', 1);\n"
+        . "define('JPATH_ROOT', " . var_export($root, true) . ");\n"
+        . "define('JPATH_SITE', " . var_export($root, true) . ");\n"
+        . "define('JPATH_ADMINISTRATOR', " . var_export($root . '/administrator', true) . ");\n"
+        . "define('JPATH_PLUGINS', " . var_export($root . '/plugins', true) . ");\n"
+        . "define('JPATH_BASE', " . var_export($root, true) . ");\n"
+        . "define('JPATH_LIBRARIES', " . var_export($librariesDir, true) . ");\n"
+        . "define('JPATH_PLATFORM', 1);\n"
+        . 'require ' . var_export($autoloadPath, true) . ";\n";
+}
+
+/** 给子进程用的引子：本包 `ErikWang2013\Xhprof\*` → 仓库 `src/` 的自注册（环的 autoloader 不管 src）。 */
+function joomla_repo_autoload_script(string $repoRoot): string
+{
+    return '$repoRoot = ' . var_export($repoRoot, true) . ";\n"
+        . <<<'PHP'
+spl_autoload_register(static function (string $class) use ($repoRoot): void {
+    $prefix = 'ErikWang2013\\Xhprof\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = $repoRoot . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+PHP
+        . "\n";
+}
+
+/**
+ * 型别包含：`$inner ⊆ $outer`（联合型别要拆开看，`?T` 归一成 `T|null`，`mixed` 是全集）。
+ * 桩与真实包之间的型别差异只允许**这个方向**成立。
+ */
+function joomla_type_subset(string $inner, string $outer): bool
+{
+    $norm = static function (string $type): array {
+        $type = trim($type);
+        $nullable = str_starts_with($type, '?');
+        if ($nullable) {
+            $type = substr($type, 1);
+        }
+        $atoms = array_map('trim', explode('|', $type));
+        if ($nullable) {
+            $atoms[] = 'null';
+        }
+        sort($atoms);
+        return $atoms;
+    };
+
+    $a = $norm($inner);
+    $b = $norm($outer);
+    if (in_array('mixed', $b, true)) {
+        return true;
+    }
+    if (in_array('mixed', $a, true)) {
+        return false;
+    }
+    return array_diff($a, $b) === [];
+}
+
+/**
+ * 方向比较：**桩可以更窄，不许更宽**（Drupal 卡立的规矩，这里同样适用）。
+ *
+ * - 桩有、真实没有（常量/方法/接口）→ 差异（桩更宽 = 单测会依赖上生产里不存在的能力）
+ * - 真实有、桩没有 → 备注（桩更窄，方向安全）
+ * - 参数型别：桩 ⊆ 真实；返回型别：真实 ⊆ 桩（桩的返回必须是真实返回的超集）
+ * - 常量值、可见性、static、按引用、必填/默认值：精确相等
+ * - JOOMLA_CMS_REAL_MISSING 里那条（合成项）在这里跳过 —— 由「缺失集精确相等」单独钉
+ *
+ * 差异串形如 `FQN::member.p0.type`、`FQN::CONST.constant`、`FQN.extends.\Foo`，
+ * 与 JOOMLA_CMS_EXPECTED_DIFFS 里冻结的写法一一对应。
+ *
+ * @param array<mixed>  $stub
+ * @param array<mixed>  $real
+ * @param list<string>  $diffs
+ * @param list<string>  $notes
+ */
+function joomla_cms_compare(array $stub, array $real, string $fqn, array $realMissing, array &$diffs, array &$notes): void
+{
+    if ($stub['kind'] !== $real['kind']) {
+        $diffs[] = "{$fqn}.kind";
+    }
+    if ($stub['kind'] === 'class' && $stub['abstract'] !== $real['abstract'] && !$stub['abstract']) {
+        // 桩非抽象而真实抽象：单测能 new 出生产里不该能 new 的东西 = 桩更宽
+        $diffs[] = "{$fqn}.abstract";
+    } elseif ($stub['kind'] === 'class' && $stub['abstract'] !== $real['abstract']) {
+        $notes[] = "{$fqn}：抽象性 桩=abstract 真实=concrete（桩更窄，只能少 new 不能多 new）";
+    }
+
+    foreach (array_diff($stub['extends'], $real['extends']) as $iface) {
+        $diffs[] = "{$fqn}.extends.{$iface}";
+    }
+    foreach (array_diff($real['extends'], $stub['extends']) as $iface) {
+        $notes[] = "{$fqn} 真实多出 {$iface}（桩更窄）";
+    }
+
+    foreach ($stub['constants'] as $name => $value) {
+        if (!array_key_exists($name, $real['constants']) || $real['constants'][$name] !== $value) {
+            $diffs[] = "{$fqn}::{$name}.constant";
+        }
+    }
+    foreach (array_diff_key($real['constants'], $stub['constants']) as $name => $_value) {
+        $notes[] = "{$fqn}::{$name} 真实有、桩未声明（桩更窄）";
+    }
+
+    foreach ($stub['methods'] as $name => $sm) {
+        if (in_array("{$fqn}::{$name}", $realMissing, true)) {
+            $notes[] = "{$fqn}::{$name}：合成项，由「缺失集精确相等」单独钉";
+            continue;
+        }
+        if (!isset($real['methods'][$name])) {
+            $diffs[] = "{$fqn}::{$name}.missing";
+            continue;
+        }
+        $rm = $real['methods'][$name];
+
+        foreach (['visibility', 'static', 'returnsRef'] as $attr) {
+            if ($sm[$attr] !== $rm[$attr]) {
+                $diffs[] = "{$fqn}::{$name}.{$attr}";
+            }
+        }
+        if (count($sm['params']) > count($rm['params'])) {
+            $diffs[] = "{$fqn}::{$name}.params(count)";
+        } else {
+            foreach ($sm['params'] as $i => $sp) {
+                $rp = $rm['params'][$i];
+                foreach (['variadic', 'byRef'] as $attr) {
+                    if ($sp[$attr] !== $rp[$attr]) {
+                        $diffs[] = "{$fqn}::{$name}.p{$i}.{$attr}";
+                    }
+                }
+                if ($sp['type'] !== $rp['type']) {
+                    if ($rp['type'] === null) {
+                        // 真实侧无型别 = 最宽：桩写了型别只是更窄（调用方传什么真实都收），记备注不报差异
+                        $notes[] = "{$fqn}::{$name}.p{$i}：型别 桩=" . var_export($sp['type'], true)
+                            . ' 真实无型别（最宽，桩更窄）';
+                    } elseif ($sp['type'] === null || !joomla_type_subset($sp['type'], $rp['type'])) {
+                        // 桩无型别（更宽：真实会拒绝的参数桩照收）或桩的型别不是真实的子集
+                        $diffs[] = "{$fqn}::{$name}.p{$i}.type";
+                    }
+                }
+                if ($sp['hasDefault'] && !$rp['hasDefault']) {
+                    $diffs[] = "{$fqn}::{$name}.p{$i}.required";
+                }
+                if ($sp['hasDefault'] && $rp['hasDefault'] && $sp['default'] !== $rp['default']) {
+                    $diffs[] = "{$fqn}::{$name}.p{$i}.default";
+                }
+                if ($sp['name'] !== $rp['name']) {
+                    $notes[] = "{$fqn}::{$name}.p{$i}：参数名 桩={$sp['name']} 真实={$rp['name']}（只按位置传参则无影响）";
+                }
+            }
+            if (count($rm['params']) > count($sm['params'])) {
+                $notes[] = "{$fqn}::{$name}：真实多出 " . (count($rm['params']) - count($sm['params'])) . ' 个可选参数（桩更窄）';
+            }
+        }
+        if ($sm['return'] !== $rm['return']
+            && !($rm['return'] === null)
+            && !($sm['return'] !== null && joomla_type_subset($rm['return'], $sm['return']))) {
+            $diffs[] = "{$fqn}::{$name}.return";
+        } elseif ($sm['return'] !== $rm['return']) {
+            $notes[] = "{$fqn}::{$name}：返回 桩=" . var_export($sm['return'], true)
+                . ' 真实=' . var_export($rm['return'], true) . '（真实无型别 = 最宽，桩只能更窄）';
+        }
+    }
+    foreach (array_diff_key($real['methods'], $stub['methods']) as $name => $_rm) {
+        $notes[] = "{$fqn}::{$name} 真实有、桩未声明（桩更窄）";
+    }
+}
+
+/**
+ * 从子进程 stderr 里取观测行（`OBS {json}`）。stderr 里可能有别的噪声（PHP 警告），逐行找。
+ *
+ * @return array<string, mixed>|null
+ */
+function joomla_e2e_observe(string $stderr): ?array
+{
+    foreach (explode("\n", $stderr) as $line) {
+        if (str_starts_with($line, 'OBS ')) {
+            $decoded = json_decode(substr($line, 4), true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * §9 端到端探针：真 SiteApplication + 真 CMSPlugin + 真事件类 + 真 Dispatcher + 本包入口类，
+ * 按请求类型跑四个模式，观测响应正文/响应头/落库/监听器/事件对象。
+ *
+ * 观测走 stderr 的 `OBS {json}` 行：正文（stdout）必须是**插件发出去的东西**本身，
+ * 观测不能混进去。观测器最后注册，PHP 按注册顺序跑 shutdown，所以它一定在插件的
+ * onAfterRespond（停采样 + 落库）之后跑。
+ *
+ * argv: [1]=CMS 包目录 [2]=仓库根 [3]=站点根 [4]=模式（report/deny/assets/sample）
+ */
+function joomla_e2e_script(): string
+{
+    return <<<'PHP'
+$cmsDir = $argv[1];
+$repoRoot = $argv[2];
+$siteRoot = $argv[3];
+$mode = $argv[4] ?? 'report';
+
+define('_JEXEC', 1);
+define('JPATH_PLATFORM', 1);
+define('JPATH_ROOT', $siteRoot);
+define('JPATH_SITE', $siteRoot);
+define('JPATH_ADMINISTRATOR', $siteRoot . '/administrator');
+define('JPATH_PLUGINS', $siteRoot . '/plugins');
+define('JPATH_BASE', $siteRoot);
+define('JPATH_LIBRARIES', $cmsDir . '/libraries');
+
+require $cmsDir . '/libraries/vendor/autoload.php';
+spl_autoload_register(static function (string $class) use ($repoRoot): void {
+    $prefix = 'ErikWang2013\\Xhprof\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = $repoRoot . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+require $repoRoot . '/tests/Fixtures/Fakes.php';
+
+/** 采样标记：证明落库的数据覆盖到本次请求里真的跑过的代码（与卡里那个同名同形） */
+function xhprof_joomla_marker(): int
+{
+    return 42;
+}
+
+$obs = [
+    'mode' => $mode,
+    'dispatched' => [],
+    'cache_runs' => [],
+    'run_has_main' => null,
+    'run_covers_marker' => null,
+];
+
+$container = new Joomla\DI\Container();
+$dispatcher = new Joomla\Event\Dispatcher();
+$container->set(Joomla\Event\DispatcherInterface::class, $dispatcher);
+
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_SERVER['HTTP_HOST'] = 'example.com';
+$_SERVER['HTTPS'] = 'on';
+$_SERVER['REMOTE_ADDR'] = '10.0.0.1';
+$_REQUEST = [];
+
+if ($mode === 'report') {
+    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => false, 'auth_token' => 'tok', 'locale' => 'zh_CN'];\n");
+    $_SERVER['REQUEST_URI'] = '/xhprof?token=tok';
+    $_REQUEST = ['token' => 'tok'];
+} elseif ($mode === 'deny') {
+    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => false, 'auth_token' => 'tok', 'locale' => 'zh_CN'];\n");
+    $_SERVER['REQUEST_URI'] = '/xhprof?token=wrong';
+    $_REQUEST = ['token' => 'wrong'];
+} elseif ($mode === 'assets') {
+    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => false];\n");
+    $_SERVER['REQUEST_URI'] = '/xhprof-assets/css/xhprof.css';
+} elseif ($mode === 'sample') {
+    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => true];\n");
+    $_SERVER['REQUEST_URI'] = '/index.php';
+} else {
+    file_put_contents($siteRoot . '/xhprof.php', "<?php\n\nreturn ['enable' => false];\n");
+    $_SERVER['REQUEST_URI'] = '/index.php';
+}
+
+$config = new Joomla\Registry\Registry(['session' => false, 'debug' => false, 'sitename' => 'contracts', 'MetaDesc' => '']);
+$app = new Joomla\CMS\Application\SiteApplication(null, $config, null, $container);
+$app->setDispatcher($dispatcher);
+$obs['input_class'] = get_class($app->getInput());
+
+// 观测器：事件真的派发了几次、派发的对象是什么类。先于插件注册，所以计数涵盖插件的监听器在内
+$dispatcher->addListener('onAfterInitialise', static function ($e = null) use (&$obs): void {
+    $obs['dispatched'][] = 'onAfterInitialise:' . (is_object($e) ? get_class($e) : gettype($e));
+});
+
+$cache = new ErikWang2013\Xhprof\Tests\Fixtures\FakeCache();
+$plugin = new ErikWang2013\Xhprof\Joomla\Extension\Xhprof($dispatcher, [], $cache, null);
+$obs['plugin_parent'] = get_parent_class($plugin);
+$obs['plugin_is_cms_plugin'] = $plugin instanceof Joomla\CMS\Plugin\CMSPlugin;
+$obs['dispatcher_identity'] = $plugin->getDispatcher() === $dispatcher;
+// getApplication() 是 protected（真实 CMSPlugin 如此，桩亦如此）—— 观测只能走反射
+$getApp = new ReflectionMethod($plugin, 'getApplication');
+$getApp->setAccessible(true);
+$obs['get_application_visibility'] = $getApp->isProtected() ? 'protected' : ($getApp->isPublic() ? 'public' : 'private');
+$obs['application_before_set'] = $getApp->invoke($plugin) === null;
+$plugin->setApplication($app);
+$obs['application_after_set_is_app'] = $getApp->invoke($plugin) === $app;
+
+$dispatcher->addListener('onAfterRespond', static function ($e = null) use (&$obs): void {
+    $obs['dispatched'][] = 'onAfterRespond:' . (is_object($e) ? get_class($e) : gettype($e));
+});
+$obs['listener_count_before'] = count($dispatcher->getListeners('onAfterInitialise'));
+$plugin->registerListeners();
+$obs['listener_count_initialise'] = count($dispatcher->getListeners('onAfterInitialise'));
+$obs['listener_count_respond'] = count($dispatcher->getListeners('onAfterRespond'));
+
+register_shutdown_function(static function () use (&$obs, $app, $cache): void {
+    $obs['headers'] = [];
+    foreach ($app->getHeaders() as $h) {
+        $obs['headers'][] = $h['name'] . ': ' . $h['value'];
+    }
+    $obs['cache_runs'] = $cache->lRange('xhprof:run_id', 0, -1);
+    if ($obs['cache_runs'] !== []) {
+        $data = (array) unserialize((string) $cache->get('xhprof:xhprof_log:' . $obs['cache_runs'][0]));
+        $obs['run_has_main'] = array_key_exists('main()', $data);
+        $obs['run_covers_marker'] = false;
+        foreach (array_keys($data) as $key) {
+            if (str_contains((string) $key, 'xhprof_joomla_marker')) {
+                $obs['run_covers_marker'] = true;
+                break;
+            }
+        }
+    }
+    $obs['on_after_respond_count'] = count(array_filter(
+        $obs['dispatched'],
+        static fn (string $d): bool => str_starts_with($d, 'onAfterRespond:')
+    ));
+    $obs['has_method'] = array_values(array_filter(
+        ['setHeader', 'sendHeaders', 'close', 'getInput'],
+        static fn (string $m): bool => method_exists($app, $m)
+    ));
+    fwrite(STDERR, "OBS " . json_encode($obs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+});
+
+// 真实分发。4.4：CMSApplication.php:745 是 `$this->triggerEvent('onAfterInitialise')`，事件对象
+// 是通用的 Joomla\Event\Event；5.x：CMSApplication.php:766-769 是
+// `$this->dispatchEvent('onAfterInitialise', new AfterInitialiseEvent('onAfterInitialise', ['subject' => $this]))`。
+// 5.x 的 triggerEvent($name) 不带事件对象会在 ApplicationEvent::__construct 里因缺 subject 抛
+// BadMethodCallException（实测），所以这里按版本各走各的真形状。
+$event5 = class_exists('Joomla\CMS\Event\Application\AfterInitialiseEvent');
+if ($event5) {
+    $app->triggerEvent('onAfterInitialise', new Joomla\CMS\Event\Application\AfterInitialiseEvent('onAfterInitialise', ['subject' => $app]));
+} else {
+    $app->triggerEvent('onAfterInitialise');
+}
+// report/deny/assets 三个模式在这里已经被插件的 close() 掐断（真 exit），下面一行到不了
+echo "AFTER-INITIALISE-DISPATCH\n";
+
+// 采样窗口里跑过这段代码（采样模式下才可能到这儿）
+if ($mode === 'sample') {
+    xhprof_joomla_marker();
+}
+
+// 4.4 里 onAfterRespond 有两个分发点（CMSApplication.php:332 与 WebApplication.php:188），
+// 同一请求里可能各来一次 —— 幂等守卫就是为它准备的。两个版本都连发两次。
+for ($i = 0; $i < 2; $i++) {
+    if ($event5) {
+        $app->triggerEvent('onAfterRespond', new Joomla\CMS\Event\Application\AfterRespondEvent('onAfterRespond', ['subject' => $app]));
+    } else {
+        $app->triggerEvent('onAfterRespond');
+    }
+}
+echo "AFTER-RESPOND-DISPATCH\n";
+echo "END-OF-SCRIPT\n";
+PHP;
+}
+
+/**
+ * §10 真 Log 通路：用真实 Joomla\CMS\Log\Log 的**回调 logger** 收本包 LogAdapter 发出去的条目。
+ * 桩里的 Log 只记数组，证明不了「位掩码级别 / 分类 / context 真的走到了真实 Log」。
+ *
+ * 引子（boot + 本包 autoload）由调用方拼在前面。
+ */
+function joomla_log_script(): string
+{
+    return <<<'PHP'
+$received = [];
+$argCount = 0;
+Joomla\CMS\Log\Log::addLogger(
+    [
+        'logger' => 'callback',
+        'callback' => static function (...$args) use (&$received, &$argCount): void {
+            $argCount = count($args);
+            $entry = $args[0] ?? null;
+            $received = [
+                'class' => is_object($entry) ? get_class($entry) : gettype($entry),
+                'message' => is_object($entry) ? $entry->message : null,
+                'priority' => is_object($entry) ? $entry->priority : null,
+                'category' => is_object($entry) ? $entry->category : null,
+                'context' => is_object($entry) ? $entry->context : null,
+            ];
+        },
+    ],
+    Joomla\CMS\Log\Log::ALL,
+    ['xhprof']
+);
+
+$adapter = new ErikWang2013\Xhprof\Joomla\Adapter\LogAdapter();
+$adapter->error('xhprof 契约：真 Log 通路', ['k' => 'v']);
+
+echo json_encode(['arg_count' => $argCount, 'entry' => $received], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+PHP;
+}
+
+/**
+ * §11c 探针：SKIP A 的「SQLite 近路」有界试探。真 sqlite 驱动建真 `#__extensions` 表 + 真 params 行，
+ * 再看 `PluginHelper::getPlugin()` 能不能读出来 —— 各步抛点原样上报，不粉饰。
+ * 最后一步把插件目录按**安装后的样子**摆一遍（manifest + services/provider.php）再 bootPlugin：
+ * 拿到的是 `provider.php` 里那句「类不存在」，即「插件类只有装过之后才存在」的实测（SKIP B）。
+ *
+ * 它**不能**复用 joomla_cms_boot_script()：本探针要 require libraries/bootstrap.php，而那份文件
+ * 会拿常量拼 loader.php 的真路径 —— 4.4 拼的是 `JPATH_PLATFORM`、5.x 拼的是 `JPATH_LIBRARIES`
+ * （§3B 钉的世代差异），两个都得给真路径，给标记值就直接致命。
+ *
+ * argv: [1]=CMS 包目录 [2]=站点根 [3]=仓库根
+ */
+function joomla_sqlite_probe_script(): string
+{
+    return <<<'PHP'
+$cmsDir = $argv[1];
+$siteRoot = $argv[2];
+$repoRoot = $argv[3];
+
+define('_JEXEC', 1);
+define('JPATH_ROOT', $siteRoot);
+define('JPATH_SITE', $siteRoot);
+define('JPATH_ADMINISTRATOR', $siteRoot . '/administrator');
+define('JPATH_PLUGINS', $siteRoot . '/plugins');
+define('JPATH_BASE', $siteRoot);
+define('JPATH_CONFIGURATION', $siteRoot);
+// 两个都给真路径：4.4 的 bootstrap 拼 JPATH_PLATFORM、5.x 的拼 JPATH_LIBRARIES
+define('JPATH_PLATFORM', $cmsDir . '/libraries');
+define('JPATH_LIBRARIES', $cmsDir . '/libraries');
+define('JDEBUG', false);
+
+require $cmsDir . '/libraries/vendor/autoload.php';
+require_once $cmsDir . '/libraries/bootstrap.php';
+
+$steps = [];
+$step = static function (string $label, callable $fn) use (&$steps): void {
+    $steps[$label] = ['ok' => false, 'error' => null, 'data' => null];
+    try {
+        $steps[$label]['data'] = $fn();
+        $steps[$label]['ok'] = true;
+    } catch (\Throwable $e) {
+        $steps[$label]['error'] = get_class($e) . ': ' . $e->getMessage();
+    }
+};
+
+$dbFile = $siteRoot . '/site.sqlite';
+@unlink($dbFile);
+$db = null;
+$step('db', function () use (&$db, $dbFile) {
+    $db = Joomla\Database\DatabaseDriver::getInstance(['driver' => 'sqlite', 'database' => $dbFile, 'prefix' => 'jos_']);
+    $db->connect();
+    $db->setQuery('CREATE TABLE IF NOT EXISTS ' . $db->quoteName('#__extensions') . ' (
+        extension_id INTEGER PRIMARY KEY, name TEXT, type TEXT, element TEXT, folder TEXT,
+        client_id INTEGER, enabled INTEGER, access INTEGER, protected INTEGER, state INTEGER,
+        ordering INTEGER, params TEXT)')->execute();
+    $params = json_encode(['enable' => true, 'auth_token' => 'db-token-from-extensions-params']);
+    $db->setQuery('INSERT OR REPLACE INTO ' . $db->quoteName('#__extensions') . ' VALUES (1,' . $db->quote('xhprof') . ','
+        . $db->quote('plugin') . ',' . $db->quote('xhprof') . ',' . $db->quote('system') . ',0,1,1,0,0,0,' . $db->quote($params) . ')')->execute();
+    return count($db->setQuery('SELECT * FROM ' . $db->quoteName('#__extensions'))->loadObjectList());
+});
+
+$container = null;
+$app = null;
+$step('container', function () use (&$container, $db) {
+    $container = Joomla\CMS\Factory::getContainer();
+    $container->set(Joomla\Database\DatabaseInterface::class, $db);
+    return true;
+});
+$step('app', function () use (&$app, $container, $siteRoot) {
+    $config = new Joomla\Registry\Registry([
+        'dbtype' => 'sqlite', 'db' => $siteRoot . '/site.sqlite', 'dbprefix' => 'jos_', 'host' => '', 'user' => '', 'password' => '',
+        'session' => false, 'debug' => false, 'sitename' => 'contracts', 'MetaDesc' => '', 'caching' => 0, 'cache_handler' => 'file',
+        'tmp_path' => $siteRoot, 'log_path' => $siteRoot, 'offset' => 'UTC', 'lifetime' => 15, 'secret' => 'x', 'live_site' => '',
+        'gzip' => false, 'error_reporting' => 'none', 'sendmail' => false, 'mailfrom' => 'a@b.c', 'fromname' => 'c',
+        'cookie_domain' => '', 'cookie_path' => '', 'force_ssl' => 0, 'shared_session' => false, 'session_handler' => 'none',
+    ]);
+    $_SERVER['REQUEST_METHOD'] = 'GET';
+    $_SERVER['HTTP_HOST'] = 'example.com';
+    $_SERVER['REQUEST_URI'] = '/index.php';
+    $app = new Joomla\CMS\Application\SiteApplication(null, $config, null, $container);
+    Joomla\CMS\Factory::$application = $app;
+    Joomla\CMS\Factory::$config = $config;
+    Joomla\CMS\Factory::$container = $container;
+    return get_class($app);
+});
+$step('user', static fn (): int => Joomla\CMS\Factory::getUser()->id);
+$step('cache', static fn (): string => get_class(Joomla\CMS\Factory::getCache('com_plugins', 'callback')));
+$step('pluginhelper', static function (): string {
+    $plugin = Joomla\CMS\Plugin\PluginHelper::getPlugin('system', 'xhprof');
+    return is_object($plugin) ? (string) json_encode($plugin->params) : var_export($plugin, true);
+});
+// 按**安装器摆好的样子**摆一遍（manifest + services/provider.php）再 bootPlugin。
+// 只钉这一级：它抛在 provider 里（`require_once` 之后类名解析），不依赖任何缓存状态。
+// （另一形态——只有 manifest、没有 services/——实测会静默退化成 Joomla 的 DummyPlugin 空替身；
+//  那一级本探针不断言，因为同一进程里第二次 boot 会走 require_once/已加载缓存的旁路。）
+$pluginDir = $siteRoot . '/plugins/system/xhprof';
+@mkdir($pluginDir, 0777, true);
+@symlink($repoRoot . '/joomla/xhprof.xml', $pluginDir . '/xhprof.xml');
+@symlink($repoRoot . '/joomla/services', $pluginDir . '/services');
+$step('bootInstalled', static function () use ($app, $repoRoot): string {
+    try {
+        return 'booted:' . get_class($app->bootPlugin('xhprof', 'system'));
+    } catch (\Throwable $e) {
+        // 抛点原样上报。文件按仓库根归一（provider.php 是别人维护的，只钉到文件、不钉行号；
+        // 实测抛在 `$plugin = new Xhprof(` 那行：PHP 先解析 new 的类名再算实参，
+        // 所以「类不存在」比后面 PluginHelper 的 session 抛点更早露面）。
+        return get_class($e) . ': ' . $e->getMessage() . ' @ ' . str_replace($repoRoot . '/', '', $e->getFile());
+    }
+});
+
+// 收尾：临时站点根里本探针造的东西全撤掉
+@unlink($siteRoot . '/plugins/system/xhprof/xhprof.xml');
+@unlink($siteRoot . '/plugins/system/xhprof/services');
+@rmdir($siteRoot . '/plugins/system/xhprof');
+@rmdir($siteRoot . '/plugins/system');
+@rmdir($siteRoot . '/plugins');
+@unlink($dbFile);
+
+echo json_encode(['steps' => $steps], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+PHP;
+}
+
+/**
+ * §11 provider 协议：在**真容器**上 register()，然后试着取服务 —— 取不出来就是 SKIP A/B 的理由。
+ *
+ * 量的是**两级**阻塞，两级都是实测、逐字断言：
+ *   (1) 没装（没有安装器写的 namespacemap）：容器找不到 `Joomla\Plugin\System\Xhprof\Extension\Xhprof`
+ *       —— 「插件类只有在装过之后才存在」，这是 SKIP B 的机器可核实理由；
+ *   (2) 手工补上 namespacemap（把 `Joomla\Plugin\System\Xhprof\` 映到 joomla/src，等价于安装器
+ *       生成的那份 map）：类找得到、就是我们入口类的别名，但服务仍取不出来 —— 三条路径
+ *       （容器取 PluginInterface / Factory::getApplication / PluginHelper::getPlugin）
+ *       逐字都是 `Exception: Failed to start application`（Factory.php:158），这是 SKIP A 的理由。
+ *
+ * argv: [1]=joomla/services/provider.php [2]=仓库根
+ */
+function joomla_provider_script(): string
+{
+    return <<<'PHP'
+$providerPath = $argv[1];
+$repoRoot = $argv[2];
+
+// 本包 src/ 先自注册（别名文件里那句 class_exists 依赖它；也免得真去 require 站点根的 autoloader）
+spl_autoload_register(static function (string $class) use ($repoRoot): void {
+    $prefix = 'ErikWang2013\\Xhprof\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = $repoRoot . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
+$provider = require $providerPath;
+$out = [
+    'instanceof' => $provider instanceof Joomla\DI\ServiceProviderInterface,
+    'registered' => false,
+    'register_error' => null,
+    'unmapped_error' => null,
+    'mapped_is_ours' => null,
+    'container_error' => null,
+    'factory_error' => null,
+    'pluginhelper_error' => null,
+];
+
+$container = new Joomla\DI\Container();
+$container->set(Joomla\Event\DispatcherInterface::class, new Joomla\Event\Dispatcher());
+
+try {
+    $provider->register($container);
+    $out['registered'] = true;
+} catch (\Throwable $e) {
+    $out['register_error'] = get_class($e) . ': ' . $e->getMessage();
+}
+
+// (1) 没装：插件类不存在
+try {
+    $container->get(Joomla\CMS\Extension\PluginInterface::class);
+    $out['unmapped_error'] = false;
+} catch (\Throwable $e) {
+    $out['unmapped_error'] = get_class($e) . ': ' . $e->getMessage();
+}
+
+// (2) 等价于安装器写过的 namespacemap：Joomla\Plugin\System\Xhprof\ → plugins/system/xhprof/src
+spl_autoload_register(static function (string $class) use ($repoRoot): void {
+    $prefix = 'Joomla\\Plugin\\System\\Xhprof\\';
+    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+        return;
+    }
+    $file = $repoRoot . '/joomla/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
+// 别名（class_alias）与真身是同一个类，反射报的是**真身**的类名 —— 这一条同时证明
+// 「Joomla 惯例的类名能加载」与「加载到的是我们包里那个实现」，而不是某个同名的别的东西
+$aliasName = 'Joomla\Plugin\System\Xhprof\Extension\Xhprof';
+$out['mapped_is_ours'] = class_exists($aliasName)
+    && (new ReflectionClass($aliasName))->getName() === ErikWang2013\Xhprof\Joomla\Extension\Xhprof::class;
+
+try {
+    $container->get(Joomla\CMS\Extension\PluginInterface::class);
+    $out['container_error'] = false;
+} catch (\Throwable $e) {
+    $out['container_error'] = get_class($e) . ': ' . $e->getMessage();
+}
+
+try {
+    Joomla\CMS\Factory::getApplication();
+    $out['factory_error'] = false;
+} catch (\Throwable $e) {
+    $out['factory_error'] = get_class($e) . ': ' . $e->getMessage();
+}
+
+try {
+    Joomla\CMS\Plugin\PluginHelper::getPlugin('system', 'xhprof');
+    $out['pluginhelper_error'] = false;
+} catch (\Throwable $e) {
+    $out['pluginhelper_error'] = get_class($e) . ': ' . $e->getMessage();
+}
+
+echo json_encode($out, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+PHP;
 }

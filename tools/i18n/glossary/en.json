@@ -4,7 +4,7 @@
         "name": "English",
         "dir": "ltr",
         "notice": null,
-        "note": "English is a source language of this project (README.EN.md), not a machine translation, so no machine-translation notice is added for this locale."
+        "note": "English is a source language of this project (docs/i18n/en/README.md), not a machine translation, so no machine-translation notice is added for this locale."
     },
     "architecture.title.1": "XHProf Webman Layered Architecture",
     "architecture.title.2": "10 framework entries → 5 contracts → 1 Core: new frameworks leave Core alone",

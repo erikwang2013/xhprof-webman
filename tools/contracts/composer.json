@@ -3,7 +3,61 @@
     "description": "契约验证环：用真实 PSR 包校验 tests/Stubs 的框架桩与真实框架 API 是否一致。独立嵌套项目，不与主仓库共享依赖。",
     "type": "project",
     "license": "MIT",
+    "repositories": [
+        {
+            "description": "WordPress/SQLite 集成插件：官方发布包，不在 packagist 上，用 package 仓库锁进 composer（dist 是 GitHub Release 资产，版本与 sha1 都钉死）。cases/Wordpress.php 拿它做真 WP 安装（SQLite 后端），不需要 MySQL 服务。",
+            "type": "package",
+            "package": {
+                "name": "wordpress/sqlite-database-integration",
+                "version": "3.0.2",
+                "description": "SQLite database integration for WordPress (official plugin release asset).",
+                "type": "wordpress-plugin",
+                "license": "GPL-2.0-or-later",
+                "dist": {
+                    "url": "https://github.com/WordPress/sqlite-database-integration/releases/download/v3.0.2/plugin-sqlite-database-integration.zip",
+                    "type": "zip",
+                    "shasum": "ec7894685f39823b4ffa4f8f41db9705279c4dce"
+                }
+            }
+        },
+        {
+            "description": "Joomla CMS 5.2.2 官方发布包（**完整包**，非 update/patch 包：只有完整包自带可用的 libraries/vendor/autoload.php，仓库里的 tarball 没有 libraries/vendor）。Joomla\\CMS\\* 不在 packagist 上，只能这样锁进 composer；版本与 sha1 都钉死。故意**不声明 autoload**：环自己的进程绝不能自动加载到 CMS（会与 tests/Stubs 的桩撞名），只有 cases/Joomla.php 起的子进程显式 require 它的 libraries/vendor/autoload.php。",
+            "type": "package",
+            "package": {
+                "name": "joomla/cms-full-package-5",
+                "version": "5.2.2",
+                "description": "Joomla! CMS 5.2.2 full release package (official GitHub release asset, no autoload on purpose).",
+                "type": "library",
+                "license": "GPL-2.0-or-later",
+                "dist": {
+                    "url": "https://github.com/joomla/joomla-cms/releases/download/5.2.2/Joomla_5.2.2-Stable-Full_Package.zip",
+                    "type": "zip",
+                    "shasum": "1767712af0a714deaea2b597742150ecf193d15a"
+                }
+            }
+        },
+        {
+            "description": "Joomla CMS 4.4.14 官方发布包（完整包；用来钉住 4.4 与 5.x 的差异 —— 最要紧的是 CMSPlugin::__construct：4.4 是 `(&$subject, $config = [])` 第一个参数按引用且无型别，5.x 是 `(DispatcherInterface $dispatcher, array $config = [])`）。同样不声明 autoload。",
+            "type": "package",
+            "package": {
+                "name": "joomla/cms-full-package-4",
+                "version": "4.4.14",
+                "description": "Joomla! CMS 4.4.14 full release package (official GitHub release asset, no autoload on purpose).",
+                "type": "library",
+                "license": "GPL-2.0-or-later",
+                "dist": {
+                    "url": "https://github.com/joomla/joomla-cms/releases/download/4.4.14/Joomla_4.4.14-Stable-Full_Package.zip",
+                    "type": "zip",
+                    "shasum": "674719b769cf5fae993d8b201e4aec7f8bf7ebc6"
+                }
+            }
+        }
+    ],
     "require": {
+        "php": ">=8.2",
+        "drupal/core": "^11.4",
+        "joomla/cms-full-package-4": "4.4.14",
+        "joomla/cms-full-package-5": "5.2.2",
         "joomla/event": "^3.0",
         "joomla/input": "^3.0",
         "joomla/registry": "^3.0",
@@ -11,7 +65,6 @@
         "laravel/framework": "^11.0",
         "nyholm/psr7": "^1.8",
         "nyholm/psr7-server": "^1.1",
-        "php": ">=8.2",
         "php-stubs/wordpress-stubs": "*",
         "psr/http-factory": "^1.0",
         "psr/http-message": "^2.0",
@@ -22,11 +75,16 @@
         "symfony/http-foundation": "^7.0",
         "symfony/http-kernel": "^7.0",
         "symfony/mime": "^7.0",
+        "wordpress/sqlite-database-integration": "3.0.2",
         "workerman/webman-framework": "^2.2",
         "yiisoft/di": "^1.0",
         "yiisoft/middleware-dispatcher": "^5.0"
     },
     "config": {
+        "allow-plugins": {
+            "drupal/core-composer-scaffold": false,
+            "symfony/runtime": false
+        },
         "sort-packages": true
     }
 }

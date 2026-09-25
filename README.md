@@ -1,10 +1,14 @@
 # XHProf 性能分析插件
 
-**中文** · [English](./README.EN.md) · [한국어](./docs/i18n/ko/README.md) · [Русский](./docs/i18n/ru/README.md) · [Deutsch](./docs/i18n/de/README.md) · [Français](./docs/i18n/fr/README.md) · [Español](./docs/i18n/es/README.md) · [Português](./docs/i18n/pt/README.md) · [العربية](./docs/i18n/ar/README.md) · [हिन्दी](./docs/i18n/hi/README.md) · [বাংলা](./docs/i18n/bn/README.md) · [Bahasa Indonesia](./docs/i18n/id/README.md) · [日本語](./docs/i18n/ja/README.md)
+**中文** · [English](./docs/i18n/en/README.md) · [한국어](./docs/i18n/ko/README.md) · [Русский](./docs/i18n/ru/README.md) · [Deutsch](./docs/i18n/de/README.md) · [Français](./docs/i18n/fr/README.md) · [Español](./docs/i18n/es/README.md) · [Português](./docs/i18n/pt/README.md) · [العربية](./docs/i18n/ar/README.md) · [हिन्दी](./docs/i18n/hi/README.md) · [বাংলা](./docs/i18n/bn/README.md) · [Bahasa Indonesia](./docs/i18n/id/README.md) · [日本語](./docs/i18n/ja/README.md)
 
 兼容 webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 的代码性能分析插件。
 
 基于 xhprof 扩展采集数据并存入 Redis，开发者可通过浏览器快速访问性能分析报告，排查代码性能瓶颈。
+
+![项目宠物：小火苗](docs/images/pet.svg)
+
+同一只小火苗也是报告页的站点图标与左上角品牌图标（`src/html/pet.svg`，随 `assets_url` 前缀服务）。
 
 **请求记录**
 
@@ -36,7 +40,7 @@
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | 复制到 `plugins/system/`，后台「发现」安装 |
 | Drupal | 10.x / 11.x | 8.1（10.x）/ 8.3（11.x） | `xhprof` 模块（`Drupal\XhprofMiddleware`） | 标准模块，启用即可 |
 
-入口类命名空间前缀统一为 `ErikWang2013\Xhprof\`（上表省略）。六个新框架里，除 Drupal 用模块路由提供报告页外，另外五家的入口类**自服务报告页**，不需要注册控制器与路由。
+入口类命名空间前缀统一为 `ErikWang2013\Xhprof\`（上表省略）。十家都不需要你注册控制器与路由：报告页与静态资源由入口类自行接管，Drupal 则由模块路由提供（见 Drupal 一节）。
 
 本包声明 `php >= 8.0`，但 Yii3 依赖的 `yiisoft/*` 组件要求 **PHP 8.1+**，所以 **Yii3 在 PHP 8.0 上不可用**；Symfony 7.x、Drupal 11.x 同理需要更高的 PHP 版本。逐步接入方式见下方「框架配置」。
 
@@ -72,37 +76,9 @@ return [
 ];
 ```
 
-**2. 创建控制器**：
+**2. 报告页与静态资源** — **无需注册控制器与路由**：中间件在采样开始前判断请求路径，命中报告路径 `/xhprof` 直接输出报告页并返回，命中资源路径（前缀从配置项 `assets_url` 读，默认 `/xhprof-assets`）直接输出静态资源。
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. 注册路由** — `config/route.php`：
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. 配置** — 见 `config/plugin/aaron-dev/xhprof/xhprof.php`。
+**3. 配置** — 见 `config/plugin/aaron-dev/xhprof/xhprof.php`。
 
 ---
 
@@ -117,43 +93,9 @@ protected $middleware = [
 ];
 ```
 
-**2. 创建控制器**：
+**2. 报告页与静态资源** — **无需注册控制器与路由**：中间件在采样开始前判断请求路径，命中报告路径 `/xhprof` 直接输出报告页并返回，命中资源路径（前缀从配置项 `assets_url` 读，默认 `/xhprof-assets`）直接输出静态资源。
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. 注册路由** — `routes/web.php`：
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. 发布配置**：
+**3. 发布配置**：
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -173,44 +115,9 @@ return [
 ];
 ```
 
-**2. 创建控制器**：
+**2. 报告页与静态资源** — **无需注册控制器与路由**：中间件在采样开始前判断请求路径，命中报告路径 `/xhprof` 直接输出报告页并返回，命中资源路径（前缀从配置项 `assets_url` 读，默认 `/xhprof-assets`）直接输出静态资源。
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. 注册路由** — `route/app.php`：
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. 配置** — 复制 `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` 到项目 `config/xhprof.php`。
+**3. 配置** — 复制 `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` 到项目 `config/xhprof.php`。
 
 ---
 
@@ -218,57 +125,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. 中间件自动注册** — ConfigProvider 自动将中间件加入 HTTP 中间件队列。
 
-**2. 创建控制器**：
+**2. 报告页与静态资源** — **无需注册控制器与路由**：中间件在采样开始前判断请求路径，命中报告路径 `/xhprof` 直接输出报告页并返回，命中资源路径（前缀从配置项 `assets_url` 读，默认 `/xhprof-assets`）直接输出静态资源。
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-`Xhprof::index()` 返回 HTML 字符串时，**不要**直接 `return`：Hyperf 的 `CoreMiddleware::transferToResponse()` 对字符串返回值会无条件加上 `content-type: text/plain`，浏览器把报告页当纯文本显示（实测 3.0.45 / 3.1.69 / 3.2.0 三版行为一致）。上面显式构造响应即可绕开它；`index()` 在鉴权失败时返回的是已经发过的响应对象，原样返回即可。
-
-**3. 静态资源路由** — `config/routes.php`：
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. 发布配置**：
+**3. 发布配置**：
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -422,7 +281,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. 启用模块** — 包内 `drupal/xhprof/` 是标准 Drupal 模块（`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`），放到站点的 `modules/custom/xhprof/` 后在后台「扩展」页勾选启用（或 `drush en xhprof`）。
 
-**2. 报告页** — Drupal 是十个框架里**唯一用模块路由提供报告页**的：`xhprof.routing.yml` 注册报告路径 `/xhprof`，由模块 Controller 输出报告页；其余五个新框架的入口类自服务报告页与静态资源，不注册路由。
+**2. 报告页与静态资源** — Drupal 是十个框架里**唯一走「模块 + 路由」这一形态**的：`xhprof.routing.yml` 注册报告路径 `/xhprof` 与资源路径 `/xhprof-assets`，默认由模块 Controller 输出；其余九家的入口类在采样开始前自行短路，自服务报告页与静态资源，不注册路由。**改成自定义 `assets_url` 前缀时资源改由中间件接管**：模块的资源路由 path 写死在 `xhprof.routing.yml`（`/xhprof-assets/{file}`），匹配不到别的前缀。
 
 **3. 配置** — 配置是模块内的 typed config：默认值在 `drupal/xhprof/config/install/xhprof.settings.yml`，结构定义在 `drupal/xhprof/config/schema/xhprof.schema.yml`。字段含义见「配置项说明」。
 
@@ -575,11 +434,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # 各框架 Redis 适配器的共享实现
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 既有 4 个框架
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 新增 6 个框架
-│   └── html/                     # 报告页静态资源（css / js / images）
+│   └── html/                     # 报告页静态资源（css / js / images / pet.svg 站点图标与品牌图标）
 ├── wordpress/                    # mu-plugin 引导文件（带 plugin header）
 ├── joomla/                       # Joomla 插件（CMSPlugin + 清单）
 ├── drupal/xhprof/                # Drupal 标准模块（info / routing / services + Controller）
-├── tools/contracts/              # 独立验证环：对真实框架包校验签名与语义
+├── tools/contracts/              # 独立验证环：对真实框架包校验签名与语义（`legacy-symfony64/` 是 6.4 腿）
 ├── tools/i18n/                   # README 与三张 SVG 的翻译工具链（生成 / 校验 / 自检）
 ├── docs/i18n/                    # 12 份译文产物（英文、韩语、俄语、德语、法语、西班牙语、葡萄牙语、阿拉伯语、印地语、孟加拉语、印尼语、日语）
 ├── tests/                        # PHPUnit：适配器单测、接线测试、Core 单测、14 份 README 的结构一致性
@@ -608,8 +467,8 @@ src/<Fw>/
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
 | 十个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job）：装真实框架包，对**已入环的 8 个框架**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；ThinkPHP / Hyperf 未入环，见下 |
-| 适配器语义正确 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效 |
+| `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 8 个框架**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；ThinkPHP / Hyperf 未入环，见下 |
+| 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑 |
 
 
 **未自动化验证的（不要当成已验过）**
@@ -617,11 +476,9 @@ src/<Fw>/
 | 项 | 为什么没验 |
 |---|---|
 | 所有框架的接线（钩子是否真挂上、事件是否真触发） | 单测用的是桩，接线正确性目前只有手工冒烟能确认 |
-| WordPress 全链路 | `plugins_loaded` 实际时点、致命错误下 `shutdown` 是否触发、mu-plugin 是否被加载，都需要真实 WordPress |
-| Joomla 插件发现与 `$app->close()` | 需要真实 Joomla 后台执行「发现」 |
-| Drupal 的 priority 是否真落在页面缓存之外 | 需要 booted 的 Drupal 内核 |
+| Joomla 剩下的两条子项 | 环里仍够不到、且原因都是需要数据库/安装器的那两件事：`#__extensions.params` 的真实读取路径（`PluginHelper::getPlugin()` → `bootPlugin()`）、安装器形态（namespacemap 被写过、`bootPlugin()` 找得到类） |
 | Symfony 的 `kernel.event_subscriber` 自动配置 | 需要真实容器编译 |
-| 长驻进程下的静态状态串扰 | 继承自既有架构（Webman / Hyperf 同样如此），本次未改 |
+| 长驻进程下的静态状态串扰 | Webman 侧未改（Hyperf 侧已隔离：渲染期 9 个按请求量走协程 Context，`tests/Unit/Lib/RenderStateCoroutineTest.php` 用真让出的协程钉住） |
 | 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 真实 Redis 读写**已进验证环**（`cases/Redis.php`：真 phpredis + 真 Slim 端到端——业务请求 → 落库 → 列表页 → 报告页）；浏览器渲染与真实负载下的采样开销仍超出单测与验证环的范围 |
 | ThinkPHP / Hyperf 的适配器签名与语义 | 这两家未装入验证环（环覆盖 8 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
 
@@ -639,7 +496,7 @@ src/<Fw>/
 
 **`assets_url` 已支持自定义前缀**
 
-静态资源前缀不再是硬编码常量：`src/Core/StaticController.php` 按配置项 `assets_url` 匹配资源路径（默认 `/xhprof-assets`，尾斜杠可有可无）。目录/子路径部署下的剩余限制见下一条 Drupal。 **边界**：资源前缀在「中间件/入口类自行短路」的五家（Yii3、Symfony、Slim、WordPress、Joomla）上开箱即用；Laravel、Hyperf、Webman、ThinkPHP 的资源路由 path 与 Drupal 的 `xhprof.routing.yml` 都由**你**注册，改 `assets_url` 时要一起改，否则资源请求落不到 `StaticController`，报告页会丢样式与脚本。
+静态资源前缀不再是硬编码常量：`src/Core/StaticController.php` 按配置项 `assets_url` 匹配资源路径（默认 `/xhprof-assets`，尾斜杠可有可无）。**十个框架都跟随这个配置**：九家的入口类在采样开始前自行短路并服务资源；Drupal 的默认前缀由模块路由 + Controller 服务、自定义前缀由中间件接管。**边界**：Laravel、Hyperf、Webman、ThinkPHP 四家不再需要控制器与路由——中间件先跑，按旧版说明注册过的那两条路由只是被遮蔽：既不会报错，也不会再被命中。目录/子路径部署下的剩余限制见下一条 Drupal。
 
 **已知限制：Drupal 装在子目录时路径守卫失效**
 
@@ -647,7 +504,7 @@ Drupal 装在子目录（如 `/sites/app/xhprof`）时，路径守卫匹配不�
 
 **Symfony 6.4 兼容性**
 
-Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看不出的过度拟合：`Request` 属性在 6.4 无原生类型声明、`prepare()` 补的 charset 大小写不同），但 CI 的验证环只跑 7.4。
+Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看不出的过度拟合：`Request` 属性在 6.4 无原生类型声明、`prepare()` 补的 charset 大小写不同）。**两条腿都进 CI**：主腿 7.x + 独立的 `tools/contracts/legacy-symfony64` 项目跑同一份 case（不复制），两条腿也都在 tag 门禁里。
 
 ---
 

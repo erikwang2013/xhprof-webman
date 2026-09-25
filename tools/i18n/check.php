@@ -616,7 +616,7 @@ if ($lang === 'en') {
     // English is a source language of this project, not a machine translation
     // that nobody reviewed.  A notice here would be a false claim.
     if (is_string($notice) && trim($notice) !== '') {
-        bad("glossary/$lang.json: _meta.notice is set, but en is a source language (README.EN.md) and must not carry one");
+        bad("glossary/$lang.json: _meta.notice is set, but en is a source language (tools/i18n/readme/en.md) and must not carry one");
     } else {
         ok('glossary/en.json: no notice, as a source language should be');
     }

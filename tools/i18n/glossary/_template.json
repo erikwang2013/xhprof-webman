@@ -5,7 +5,7 @@
         "name": "Deutsch",
         "dir": "ltr",
         "notice": "> **Maschinelle Übersetzung.** Dieses Dokument wurde automatisch übersetzt und nicht von einem Muttersprachler geprüft.",
-        "note": "translated from README.EN.md and tools/i18n/glossary/en.json on 2026-09-25; terminology follows the project's README.EN.md"
+        "note": "translated from docs/i18n/en/README.md and tools/i18n/glossary/en.json on 2026-09-25; terminology follows the project's docs/i18n/en/README.md"
     },
     "architecture.title.1": "XHProf Webman 分层架构 :: class 'code' — translate the prose, but every token in the key's classify.json \"keep\" list (here XHProf and Webman) must survive verbatim",
     "architecture.legend.3": "已适配 4 个 :: class 'text' — translate freely; nothing is protected and nothing has to match the source",

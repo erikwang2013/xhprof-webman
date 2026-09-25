@@ -74,11 +74,12 @@ class StaticController
 
         // Content-Type 必须显式钉住，不能交给 file() 的实现去猜：Laravel 的
         // response()->file() 返回 Symfony BinaryFileResponse，它的 prepare() 在
-        // **缺** Content-Type 时用 finfo 按**内容**嗅探——实测本包 src/html 的 11 个文件里
+        // **缺** Content-Type 时用 finfo 按**内容**嗅探——实测本包 src/html 当时的 11 个文件里
         // 8 个被猜错（三个 css 全被猜成 text/plain；四个 js 里 xhprof_report.js /
         // jquery.dataTables.min.js / bootstrap.min.js 猜成 text/plain，dataTables.bootstrap.js
         // 猜成 text/html；png/gif 两个猜对了），浏览器会拒收 text/plain 的 script、
         // 不套用 text/plain 的样式表 → 报告页在 Laravel 上无 JS 无 CSS。
+        // （pet.svg 是后加的，不在那次实测里：它在 MIME_TYPES 有显式映射，本就不走嗅探。）
         // 其余六个适配器的 file() 自己钉了同一个类型（都取自本文件的 MIME_TYPES），
         // 这里补上后十家输出一致；类型表复用 readFile() 那张，不新造第二张。
         // withHeaders() 必须在 file() 之后：file() 返回的是**新的**响应对象（Laravel 上是一个
@@ -90,12 +91,13 @@ class StaticController
     }
 
     /**
-     * 资源 URL 前缀（带尾斜杠），取自 `xhprof.assets_url`——**与各家入口类同一口径**：
-     * Slim/Symfony/WordPress/Joomla/Yii3 的短路前缀与 Drupal 的守卫都从这一个配置项
-     * 归一化出来（同一套归一化：先取原串再 rtrim，空串 = 不启用）。
-     * 四个路由型框架（Laravel/Hyperf/Webman/ThinkPHP）的资源**路由 path 不跟配置走**：
-     * 那条路由由用户在各自的路由文件里写死，改了配置只会让 Core 不再服务这条路径。
-     * 这是既有的已知边界，README 不声称自定义前缀在它们身上生效。
+     * 资源 URL 前缀（带尾斜杠），取自 `xhprof.assets_url`——**十家入口类同一口径**：
+     * Slim/Symfony/WordPress/Joomla/Yii3 在 xhprofStart() 之前短路、Drupal 走守卫、
+     * Laravel/Hyperf/Webman/ThinkPHP 由全局中间件短路，都从这一个配置项归一化出来
+     * （同一套归一化：先取原串再 rtrim，空串 = 不启用）。
+     * 2026-09-25 之前四家路由型框架是例外：资源路由 path 由用户在自己路由文件里写死、
+     * 不跟配置走，改了配置只会让 Core 不再服务这条路径 —— 那条边界已随中间件短路消失，
+     * 现在配什么前缀四家就接管什么前缀，用户不必再注册资源路由。
      * 这里曾经硬编码 `/xhprof-assets`，于是配成别的值时入口类按配置把请求交给
      * serve()，而 serve() 只认老前缀 → 返回**空 body 的 200**，静态资源静默消失。
      *

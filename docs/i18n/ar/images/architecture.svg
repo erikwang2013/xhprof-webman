@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" direction="rtl">
   <title>بنية XHProf Webman الطبقية</title>
-  <desc>ثلاث طبقات: الطبقة العليا هي فئات مدخل الأطر العشر (4 مدعومة أصلًا + 6 جديدة في هذا الإصدار)، والوسطى هي الواجهات الخمس في src/Core/Contract/، والسفلى هي فئات Core الخمس. ويُبرز الشريط الأحمر في الأسفل موضعي الاقتران الوحيدين الباقيين مع الأطر، مع التنبيه إلى أن الأطر الستة الجديدة لا تمرّ عبر autoDetect بل تستخدم الحقن الصريح عبر Xhprof::bootstrap()‎. ترجمة آلية غير مُراجَعة. هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. النسخة الإنجليزية هي المرجع المعتمد: README.EN.md.</desc>
+  <desc>ثلاث طبقات: الطبقة العليا هي فئات مدخل الأطر العشر (4 مدعومة أصلًا + 6 جديدة في هذا الإصدار)، والوسطى هي الواجهات الخمس في src/Core/Contract/، والسفلى هي فئات Core الخمس. ويُبرز الشريط الأحمر في الأسفل موضعي الاقتران الوحيدين الباقيين مع الأطر، مع التنبيه إلى أن الأطر الستة الجديدة لا تمرّ عبر autoDetect بل تستخدم الحقن الصريح عبر Xhprof::bootstrap()‎. ترجمة آلية غير مُراجَعة. هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. المرجع المعتمد هو النسخة الإنجليزية.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

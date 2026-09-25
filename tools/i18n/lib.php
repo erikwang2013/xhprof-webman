@@ -24,13 +24,15 @@ const I18N_DOCS = ['architecture', 'lifecycle', 'design'];
  * are on.
  *
  * The second element is the file at the *repository root* that this locale's
- * README is a rendering of, or null when the locale is a translation and
- * therefore a sibling directory.  Paths are built from that rather than stored,
- * so changing where locales are written does not silently break 13 links.
+ * README is a rendering of, or null when the locale's README lives *beside* the
+ * others under the output root (`docs/i18n/<code>/README.md`).  `en` is null as
+ * well: it is a source language, but since the English README moved into `docs/`
+ * its file is a sibling, not a root file.  Paths are built from that rather than
+ * stored, so changing where locales are written does not silently break 13 links.
  */
 const I18N_LANGUAGES = [
     'zh' => ['中文',             'README.md'],
-    'en' => ['English',          'README.EN.md'],
+    'en' => ['English',          null],
     'ko' => ['한국어',            null],
     'ru' => ['Русский',          null],
     'de' => ['Deutsch',          null],
@@ -104,8 +106,8 @@ function i18n_input_root(): string
  * move away from pointing every link in every locale at the wrong place.
  *
  * The output root has to be inside the repository for those relative links to
- * be expressible at all — the switcher points at the root README.md and
- * README.EN.md, and the README body at docs/*.png.  A root outside the repo
+ * be expressible at all — the switcher points at the root README.md and at the
+ * sibling en/README.md, and the README body at docs/*.png.  A root outside the repo
  * therefore cannot be described in relative terms, and the only honest response
  * is to refuse.  Returning a number anyway is worse than useless: an earlier
  * version subtracted the repo prefix from a path that did not have it, got an
@@ -632,8 +634,8 @@ function i18n_notice_plain(?string $notice): string
     }
     // Links become their label, and the target is dropped rather than kept as
     // a bare URL.  Two reasons: a <desc> is plain text, so a Markdown link is
-    // unclickable syntax there ("[README.EN.md](../../../README.EN.md)" went
-    // into every translated diagram verbatim); and the target is written for
+    // unclickable syntax there ("[English](../en/README.md)" went into every
+    // translated diagram verbatim); and the target is written for
     // the README's directory, so from docs/i18n/<lang>/images/ it resolves one
     // level short.  The label survives, which is the part that carries meaning.
     $t = preg_replace('/!?\[([^\]]*)\]\([^)]*\)/u', '$1', $notice);

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Arsitektur berlapis XHProf Webman</title>
-  <desc>Tiga diagram berlapis: lapisan atas adalah 10 kelas entri framework (4 sudah didukung + 6 baru di rilis ini), lapisan tengah adalah 5 antarmuka di src/Core/Contract/, lapisan bawah adalah 5 kelas di Core. Pita merah di bagian bawah menandai satu-satunya dua coupling ke framework yang tersisa di Core, dan mencatat bahwa 6 framework baru tidak pernah lewat autoDetect — semuanya memakai injeksi eksplisit lewat Xhprof::bootstrap(). Terjemahan mesin. Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah versi bahasa Inggris: README.EN.md.</desc>
+  <desc>Tiga diagram berlapis: lapisan atas adalah 10 kelas entri framework (4 sudah didukung + 6 baru di rilis ini), lapisan tengah adalah 5 antarmuka di src/Core/Contract/, lapisan bawah adalah 5 kelas di Core. Pita merah di bagian bawah menandai satu-satunya dua coupling ke framework yang tersisa di Core, dan mencatat bahwa 6 framework baru tidak pernah lewat autoDetect — semuanya memakai injeksi eksplisit lewat Xhprof::bootstrap(). Terjemahan mesin. Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah versi bahasa Inggris.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

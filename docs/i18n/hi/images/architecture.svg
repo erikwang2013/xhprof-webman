@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman परतदार आर्किटेक्चर</title>
-  <desc>तीन परतों वाले चित्र: सबसे ऊपर 10 फ़्रेमवर्क एंट्री क्लास हैं (4 पहले से समर्थित + इस रिलीज़ में 6 नए), बीच में src/Core/Contract/ की 5 इंटरफ़ेस हैं, और नीचे Core की 5 क्लास हैं। नीचे की लाल पट्टी Core में बची फ़्रेमवर्क से जुड़ी अकेली दो कड़ियाँ दिखाती है, और यह भी कि 6 नए फ़्रेमवर्क कभी autoDetect से नहीं जाते — सभी Xhprof::bootstrap() के ज़रिए स्पष्ट इंजेक्शन इस्तेमाल करते हैं। मशीन अनुवाद। यह दस्तावेज़ स्वचालित रूप से अनुवादित है और किसी मातृभाषी द्वारा समीक्षित नहीं है। अंग्रेज़ी मूल README.EN.md ही प्रामाणिक है।</desc>
+  <desc>तीन परतों वाले चित्र: सबसे ऊपर 10 फ़्रेमवर्क एंट्री क्लास हैं (4 पहले से समर्थित + इस रिलीज़ में 6 नए), बीच में src/Core/Contract/ की 5 इंटरफ़ेस हैं, और नीचे Core की 5 क्लास हैं। नीचे की लाल पट्टी Core में बची फ़्रेमवर्क से जुड़ी अकेली दो कड़ियाँ दिखाती है, और यह भी कि 6 नए फ़्रेमवर्क कभी autoDetect से नहीं जाते — सभी Xhprof::bootstrap() के ज़रिए स्पष्ट इंजेक्शन इस्तेमाल करते हैं। मशीन अनुवाद। यह दस्तावेज़ स्वचालित रूप से अनुवादित है और किसी मातृभाषी द्वारा समीक्षित नहीं है। अंग्रेज़ी मूल ही प्रामाणिक है।</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">

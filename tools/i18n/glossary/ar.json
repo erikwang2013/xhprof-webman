@@ -3,8 +3,8 @@
         "lang": "ar",
         "name": "العربية",
         "dir": "rtl",
-        "notice": "> **ترجمة آلية غير مُراجَعة.** هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. النسخة الإنجليزية هي المرجع المعتمد: [README.EN.md](../../../README.EN.md).",
-        "note": "Translated from README.EN.md and tools/i18n/glossary/en.json on 2026-09-25 by an AI i18n agent (no native Arabic reviewer involved). Terminology follows README.EN.md; Latin identifiers, paths and PSR/framework names are kept verbatim, with U+200E appended where an embedded Latin token would otherwise reorder under bidi."
+        "notice": "> **ترجمة آلية غير مُراجَعة.** هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. المرجع المعتمد هو [النسخة الإنجليزية](../en/README.md).",
+        "note": "Translated from docs/i18n/en/README.md and tools/i18n/glossary/en.json on 2026-09-25 by an AI i18n agent (no native Arabic reviewer involved). Terminology follows docs/i18n/en/README.md; Latin identifiers, paths and PSR/framework names are kept verbatim, with U+200E appended where an embedded Latin token would otherwise reorder under bidi."
     },
     "architecture.title.1": "بنية XHProf Webman الطبقية",
     "architecture.title.2": "10 مداخل أطر → 5 عقود → 1 نواة: الأطر الجديدة لا تمسّ Core",

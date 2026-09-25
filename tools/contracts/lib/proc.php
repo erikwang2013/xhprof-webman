@@ -12,16 +12,41 @@ declare(strict_types=1);
  * 本环的每个子进程只输出几 KB（JSON / 反射快照），够用；真遇到大输出再换 stream_select。
  */
 
-/** tools/contracts 的绝对路径。 */
+/**
+ * tools/contracts 的绝对路径。
+ *
+ * 默认就是本文件所在目录的上一层。`run.php --leg=` 会通过环境变量
+ * CONTRACTS_DIR_OVERRIDE 把它换成**镜像目录**（例如 tools/contracts/legacy-symfony64）：
+ * 那里有自己的 vendor/，于是 case 里所有 `contracts_dir() . '/vendor/...'` 的取用都落到
+ * 另一套真实包上 —— 同一份 case 文件跑第二条腿靠的就是这一处，不复制 case。
+ *
+ * 上限（写清楚免得后人误用）：镜像目录得是个**只以 vendor/ 为契约**的目录。本环目前
+ * 只有 Symfony.php 满足（它对 contracts_dir() 的用法只有 vendor/autoload.php 一处）；
+ * Psr7.php 还要 `contracts_dir() . '/lib/dump.php'`、Wordpress.php 要
+ * `vendor/roots/wordpress-no-content` 之外的目录结构，那些 case 不能进第二条腿
+ * （run.php 的腿表里逐腿列了 case，不是按 glob 跑）。
+ */
 function contracts_dir(): string
 {
-    return dirname(__DIR__);
+    $override = getenv('CONTRACTS_DIR_OVERRIDE');
+
+    return is_string($override) && $override !== '' ? $override : dirname(__DIR__);
 }
 
-/** 仓库根：tools/contracts 往上两级。 */
+/**
+ * 仓库根：tools/contracts 往上两级。
+ *
+ * 刻意写 dirname(__DIR__, 3) 而不是 dirname(contracts_dir(), 2)：后者会被上面那个覆盖
+ * 带偏 —— 镜像目录在 tools/contracts/ **下一层**，从它往上两级只到 tools/，而 case 拿
+ * 这个路径去找 src/ 与 tests/Fixtures（见 Symfony.php 的 $repoRoot），那些永远在真仓库里。
+ * （层数是 3 不是 2：这里的 __DIR__ 是 lib/，lib → contracts → tools → 仓库根。）
+ * 这一条不是理论：第一版写成 dirname(__DIR__, 2) 时，6.4 腿立刻红在
+ * `Failed opening required .../tools/tests/Fixtures/Fakes.php` —— 覆盖只该换 vendor，
+ * 不该动仓库根，这两个 helper 必须各管各的。
+ */
 function contracts_repo_root(): string
 {
-    return dirname(contracts_dir(), 2);
+    return dirname(__DIR__, 3);
 }
 
 /**

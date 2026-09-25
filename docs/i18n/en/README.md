@@ -2,11 +2,13 @@
 
 # XHProf Performance Profiler
 
-[中文](./README.md) · **English** · [한국어](../../../docs/i18n/ko/README.md) · [Русский](../../../docs/i18n/ru/README.md) · [Deutsch](../../../docs/i18n/de/README.md) · [Français](../../../docs/i18n/fr/README.md) · [Español](../../../docs/i18n/es/README.md) · [Português](../../../docs/i18n/pt/README.md) · [العربية](../../../docs/i18n/ar/README.md) · [हिन्दी](../../../docs/i18n/hi/README.md) · [বাংলা](../../../docs/i18n/bn/README.md) · [Bahasa Indonesia](../../../docs/i18n/id/README.md) · [日本語](../../../docs/i18n/ja/README.md)
-
 A code performance profiling plugin compatible with webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla and Drupal.
 
 Collects profiling data via the xhprof extension and stores it in Redis. Developers can quickly access performance analysis reports through a browser to identify code performance bottlenecks.
+
+![Project pet: a little flame](../../../docs/images/pet.svg)
+
+The same little flame is also the report page's site icon and the top-left brand icon (`src/html/pet.svg`, served under the `assets_url` prefix).
 
 **Request Log**
 
@@ -38,7 +40,7 @@ Collects profiling data via the xhprof extension and stores it in Redis. Develop
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Copy into `plugins/system/`, install via Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` module (`Drupal\XhprofMiddleware`) | Standard module, just enable it |
 
-Entry classes all live under the `ErikWang2013\Xhprof\` namespace prefix (omitted above). Of the six new frameworks, Drupal is the exception — it serves the report page through module routes — while the other five entry classes **serve the report page themselves**, with no controller or route registration needed.
+Entry classes all live under the `ErikWang2013\Xhprof\` namespace prefix (omitted above). None of the ten needs you to register a controller or a route: the entry class serves the report page and the static assets itself (in Drupal's case, the module route does).
 
 This package declares `php >= 8.0`, but the `yiisoft/*` components Yii3 relies on require **PHP 8.1+**, so **Yii3 is not usable on PHP 8.0**; Symfony 7.x and Drupal 11.x likewise need a higher PHP version. Step-by-step setup is in "Framework Configuration" below.
 
@@ -74,37 +76,9 @@ return [
 ];
 ```
 
-**2. Create controller**:
+**2. Report page and static assets** — **no controller or route registration needed**: before sampling starts the middleware inspects the request path; a hit on the report path `/xhprof` returns the report page, and a hit on the asset path (prefix read from the `assets_url` option, default `/xhprof-assets`) serves the static asset directly.
 
-```php
-<?php
-
-namespace app\controller;
-
-use support\Request;
-use ErikWang2013\Xhprof\Webman\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Register routes** — `config/route.php`:
-
-```php
-use Webman\Route;
-use ErikWang2013\Xhprof\Webman\StaticController;
-
-Route::get('/xhprof', [app\controller\XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path:.+}', [StaticController::class, 'serve']);
-
-```
-
-**4. Configuration** — See `config/plugin/aaron-dev/xhprof/xhprof.php`.
+**3. Configuration** — See `config/plugin/aaron-dev/xhprof/xhprof.php`.
 
 ---
 
@@ -119,43 +93,9 @@ protected $middleware = [
 ];
 ```
 
-**2. Create controller**:
+**2. Report page and static assets** — **no controller or route registration needed**: before sampling starts the middleware inspects the request path; a hit on the report path `/xhprof` returns the report page, and a hit on the asset path (prefix read from the `assets_url` option, default `/xhprof-assets`) serves the static asset directly.
 
-```php
-<?php
-
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController extends Controller
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Register routes** — `routes/web.php`:
-
-```php
-use App\Http\Controllers\XhprofController;
-use ErikWang2013\Xhprof\Core\StaticController;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/xhprof', [XhprofController::class, 'index']);
-Route::get('/xhprof-assets/{path}', function ($path) {
-    $req = new \ErikWang2013\Xhprof\Laravel\Adapter\RequestAdapter(request());
-    $res = new \ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->where('path', '.*');
-
-```
-
-**4. Publish config**:
+**3. Publish config**:
 
 ```sh
 php artisan vendor:publish --tag=xhprof-config
@@ -175,44 +115,9 @@ return [
 ];
 ```
 
-**2. Create controller**:
+**2. Report page and static assets** — **no controller or route registration needed**: before sampling starts the middleware inspects the request path; a hit on the report path `/xhprof` returns the report page, and a hit on the asset path (prefix read from the `assets_url` option, default `/xhprof-assets`) serves the static asset directly.
 
-```php
-<?php
-
-namespace app\controller;
-
-use think\Request;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-class XhprofController
-{
-    public function index(Request $request)
-    {
-        Xhprof::bootstrap();
-        return Xhprof::index();
-    }
-}
-```
-
-**3. Register routes** — `route/app.php`:
-
-```php
-use think\facade\Route;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
-
-Route::get('/xhprof', 'app\controller\XhprofController@index');
-Route::get('/xhprof-assets/[:path]', function ($path = '') {
-    $req = new RequestAdapter(app('request'));
-    $res = new ResponseAdapter(response(''));
-    return StaticController::serve($req, $res)->send();
-})->pattern(['path' => '.*']);
-
-```
-
-**4. Configuration** — Copy `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` to project `config/xhprof.php`.
+**3. Configuration** — Copy `vendor/aaron-dev/xhprof-webman/src/Thinkphp/config/xhprof.php` to project `config/xhprof.php`.
 
 ---
 
@@ -220,57 +125,9 @@ Route::get('/xhprof-assets/[:path]', function ($path = '') {
 
 **1. Middleware auto-registration** — ConfigProvider automatically adds middleware to the HTTP middleware queue.
 
-**2. Create controller**:
+**2. Report page and static assets** — **no controller or route registration needed**: before sampling starts the middleware inspects the request path; a hit on the report path `/xhprof` returns the report page, and a hit on the asset path (prefix read from the `assets_url` option, default `/xhprof-assets`) serves the static asset directly.
 
-```php
-<?php
-
-namespace App\Controller;
-
-use Hyperf\HttpServer\Annotation\Controller;
-use Hyperf\HttpServer\Annotation\RequestMapping;
-use ErikWang2013\Xhprof\Core\Xhprof;
-
-#[Controller(prefix: '/xhprof')]
-class XhprofController
-{
-    #[RequestMapping(path: '')]
-    public function index()
-    {
-        Xhprof::bootstrap();
-        $html = Xhprof::index();
-        if (!is_string($html)) {
-            return $html;
-        }
-        return $this->response
-            ->withStatus(200)
-            ->withHeader('Content-Type', 'text/html; charset=UTF-8')
-            ->withBody(new \Hyperf\HttpMessage\Stream\SwooleStream($html));
-    }
-}
-```
-
-When `Xhprof::index()` returns an HTML string, do **not** return it directly: Hyperf's `CoreMiddleware::transferToResponse()` unconditionally adds `content-type: text/plain` to string return values, so browsers render the report as plain text (verified identical in 3.0.45 / 3.1.69 / 3.2.0). The explicit response above bypasses it; when authentication fails, `index()` returns a response object that has already been sent — return it as is.
-
-**3. Static asset routes** — `config/routes.php`:
-
-```php
-use Hyperf\HttpServer\Router\Router;
-use ErikWang2013\Xhprof\Core\StaticController;
-use ErikWang2013\Xhprof\Hyperf\Adapter\RequestAdapter;
-use ErikWang2013\Xhprof\Hyperf\Adapter\ResponseAdapter;
-use Hyperf\Context\ApplicationContext;
-
-Router::get('/xhprof-assets/{path:.+}', function ($path) {
-    $container = ApplicationContext::getContainer();
-    $req = new RequestAdapter($container->get(\Hyperf\HttpServer\Contract\RequestInterface::class));
-    $res = new ResponseAdapter($container->get(\Hyperf\HttpServer\Contract\ResponseInterface::class));
-    return StaticController::serve($req, $res)->send();
-});
-
-```
-
-**4. Publish config**:
+**3. Publish config**:
 
 ```sh
 php bin/hyperf.php vendor:publish aaron-dev/xhprof-webman
@@ -424,7 +281,7 @@ The package's `joomla/` directory *is* the plugin: the `xhprof.xml` manifest, `s
 
 **1. Enable the module** — `drupal/xhprof/` in the package is a standard Drupal module (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Place it at `modules/custom/xhprof/` in your site, then enable it on the "Extend" page (or with `drush en xhprof`).
 
-**2. Report page** — Drupal is the **only one of the ten frameworks that serves the report page through module routes**: `xhprof.routing.yml` registers the report path `/xhprof` and a module controller renders it. The other five new frameworks serve the report page and static assets themselves and register no routes.
+**2. Report page and static assets** — Drupal is the **one of the ten that goes through a module + routes**: `xhprof.routing.yml` registers the report path `/xhprof` and the asset path `/xhprof-assets`, served by the module controller by default; the other nine entry classes short-circuit before sampling starts and serve the report page and the static assets themselves, registering no routes. **With a custom `assets_url` prefix the middleware serves the assets instead**: the module asset route path is hardcoded in `xhprof.routing.yml` (`/xhprof-assets/{file}`) and never matches another prefix.
 
 **3. Configuration** — configuration is module-level typed config: defaults live in `drupal/xhprof/config/install/xhprof.settings.yml`, with the schema in `drupal/xhprof/config/schema/xhprof.schema.yml`. See "Configuration Reference" for the fields.
 
@@ -577,11 +434,11 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
-│   └── html/                     # report page assets (css / js / images)
+│   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages
+├── tools/contracts/              # standalone verification loop: checks signatures and semantics against real framework packages (`legacy-symfony64/` is the 6.4 leg)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -610,20 +467,18 @@ src/<Fw>/
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
 | All ten frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
-| The methods the adapters call really exist | `tools/contracts/` verification loop (its own CI job): installs real framework packages and asserts via reflection that every method / constant / global function exists **for the eight frameworks in the loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf are not in the loop — see below |
-| Adapter semantics | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()` |
+| `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the eight frameworks in the loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf are not in the loop — see below |
+| The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run |
 
 
-**Not automatically verified (do not read this as "all six were tested")**
+**Not automatically verified (do not read this as "everything is covered")**
 
 | Item | Why not |
 |------|---------|
 | Every framework's **wiring** (is the hook really attached, does the event really fire) | Unit tests use stubs; wiring can currently only be confirmed by manual smoke tests |
-| WordPress end to end | The actual `plugins_loaded` timing, whether `shutdown` fires on a fatal error, and whether the mu-plugin is loaded all require a real WordPress |
-| Joomla plugin discovery and `$app->close()` | Requires running Discover in a real Joomla admin |
-| Whether Drupal's priority really lands outside the page cache | Requires a booted Drupal kernel |
+| Joomla's remaining two sub-items | The two things the loop still cannot reach, and both for the same reason (they need a database or an installer): the real read path of `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) and the installer shape (namespace map written, `bootPlugin()` able to find the class) |
 | Symfony's `kernel.event_subscriber` auto-configuration | Requires a real container compile |
-| Static-state crosstalk in long-running processes | Inherited from the existing architecture (the same is true of Webman / Hyperf); unchanged here |
+| Static-state crosstalk in long-running processes | Unchanged on the Webman side (on Hyperf the 9 per-request render-state values are isolated in the coroutine Context, pinned by `tests/Unit/Lib/RenderStateCoroutineTest.php` with a genuinely yielding coroutine) |
 | Real Redis I/O, browser rendering, profiling overhead under real load | Real Redis I/O is **in the loop** (`cases/Redis.php`: real phpredis + a real Slim request end to end — hit → persist → list page → report page); browser rendering and profiling overhead under real load stay outside the scope of unit tests and the loop |
 | Adapter signatures and semantics for ThinkPHP / Hyperf | these two are not in the verification loop (it covers eight frameworks); their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
 
@@ -641,7 +496,7 @@ The `host()` contract means "host only, no port" (R-2), and all ten frameworks h
 
 **`assets_url` now supports a custom prefix**
 
-The asset prefix is no longer a hardcoded constant: `src/Core/StaticController.php` matches asset paths against the `assets_url` option (default `/xhprof-assets`, trailing slash optional). The remaining limitation under a subdirectory deployment is the Drupal one below. **Boundary**: a custom prefix works out of the box on the five frameworks where a middleware or entry class short-circuits the asset path (Yii3, Symfony, Slim, WordPress, Joomla); on Laravel, Hyperf, Webman and ThinkPHP the asset route path, and on Drupal `xhprof.routing.yml`, are registered by **you** — change them together with `assets_url`, or the asset requests never reach `StaticController` and the report page loses its styles and scripts.
+The asset prefix is no longer a hardcoded constant: `src/Core/StaticController.php` matches asset paths against the `assets_url` option (default `/xhprof-assets`, trailing slash optional). **All ten frameworks follow that option**: nine entry classes short-circuit before sampling starts and serve the assets themselves, while Drupal serves the default prefix through its module route + controller and hands a custom prefix to the middleware. **Boundary**: Laravel, Hyperf, Webman and ThinkPHP no longer need a controller or routes — the middleware runs first, so a controller and the two routes from the older instructions are merely shadowed: they do not error and are never reached. The remaining limitation under a subdirectory deployment is the Drupal one below.
 
 **Known limitation: the path guard fails when Drupal lives in a subdirectory**
 
@@ -649,7 +504,7 @@ When Drupal is installed under a subdirectory (e.g. `/sites/app/xhprof`), the pa
 
 **Symfony 6.4 compatibility**
 
-Symfony 6.4 compatibility has been measured (which is how two over-fits invisible on 7.4 were fixed: `Request` properties carry no native type declaration on 6.4, and the charset added by `prepare()` differs in case), but the CI verification loop only runs 7.4.
+Symfony 6.4 compatibility has been measured (which is how two over-fits invisible on 7.4 were fixed: `Request` properties carry no native type declaration on 6.4, and the charset added by `prepare()` differs in case). **Both legs run in CI**: the main 7.x leg plus the separate `tools/contracts/legacy-symfony64` project, which runs the same case file without copying it — and both legs are in the tag gate as well.
 
 ---
 
