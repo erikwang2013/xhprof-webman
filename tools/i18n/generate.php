@@ -452,7 +452,7 @@ foreach (I18N_DOCS as $doc) {
 
 $readmeSource = $lang === 'en'
     ? I18N_REPO . '/README.EN.md'
-    : I18N_DIR . "/readme/$lang.md";
+    : i18n_input_root() . "/readme/$lang.md";
 
 if (!is_file($readmeSource)) {
     fwrite(STDERR, "missing README source: $readmeSource\n");

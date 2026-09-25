@@ -706,5 +706,22 @@ if (!is_file($readme)) {
 }
 
 // ---------------------------------------------------------------------------
+// A knob's state belongs next to the verdict.  I18N_NEAR_MISS_PX can disable the
+// near-miss rule outright (0) or move it, and every other line of this script's
+// output looks identical either way — so a PASS would be indistinguishable from
+// a PASS with a gate switched off, which is a green that means less than it
+// looks like it means.  With the variable unset nothing prints, so this line's
+// *presence* is itself the signal ("the variable was set to something").  The
+// parse stays in one place (the overlap block above); $nmEnv and $nearPx are
+// reused here rather than re-read, so the number reported cannot drift from the
+// number used.
+if (isset($nmEnv) && $nmEnv !== false && $nmEnv !== '') {
+    printf(
+        "note    I18N_NEAR_MISS_PX=%s (default %g): %s\n",
+        $nmEnv,
+        NEAR_MISS_PX,
+        $nearPx > 0.0 ? 'near-miss rule ran at this threshold' : 'near-miss rule DISABLED — this verdict does not cover it'
+    );
+}
 printf("\n%s  %d failure(s), %d warning(s)\n", $fail ? 'RESULT: FAIL' : 'RESULT: PASS', $fail, $warn);
 exit($fail ? 1 : 0);

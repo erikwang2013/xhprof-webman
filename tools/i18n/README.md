@@ -16,7 +16,7 @@ of them claims to.
 | `generate.php` | glossary → `docs/i18n/<lang>/images/*.svg` + `docs/i18n/<lang>/README.md`. |
 | `check.php` | the gate. Structure, wording, links, overflow, collisions, text direction, and whether the generator would even accept the locale. |
 | `calibrate.php` | re-measures the width model against real Chrome. Oracle, not a gate. |
-| `selftest.php` | proves that `check.php` and `generate.php` actually fail when they should. Writes its scratch copies under the gitignored `.selftest/` at the repo root — never inside `docs/i18n/`, which is a delivery directory. |
+| `selftest.php` | proves that `check.php` and `generate.php` actually fail when they should. Reads and writes only under the gitignored `.selftest/` at the repo root — never inside `docs/i18n/`, which is a delivery directory (one read-only case excepted, which asserts the delivered English pilot passes its own gate). |
 
 ## The loop
 
@@ -262,6 +262,15 @@ ok    architecture: 82 text runs, no two overlap; tightest vertical clearance 4.
 
 — so the headroom is visible on every run, including the eleven locales where
 nothing is close, without an alarm per pair.
+
+**`I18N_NEAR_MISS_PX` moves that threshold, and `0` turns the rule off.** The
+knob exists for the person who wants to re-measure at another clearance, so the
+verdict has to say so: a `PASS` with the rule disabled is not the same claim as a
+`PASS` with it on, and every other line of the output is identical either way.
+When the variable is set at all, `check.php` prints a `note` line naming the
+threshold it actually used — unset, nothing prints, so the line's *presence* is
+the signal. The near-miss warnings themselves stay warnings: they never fail the
+gate.
 
 ### The height the band assumes, measured
 
@@ -621,6 +630,16 @@ failing. That rendered `../README.md` where `../../../README.md` belongs and
 wrote it into every locale over a green exit code — a wrong answer wearing the
 shape of a right one. `selftest.php` now asserts both that such a root is
 refused and that nothing reaches the disk first.
+
+The inputs have a matching override: `I18N_INPUT_ROOT` moves where
+`glossary/<lang>.json` and the `readme/<lang>.md` source are read from, and the
+selftest points it at the scratch tree too. Several cases have to break a
+glossary on purpose — one of them proves the generator refuses an unfittable
+diagram — and what they break is now a copy. It used to be the delivered
+`glossary/en.json` and the delivered English SVGs, restored by a shutdown
+handler: green meant "the restore ran", and a process killed between the edit
+and the restore left the delivery tree dirty (measured: SIGKILL there leaves
+both the glossary key and the SVG text overwritten).
 
 ### Why `docs/i18n/en/` keeps a README
 

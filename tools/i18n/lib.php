@@ -82,6 +82,23 @@ function i18n_out_dir(string $lang): string
 }
 
 /**
+ * Where a locale's *inputs* are read from: `glossary/$lang.json` and (for a
+ * translation) `readme/$lang.md`.  Default `tools/i18n`; overridable so
+ * selftest.php can exercise the source-language path against a copy, instead of
+ * editing the delivered `glossary/en.json` and restoring it afterwards — a
+ * restore is only as reliable as the shutdown handler that performs it.
+ *
+ * `!== false && !== ''` rather than `?:` on purpose: a root of "0" is falsy, and
+ * quietly falling back to the delivered glossary is the exact substitution this
+ * override exists to rule out.
+ */
+function i18n_input_root(): string
+{
+    $root = getenv('I18N_INPUT_ROOT');
+    return $root === false || $root === '' ? I18N_DIR : i18n_norm_path(rtrim($root, '/'));
+}
+
+/**
  * How many `../` climb from a locale directory back to the repository root.
  * Derived rather than written out: a hardcoded `../../../` is one directory
  * move away from pointing every link in every locale at the wrong place.
@@ -803,7 +820,7 @@ function i18n_template_path(string $doc): string
 
 function i18n_glossary_path(string $lang): string
 {
-    return I18N_DIR . "/glossary/$lang.json";
+    return i18n_input_root() . "/glossary/$lang.json";
 }
 
 /** Every key in a document, in manifest order. @return array<string,array> */

@@ -20,8 +20,21 @@ declare(strict_types=1);
  * a reader) must see deliverables only.  A locale that lives for three seconds
  * is not one.
  *
- * The repo is left exactly as it was found, via a shutdown handler that also
- * runs when a case throws.
+ * Everything this script touches lives under .selftest/: both the output root
+ * (I18N_OUT_ROOT) and the input root (I18N_INPUT_ROOT, i.e. glossary/*.json and
+ * readme/*.md) are redirected there.  Cases mutate the *English* glossary and
+ * the English SVGs on purpose — one of them has to prove the generator refuses
+ * an unfittable diagram — and an earlier version did that to the delivered
+ * files, then restored them in a shutdown handler.  A restore that runs after
+ * the process is killed, or whose copy fails, leaves a corrupted deliverable
+ * behind; not writing there in the first place cannot.  The shutdown handler
+ * now only clears the scratch, which is gitignored — under a per-run subdirectory,
+ * because two selftests sharing one scratch delete each other's fixtures
+ * mid-run (the collision that motivated the pid suffix; see SCRATCH_OUT below).
+ *
+ * One case deliberately stays outside: the dry-run fingerprint, which asserts
+ * that a dry run leaves the real docs/i18n untouched.  An assertion about the
+ * delivery tree has to look at the delivery tree.
  */
 
 require __DIR__ . '/lib.php';
@@ -30,24 +43,52 @@ const SRC_LANG = 'en';
 const TMP_LANG = 'zz';
 
 /**
- * Scratch output root.  Its *depth* matters: locale READMEs link back to the
- * repository root with a computed number of `../`, so a scratch root has to sit
- * as far below the repo root as docs/i18n does.  Here that is four levels.
+ * Scratch output root — deliberately one level **deeper** than docs/i18n (four
+ * below the repo root instead of three).  Locale READMEs link back to the repo
+ * root with a computed number of `../`, so at this depth a hardcoded `../../../`
+ * resolves one directory short and the run goes red, while the real tree keeps
+ * working.  That is the only thing standing between us and a link-depth
+ * regression that the delivery tree cannot show; see tools/i18n/README.md.
+ *
+ * Because the depth differs, the English fixture below is *generated* here
+ * rather than copied in: the delivered README carries links written for the
+ * delivery location, and in this tree they point one level too high.
+ *
+ * The pid in the last segment matters as much as the depth.  Two selftests
+ * started at once (an agent and a human, a local run and CI) used to share this
+ * path, and each one's shutdown handler removes it — so the second run would rip
+ * the glossary out from under the first one mid-parse.  Measured before the pid
+ * was added, with two runs started together: both exited non-zero, one of them
+ * dying with `Uncaught JsonException` inside generate.php, and the survivors
+ * reporting "file text does not match glossary" for a fixture the other run had
+ * half-deleted.  A pid is enough of a run id here: these runs are seconds long,
+ * on one machine.
  */
-const SCRATCH_OUT = I18N_REPO . '/.selftest/root/i18n';
+define('SCRATCH_OUT', I18N_REPO . '/.selftest/root/i18n-' . getmypid());
+define('SCRATCH_INPUT', I18N_REPO . '/.selftest/input-' . getmypid());
 const SCRATCH_TOP = I18N_REPO . '/.selftest';
 
-$backup = sys_get_temp_dir() . '/i18n-selftest-' . getmypid();
 $pass = 0;
 $fail = 0;
 
-/** Run a subcommand, optionally pointed at the scratch output root. */
+/**
+ * Environment every child gets.  The input root is always redirected — no case
+ * here has a reason to read or write the delivered glossary — while the output
+ * root is redirected only for the cases that generate something, so that the
+ * dry-run fingerprint below can still watch the real docs/i18n.
+ */
+function scratch_env(bool $out): string
+{
+    return 'I18N_INPUT_ROOT=' . escapeshellarg(SCRATCH_INPUT) . ' '
+        . ($out ? 'I18N_OUT_ROOT=' . escapeshellarg(SCRATCH_OUT) . ' ' : '');
+}
+
+/** Run a generate.php subcommand, optionally pointed at the scratch output root. */
 function run(string $args, bool $scratch = false): array
 {
     $out = [];
     $rc = 0;
-    $env = $scratch ? 'I18N_OUT_ROOT=' . escapeshellarg(SCRATCH_OUT) . ' ' : '';
-    exec($env . 'php ' . escapeshellarg(I18N_DIR . '/generate.php') . " $args 2>&1", $out, $rc);
+    exec(scratch_env($scratch) . 'php ' . escapeshellarg(I18N_DIR . '/generate.php') . " $args 2>&1", $out, $rc);
     return [$rc, implode("\n", $out)];
 }
 
@@ -55,8 +96,7 @@ function run_check(string $args, bool $scratch = false): array
 {
     $out = [];
     $rc = 0;
-    $env = $scratch ? 'I18N_OUT_ROOT=' . escapeshellarg(SCRATCH_OUT) . ' ' : '';
-    exec($env . 'php ' . escapeshellarg(I18N_DIR . '/check.php') . " $args 2>&1", $out, $rc);
+    exec(scratch_env($scratch) . 'php ' . escapeshellarg(I18N_DIR . '/check.php') . " $args 2>&1", $out, $rc);
     return [$rc, implode("\n", $out)];
 }
 
@@ -65,7 +105,8 @@ function run_root(string $root, string $args): array
 {
     $out = [];
     $rc = 0;
-    exec('I18N_OUT_ROOT=' . escapeshellarg($root) . ' php '
+    exec('I18N_INPUT_ROOT=' . escapeshellarg(SCRATCH_INPUT)
+        . ' I18N_OUT_ROOT=' . escapeshellarg($root) . ' php '
         . escapeshellarg(I18N_DIR . '/generate.php') . " $args 2>&1", $out, $rc);
     return [$rc, implode("\n", $out)];
 }
@@ -82,54 +123,111 @@ function ok(string $name, bool $cond, string $detail = ''): void
     }
 }
 
-/** Path inside the scratch tree: the localised artefacts for TMP_LANG. */
-function tmp(string $rel = ''): string
+/** Path inside the scratch tree: the artefacts for $lang (default the throwaway). */
+function tmp(string $rel = '', string $lang = TMP_LANG): string
 {
-    return SCRATCH_OUT . '/' . TMP_LANG . ($rel === '' ? '' : "/$rel");
+    return SCRATCH_OUT . '/' . $lang . ($rel === '' ? '' : "/$rel");
+}
+
+/**
+ * Content **and mtime** of the delivered tree, so a rewrite with identical bytes
+ * still shows up.  Measured why that matters: the pre-fix scratch symlinked `en`
+ * back into docs/i18n, and the run regenerated the delivered English files byte
+ * for byte over a green 43/43 — content alone would have said "unchanged".
+ *
+ * Scope, spelled out because a future edit that narrows it would quietly stop
+ * guarding while this comment still claims it does:
+ *
+ *   repo root, top-level files only   README.md, README.EN.md, composer.json, .gitignore, …
+ *   docs/i18n/**                      the delivery directory
+ *   tools/i18n/**                     this toolchain
+ *
+ * Excluded, on purpose: the gitignored `.selftest/` scratch (where this script is
+ * *supposed* to write), and `src/` + `tests/`, which this pipeline does not
+ * deliver and which other agents edit while a run is in flight.
+ *
+ * @return array<string, array{0:int,1:string}>
+ */
+function delivered_fingerprint(): array
+{
+    $files = [];
+    foreach ((array) glob(I18N_REPO . '/*') as $p) {
+        if (is_file($p)) {
+            $files[] = $p;
+        }
+    }
+    foreach ([I18N_REPO . '/docs/i18n', I18N_REPO . '/tools/i18n'] as $dir) {
+        foreach (new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS)
+        ) as $f) {
+            $files[] = $f->getPathname();
+        }
+    }
+    $h = [];
+    foreach ($files as $f) {
+        $h[$f] = [(int) filemtime($f), (string) sha1_file($f)];
+    }
+    ksort($h);
+    return $h;
 }
 
 // ---------------------------------------------------------------------------
-// snapshot everything this script can disturb
+// build the scratch tree — the only thing this script may write to
 // ---------------------------------------------------------------------------
 
-$restore = static function () use ($backup): void {
-    $en = I18N_DIR . '/glossary/' . SRC_LANG . '.json';
-    if (is_file("$backup/" . SRC_LANG . '.json')) {
-        copy("$backup/" . SRC_LANG . '.json', $en);
-    }
-    exec('rm -rf ' . escapeshellarg(SCRATCH_TOP));
-    foreach ([I18N_DIR . '/glossary/' . TMP_LANG . '.json',
-              I18N_DIR . '/readme/' . TMP_LANG . '.md'] as $p) {
-        if (is_file($p)) {
-            unlink($p);
-        }
-    }
-    if (is_dir("$backup/docs")) {
-        exec('rm -rf ' . escapeshellarg(I18N_REPO . '/docs/i18n/' . SRC_LANG));
-        exec('cp -r ' . escapeshellarg("$backup/docs") . ' ' . escapeshellarg(I18N_REPO . '/docs/i18n/' . SRC_LANG));
-    }
-    exec('rm -rf ' . escapeshellarg($backup));
+$restore = static function (): void {
+    exec('rm -rf ' . escapeshellarg(SCRATCH_OUT) . ' ' . escapeshellarg(SCRATCH_INPUT));
+    // rmdir, not rm -rf, for the two shared parents: rmdir only removes a
+    // directory that is empty, so a concurrent run's scratch — and this run's
+    // own on the way out — is what decides.  Leftovers after SIGKILL are
+    // allowed to sit there; `.selftest/` is gitignored.
+    @rmdir(SCRATCH_TOP . '/root');
+    @rmdir(SCRATCH_TOP);
 };
 register_shutdown_function($restore);
 
-mkdir($backup, 0755, true);
-copy(I18N_DIR . '/glossary/' . SRC_LANG . '.json', "$backup/" . SRC_LANG . '.json');
-if (is_dir(I18N_REPO . '/docs/i18n/' . SRC_LANG)) {
-    exec('cp -r ' . escapeshellarg(I18N_REPO . '/docs/i18n/' . SRC_LANG) . ' ' . escapeshellarg("$backup/docs"));
-}
+$deliveredBefore = delivered_fingerprint();
 
-// Build the scratch root as a faithful mirror: the language switcher in every
+mkdir(SCRATCH_INPUT . '/glossary', 0755, true);
+mkdir(SCRATCH_INPUT . '/readme', 0755, true);
+
+/**
+ * Put the delivered en glossary back into the scratch input, undoing a case
+ * that mutated it.  Cheaper and more local than re-seeding the whole tree.
+ */
+$resetEn = static function (): void {
+    copy(I18N_DIR . '/glossary/' . SRC_LANG . '.json', SCRATCH_INPUT . '/glossary/' . SRC_LANG . '.json');
+};
+$resetEn();
+
+// The scratch output root mirrors docs/i18n: the language switcher in every
 // generated README links to each sibling locale, and check.php resolves those
 // links against the filesystem, so the siblings have to be reachable there.
+//
+// en is a real directory, not a symlink.  The cases below deliberately break the
+// English artefacts, and a symlink to the delivery tree writes those mutations
+// straight into docs/i18n/en — which is the accident this layout exists to
+// prevent, not to reproduce.  The English tree is built by the generator, at
+// this root's depth, so its links are the ones this location requires.
+//
+// The `en` exclusion below is belt-and-braces, and measurably so: deleting it
+// leaves the run green, because the fixture build immediately above has already
+// created the directory and symlink() will not overwrite one.  It is kept so the
+// two blocks do not silently depend on their order.
 mkdir(SCRATCH_OUT, 0755, true);
+[, $out] = run('--lang=' . SRC_LANG, true);
+if (!is_file(tmp('README.md', SRC_LANG))) {
+    fwrite(STDERR, "fixture build failed — generate.php --lang=" . SRC_LANG . " wrote no README:\n$out\n");
+    exit(2);
+}
 foreach ((array) glob(I18N_REPO . '/docs/i18n/*', GLOB_ONLYDIR) as $dir) {
     $code = basename($dir);
-    if ($code !== TMP_LANG) {
+    if ($code !== TMP_LANG && $code !== SRC_LANG) {
         symlink($dir, SCRATCH_OUT . '/' . $code);
     }
 }
 
-$en = json_decode((string) file_get_contents(I18N_DIR . '/glossary/' . SRC_LANG . '.json'), true, 512, JSON_THROW_ON_ERROR);
+$en = json_decode((string) file_get_contents(SCRATCH_INPUT . '/glossary/' . SRC_LANG . '.json'), true, 512, JSON_THROW_ON_ERROR);
 
 /**
  * Write a zz glossary derived from en, optionally with a notice, a direction,
@@ -144,7 +242,7 @@ $makeGlossary = static function (?string $notice, string $dir = 'ltr', array $ov
     }
     $g['_meta'] = ['lang' => TMP_LANG, 'name' => 'Self-test', 'dir' => $dir, 'notice' => $notice,
         'note' => 'throwaway locale, written and deleted by selftest.php'];
-    file_put_contents(I18N_DIR . '/glossary/' . TMP_LANG . '.json',
+    file_put_contents(SCRATCH_INPUT . '/glossary/' . TMP_LANG . '.json',
         json_encode($g, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
 };
 
@@ -153,22 +251,26 @@ const NOTICE = '> **Machine translation.** This document was translated automati
 // ---------------------------------------------------------------------------
 
 echo "== the baseline really does pass ==\n";
+// Read-only, and deliberately not scratch: this is the one case that runs against
+// the delivered tree, so it says the shipped English pilot passes its own gate.
+// (The glossary it reads comes from the scratch input, byte-identical to the
+// delivered one — the checker reaches nothing else.)
 [, $out] = run_check('--lang=' . SRC_LANG . ' --quiet');
 ok('check.php --lang=en exits 0', str_contains($out, 'RESULT: PASS'), $out);
 
 echo "\n== the overflow check reports overflow ==\n";
 $g = $en;
 $g['architecture.entry.10'] = 'a label far too long for a badge box even after wrapping and shrinking';
-file_put_contents(I18N_DIR . '/glossary/' . SRC_LANG . '.json',
+file_put_contents(SCRATCH_INPUT . '/glossary/' . SRC_LANG . '.json',
     json_encode($g, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
 
-[$rc, $out] = run('--lang=' . SRC_LANG);
+[$rc, $out] = run('--lang=' . SRC_LANG, true);
 ok('generate.php refuses to write an unfittable diagram', $rc !== 0 && str_contains($out, 'SKIPPED'), "exit=$rc");
 ok('generate.php names the run it could not fit', str_contains($out, 'OVERFLOW architecture.entry.10'), $out);
 
 // The generator refuses, so force the bad text onto disk: this is the state a
 // translator would be in if they had edited the SVG by hand.
-$path = I18N_REPO . '/docs/i18n/' . SRC_LANG . '/images/architecture.svg';
+$path = tmp('images/architecture.svg', SRC_LANG);
 $d = i18n_load_svg($path);
 $t = i18n_text_nodes($d)[9];
 while ($t->firstChild) {
@@ -177,13 +279,13 @@ while ($t->firstChild) {
 $t->appendChild($d->createTextNode($g['architecture.entry.10']));
 i18n_write_svg($d, $path);
 
-[$rc, $out] = run_check('--lang=' . SRC_LANG);
+[$rc, $out] = run_check('--lang=' . SRC_LANG, true);
 ok('check.php exits non-zero on an overflowing run', $rc !== 0, "exit=$rc");
 ok('check.php reports the overflow with a negative slack', str_contains($out, 'overflow -'), $out);
 ok('the summary line does not claim ok for that diagram', !str_contains($out, 'ok    architecture: 82 text runs'), $out);
 
-copy("$backup/" . SRC_LANG . '.json', I18N_DIR . '/glossary/' . SRC_LANG . '.json');
-run('--lang=' . SRC_LANG);
+$resetEn();
+run('--lang=' . SRC_LANG, true);
 
 echo "\n== the machine-translation notice is enforced ==\n";
 $makeGlossary(null);
@@ -192,16 +294,15 @@ ok('generate.php rejects a translated locale with no notice', $rc !== 0 && str_c
 
 $g = $en;
 $g['_meta'] = ['lang' => SRC_LANG, 'name' => 'English', 'dir' => 'ltr', 'notice' => NOTICE];
-file_put_contents(I18N_DIR . '/glossary/' . SRC_LANG . '.json',
+file_put_contents(SCRATCH_INPUT . '/glossary/' . SRC_LANG . '.json',
     json_encode($g, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
-[$rc, $out] = run('--lang=' . SRC_LANG);
+[$rc, $out] = run('--lang=' . SRC_LANG, true);
 ok('generate.php rejects a notice on a source language', $rc !== 0 && str_contains($out, 'source language'), "exit=$rc");
-copy("$backup/" . SRC_LANG . '.json', I18N_DIR . '/glossary/' . SRC_LANG . '.json');
-run('--lang=' . SRC_LANG);
+$resetEn();
+run('--lang=' . SRC_LANG, true);
 
 $makeGlossary(NOTICE);
-@mkdir(I18N_DIR . '/readme', 0755, true);
-file_put_contents(I18N_DIR . '/readme/' . TMP_LANG . '.md',
+file_put_contents(SCRATCH_INPUT . '/readme/' . TMP_LANG . '.md',
     "# Throwaway\n\n![Architecture](docs/images/architecture.svg)\n\n[Lifecycle](docs/images/lifecycle.svg)\n");
 [$rc, $out] = run('--lang=' . TMP_LANG, true);
 ok('generate.php accepts a translated locale that carries a notice', $rc === 0, $out);
@@ -536,6 +637,37 @@ ok('a root outside the repository is refused',
 ok('...and nothing is written before it refuses',
     glob($outside . '/*') === [], 'wrote: ' . implode(', ', (array) glob($outside . '/*')));
 exec('rm -rf ' . escapeshellarg($outside));
+
+// ---------------------------------------------------------------------------
+echo "\n== and the run left the delivered tree alone ==\n";
+
+// The cases above mutate English artefacts on purpose.  They used to do it to the
+// delivered ones and restore them via a shutdown handler, which is green until the
+// day the process dies in between — and when the scratch symlinked `en` back into
+// docs/i18n, the rewrites were byte-identical and *nothing in this file noticed*:
+// every case passed while four delivered files were rewritten.  The exit status
+// cannot see that class at all, so it needs its own check.  Reporting the paths
+// rather than one boolean is deliberate: "something changed" is not diagnosable,
+// and a red that cannot be acted on gets relaxed.
+$deliveredAfter = delivered_fingerprint();
+$drift = [];
+foreach ($deliveredBefore as $p => [$mtime, $hash]) {
+    $rel = str_replace(I18N_REPO . '/', '', $p);
+    if (!isset($deliveredAfter[$p])) {
+        $drift[] = "$rel (deleted)";
+    } elseif ($deliveredAfter[$p] !== [$mtime, $hash]) {
+        $drift[] = $rel . ($deliveredAfter[$p][1] === $hash
+            ? ' (rewritten with identical bytes — only the mtime moved)'
+            : ' (content changed)');
+    }
+}
+foreach ($deliveredAfter as $p => $_) {
+    if (!isset($deliveredBefore[$p])) {
+        $drift[] = str_replace(I18N_REPO . '/', '', $p) . ' (created)';
+    }
+}
+ok('nothing under the repo root / docs/i18n / tools/i18n was written',
+    $drift === [], implode('; ', $drift));
 
 // ---------------------------------------------------------------------------
 printf("\n%s  %d passed, %d failed\n", $fail ? 'SELFTEST: FAIL' : 'SELFTEST: PASS', $pass, $fail);
