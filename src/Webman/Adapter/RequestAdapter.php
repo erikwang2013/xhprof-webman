@@ -51,7 +51,7 @@ class RequestAdapter implements RequestInterface
         //
         // 必须传 true（契约 R-2：host() 不含端口）。默认的 $withoutPort=false 是**原样
         // 返回 Host 头**——实测 workerman 5.2.2：'example.com:8080'，而 host(true) 给
-        // 'example.com'。十家的 Request API 里只有这两家（webman / thinkphp）默认带端口，
+        // 'example.com'。十一家入口的 Request API 里只有这两家（webman / thinkphp）默认带端口，
         // 调用点 XHProfRunsDefault.php:132 拿它拼 request_log 的展示文本。
         return (string) $this->request->host(true);
     }

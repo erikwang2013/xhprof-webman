@@ -37,8 +37,9 @@ A mesma chama também é o ícone do site e o ícone da marca no canto superior 
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Copie para `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Copie para `plugins/system/` e instale pelo Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | módulo `xhprof` (`Drupal\XhprofMiddleware`) | Módulo padrão, basta habilitar |
+| PHP puro (sem framework) | — (sem pacote externo) | 8.0 | `Native\XhprofBootstrap` | Uma linha no topo do arquivo de entrada, `XhprofBootstrap::start()`, sem registrar controller nem rota |
 
-Todas as classes de entrada ficam sob o prefixo de namespace `ErikWang2013\Xhprof\` (omitido acima).  Nenhum dos dez precisa que você registre controller ou rota: a página de relatório e os recursos estáticos são servidos pela própria classe de entrada (no caso do Drupal, pela rota do módulo).
+Todas as classes de entrada ficam sob o prefixo de namespace `ErikWang2013\Xhprof\` (omitido acima).  Nenhum dos onze precisa que você registre controller ou rota: a página de relatório e os recursos estáticos são servidos pela própria classe de entrada (no caso do Drupal, pela rota do módulo).
 
 Este pacote declara `php >= 8.0`, mas os componentes `yiisoft/*` dos quais o Yii3 depende exigem **PHP 8.1+**, então **o Yii3 não é utilizável no PHP 8.0**; o Symfony 7.x e o Drupal 11.x também precisam de uma versão de PHP mais alta. O passo a passo está em "Configuração por framework", abaixo.
 
@@ -279,7 +280,7 @@ O diretório `joomla/` do pacote *é* o plugin: o manifesto `xhprof.xml`, o `ser
 
 **1. Habilite o módulo** — o `drupal/xhprof/` do pacote é um módulo Drupal padrão (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Coloque-o em `modules/custom/xhprof/` do seu site e habilite-o na página "Extend" (ou com `drush en xhprof`).
 
-**2. Página de relatório e recursos estáticos** — o Drupal é **o único dos dez frameworks que segue o formato «módulo + rotas»**: o `xhprof.routing.yml` registra o caminho do relatório `/xhprof` e o dos recursos `/xhprof-assets`, servidos por padrão pelo controller do módulo; as outras nove classes de entrada fazem curto-circuito antes de o profiling começar e servem a página de relatório e os recursos estáticos sem registrar rotas. **Com um prefixo `assets_url` próprio, os recursos passam ao middleware**: o path da rota de recursos do módulo é fixo no `xhprof.routing.yml` (`/xhprof-assets/{file}`) e nunca casa com outro prefixo.
+**2. Página de relatório e recursos estáticos** — o Drupal é **o único dos onze frameworks que segue o formato «módulo + rotas»**: o `xhprof.routing.yml` registra o caminho do relatório `/xhprof` e o dos recursos `/xhprof-assets`, servidos por padrão pelo controller do módulo; as outras dez classes de entrada fazem curto-circuito antes de o profiling começar e servem a página de relatório e os recursos estáticos sem registrar rotas. **Com um prefixo `assets_url` próprio, os recursos passam ao middleware**: o path da rota de recursos do módulo é fixo no `xhprof.routing.yml` (`/xhprof-assets/{file}`) e nunca casa com outro prefixo.
 
 **3. Configuração** — a configuração é config tipada de nível de módulo: os padrões ficam em `drupal/xhprof/config/install/xhprof.settings.yml`, com o schema em `drupal/xhprof/config/schema/xhprof.schema.yml`. Veja "Referência de configuração" para os campos.
 
@@ -301,6 +302,40 @@ O kernel interno é **inserido automaticamente como argumento 0 do construtor** 
 - `priority: 1000` coloca o middleware **fora do cache de página** (a maior prioridade que já existe no core é a de negociação: 400 no D10, 500 no D11, enquanto o cache de página é 200), então **requisições servidas pelo cache de página do Drupal ainda são perfiladas**. Para uma ferramenta de profiling esse é o comportamento pretendido, mas o usuário deve saber disso.
 - O cache funciona sem nenhuma configuração: o middleware usa por padrão o adaptador Redis que acompanha este pacote (o pacote depende obrigatoriamente da ext-redis), e também aceita um argumento opcional `CacheInterface` via `arguments` no `services.yml` para sobrescrevê-lo. Se o cache estiver indisponível, uma gravação que falhou é engolida pelo `XhprofProfiler::stop()` em uma única linha de log — **nenhum erro é levantado**.
 - Requisições para a página de relatório `/xhprof` e para `/xhprof-assets/*` **não são perfiladas**: o middleware pula o profiling por caminho antes do `xhprofStart()`. A resposta ainda é produzida pelo Controller do `xhprof.routing.yml` (**isto não é um curto-circuito**). Portanto, mesmo com `ignore_url_arr` definido como `[]` (não filtrando nada), essas duas requisições nunca aparecem no relatório.
+
+### PHP puro (sem framework)
+
+Para aplicações sem framework, com apenas um front controller (como `public/index.php`).
+
+**1. Adicione uma linha no topo do arquivo de entrada**:
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
+```
+
+Para mudar a configuração, passe o array nessa mesma linha (o conjunto de chaves é o mesmo das outras dez; os padrões ficam em `src/Native/config/xhprof.php`):
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
+    'enable' => true,
+    'auth_token' => 'xxx',
+]);
+```
+
+O segundo e o terceiro argumentos são pontos de injeção opcionais: `CacheInterface $cache` e `LoggerInterface $logger` (por padrão, o adaptador Redis deste pacote e `error_log`). O valor de retorno é a instância de entrada desta requisição (`stop()` é idempotente); chame-o para parar mais cedo no mesmo processo.
+
+**2. Página de relatório e recursos estáticos** — **não precisa de controller nem de registro de rota**: esta linha inspeciona o caminho da requisição antes de o profiling começar: um acerto no caminho do relatório `/xhprof` devolve a página de relatório na hora (com `Content-Type: text/html; charset=UTF-8` e `Cache-Control: no-cache, private`; `auth_token` continua valendo), e um acerto no caminho dos assets (o prefixo é lido da opção `assets_url`, padrão `/xhprof-assets`) devolve o recurso estático direto. **O custo está escrito às claras**: depois de atender esses dois caminhos há um `exit` — o resto da requisição (as rotas após esta linha, o bootstrap do contêiner, o início da sessão e a lógica de encerramento registrada pela própria aplicação) não roda.
+
+**3. Janela de profiling = esta linha → encerramento do processo** (o que se registra é `register_shutdown_function`). **Os limites, como são**: não inclui o código **anterior** a esta linha (autoload do composer, bootstrap do front controller) nem o que outros processos ou extensões fazem (a análise da requisição no php-fpm, o tratamento do lado do nginx). Fim normal, `exit` e Error / exceções não capturados chegam ao ponto de parada; `SIGKILL` / OOM killer não — o estado do profiling some com o processo e não fica para a próxima requisição. Para estreitar o escopo há a opção `ignore_url_arr` (correspondência de subcadeia sobre `uri()`, vale sem mexer no código).
+
+**4. Rode de verdade uma vez com `php -S`**:
+
+```sh
+# No topo de public/index.php há XhprofBootstrap::start(), e esse arquivo é o front controller
+php -S 127.0.0.1:8000 -t public public/index.php
+```
+
+Acesse `http://127.0.0.1:8000/` para gerar dados e depois `http://127.0.0.1:8000/xhprof` para ver o relatório — os dois no mesmo processo, e os assets também ficam verificados.
 
 ---
 
@@ -385,7 +420,7 @@ Cada framework fornece 5 adaptadores que implementam esses contratos, registrado
 
 ![Arquitetura](docs/images/architecture.svg)
 
-O primeiro diagrama é a **estrutura**: a classe de entrada de cada um dos dez frameworks, os 5 contratos, as três camadas do Core e os dois únicos acoplamentos que restam.
+O primeiro diagrama é a **estrutura**: a classe de entrada de cada um dos onze frameworks, os 5 contratos, as três camadas do Core e os dois únicos acoplamentos que restam.
 
 ![Razões do design](docs/images/design.svg)
 
@@ -414,6 +449,7 @@ Uma requisição perfilada:
 | WordPress | `plugins_loaded` | `shutdown` |
 | Joomla | `onAfterInitialise` | `onAfterRespond`, mais um fallback de shutdown |
 | Drupal | `http_middleware` (prioridade 1000, o mais externo) | `finally` |
+| PHP puro (sem framework) | Uma linha `XhprofBootstrap::start()` no topo do arquivo de entrada | Encerramento do processo (`register_shutdown_function`), e `stop()` para parar antes |
 
 ---
 
@@ -432,6 +468,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # implementação compartilhada do adaptador Redis
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # os 4 frameworks já existentes
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # os 6 novos frameworks
+│   ├── Native/                   # PHP puro (sem framework): classe de entrada e 5 adaptadores
 │   └── html/                     # assets da página de relatório (css / js / images / pet.svg ícone do site e ícone da marca)
 ├── wordpress/                    # arquivo de bootstrap do mu-plugin (com cabeçalho de plugin)
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifesto)
@@ -463,7 +500,7 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | Item | Como |
 |------|-----|
 | Comportamento dos adaptadores e do wiring das entradas | `tests/Unit/Adapter/*Test.php`: habilitado → salvo / desabilitado → não salvo / exceção de negócio → ainda assim salvo via `finally` |
-| Os dez frameworks compartilham um mesmo conjunto de chaves de configuração | teste de paridade de config (conjuntos de chaves, não byte a byte; os comentários podem diferir) |
+| Os onze frameworks compartilham um mesmo conjunto de chaves de configuração | teste de paridade de config (conjuntos de chaves, não byte a byte; os comentários podem diferir) |
 | Os dois READMEs espelham um ao outro | teste de paridade do README: compara a sequência de títulos `##` / `###` e o número de blocos de código |
 | Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI, **duas pernas**: a perna principal instala os pacotes mais recentes de cada framework, e o projeto separado `tools/contracts/legacy-symfony64` roda o mesmo caso do Symfony contra o 6.4): instala pacotes reais dos frameworks (`drupal/core` real para o Drupal, dois pacotes de versão reais do CMS para o Joomla) e verifica por reflection que cada método / constante / função global existe **para os oito frameworks do ciclo** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf não estão no ciclo — veja abaixo |
 | Semântica dos adaptadores | O mesmo ciclo instancia objetos reais de request e response e executa os adaptadores, com dois invariantes: `uri()` não carrega scheme/host, e `withHeaders()` continua valendo depois de `file()`. O número de SKIP do ciclo é uma constante congelada (2 na perna principal, 0 na perna 6.4) e os dois SKIP estão no Joomla: o caminho de leitura real de `#__extensions.params` e o formato do instalador — ambos precisam de banco de dados ou instalador para rodar |
@@ -488,13 +525,15 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | 2 | Acesse qualquer URL da aplicação | O tamanho da chave `xhprof:run_id` no Redis aumenta em 1 |
 | 3 | Abra `/xhprof` | A página de relatório renderiza com os estilos; `/xhprof-assets/js/xhprof_report.js` retorna 200 |
 
+**Teste de fumaça do PHP puro**: suba o servidor embutido com `php -S 127.0.0.1:8000 -t public public/index.php` (passo 4 de "PHP puro") e faça os três passos — a página de relatório e os recursos ficam no **mesmo processo** das requisições de negócio, então o passo 3 é verificado na hora.
+
 **Limitação conhecida: o `request_uri` exibido na lista não tem porta**
 
-O contrato `host()` significa "só o host, sem porta" (R-2), e os dez frameworks o cumprem — só a implementação difere: o `getHost()` do PSR-7 nunca carrega a porta, Joomla / WordPress a cortam à mão com `parse_url`, e Webman / ThinkPHP precisam do argumento estrito `host(true)` (o padrão devolve o cabeçalho `Host` como está, porta incluída). O `request_uri` exibido na lista é montado como `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), então numa porta fora do padrão (por exemplo `:8080`) o **texto** dessa linha não mostra a porta. **Os links em si não são afetados**: os da lista e os do relatório são todos montados por `XhprofLib::report_url()` como URLs relativas (só caminho + query), abrem a página certa e não dependem de `host()`.
+O contrato `host()` significa "só o host, sem porta" (R-2), e os onze frameworks o cumprem — só a implementação difere: o `getHost()` do PSR-7 nunca carrega a porta, Joomla / WordPress a cortam à mão com `parse_url`, e Webman / ThinkPHP precisam do argumento estrito `host(true)` (o padrão devolve o cabeçalho `Host` como está, porta incluída). O `request_uri` exibido na lista é montado como `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), então numa porta fora do padrão (por exemplo `:8080`) o **texto** dessa linha não mostra a porta. **Os links em si não são afetados**: os da lista e os do relatório são todos montados por `XhprofLib::report_url()` como URLs relativas (só caminho + query), abrem a página certa e não dependem de `host()`.
 
 **O `assets_url` agora aceita um prefixo personalizado**
 
-O prefixo de assets não é mais uma constante fixa: `src/Core/StaticController.php` casa os caminhos de assets com a opção `assets_url` (padrão `/xhprof-assets`, barra final opcional). A limitação restante em implantação num subdiretório é a do Drupal, abaixo. **Os dez frameworks seguem essa opção**: nove classes de entrada fazem curto-circuito no caminho dos recursos antes do início do profiling e os servem, enquanto o Drupal serve o prefixo padrão pela rota do módulo + controller e entrega um prefixo próprio ao middleware. **Limite**: Laravel, Hyperf, Webman e ThinkPHP não precisam mais de controller nem de rotas — o middleware roda antes, então o controller e as duas rotas registrados conforme as instruções antigas ficam apenas sombreados: não dão erro e nunca mais são alcançados.
+O prefixo de assets não é mais uma constante fixa: `src/Core/StaticController.php` casa os caminhos de assets com a opção `assets_url` (padrão `/xhprof-assets`, barra final opcional). A limitação restante em implantação num subdiretório é a do Drupal, abaixo. **Os onze frameworks seguem essa opção**: dez classes de entrada fazem curto-circuito no caminho dos recursos antes do início do profiling e os servem, enquanto o Drupal serve o prefixo padrão pela rota do módulo + controller e entrega um prefixo próprio ao middleware. **Limite**: Laravel, Hyperf, Webman e ThinkPHP não precisam mais de controller nem de rotas — o middleware roda antes, então o controller e as duas rotas registrados conforme as instruções antigas ficam apenas sombreados: não dão erro e nunca mais são alcançados.
 
 **Limitação conhecida: a guarda de caminho falha quando o Drupal fica em um subdiretório**
 

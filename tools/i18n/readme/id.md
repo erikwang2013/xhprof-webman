@@ -37,8 +37,9 @@ Api kecil yang sama juga menjadi ikon situs dan ikon merek di kiri atas halaman 
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Salin ke `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Salin ke `plugins/system/`, pasang lewat Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | modul `xhprof` (`Drupal\XhprofMiddleware`) | Modul standar, cukup diaktifkan |
+| PHP murni (tanpa framework) | — (tanpa paket eksternal) | 8.0 | `Native\XhprofBootstrap` | Satu baris di atas berkas entri, `XhprofBootstrap::start()`, tanpa mendaftarkan controller atau route |
 
-Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihilangkan di atas).  Tidak satu pun dari sepuluh yang meminta Anda mendaftarkan controller atau route: halaman report dan aset statis dilayani oleh kelas entri itu sendiri (pada Drupal, oleh route modul).
+Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihilangkan di atas).  Tidak satu pun dari sebelas yang meminta Anda mendaftarkan controller atau route: halaman report dan aset statis dilayani oleh kelas entri itu sendiri (pada Drupal, oleh route modul).
 
 Paket ini mendeklarasikan `php >= 8.0`, tetapi komponen `yiisoft/*` yang diandalkan Yii3 mensyaratkan **PHP 8.1+**, jadi **Yii3 tidak bisa dipakai di PHP 8.0**; Symfony 7.x dan Drupal 11.x juga butuh versi PHP yang lebih tinggi. Langkah pemasangan terperinci ada di "Konfigurasi Framework" di bawah.
 
@@ -279,7 +280,7 @@ Direktori `joomla/` di paket *adalah* pluginnya: manifes `xhprof.xml`, `services
 
 **1. Aktifkan modul** — `drupal/xhprof/` di dalam paket adalah modul Drupal standar (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Letakkan di `modules/custom/xhprof/` situs Anda, lalu aktifkan di halaman "Extend" (atau dengan `drush en xhprof`).
 
-**2. Halaman report dan aset statis** — Drupal adalah **satu-satunya dari sepuluh framework yang lewat jalur «modul + route»**: `xhprof.routing.yml` mendaftarkan path report `/xhprof` dan path aset `/xhprof-assets`, yang secara default dilayani controller modul; sembilan kelas entri lainnya memintas sendiri sebelum profiling dimulai dan melayani halaman report beserta aset statisnya tanpa mendaftarkan route. **Dengan prefiks `assets_url` kustom, aset dilayani middleware**: path route aset modul ditulis mati di `xhprof.routing.yml` (`/xhprof-assets/{file}`) dan tidak akan pernah cocok dengan prefiks lain.
+**2. Halaman report dan aset statis** — Drupal adalah **satu-satunya dari sebelas framework yang lewat jalur «modul + route»**: `xhprof.routing.yml` mendaftarkan path report `/xhprof` dan path aset `/xhprof-assets`, yang secara default dilayani controller modul; sepuluh kelas entri lainnya memintas sendiri sebelum profiling dimulai dan melayani halaman report beserta aset statisnya tanpa mendaftarkan route. **Dengan prefiks `assets_url` kustom, aset dilayani middleware**: path route aset modul ditulis mati di `xhprof.routing.yml` (`/xhprof-assets/{file}`) dan tidak akan pernah cocok dengan prefiks lain.
 
 **3. Konfigurasi** — konfigurasinya adalah config bertipe tingkat modul: nilai default ada di `drupal/xhprof/config/install/xhprof.settings.yml`, dengan skemanya di `drupal/xhprof/config/schema/xhprof.schema.yml`. Lihat "Referensi Konfigurasi" untuk daftar kolomnya.
 
@@ -301,6 +302,40 @@ Kernel dalam **diberikan otomatis sebagai argumen konstruktor ke-0** oleh `Stack
 - `priority: 1000` menempatkan middleware **di luar page cache** (prioritas tertinggi yang sudah ada di core adalah negotiation: 400 di D10, 500 di D11, sedangkan page cache 200), jadi **request yang dilayani dari page cache Drupal tetap diprofilkan**. Untuk alat profiling, itu perilaku yang diinginkan, tetapi pengguna perlu mengetahuinya.
 - Cache-nya bekerja langsung tanpa penyetelan: middleware memakai adapter Redis bawaan paket ini (paket ini bergantung keras pada ext-redis), dan ia juga menerima argumen `CacheInterface` opsional lewat `arguments` di `services.yml` untuk menimpanya. Kalau cache tidak tersedia, penyimpanan yang gagal ditelan oleh `XhprofProfiler::stop()` menjadi satu baris log — **tidak ada error yang dilempar**.
 - Request ke halaman report `/xhprof` dan ke `/xhprof-assets/*` **tidak diprofilkan**: middleware melewati profiling berdasarkan path sebelum `xhprofStart()`. Responsnya tetap dihasilkan oleh Controller di `xhprof.routing.yml` (**ini bukan short-circuit**). Jadi meskipun `ignore_url_arr` diisi `[]` (tidak menyaring apa pun), kedua request itu tidak pernah muncul di laporan.
+
+### PHP murni (tanpa framework)
+
+Untuk aplikasi tanpa framework yang hanya punya satu front controller (`public/index.php` dan sejenisnya).
+
+**1. Tambahkan satu baris di bagian atas berkas entri**:
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
+```
+
+Untuk mengubah konfigurasi, berikan array-nya pada baris ini (set key-nya sama dengan sepuluh yang lain; nilai default ada di `src/Native/config/xhprof.php`):
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
+    'enable' => true,
+    'auth_token' => 'xxx',
+]);
+```
+
+Argumen kedua dan ketiga adalah titik injeksi opsional: `CacheInterface $cache` dan `LoggerInterface $logger` (default: adapter Redis paket ini dan `error_log`). Nilai kembaliannya adalah instans entri untuk request ini (`stop()` idempoten); panggil untuk berhenti lebih awal di proses yang sama.
+
+**2. Halaman report dan aset statis** — **tidak perlu controller atau pendaftaran route**: sebelum profiling dimulai baris ini memeriksa path request: kecocokan pada path report `/xhprof` langsung mengembalikan halaman report (dengan `Content-Type: text/html; charset=UTF-8` dan `Cache-Control: no-cache, private`; `auth_token` tetap berlaku), dan kecocokan pada path aset (prefiks dibaca dari opsi `assets_url`, default `/xhprof-assets`) langsung mengembalikan aset statisnya. **Biayanya ditulis terang-terangan**: setelah kedua path itu dilayani, terjadilah `exit` — sisa request tersebut (route setelah baris ini, bootstrap container, mulai sesi, dan logika penutup yang didaftarkan aplikasi sendiri) tidak dijalankan.
+
+**3. Jendela profiling = baris ini → shutdown proses** (yang didaftarkan adalah `register_shutdown_function`). **Batasnya apa adanya**: tidak mencakup kode **sebelum** baris ini (autoload composer, bootstrap front controller), juga bukan yang dikerjakan proses/ekstensi lain (parsing request di php-fpm, pemrosesan di sisi nginx). Akhir normal, `exit`, serta Error / exception yang tak tertangkap semuanya sampai ke titik akhir; `SIGKILL` / OOM killer tidak — status profiling hilang bersama proses dan tidak tertinggal untuk request berikutnya. Untuk mempersempit cakupan gunakan opsi `ignore_url_arr` (kecocokan substring pada `uri()`, berlaku tanpa mengubah kode).
+
+**4. Jalankan sekali sungguhan dengan `php -S`**:
+
+```sh
+# Di bagian atas public/index.php ada XhprofBootstrap::start(), dan berkas itu adalah front controller-nya
+php -S 127.0.0.1:8000 -t public public/index.php
+```
+
+Buka `http://127.0.0.1:8000/` untuk menghasilkan data, lalu `http://127.0.0.1:8000/xhprof` untuk halaman report — keduanya di proses yang sama, dan asetnya ikut terverifikasi.
 
 ---
 
@@ -385,7 +420,7 @@ Setiap framework menyediakan 5 adapter yang mengimplementasikan kontrak-kontrak 
 
 ![Arsitektur](docs/images/architecture.svg)
 
-Diagram pertama adalah **strukturnya**: kelas entri dari kesepuluh framework, 5 kontraknya, tiga lapisan Core, dan satu-satunya dua coupling yang tersisa.
+Diagram pertama adalah **strukturnya**: kelas entri dari kesebelas framework, 5 kontraknya, tiga lapisan Core, dan satu-satunya dua coupling yang tersisa.
 
 ![Alasan desain](docs/images/design.svg)
 
@@ -414,6 +449,7 @@ Satu request yang diprofilkan:
 | WordPress | `plugins_loaded` | `shutdown` |
 | Joomla | `onAfterInitialise` | `onAfterRespond`, plus cadangan shutdown |
 | Drupal | `http_middleware` (prioritas 1000, terluar) | `finally` |
+| PHP murni (tanpa framework) | Satu baris `XhprofBootstrap::start()` di atas berkas entri | Shutdown proses (`register_shutdown_function`), plus `stop()` untuk berhenti lebih awal |
 
 ---
 
@@ -432,6 +468,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # implementasi adapter Redis bersama
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 4 framework yang sudah ada
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 6 framework baru
+│   ├── Native/                   # PHP murni (tanpa framework): kelas entri dan 5 adapter
 │   └── html/                     # aset halaman report (css / js / images / pet.svg ikon situs dan ikon merek)
 ├── wordpress/                    # berkas bootstrap mu-plugin (dengan header plugin)
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifes)
@@ -463,7 +500,7 @@ src/<Fw>/
 | Butir | Caranya |
 |------|-----|
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
-| Kesepuluh framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
+| Kesebelas framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
 | Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk delapan framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
 | Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, dengan dua invarian: `uri()` tidak membawa scheme/host, dan `withHeaders()` tetap berlaku setelah `file()`. Jumlah SKIP loop adalah konstanta beku (2 di leg utama, 0 di leg 6.4) dan keduanya ada di Joomla: jalur baca asli `#__extensions.params` dan bentuk installer, keduanya butuh database atau installer untuk dijalankan |
@@ -488,13 +525,15 @@ src/<Fw>/
 | 2 | Buka URL aplikasi mana pun | Panjang key `xhprof:run_id` di Redis naik 1 |
 | 3 | Buka `/xhprof` | Halaman report ter-render dengan gayanya; `/xhprof-assets/js/xhprof_report.js` mengembalikan 200 |
 
+**Smoke test PHP murni**: jalankan server bawaan dengan `php -S 127.0.0.1:8000 -t public public/index.php` (langkah 4 di "PHP murni"), lalu lakukan ketiga langkahnya — halaman report dan aset berada di **proses yang sama** dengan request bisnis, jadi langkah 3 bisa langsung diverifikasi.
+
 **Keterbatasan yang diketahui: `request_uri` yang ditampilkan di daftar tidak punya port**
 
-Kontrak `host()` berarti "hanya host, tanpa port" (R-2), dan kesepuluh framework mematuhinya — hanya implementasinya yang berbeda: `getHost()` dari PSR-7 tidak pernah membawa port, Joomla / WordPress memotongnya sendiri dengan `parse_url`, dan Webman / ThinkPHP butuh argumen ketat `host(true)` (nilai default mengembalikan header `Host` apa adanya, termasuk port). `request_uri` yang ditampilkan di daftar disusun sebagai `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), jadi pada port non-standar (misalnya `:8080`) **teks** baris itu tidak menampilkan port. **Tautannya sendiri tidak terpengaruh**: tautan di daftar dan di laporan semuanya dibuat `XhprofLib::report_url()` sebagai URL relatif (hanya path + query), membuka halaman yang benar, dan tidak bergantung pada `host()`.
+Kontrak `host()` berarti "hanya host, tanpa port" (R-2), dan kesebelas framework mematuhinya — hanya implementasinya yang berbeda: `getHost()` dari PSR-7 tidak pernah membawa port, Joomla / WordPress memotongnya sendiri dengan `parse_url`, dan Webman / ThinkPHP butuh argumen ketat `host(true)` (nilai default mengembalikan header `Host` apa adanya, termasuk port). `request_uri` yang ditampilkan di daftar disusun sebagai `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), jadi pada port non-standar (misalnya `:8080`) **teks** baris itu tidak menampilkan port. **Tautannya sendiri tidak terpengaruh**: tautan di daftar dan di laporan semuanya dibuat `XhprofLib::report_url()` sebagai URL relatif (hanya path + query), membuka halaman yang benar, dan tidak bergantung pada `host()`.
 
 **`assets_url` kini mendukung prefiks khusus**
 
-Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Kesepuluh framework mengikuti opsi ini**: sembilan kelas entri memintas jalur aset sendiri sebelum profiling dimulai dan melayaninya, sedangkan Drupal melayani prefiks default lewat route modul + controller dan menyerahkan prefiks kustom ke middleware. **Batas**: Laravel, Hyperf, Webman, dan ThinkPHP tidak lagi perlu controller atau route — middleware berjalan lebih dulu, jadi controller dan dua route yang didaftarkan menurut petunjuk lama hanya tertutupi: tidak error dan tidak pernah lagi tersentuh.
+Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Kesebelas framework mengikuti opsi ini**: sepuluh kelas entri memintas jalur aset sendiri sebelum profiling dimulai dan melayaninya, sedangkan Drupal melayani prefiks default lewat route modul + controller dan menyerahkan prefiks kustom ke middleware. **Batas**: Laravel, Hyperf, Webman, dan ThinkPHP tidak lagi perlu controller atau route — middleware berjalan lebih dulu, jadi controller dan dua route yang didaftarkan menurut petunjuk lama hanya tertutupi: tidak error dan tidak pernah lagi tersentuh.
 
 **Keterbatasan yang diketahui: penjaga path gagal kalau Drupal berada di subdirektori**
 

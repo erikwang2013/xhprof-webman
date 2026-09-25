@@ -81,7 +81,7 @@ class StaticController
         // 不套用 text/plain 的样式表 → 报告页在 Laravel 上无 JS 无 CSS。
         // （pet.svg 是后加的，不在那次实测里：它在 MIME_TYPES 有显式映射，本就不走嗅探。）
         // 其余六个适配器的 file() 自己钉了同一个类型（都取自本文件的 MIME_TYPES），
-        // 这里补上后十家输出一致；类型表复用 readFile() 那张，不新造第二张。
+        // 这里补上后十一家输出一致；类型表复用 readFile() 那张，不新造第二张。
         // withHeaders() 必须在 file() 之后：file() 返回的是**新的**响应对象（Laravel 上是一个
         // 新建的 BinaryFileResponse），先挂头会被它整个替换掉，头就白挂了。
         return $response->file($realFile)->withHeaders([
@@ -91,8 +91,8 @@ class StaticController
     }
 
     /**
-     * 资源 URL 前缀（带尾斜杠），取自 `xhprof.assets_url`——**十家入口类同一口径**：
-     * Slim/Symfony/WordPress/Joomla/Yii3 在 xhprofStart() 之前短路、Drupal 走守卫、
+     * 资源 URL 前缀（带尾斜杠），取自 `xhprof.assets_url`——**十一家入口类同一口径**：
+     * Slim/Symfony/WordPress/Joomla/Yii3/Native 在 xhprofStart() 之前短路、Drupal 走守卫、
      * Laravel/Hyperf/Webman/ThinkPHP 由全局中间件短路，都从这一个配置项归一化出来
      * （同一套归一化：先取原串再 rtrim，空串 = 不启用）。
      * 2026-09-25 之前四家路由型框架是例外：资源路由 path 由用户在自己路由文件里写死、

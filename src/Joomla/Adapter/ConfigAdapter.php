@@ -47,7 +47,7 @@ class ConfigAdapter implements ConfigInterface
         // "Cannot use object of type stdClass as array"）。只有先转数组才行。
         //
         // 只做一层：Registry 的 bindData 对数字键（列表）本就保留数组形态，
-        // 9 个配置项里没有更深的对象节点。
+        // 10 个配置项里没有更深的对象节点。
         return $value instanceof \stdClass ? (array) $value : $value;
     }
 }

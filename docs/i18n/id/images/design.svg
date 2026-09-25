@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">perilaku Webman/Laravel juga tidak terpengaruh</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">kontrak yang sama diimplementasikan 10 kali</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 framework masing-masing menulis 5 Adapter,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">kontrak yang sama diimplementasikan 11 kali</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 framework masing-masing menulis 5 Adapter,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">kontraknya tetap, implementasinya ditulis ulang</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">tak perlu daftarkan route aset</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">logika short-circuit diulang 10 kali</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">logika short-circuit diulang 11 kali</text>
   <text x="816" y="314" font-size="11" fill="#24292f">ketiganya justru tempat salah tebak lolos dari tes,</text>
   <text x="816" y="330" font-size="11" fill="#24292f">pengulangan membeli kepastian (kecuali modul standar Drupal)</text>
 

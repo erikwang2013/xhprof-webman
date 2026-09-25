@@ -76,7 +76,7 @@ trait MiddlewareTrait
         // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被页面缓存留存副本。
         // Content-Type 必须显式给（Laravel 的 ResponseHeaderBag 只补 text/html，Thinkphp
         // 的 Html 响应给的是 text/html; charset=utf-8，两家的默认值都不等于这一个）。
-        // 两个字面量与 Drupal 控制器及另外五家入口类一致（十框架同形）。
+        // 两个字面量与 Drupal 控制器及其余入口类一致（十一家同形）。
         return $res
             ->withStatus(200)
             ->withHeaders(['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'])

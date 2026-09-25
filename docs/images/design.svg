@@ -39,8 +39,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel 的行为也不受影响</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">同一契约实现 10 遍</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 个框架各写 5 个 Adapter，</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">同一契约实现 11 遍</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 个框架各写 5 个 Adapter，</text>
   <text x="816" y="240" font-size="11" fill="#24292f">契约不变但实现代码反复重写</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -55,7 +55,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">不用注册资源路由</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">短路逻辑重复 10 份</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">短路逻辑重复 11 份</text>
   <text x="816" y="314" font-size="11" fill="#24292f">那 3 处恰是猜错也不会被测试发现的地方，</text>
   <text x="816" y="330" font-size="11" fill="#24292f">重复换确定性（Drupal 标准模块是例外）</text>
 

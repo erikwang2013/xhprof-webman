@@ -2,7 +2,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img"
      font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman 分层架构</title>
-  <desc>三张分层图：上层是 10 个框架入口类（已适配 4 个 + 本次新增 6 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明 6 个新框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。</desc>
+  <desc>三张分层图：上层是 11 个框架入口类（已适配 4 个 + 本次新增 7 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明 7 个新框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -17,17 +17,17 @@
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">XHProf Webman 分层架构</text>
-  <text x="32" y="70" font-size="13" fill="#57606a">10 个框架入口 → 5 个契约 → 1 个 Core：新增框架不改 Core</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">11 个框架入口 → 5 个契约 → 1 个 Core：新增框架不改 Core</text>
 
   <!-- 图例 -->
   <rect x="700" y="32" width="18" height="18" rx="4" fill="#ffffff" stroke="#1a7f37" stroke-width="2"/>
   <text x="726" y="46" font-size="12.5" fill="#57606a">已适配 4 个</text>
   <rect x="830" y="32" width="18" height="18" rx="4" fill="#ddf4ff" stroke="#0969da" stroke-width="2" stroke-dasharray="5 3"/>
-  <text x="856" y="46" font-size="12.5" fill="#57606a">本次新增 6 个</text>
+  <text x="856" y="46" font-size="12.5" fill="#57606a">本次新增 7 个</text>
 
   <!-- ============ ① 框架入口层 ============ -->
   <rect x="24" y="100" width="1152" height="236" rx="12" fill="#ffffff" stroke="#e1e4e8" stroke-width="1.5"/>
-  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f">① 框架入口层 — 10 个入口类</text>
+  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f">① 框架入口层 — 11 个入口类</text>
   <text x="1156" y="128" font-size="11.5" fill="#57606a" text-anchor="end">类名省略命名空间前缀 ErikWang2013\Xhprof\</text>
 
   <text x="44" y="152" font-size="12" font-weight="600" fill="#1a7f37">已适配 4 个框架</text>
@@ -60,44 +60,44 @@
   <rect x="1098" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
   <text x="1122" y="179" font-size="10.5" fill="#ffffff" text-anchor="middle">已适配</text>
 
-  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da">本次新增 6 个框架</text>
+  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da">本次新增 7 个框架</text>
 
-  <!-- 新增 6 个 -->
-  <rect x="44" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <!-- 新增 7 个 -->
+  <rect x="44" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
   <text x="56" y="279" font-size="13" font-weight="600" fill="#24292f">Yii3</text>
   <text x="56" y="300" font-size="10.5" fill="#57606a">Yii3\XhprofMiddleware</text>
-  <rect x="164" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="186" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
+  <rect x="144" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="166" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 
-  <rect x="232" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="244" y="279" font-size="13" font-weight="600" fill="#24292f">Symfony</text>
-  <text x="244" y="300" font-size="10.5" fill="#57606a">Symfony\XhprofListener</text>
-  <rect x="352" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="374" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
+  <rect x="204" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="216" y="279" font-size="13" font-weight="600" fill="#24292f">Symfony</text>
+  <text x="216" y="300" font-size="10.5" fill="#57606a">Symfony\XhprofListener</text>
+  <rect x="304" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="326" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 
-  <rect x="420" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="432" y="279" font-size="13" font-weight="600" fill="#24292f">Slim 4</text>
-  <text x="432" y="300" font-size="10.5" fill="#57606a">Slim\XhprofMiddleware</text>
-  <rect x="540" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="562" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
+  <rect x="364" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="376" y="279" font-size="13" font-weight="600" fill="#24292f">Slim 4</text>
+  <text x="376" y="300" font-size="10.5" fill="#57606a">Slim\XhprofMiddleware</text>
+  <rect x="464" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="486" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 
-  <rect x="608" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="620" y="279" font-size="13" font-weight="600" fill="#24292f">WordPress</text>
-  <text x="620" y="300" font-size="10.5" fill="#57606a">Wordpress\XhprofPlugin</text>
-  <rect x="728" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="750" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
+  <rect x="524" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="536" y="279" font-size="13" font-weight="600" fill="#24292f">WordPress</text>
+  <text x="536" y="300" font-size="10.5" fill="#57606a">Wordpress\XhprofPlugin</text>
+  <rect x="624" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="646" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 
-  <rect x="796" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="808" y="279" font-size="13" font-weight="600" fill="#24292f">Joomla</text>
-  <text x="808" y="300" font-size="10.5" fill="#57606a">Joomla\Extension\Xhprof</text>
-  <rect x="916" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="938" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
+  <rect x="684" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="696" y="279" font-size="13" font-weight="600" fill="#24292f">Joomla</text>
+  <text x="696" y="300" font-size="10.5" fill="#57606a">Joomla\Extension\Xhprof</text>
+  <rect x="784" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="806" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 
-  <rect x="984" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="996" y="279" font-size="13" font-weight="600" fill="#24292f">Drupal</text>
-  <text x="996" y="300" font-size="10.5" fill="#57606a">Drupal\XhprofMiddleware</text>
-  <rect x="1104" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="1126" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
+  <rect x="844" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="856" y="279" font-size="13" font-weight="600" fill="#24292f">Drupal</text>
+  <text x="856" y="300" font-size="10.5" fill="#57606a">Drupal\XhprofMiddleware</text>
+  <rect x="944" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="966" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 
   <!-- ① → ② -->
   <line x1="600" y1="340" x2="600" y2="358" stroke="#57606a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
@@ -170,7 +170,7 @@
   <rect x="24" y="654" width="1152" height="200" rx="12" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
   <rect x="44" y="668" width="252" height="26" rx="13" fill="#cf222e"/>
   <text x="170" y="686" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">Core 对框架仅剩的两处耦合</text>
-  <text x="312" y="686" font-size="11.5" fill="#57606a">两者都只在无参 bootstrap() 的老路径上生效，不影响 6 个新框架</text>
+  <text x="312" y="686" font-size="11.5" fill="#57606a">两者都只在无参 bootstrap() 的老路径上生效，不影响 7 个新框架</text>
 
   <rect x="45" y="698" width="546" height="76" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
   <text x="61" y="719" font-size="12.5" font-weight="600" fill="#cf222e">① Xhprof::autoDetect() 的 class_exists 链</text>
@@ -185,6 +185,12 @@
   <text x="627" y="768" font-size="10.5" fill="#57606a">Core 里唯一直接引用框架类名的代码</text>
 
   <rect x="44" y="792" width="1112" height="42" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">6 个新框架不经过 autoDetect</text>
+  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">7 个新框架不经过 autoDetect</text>
   <text x="600" y="829" font-size="11.5" fill="#24292f" text-anchor="middle">全部走显式注入 Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
+  <!-- ① 框架入口层 -->
+  <rect x="1004" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="1016" y="279" font-size="13" font-weight="600" fill="#24292f">Native PHP</text>
+  <text x="1016" y="300" font-size="10.5" fill="#57606a">Native\XhprofBootstrap</text>
+  <rect x="1104" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="1126" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">新增</text>
 </svg>

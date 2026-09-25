@@ -16,10 +16,10 @@ use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
 class FakeCache implements CacheInterface
 {
     /** @var array<string, mixed> */
-    private array $store = [];
+    protected array $store = [];
 
     /** @var array<string, array<int, mixed>> 列表，索引 0 为头部 */
-    private array $lists = [];
+    protected array $lists = [];
 
     /** @var array<int, string> 调用记录 */
     public array $calls = [];
@@ -123,6 +123,88 @@ class FakeCache implements CacheInterface
             }
         }
         return $n;
+    }
+}
+
+/**
+ * 跨请求的文件版 Cache：把 FakeCache 的 store/lists 落到一个文件里。
+ *
+ * 存在的理由只有一个：`php -S`（与 fpm 一样）每个请求都是独立的脚本执行，内存版
+ * FakeCache 到下一个请求什么都不剩，而原生入口那条真实 HTTP 用例要跑通
+ * 「业务请求落库 → 报告页/报告详情读得到这条 run」这条链，需要一份真的跨请求存储。
+ *
+ * **不拿真 Redis 顶上**：CI 的单测 job 只装扩展、不启 redis 服务（.github/workflows/ci.yml
+ * 的 test job 里没有 services），真连 Redis 的用例在 CI 上必红；而这条用例要验证的是
+ * 「原生入口接得上 Core 的落库/读取路径」，不是 phpredis 本身（那是环里 Redis case 的事）。
+ *
+ * 语义全部继承 FakeCache（写入时持久化、构造时载入），所以列表索引、lRange 边界、
+ * mget 的返回形态与其余十家的 FakeCache 用法完全一致。
+ */
+class FileCache extends FakeCache
+{
+    private string $path;
+
+    public function __construct(string $path)
+    {
+        $this->path = $path;
+        $state = is_file($path) ? unserialize((string) file_get_contents($path), ['allowed_classes' => false]) : null;
+        if (is_array($state)) {
+            $this->store = is_array($state['store'] ?? null) ? $state['store'] : [];
+            $this->lists = is_array($state['lists'] ?? null) ? $state['lists'] : [];
+        }
+    }
+
+    public function set(string $key, mixed $value, ?int $ttl = null): mixed
+    {
+        $out = parent::set($key, $value, $ttl);
+        $this->persist();
+
+        return $out;
+    }
+
+    public function incr(string $key): int
+    {
+        $out = parent::incr($key);
+        $this->persist();
+
+        return $out;
+    }
+
+    public function decr(string $key): int
+    {
+        $out = parent::decr($key);
+        $this->persist();
+
+        return $out;
+    }
+
+    public function lPush(string $key, mixed $value): int
+    {
+        $out = parent::lPush($key, $value);
+        $this->persist();
+
+        return $out;
+    }
+
+    public function rPop(string $key): mixed
+    {
+        $out = parent::rPop($key);
+        $this->persist();
+
+        return $out;
+    }
+
+    public function del(string ...$keys): int
+    {
+        $out = parent::del(...$keys);
+        $this->persist();
+
+        return $out;
+    }
+
+    private function persist(): void
+    {
+        file_put_contents($this->path, serialize(['store' => $this->store, 'lists' => $this->lists]));
     }
 }
 

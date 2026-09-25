@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel-এর আচরণও অপরিবর্তিত</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">একই চুক্তি ১০ বার বাস্তবায়িত</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">১০টি ফ্রেমওয়ার্ক প্রত্যেকে ৫টি Adapter লেখে,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">একই চুক্তি ১১ বার বাস্তবায়িত</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">১১টি ফ্রেমওয়ার্ক প্রত্যেকে ৫টি Adapter লেখে,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">চুক্তি অটুট থাকে কিন্তু বাস্তবায়ন বারবার নতুন করে লেখা হয়</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">অ্যাসেট রুট নিবন্ধন করতে হয় না</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">শর্ট সার্কিট লজিক ১০ বার পুনরাবৃত্ত</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">শর্ট সার্কিট লজিক ১১ বার পুনরাবৃত্ত</text>
   <text x="816" y="314" font-size="11" fill="#24292f">ওই ৩টি জায়গাই ঠিক যেখানে ভুল অনুমান টেস্টের চোখ এড়িয়ে যায়,</text>
   <text x="816" y="330" font-size="11" fill="#24292f">পুনরাবৃত্তি নিশ্চয়তা কেনে (Drupal স্ট্যান্ডার্ড মডিউলটি ব্যতিক্রম)</text>
 

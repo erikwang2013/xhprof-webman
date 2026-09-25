@@ -93,7 +93,7 @@ class RequestAdapter implements RequestInterface
         // 契约要求只返回主机名、不含端口（R-2）。已知代价只有一处：列表页那行
         // request_uri 的**显示文本**不体现端口（它由 `host() . uri()` 拼成，
         // 见 XHProfRunsDefault 的 request_uri）。页面里的链接不受影响——列表页与报告页
-        // 的链接统一由 XhprofLib::report_url() 生成相对 URL（只含 path+query）。十家一致。
+        // 的链接统一由 XhprofLib::report_url() 生成相对 URL（只含 path+query）。十一家一致。
         $parsed = parse_url('http://' . $host, PHP_URL_HOST);
 
         return is_string($parsed) && $parsed !== '' ? $parsed : $host;

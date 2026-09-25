@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel का व्यवहार भी अप्रभावित है</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">वही कॉन्ट्रैक्ट 10 बार लागू</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 फ़्रेमवर्क में हर एक 5 Adapter लिखता है,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">वही कॉन्ट्रैक्ट 11 बार लागू</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 फ़्रेमवर्क में हर एक 5 Adapter लिखता है,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">कॉन्ट्रैक्ट टिकता है पर लागू करना फिर से लिखा जाता है</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">कोई एसेट रूट दर्ज नहीं</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">शॉर्ट-सर्किट लॉजिक 10 बार दोहराया गया</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">शॉर्ट-सर्किट लॉजिक 11 बार दोहराया गया</text>
   <text x="816" y="314" font-size="11" fill="#24292f">वही 3 जगहें हैं जहाँ ग़लत अनुमान टेस्ट से बच जाता है,</text>
   <text x="816" y="330" font-size="11" fill="#24292f">दोहराव निश्चितता देता है (Drupal का स्टैंडर्ड मॉड्यूल अपवाद है)</text>
 

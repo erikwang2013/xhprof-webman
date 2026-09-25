@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel の挙動も影響を受けない</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">同じ契約を 10 回実装する</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 フレームワークがそれぞれ 5 つの Adapter を書き、</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">同じ契約を 11 回実装する</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 フレームワークがそれぞれ 5 つの Adapter を書き、</text>
   <text x="816" y="240" font-size="11" fill="#24292f">契約は保たれるが実装は書き直される</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">アセットのルートも登録不要</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">短絡ロジックが 10 回繰り返される</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">短絡ロジックが 11 回繰り返される</text>
   <text x="816" y="314" font-size="11" fill="#24292f">その 3 箇所こそ推測を誤ってもテストが気づかない場所、</text>
   <text x="816" y="330" font-size="11" fill="#24292f">繰り返しが確実さを買う（Drupal 標準モジュールは例外）</text>
 

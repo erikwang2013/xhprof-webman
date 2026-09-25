@@ -31,7 +31,7 @@ class RequestAdapter implements RequestInterface
     {
         // 第三个参数不能省：Joomla\Input\Input::get() 默认过滤器是 'cmd'，它把
         // [^A-Z0-9_.-] 全删掉——auth_token='a+b/c=' 会被读成 'abc'，hash_equals 永不相等，
-        // 报告页对任何含特殊字符的 token 恒返回 403。'raw' 不过滤，与其余 9 个框架的
+        // 报告页对任何含特殊字符的 token 恒返回 403。'raw' 不过滤，与其余 10 个框架的
         // 适配器（webman input() / laravel input() / think param()）口径一致；
         // 参数合法性由 Core\Xhprof::index() 自己的白名单校验负责。
         return $this->input->get($key, $default, 'raw');

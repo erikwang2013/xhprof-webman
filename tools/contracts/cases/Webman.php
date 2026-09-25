@@ -10,7 +10,8 @@ declare(strict_types=1);
  * 本卡要钉的两件事（任务书原文）：
  *   1) `Webman\Http\Request::host(bool $withoutPort = false)` 的**两种调用**：真包实测
  *      `host()` = 'example.com:8080'、`host(true)` = 'example.com'，而**本仓适配器必须传 true**
- *      （契约 R-2：host() 只给主机名）。十家的 Request API 里只有 webman/thinkphp 默认带端口，
+ *      （契约 R-2：host() 只给主机名）。各家的框架 Request API 里只有 webman/thinkphp 默认带端口
+ *      （原生 PHP 那条没有框架 API，端口口径由本仓适配器自己定），
  *      调用点 XHProfRunsDefault.php 拿它拼 request_log 的展示文本 —— 差一个端口就是数据出错。
  *   2) `Webman\Http\Response` 的**可变语义**：withStatus/withHeaders/withBody/withFile 改的都是
  *      `$this` 并返回它（不是 Laravel/Symfony 那样的 with* 克隆）。本仓 ResponseAdapter 依赖

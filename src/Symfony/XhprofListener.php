@@ -111,7 +111,7 @@ class XhprofListener implements EventSubscriberInterface
         // 缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
         // 顺序不可换：available() 短路在前，enable=false 时才不会把「缺扩展」吞掉。
         // 此前这里只判 ext-xhprof —— 缺 redis 时会照常采样、落库必然失败，
-        // 报告页读缓存还会变成未捕获错误，而另外 9 个入口早已统一到 SamplingGuard。
+        // 报告页读缓存还会变成未捕获错误，而另外 10 个入口早已统一到 SamplingGuard。
         if (!SamplingGuard::available() || !XhprofProfiler::isEnabled()) {
             return;
         }

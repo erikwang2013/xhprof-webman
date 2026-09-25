@@ -30,7 +30,7 @@ use Joomla\Event\SubscriberInterface;
  */
 final class Xhprof extends CMSPlugin implements SubscriberInterface
 {
-    /** 报告路径，硬编码（与其余 9 个框架一致） */
+    /** 报告路径，硬编码（与其余 10 个框架一致） */
     private const REPORT_PATH = '/xhprof';
 
     private const DEFAULT_ASSETS_URL = '/xhprof-assets';
@@ -219,7 +219,7 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
     /**
      * assets_url 归一化成带尾斜杠的前缀；配成空串视为不启用资源短路。
      *
-     * 口径与 `Core\StaticController::uriPrefix()` 及另外 5 家入口类一致（取原串 → 非字符串
+     * 口径与 `Core\StaticController::uriPrefix()` 及其余入口类一致（取原串 → 非字符串
      * 或空串视为不启用 → 否则 rtrim 掉尾斜杠再补一个 '/'）：Joomla 的短路判定必须与 Core 的
      * 服务判定同源，否则配了自定义前缀会出现「一边认是资源、另一边不认」。
      */

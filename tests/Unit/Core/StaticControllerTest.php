@@ -27,7 +27,7 @@ class StaticControllerTest extends TestCase
     protected function setUp(): void
     {
         $this->response = new FakeResponse();
-        // Xhprof::$config 是进程级静态量：别的测试类（十家适配器）会临时换上自己的
+        // Xhprof::$config 是进程级静态量：别的测试类（十一家适配器）会临时换上自己的
         // FakeConfig，虽然它们都在 tearDown 里还原，本类自己改了也必须还原——否则
         // 「哪些资源请求被认」这件事会随测试顺序变化。
         $this->savedConfig = Xhprof::$config;
@@ -325,8 +325,9 @@ class StaticControllerTest extends TestCase
     }
 
     /**
-     * 资源前缀必须跟着 `xhprof.assets_url` 走，且归一化口径与 **10 个入口类**一致
-     * （Slim/Symfony/WordPress/Joomla/Yii3 的短路前缀、四个路由型入口的路由 path）。
+     * 资源前缀必须跟着 `xhprof.assets_url` 走，且归一化口径与 **11 个入口类**一致
+     * （各入口类短路时用的前缀都从这一个配置项归一化出来，参照实现见 `uriPrefix()`；
+     * 四个路由型入口曾经把资源 path 写死在用户路由文件里，那条边界已随中间件短路消失）。
      *
      * 这条路径此前是坏的：前缀硬编码在 StaticController 里，入口类按**配置的**
      * 前缀决定要不要接管，于是「配了非默认值」= 入口类把请求交给 serve()，

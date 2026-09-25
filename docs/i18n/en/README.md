@@ -39,8 +39,9 @@ The same little flame is also the report page's site icon and the top-left brand
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Copy into `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Copy into `plugins/system/`, install via Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` module (`Drupal\XhprofMiddleware`) | Standard module, just enable it |
+| Native PHP (no framework) | — (no external package) | 8.0 | `Native\XhprofBootstrap` | One line at the top of the entry file, `XhprofBootstrap::start()`, no controller or route to register |
 
-Entry classes all live under the `ErikWang2013\Xhprof\` namespace prefix (omitted above). None of the ten needs you to register a controller or a route: the entry class serves the report page and the static assets itself (in Drupal's case, the module route does).
+Entry classes all live under the `ErikWang2013\Xhprof\` namespace prefix (omitted above). None of the eleven needs you to register a controller or a route: the entry class serves the report page and the static assets itself (in Drupal's case, the module route does).
 
 This package declares `php >= 8.0`, but the `yiisoft/*` components Yii3 relies on require **PHP 8.1+**, so **Yii3 is not usable on PHP 8.0**; Symfony 7.x and Drupal 11.x likewise need a higher PHP version. Step-by-step setup is in "Framework Configuration" below.
 
@@ -281,7 +282,7 @@ The package's `joomla/` directory *is* the plugin: the `xhprof.xml` manifest, `s
 
 **1. Enable the module** — `drupal/xhprof/` in the package is a standard Drupal module (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Place it at `modules/custom/xhprof/` in your site, then enable it on the "Extend" page (or with `drush en xhprof`).
 
-**2. Report page and static assets** — Drupal is the **one of the ten that goes through a module + routes**: `xhprof.routing.yml` registers the report path `/xhprof` and the asset path `/xhprof-assets`, served by the module controller by default; the other nine entry classes short-circuit before sampling starts and serve the report page and the static assets themselves, registering no routes. **With a custom `assets_url` prefix the middleware serves the assets instead**: the module asset route path is hardcoded in `xhprof.routing.yml` (`/xhprof-assets/{file}`) and never matches another prefix.
+**2. Report page and static assets** — Drupal is the **one of the eleven that goes through a module + routes**: `xhprof.routing.yml` registers the report path `/xhprof` and the asset path `/xhprof-assets`, served by the module controller by default; the other ten entry classes short-circuit before sampling starts and serve the report page and the static assets themselves, registering no routes. **With a custom `assets_url` prefix the middleware serves the assets instead**: the module asset route path is hardcoded in `xhprof.routing.yml` (`/xhprof-assets/{file}`) and never matches another prefix.
 
 **3. Configuration** — configuration is module-level typed config: defaults live in `drupal/xhprof/config/install/xhprof.settings.yml`, with the schema in `drupal/xhprof/config/schema/xhprof.schema.yml`. See "Configuration Reference" for the fields.
 
@@ -303,6 +304,40 @@ The inner kernel is **prepended automatically as constructor argument 0** by Dru
 - `priority: 1000` places the middleware **outside the page cache** (core's highest existing priority is negotiation: 400 on D10, 500 on D11, while the page cache is 200), so **requests served from Drupal's page cache are still profiled**. For a profiling tool that is the intended behaviour, but users should know it.
 - The cache works out of the box: the middleware defaults to the Redis adapter shipped with this package (the package hard-depends on ext-redis), and it also accepts an optional `CacheInterface` argument via `arguments` in `services.yml` to override it. If the cache is unavailable, a failed save is swallowed by `XhprofProfiler::stop()` into a single log line — **no error is raised**.
 - Requests to the report page `/xhprof` and to `/xhprof-assets/*` are **not profiled**: the middleware skips profiling by path before `xhprofStart()`. The response is still produced by the Controller in `xhprof.routing.yml` (**this is not a short-circuit**). So even with `ignore_url_arr` set to `[]` (filtering nothing), these two requests never show up in the report.
+
+### Native PHP (no framework)
+
+For an application with no framework and nothing but a front controller (`public/index.php` and the like).
+
+**1. One line at the top of the entry file**:
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
+```
+
+To change configuration, pass an array into that line (same key set as the other ten; defaults live in `src/Native/config/xhprof.php`):
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
+    'enable' => true,
+    'auth_token' => 'xxx',
+]);
+```
+
+The optional 2nd and 3rd arguments are injection points — `CacheInterface $cache` and `LoggerInterface $logger` (defaults: this package's Redis adapter and `error_log`). The return value is this request's entry instance (`stop()` is idempotent), which you call to stop sampling early inside the same process.
+
+**2. Report page and static assets** — **no controller and no route to register**: before sampling starts, that line inspects the request path. The report path `/xhprof` is answered with the report page (carrying `Content-Type: text/html; charset=UTF-8` and `Cache-Control: no-cache, private`, with `auth_token` honoured as usual), and the asset path (prefix from the `assets_url` option, default `/xhprof-assets`) is answered with the static assets. **The cost is stated plainly**: both paths end in `exit` — the rest of this request (routing after that line, container boot, session start, and any request-shutdown logic your application registered) does not run.
+
+**3. The sampling window = that line → process shutdown** (it registers a `register_shutdown_function`). **The boundaries, plainly**: it does not cover the code **before** that line (composer autoload, the front controller's boot), nor what other processes and extensions do (php-fpm's request parsing, anything on the nginx side). Normal termination, `exit`, and uncaught errors/exceptions all reach the stop point; `SIGKILL` and the OOM killer do not — the sampling state disappears with the process, so it is never left over for the next request. Narrow the window with the `ignore_url_arr` option (substring match against `uri()`, effective without a code change).
+
+**4. Take it for a real run with `php -S`**:
+
+```sh
+# public/index.php has XhprofBootstrap::start() at the top and doubles as the router
+php -S 127.0.0.1:8000 -t public public/index.php
+```
+
+Visit `http://127.0.0.1:8000/` to produce data, then `http://127.0.0.1:8000/xhprof` for the report — the two share one process, so the assets are verified in the same run.
 
 ---
 
@@ -387,7 +422,7 @@ Each framework provides 5 adapters implementing these contracts, registered into
 
 ![Architecture](./images/architecture.svg)
 
-The first diagram is the **structure**: each of the ten frameworks' entry class, the 5 contracts, Core's three layers, and the only two couplings left.
+The first diagram is the **structure**: each of the eleven frameworks' entry class, the 5 contracts, Core's three layers, and the only two couplings left.
 
 ![Design rationale](./images/design.svg)
 
@@ -416,6 +451,7 @@ One profiled request:
 | WordPress | `plugins_loaded` | `shutdown` |
 | Joomla | `onAfterInitialise` | `onAfterRespond`, plus a shutdown fallback |
 | Drupal | `http_middleware` (priority 1000, outermost) | `finally` |
+| Native PHP (no framework) | One line at the top of the entry file, `XhprofBootstrap::start()` | Process shutdown (`register_shutdown_function`), with `stop()` available to stop earlier |
 
 ---
 
@@ -434,6 +470,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
+│   ├── Native/                   # native PHP (no framework): entry class + 5 adapters
 │   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
@@ -465,7 +502,7 @@ src/<Fw>/
 | Item | How |
 |------|-----|
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
-| All ten frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
+| All eleven frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
 | `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the eight frameworks in the loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf are not in the loop — see below |
 | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run |
@@ -490,13 +527,15 @@ src/<Fw>/
 | 2 | Hit any application URL | The length of the `xhprof:run_id` key in Redis goes up by 1 |
 | 3 | Open `/xhprof` | The report page renders with its styles; `/xhprof-assets/js/xhprof_report.js` returns 200 |
 
+**Smoke-testing native PHP**: start the built-in server with `php -S 127.0.0.1:8000 -t public public/index.php` (step 4 under "Native PHP") and run the same three steps — the report page and the assets share the **same process** as the business request, so step 3 verifies them directly.
+
 **Known limitation: the `request_uri` shown in the list has no port**
 
-The `host()` contract means "host only, no port" (R-2), and all ten frameworks honour it — only the implementation differs: PSR-7's `getHost()` never carries the port, Joomla / WordPress `parse_url` it out by hand, and Webman / ThinkPHP need the strict argument `host(true)` (the default returns the `Host` header verbatim, port and all). The `request_uri` shown in the list is built as `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), so on a non-standard port (e.g. `:8080`) that URL **text** does not show the port. **The links themselves are unaffected**: the links in the list and in the report are all built by `XhprofLib::report_url()` as relative URLs (path + query only), so they open the right page and do not depend on `host()`.
+The `host()` contract means "host only, no port" (R-2), and all eleven frameworks honour it — only the implementation differs: PSR-7's `getHost()` never carries the port, Joomla / WordPress `parse_url` it out by hand, and Webman / ThinkPHP need the strict argument `host(true)` (the default returns the `Host` header verbatim, port and all). The `request_uri` shown in the list is built as `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), so on a non-standard port (e.g. `:8080`) that URL **text** does not show the port. **The links themselves are unaffected**: the links in the list and in the report are all built by `XhprofLib::report_url()` as relative URLs (path + query only), so they open the right page and do not depend on `host()`.
 
 **`assets_url` now supports a custom prefix**
 
-The asset prefix is no longer a hardcoded constant: `src/Core/StaticController.php` matches asset paths against the `assets_url` option (default `/xhprof-assets`, trailing slash optional). **All ten frameworks follow that option**: nine entry classes short-circuit before sampling starts and serve the assets themselves, while Drupal serves the default prefix through its module route + controller and hands a custom prefix to the middleware. **Boundary**: Laravel, Hyperf, Webman and ThinkPHP no longer need a controller or routes — the middleware runs first, so a controller and the two routes from the older instructions are merely shadowed: they do not error and are never reached. The remaining limitation under a subdirectory deployment is the Drupal one below.
+The asset prefix is no longer a hardcoded constant: `src/Core/StaticController.php` matches asset paths against the `assets_url` option (default `/xhprof-assets`, trailing slash optional). **All eleven frameworks follow that option**: ten entry classes short-circuit before sampling starts and serve the assets themselves, while Drupal serves the default prefix through its module route + controller and hands a custom prefix to the middleware. **Boundary**: Laravel, Hyperf, Webman and ThinkPHP no longer need a controller or routes — the middleware runs first, so a controller and the two routes from the older instructions are merely shadowed: they do not error and are never reached. The remaining limitation under a subdirectory deployment is the Drupal one below.
 
 **Known limitation: the path guard fails when Drupal lives in a subdirectory**
 

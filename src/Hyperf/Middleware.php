@@ -97,7 +97,7 @@ class Middleware implements MiddlewareInterface
             // no-cache：报告是即时数据，也避免「匿名 + ?token=xxx」访问被中间缓存留副本。
             // Content-Type 必须显式给：Hyperf 的响应不带默认值，而 CoreMiddleware 对
             // **字符串**返回值加的正是 text/plain（本包绕开它的唯一方式就是这个头）。
-            // 两个字面量与 Drupal 控制器及另外五家入口类一致（十框架同形）。
+            // 两个字面量与 Drupal 控制器及其余入口类一致（十一家同形）。
             $res->withStatus(200)
                 ->withHeaders(['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'])
                 ->withBody($html);

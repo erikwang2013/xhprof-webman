@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">поведение Webman/Laravel тоже не меняется</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="11.77" font-weight="600" fill="#bc4c00">один и тот же контракт реализован 10 раз</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 фреймворков пишут по 5 адаптеров (Adapter),</text>
+  <text x="816" y="204" font-size="11.77" font-weight="600" fill="#bc4c00">один и тот же контракт реализован 11 раз</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 фреймворков пишут по 5 адаптеров (Adapter),</text>
   <text x="816" y="240" font-size="10.39" fill="#24292f">контракт держится, но реализация переписывается</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">не нужно регистрировать маршрут ресурсов</text>
 
   <rect x="800" y="272" width="384" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="10.45" font-weight="600" fill="#bc4c00">логика короткого замыкания повторена 10 раз</text>
+  <text x="816" y="294" font-size="10.45" font-weight="600" fill="#bc4c00">логика короткого замыкания повторена 11 раз</text>
   <text x="816" y="314" font-size="11" fill="#24292f">именно эти 3 места скрывают ошибку от тестов,</text>
   <text x="816" y="330" font-size="8.25" fill="#24292f">повтор даёт уверенность (исключение — стандартный модуль Drupal)</text>
 

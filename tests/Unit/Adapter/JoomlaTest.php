@@ -447,7 +447,7 @@ class JoomlaTest extends TestCase
     #[Test]
     public function responseAdapterFileMissingBecomes404(): void
     {
-        // 与其它 9 个框架同形：读不出文件给 404，而不是抛异常
+        // 与其它 10 个框架同形：读不出文件给 404，而不是抛异常
         $app = $this->app();
         (new ResponseAdapter($app))->file($this->tempFile('css') . '.missing')->send();
 

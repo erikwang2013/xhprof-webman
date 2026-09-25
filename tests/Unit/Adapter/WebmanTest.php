@@ -265,7 +265,7 @@ class WebmanTest extends TestCase
      * 旧实现 `withStatus()` 里是 `new Response($status)` —— 重建响应，此前
      * withHeaders()/withBody() 攒下的一切全丢。触发形态是 Core 的任意一条链被重排
      * （报告页那条就是 status → headers → body，见 Symfony 的 serveReport()）。
-     * 另外 7 个适配器都是就地改，这里对齐。
+     * 另外 8 个适配器都是就地改，这里对齐。
      */
     #[Test]
     public function responseAdapterHeadersSurviveLaterBodyAndStatus(): void

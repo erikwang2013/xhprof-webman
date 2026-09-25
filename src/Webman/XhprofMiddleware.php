@@ -48,7 +48,7 @@ class XhprofMiddleware implements MiddlewareInterface
             if (is_string($html)) {
                 // no-cache：报告是即时数据，也避免「匿名 + ?token=xxx」访问被中间缓存留副本。
                 // Content-Type 必须显式给：workerman 的响应不带默认值，缺了浏览器按纯文本渲染。
-                // 两个字面量与 Drupal 控制器及另外五家入口类一致（十框架同形）。
+                // 两个字面量与 Drupal 控制器及其余入口类一致（十一家同形）。
                 $res->withStatus(200)
                     ->withHeaders(['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'])
                     ->withBody($html);
@@ -63,7 +63,7 @@ class XhprofMiddleware implements MiddlewareInterface
 
         // 3) 缺扩展时 available() 已经记录"性能采样已跳过"，故必须连它一起判断：
         // 若仍启动采样，既白付采样开销，落库也必然失败——日志与实际行为自相矛盾。
-        // 判断与告警都收在 Core\SamplingGuard（十家入口共用一份，含缺哪个扩展的文案）。
+        // 判断与告警都收在 Core\SamplingGuard（十一家入口共用一份，含缺哪个扩展的文案）。
         $enabled = SamplingGuard::available() && XhprofProfiler::isEnabled();
 
         if ($enabled) {

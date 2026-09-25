@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">o comportamento de Webman/Laravel também não muda</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">o mesmo contrato implementado 10 vezes</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 frameworks escrevem 5 Adapters cada,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">o mesmo contrato implementado 11 vezes</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 frameworks escrevem 5 Adapters cada,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">o contrato se mantém, mas a implementação é reescrita</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">sem rota de assets para registrar</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">a lógica de curto-circuito repetida 10 vezes</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">a lógica de curto-circuito repetida 11 vezes</text>
   <text x="816" y="314" font-size="11" fill="#24292f">essas 3 são exatamente onde um palpite errado se esconde dos testes,</text>
   <text x="816" y="330" font-size="11" fill="#24292f">a repetição compra certeza (o módulo padrão do Drupal é a exceção)</text>
 

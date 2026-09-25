@@ -41,8 +41,9 @@ Dieselbe kleine Flamme ist auch das Site-Icon der Report-Seite und das Marken-Ic
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Nach `wp-content/mu-plugins/` kopieren |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Nach `plugins/system/` kopieren, über Discover installieren |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof`-Modul (`Drupal\XhprofMiddleware`) | Standardmodul, einfach aktivieren |
+| Reines PHP (ohne Framework) | — (kein externes Paket) | 8.0 | `Native\XhprofBootstrap` | Eine Zeile oben in der Einstiegsdatei, `XhprofBootstrap::start()`, ohne Controller- oder Routenregistrierung |
 
-Alle Eintragsklassen liegen unter dem Namespace-Präfix `ErikWang2013\Xhprof\` (oben weggelassen).  Keines der zehn braucht von dir einen Controller oder eine Route: Die Report-Seite und die statischen Assets liefert die Einstiegsklasse selbst aus (bei Drupal die Modul-Route).
+Alle Eintragsklassen liegen unter dem Namespace-Präfix `ErikWang2013\Xhprof\` (oben weggelassen).  Keines der elf braucht von dir einen Controller oder eine Route: Die Report-Seite und die statischen Assets liefert die Einstiegsklasse selbst aus (bei Drupal die Modul-Route).
 
 Dieses Paket deklariert `php >= 8.0`, aber die `yiisoft/*`-Komponenten, auf die sich Yii3 stützt, verlangen **PHP 8.1+**; **Yii3 ist auf PHP 8.0 daher nicht nutzbar**; Symfony 7.x und Drupal 11.x brauchen ebenso eine höhere PHP-Version. Die Schritt-für-Schritt-Einrichtung steht unten unter „Framework-Konfiguration".
 
@@ -283,7 +284,7 @@ Das Verzeichnis `joomla/` im Paket *ist* das Plugin: das Manifest `xhprof.xml`, 
 
 **1. Modul aktivieren** — `drupal/xhprof/` im Paket ist ein Standard-Drupal-Modul (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Es an `modules/custom/xhprof/` der eigenen Seite legen und dann auf der Seite „Erweitern" aktivieren (oder mit `drush en xhprof`).
 
-**2. Report-Seite und statische Assets** — Drupal ist **das einzige der zehn Frameworks, das den Weg „Modul + Routen“ geht**: `xhprof.routing.yml` registriert den Report-Pfad `/xhprof` und den Asset-Pfad `/xhprof-assets`, standardmäßig ausgeliefert vom Modul-Controller; die übrigen neun Einstiegsklassen schließen vor dem Start des Profilings selbst kurz und liefern Report-Seite und statische Assets ohne Routenregistrierung aus. **Bei einem eigenen `assets_url`-Präfix übernimmt die Middleware die Assets**: Der Pfad der Modul-Asset-Route ist in `xhprof.routing.yml` festgeschrieben (`/xhprof-assets/{file}`) und passt nie zu einem anderen Präfix.
+**2. Report-Seite und statische Assets** — Drupal ist **das einzige der elf Frameworks, das den Weg „Modul + Routen“ geht**: `xhprof.routing.yml` registriert den Report-Pfad `/xhprof` und den Asset-Pfad `/xhprof-assets`, standardmäßig ausgeliefert vom Modul-Controller; die übrigen zehn Einstiegsklassen schließen vor dem Start des Profilings selbst kurz und liefern Report-Seite und statische Assets ohne Routenregistrierung aus. **Bei einem eigenen `assets_url`-Präfix übernimmt die Middleware die Assets**: Der Pfad der Modul-Asset-Route ist in `xhprof.routing.yml` festgeschrieben (`/xhprof-assets/{file}`) und passt nie zu einem anderen Präfix.
 
 **3. Konfiguration** — die Konfiguration ist typisierte Konfiguration auf Modulebene: die Standardwerte liegen in `drupal/xhprof/config/install/xhprof.settings.yml`, das Schema in `drupal/xhprof/config/schema/xhprof.schema.yml`. Die Felder stehen unter „Konfigurationsreferenz".
 
@@ -305,6 +306,40 @@ Der innere Kernel wird von Drupals `StackedKernelPass` **automatisch als Konstru
 - `priority: 1000` platziert die Middleware **außerhalb des Seitencaches** (die höchste vorhandene Priorität im Core ist negotiation: 400 bei D10, 500 bei D11, der Seitencache liegt bei 200), also werden **auch Requests profiliert, die aus Drupals Seitencache bedient werden**. Für ein Profiling-Werkzeug ist das das beabsichtigte Verhalten, die Nutzer sollten es aber wissen.
 - Der Cache funktioniert ohne weiteres Zutun: die Middleware verwendet standardmäßig den mit diesem Paket gelieferten Redis-Adapter (das Paket hängt hart von ext-redis ab), und sie akzeptiert über `arguments` in `services.yml` zusätzlich ein optionales `CacheInterface`-Argument, um ihn zu überschreiben. Ist der Cache nicht verfügbar, wird ein fehlgeschlagenes Speichern von `XhprofProfiler::stop()` in einer einzigen Logzeile verschluckt — **es wird kein Fehler ausgelöst**.
 - Requests auf die Report-Seite `/xhprof` und auf `/xhprof-assets/*` werden **nicht profiliert**: die Middleware überspringt das Profiling vor `xhprofStart()` anhand des Pfades. Die Antwort erzeugt trotzdem der Controller in `xhprof.routing.yml` (**das ist kein Kurzschluss**). Selbst wenn `ignore_url_arr` auf `[]` gesetzt ist (also nichts gefiltert wird), tauchen diese beiden Requests im Report nie auf.
+
+### Reines PHP (ohne Framework)
+
+Für Anwendungen ohne Framework, die nur einen Front-Controller haben (etwa `public/index.php`).
+
+**1. Eine Zeile oben in der Einstiegsdatei ergänzen**:
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
+```
+
+Zum Ändern der Konfiguration das Array in diese Zeile geben (Schlüsselsatz wie bei den anderen zehn, Standardwerte in `src/Native/config/xhprof.php`):
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
+    'enable' => true,
+    'auth_token' => 'xxx',
+]);
+```
+
+Das zweite und dritte Argument sind optionale Injektionspunkte: `CacheInterface $cache` und `LoggerInterface $logger` (standardmäßig der Redis-Adapter dieses Pakets und `error_log`). Der Rückgabewert ist die Einstiegsinstanz dieser Anfrage (`stop()` ist idempotent); rufen Sie sie auf, um im selben Prozess früher zu beenden.
+
+**2. Report-Seite und statische Assets** — **kein Controller und keine Routenregistrierung nötig**: Diese Zeile prüft den Request-Pfad, bevor das Profiling startet: ein Treffer auf dem Report-Pfad `/xhprof` liefert sofort die Report-Seite (mit `Content-Type: text/html; charset=UTF-8` und `Cache-Control: no-cache, private`, `auth_token` wirkt wie sonst), ein Treffer auf dem Asset-Pfad (Präfix aus der Option `assets_url`, Standard `/xhprof-assets`) liefert direkt das statische Asset. **Der Preis steht offen da**: Nach diesen beiden Pfaden folgt ein `exit` — der Rest der Anfrage (Routen nach dieser Zeile, Container-Bootstrap, Session-Start und die vom Programm selbst registrierte Abschlusslogik) läuft nicht mehr.
+
+**3. Profiling-Fenster = diese Zeile → Prozess-Shutdown** (registriert wird `register_shutdown_function`). **Die Grenzen offen benannt**: Nicht enthalten ist der Code **vor** dieser Zeile (Composer-Autoload, Bootstrap des Front-Controllers) und ebenso wenig, was andere Prozesse oder Erweiterungen tun (Request-Parsing in php-fpm, Verarbeitung auf nginx-Seite). Normales Ende, `exit` sowie unbehandelte Errors / Exceptions erreichen den Endpunkt; `SIGKILL` / OOM-Killer nicht — der Profiling-Zustand verschwindet mit dem Prozess und bleibt nicht für die nächste Anfrage liegen. Zum Eingrenzen dient die Option `ignore_url_arr` (Teilstring-Abgleich auf `uri()`, wirkt ohne Codeänderung).
+
+**4. Einmal echt mit `php -S` laufen lassen**:
+
+```sh
+# Oben in public/index.php steht XhprofBootstrap::start(); die Datei ist der Front-Controller
+php -S 127.0.0.1:8000 -t public public/index.php
+```
+
+Rufen Sie `http://127.0.0.1:8000/` auf, um Daten zu erzeugen, dann `http://127.0.0.1:8000/xhprof` für die Report-Seite — beides im selben Prozess, die Assets werden so mitgeprüft.
 
 ---
 
@@ -389,7 +424,7 @@ Jedes Framework stellt 5 Adapter bereit, die diese Verträge implementieren, und
 
 ![Architecture](./images/architecture.svg)
 
-Das erste Diagramm zeigt die **Struktur**: die Eintragsklasse jedes der zehn Frameworks, die 5 Verträge, die drei Schichten des Core und die einzigen zwei verbliebenen Kopplungen.
+Das erste Diagramm zeigt die **Struktur**: die Eintragsklasse jedes der elf Frameworks, die 5 Verträge, die drei Schichten des Core und die einzigen zwei verbliebenen Kopplungen.
 
 ![Design rationale](./images/design.svg)
 
@@ -418,6 +453,7 @@ Ein profilierter Request:
 | WordPress | `plugins_loaded` | `shutdown` |
 | Joomla | `onAfterInitialise` | `onAfterRespond`, plus shutdown-Fallback |
 | Drupal | `http_middleware` (Priorität 1000, äußerste Schicht) | `finally` |
+| Reines PHP (ohne Framework) | Eine Zeile `XhprofBootstrap::start()` oben in der Einstiegsdatei | Prozess-Shutdown (`register_shutdown_function`), zusätzlich `stop()` zum früheren Beenden |
 
 ---
 
@@ -436,6 +472,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # gemeinsame Redis-Adapter-Implementierung
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # die bestehenden 4 Frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # die 6 neuen Frameworks
+│   ├── Native/                   # Reines PHP (ohne Framework): Einstiegsklasse und 5 Adapter
 │   └── html/                     # Assets der Report-Seite (css / js / images / pet.svg Site-Icon und Marken-Icon)
 ├── wordpress/                    # mu-Plugin-Bootstrap-Datei (mit Plugin-Header)
 ├── joomla/                       # Joomla-Plugin (CMSPlugin + Manifest)
@@ -467,7 +504,7 @@ src/<Fw>/
 | Punkt | Wie |
 |-------|-----|
 | Verhalten von Adaptern und Eintragsverdrahtung | `tests/Unit/Adapter/*Test.php`: aktiviert → gespeichert / deaktiviert → nicht gespeichert / Business-Exception → trotzdem über `finally` gespeichert |
-| Alle zehn Frameworks teilen einen Satz von Konfigurationsschlüsseln | Parity-Test der Konfiguration (Schlüsselmengen, nicht byteweise; Kommentare dürfen abweichen) |
+| Alle elf Frameworks teilen einen Satz von Konfigurationsschlüsseln | Parity-Test der Konfiguration (Schlüsselmengen, nicht byteweise; Kommentare dürfen abweichen) |
 | Die beiden READMEs spiegeln einander | README-Parity-Test: vergleicht die Reihenfolge der `##`/`###`-Überschriften und die Anzahl der Codeblöcke |
 | Die von den Adaptern aufgerufenen Methoden existieren wirklich | `tools/contracts/`-Verifikationsschleife (eigener CI-Job, **zwei Beine**: das Hauptbein installiert die jeweils neuesten Pakete, und das separate Projekt `tools/contracts/legacy-symfony64` fährt denselben Symfony-Case gegen 6.4): sie installiert echte Framework-Pakete (echtes `drupal/core` für Drupal, zwei echte CMS-Release-Pakete für Joomla) und prüft per Reflection, dass jede Methode / Konstante / globale Funktion existiert — **für die acht Frameworks in der Schleife** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf sind nicht in der Schleife, siehe unten |
 | Semantik der Adapter | Dieselbe Schleife erzeugt echte Request- und Response-Objekte und fährt die Adapter, inklusive zweier Invarianten: `uri()` trägt kein scheme/host, und `withHeaders()` gilt auch nach `file()`. Die SKIP-Zahl der Schleife ist eine eingefrorene Konstante (2 auf dem Hauptbein, 0 auf dem 6.4-Bein), und beide SKIPs liegen in Joomla: der echte Lesepfad von `#__extensions.params` und die Form des Installers — beide brauchen eine Datenbank oder einen Installer, um zu laufen |
@@ -492,13 +529,15 @@ src/<Fw>/
 | 2 | Eine beliebige URL der Anwendung aufrufen | Die Länge des Schlüssels `xhprof:run_id` in Redis steigt um 1 |
 | 3 | `/xhprof` öffnen | Die Report-Seite rendert mit ihren Styles; `/xhprof-assets/js/xhprof_report.js` liefert 200 |
 
+**Smoke-Test für reines PHP**: den eingebauten Server mit `php -S 127.0.0.1:8000 -t public public/index.php` starten (Schritt 4 unter „Reines PHP"), dann die drei Schritte durchführen — Report-Seite und Assets liegen mit den Fachanfragen im **selben Prozess**, Schritt 3 ist damit direkt prüfbar.
+
 **Bekannte Einschränkung: das in der Liste angezeigte `request_uri` hat keinen Port**
 
-Der Vertrag `host()` bedeutet „nur Host, kein Port“ (R-2), und alle zehn Frameworks halten sich daran — nur die Umsetzung unterscheidet sich: `getHost()` aus PSR-7 trägt den Port nie, Joomla / WordPress schneiden ihn von Hand per `parse_url` ab, und Webman / ThinkPHP brauchen das strenge Argument `host(true)` (der Standard gibt den `Host`-Header wörtlich zurück, samt Port). Das in der Liste angezeigte `request_uri` wird als `host() . uri()` gebaut (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`); auf einem Nicht-Standard-Port (z. B. `:8080`) zeigt daher der **Text** dieser Zeile den Port nicht. **Die Links selbst sind nicht betroffen**: Die Links in der Liste und im Report baut alle `XhprofLib::report_url()` als relative URLs (nur Pfad + Query), sie öffnen die richtige Seite und hängen nicht von `host()` ab.
+Der Vertrag `host()` bedeutet „nur Host, kein Port“ (R-2), und alle elf Frameworks halten sich daran — nur die Umsetzung unterscheidet sich: `getHost()` aus PSR-7 trägt den Port nie, Joomla / WordPress schneiden ihn von Hand per `parse_url` ab, und Webman / ThinkPHP brauchen das strenge Argument `host(true)` (der Standard gibt den `Host`-Header wörtlich zurück, samt Port). Das in der Liste angezeigte `request_uri` wird als `host() . uri()` gebaut (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`); auf einem Nicht-Standard-Port (z. B. `:8080`) zeigt daher der **Text** dieser Zeile den Port nicht. **Die Links selbst sind nicht betroffen**: Die Links in der Liste und im Report baut alle `XhprofLib::report_url()` als relative URLs (nur Pfad + Query), sie öffnen die richtige Seite und hängen nicht von `host()` ab.
 
 **`assets_url` unterstützt jetzt ein eigenes Präfix**
 
-Das Asset-Präfix ist keine hart kodierte Konstante mehr: `src/Core/StaticController.php` gleicht Asset-Pfade mit der Option `assets_url` ab (Standard `/xhprof-assets`, abschließender Schrägstrich optional). Die verbleibende Einschränkung bei einem Deployment im Unterverzeichnis steht unten beim Drupal-Punkt. **Alle zehn Frameworks folgen dieser Option**: neun Einstiegsklassen schließen den Asset-Pfad vor dem Start des Profilings selbst kurz und liefern ihn aus, während Drupal den Standardpräfix über Modul-Route + Controller ausliefert und einen eigenen Präfix an die Middleware übergibt. **Grenze**: Laravel, Hyperf, Webman und ThinkPHP brauchen keinen Controller und keine Routen mehr — die Middleware läuft zuerst, die nach der alten Anleitung registrierten Routen sind nur noch verdeckt: Sie werfen keinen Fehler und werden nie mehr erreicht.
+Das Asset-Präfix ist keine hart kodierte Konstante mehr: `src/Core/StaticController.php` gleicht Asset-Pfade mit der Option `assets_url` ab (Standard `/xhprof-assets`, abschließender Schrägstrich optional). Die verbleibende Einschränkung bei einem Deployment im Unterverzeichnis steht unten beim Drupal-Punkt. **Alle elf Frameworks folgen dieser Option**: zehn Einstiegsklassen schließen den Asset-Pfad vor dem Start des Profilings selbst kurz und liefern ihn aus, während Drupal den Standardpräfix über Modul-Route + Controller ausliefert und einen eigenen Präfix an die Middleware übergibt. **Grenze**: Laravel, Hyperf, Webman und ThinkPHP brauchen keinen Controller und keine Routen mehr — die Middleware läuft zuerst, die nach der alten Anleitung registrierten Routen sind nur noch verdeckt: Sie werfen keinen Fehler und werden nie mehr erreicht.
 
 **Bekannte Einschränkung: die Pfadprüfung versagt, wenn Drupal in einem Unterverzeichnis liegt**
 

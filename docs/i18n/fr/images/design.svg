@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">le comportement de Webman/Laravel est inchangé aussi</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">le même contrat implémenté 10 fois</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 frameworks écrivent chacun 5 Adapter,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">le même contrat implémenté 11 fois</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 frameworks écrivent chacun 5 Adapter,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">le contrat tient mais l'implémentation est réécrite</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">pas de route d'assets à enregistrer</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">la logique de court-circuit répétée 10 fois</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">la logique de court-circuit répétée 11 fois</text>
   <text x="816" y="314" font-size="11" fill="#24292f">ces 3 points sont exactement là où une erreur échappe aux tests,</text>
   <text x="816" y="330" font-size="10.65" fill="#24292f">la répétition achète la certitude (le module standard Drupal est l'exception)</text>
 

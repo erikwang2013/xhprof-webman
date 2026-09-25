@@ -13,11 +13,11 @@ namespace ErikWang2013\Xhprof\Core;
  * Xhprof::index() 里要读缓存（`\Redis` 类不存在）会变成未捕获错误 → 报告页 500。
  * 两个扩展都是 composer.json 的 require，同时缺的部署只能是自己少装了。
  *
- * 收在一处而不是九个入口各判一次：判断与告警的粒度必须十家一致，而「一次告警」
+ * 收在一处而不是十一个入口各判一次：判断与告警的粒度必须十一家一致，而「一次告警」
  * 是**进程级**状态（见 $warned 注释），分散在多处就会变成每个入口各刷一遍。
  * 放 Core 而不是 MiddlewareTrait：trait 的静态方法要先有 using class 才调得到，
- * 而九个入口里只有 Laravel/Thinkphp 两个用这个 trait，其余七个（Hyperf/Yii3/Slim/
- * WordPress/Joomla/Drupal + Core 相关调用）没有可用的宿主类。
+ * 而十一个入口里只有 Laravel/Thinkphp/Yii3 三个用这个 trait，其余八个（Webman/Hyperf/
+ * Slim/Symfony/WordPress/Joomla/Drupal/Native）没有可用的宿主类。
  */
 final class SamplingGuard
 {
@@ -25,7 +25,7 @@ final class SamplingGuard
      * 每个进程只告警一次，粒度照抄 Webman 入口类原有的实现（它用 private static $warned）。
      *
      * 不按请求告警：常驻进程（Swoole/RoadRunner/FrankenPHP）里缺扩展是**部署期**的
-     * 事实，每请求刷一行只会把日志淹掉。也不按入口类告警：十个入口共享本进程，
+     * 事实，每请求刷一行只会把日志淹掉。也不按入口类告警：十一个入口共享本进程，
      * 第一个缺扩展的请求已经说清楚了。
      */
     private static bool $warned = false;

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif" direction="rtl">
   <title>بنية XHProf Webman الطبقية</title>
-  <desc>ثلاث طبقات: الطبقة العليا هي فئات مدخل الأطر العشر (4 مدعومة أصلًا + 6 جديدة في هذا الإصدار)، والوسطى هي الواجهات الخمس في src/Core/Contract/، والسفلى هي فئات Core الخمس. ويُبرز الشريط الأحمر في الأسفل موضعي الاقتران الوحيدين الباقيين مع الأطر، مع التنبيه إلى أن الأطر الستة الجديدة لا تمرّ عبر autoDetect بل تستخدم الحقن الصريح عبر Xhprof::bootstrap()‎. ترجمة آلية غير مُراجَعة. هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. المرجع المعتمد هو النسخة الإنجليزية.</desc>
+  <desc>ثلاث طبقات: الطبقة العليا هي فئات مدخل الأطر الأحد عشر (4 مدعومة أصلًا + 7 جديدة في هذا الإصدار)، والوسطى هي الواجهات الخمس في src/Core/Contract/، والسفلى هي فئات Core الخمس. ويُبرز الشريط الأحمر في الأسفل موضعي الاقتران الوحيدين الباقيين مع الأطر، مع التنبيه إلى أن الأطر السبعة الجديدة لا تمرّ عبر autoDetect بل تستخدم الحقن الصريح عبر Xhprof::bootstrap()‎. ترجمة آلية غير مُراجَعة. هذا المستند تُرجم آليًا ولم يُراجعه متحدث أصلي بالعربية، وقد يحمل أخطاء في المعنى والمصطلحات. المرجع المعتمد هو النسخة الإنجليزية.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -16,17 +16,17 @@
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f" text-anchor="end">بنية XHProf Webman الطبقية</text>
-  <text x="32" y="70" font-size="13" fill="#57606a" text-anchor="end">10 مداخل أطر → 5 عقود → 1 نواة: الأطر الجديدة لا تمسّ Core</text>
+  <text x="32" y="70" font-size="13" fill="#57606a" text-anchor="end">11 مداخل أطر → 5 عقود → 1 نواة: الأطر الجديدة لا تمسّ Core</text>
 
   <!-- 图例 -->
   <rect x="700" y="32" width="18" height="18" rx="4" fill="#ffffff" stroke="#1a7f37" stroke-width="2"/>
   <text x="726" y="46" font-size="12.5" fill="#57606a" text-anchor="end">4 مدعومة</text>
   <rect x="830" y="32" width="18" height="18" rx="4" fill="#ddf4ff" stroke="#0969da" stroke-width="2" stroke-dasharray="5 3"/>
-  <text x="856" y="46" font-size="12.5" fill="#57606a" text-anchor="end">6 جديدة</text>
+  <text x="856" y="46" font-size="12.5" fill="#57606a" text-anchor="end">7 جديدة</text>
 
   <!-- ============ ① 框架入口层 ============ -->
   <rect x="24" y="100" width="1152" height="236" rx="12" fill="#ffffff" stroke="#e1e4e8" stroke-width="1.5"/>
-  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f" text-anchor="end">① طبقة مداخل الأطر — 10 فئات مدخل</text>
+  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f" text-anchor="end">① طبقة مداخل الأطر — 11 فئات مدخل</text>
   <text x="1156" y="128" font-size="11.5" fill="#57606a" text-anchor="start">أسماء الفئات تحذف بادئة مساحة الأسماء ErikWang2013\Xhprof\‎</text>
 
   <text x="44" y="152" font-size="12" font-weight="600" fill="#1a7f37" text-anchor="end">4 أطر مدعومة أصلًا</text>
@@ -59,44 +59,44 @@
   <rect x="1098" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
   <text x="1122" y="179" font-size="10.5" fill="#ffffff" text-anchor="middle">مدعوم</text>
 
-  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da" text-anchor="end">6 أطر جديدة في هذا الإصدار</text>
+  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da" text-anchor="end">7 أطر جديدة في هذا الإصدار</text>
 
-  <!-- 新增 6 个 -->
-  <rect x="44" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <!-- 新增 7 个 -->
+  <rect x="44" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
   <text x="56" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Yii3</text>
   <text x="56" y="300" font-size="10.5" fill="#57606a" direction="ltr">Yii3\XhprofMiddleware</text>
-  <rect x="164" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="186" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
+  <rect x="144" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="166" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 
-  <rect x="232" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="244" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Symfony</text>
-  <text x="244" y="300" font-size="10.5" fill="#57606a" direction="ltr">Symfony\XhprofListener</text>
-  <rect x="352" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="374" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
+  <rect x="204" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="216" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Symfony</text>
+  <text x="216" y="300" font-size="10.5" fill="#57606a" direction="ltr">Symfony\XhprofListener</text>
+  <rect x="304" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="326" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 
-  <rect x="420" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="432" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Slim 4</text>
-  <text x="432" y="300" font-size="10.5" fill="#57606a" direction="ltr">Slim\XhprofMiddleware</text>
-  <rect x="540" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="562" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
+  <rect x="364" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="376" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Slim 4</text>
+  <text x="376" y="300" font-size="10.5" fill="#57606a" direction="ltr">Slim\XhprofMiddleware</text>
+  <rect x="464" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="486" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 
-  <rect x="608" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="620" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">WordPress</text>
-  <text x="620" y="300" font-size="10.5" fill="#57606a" direction="ltr">Wordpress\XhprofPlugin</text>
-  <rect x="728" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="750" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
+  <rect x="524" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="536" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">WordPress</text>
+  <text x="536" y="300" font-size="10.5" fill="#57606a" direction="ltr">Wordpress\XhprofPlugin</text>
+  <rect x="624" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="646" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 
-  <rect x="796" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="808" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Joomla</text>
-  <text x="808" y="300" font-size="10.5" fill="#57606a" direction="ltr">Joomla\Extension\Xhprof</text>
-  <rect x="916" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="938" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
+  <rect x="684" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="696" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Joomla</text>
+  <text x="696" y="300" font-size="10.5" fill="#57606a" direction="ltr">Joomla\Extension\Xhprof</text>
+  <rect x="784" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="806" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 
-  <rect x="984" y="254" width="172" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="996" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Drupal</text>
-  <text x="996" y="300" font-size="10.5" fill="#57606a" direction="ltr">Drupal\XhprofMiddleware</text>
-  <rect x="1104" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="1126" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
+  <rect x="844" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="856" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Drupal</text>
+  <text x="856" y="300" font-size="10.5" fill="#57606a" direction="ltr">Drupal\XhprofMiddleware</text>
+  <rect x="944" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="966" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 
   <!-- ① → ② -->
   <line x1="600" y1="340" x2="600" y2="358" stroke="#57606a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
@@ -169,7 +169,7 @@
   <rect x="24" y="654" width="1152" height="200" rx="12" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
   <rect x="44" y="668" width="252" height="26" rx="13" fill="#cf222e"/>
   <text x="170" y="686" font-size="10.79" font-weight="600" fill="#ffffff" text-anchor="middle">الاقترانان الباقيان مع الأطر في Core</text>
-  <text x="312" y="686" font-size="11.5" fill="#57606a" text-anchor="end">كلاهما يعمل فقط على مسار bootstrap()‎ القديم بلا وسائط، ولا يمسّ الأطر الستة الجديدة</text>
+  <text x="312" y="686" font-size="11.5" fill="#57606a" text-anchor="end">كلاهما يعمل فقط على مسار bootstrap()‎ القديم بلا وسائط، ولا يمسّ الأطر السبعة الجديدة</text>
 
   <rect x="45" y="698" width="546" height="76" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
   <text x="61" y="719" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="end">① سلسلة class_exists في Xhprof::autoDetect()‎</text>
@@ -184,6 +184,12 @@
   <text x="627" y="768" font-size="10.5" fill="#57606a" text-anchor="end">الشيفرة الوحيدة في Core التي تذكر اسم فئة إطار مباشرة</text>
 
   <rect x="44" y="792" width="1112" height="42" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">الأطر الستة الجديدة لا تمرّ عبر autoDetect</text>
+  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">الأطر السبعة الجديدة لا تمرّ عبر autoDetect</text>
   <text x="600" y="829" font-size="11.5" fill="#24292f" text-anchor="middle">كلها تستخدم الحقن الصريح Xhprof::bootstrap($req, $res, $cfg, $cache, $log)‎</text>
+  <!-- ① 框架入口层 -->
+  <rect x="1004" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="1016" y="279" font-size="13" font-weight="600" fill="#24292f" direction="ltr">Native PHP</text>
+  <text x="1016" y="300" font-size="10.5" fill="#57606a" direction="ltr">Native\XhprofBootstrap</text>
+  <rect x="1104" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="1126" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">جديد</text>
 </svg>

@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f" text-anchor="end">وسلوك Webman/Laravel غير متأثر أيضًا</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00" text-anchor="end">العقد نفسه منفَّذ 10 مرات</text>
-  <text x="816" y="224" font-size="11" fill="#24292f" text-anchor="end">كل إطار من العشرة يكتب 5 من Adapter،</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00" text-anchor="end">العقد نفسه منفَّذ 11 مرات</text>
+  <text x="816" y="224" font-size="11" fill="#24292f" text-anchor="end">كل إطار من الأطر الأحد عشر يكتب 5 من Adapter،</text>
   <text x="816" y="240" font-size="11" fill="#24292f" text-anchor="end">العقد ثابت لكن الشيفرة تُعاد كتابتها مرارًا</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f" text-anchor="end">ولا مسار للموارد تسجّله</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00" text-anchor="end">منطق التجاوز المبكر مكرر 10 مرات</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00" text-anchor="end">منطق التجاوز المبكر مكرر 11 مرات</text>
   <text x="816" y="314" font-size="9.62" fill="#24292f" text-anchor="end">وهذه الثلاثة بالذات هي ما يختبئ فيه التخمين الخاطئ عن الاختبارات،</text>
   <text x="816" y="330" font-size="11" fill="#24292f" text-anchor="end">فالتكرار يشتري اليقين (وحدة Drupal القياسية استثناء)</text>
 

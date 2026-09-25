@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 「装了 ext-xhprof、缺 ext-redis」时九个采样入口的一致行为：报一句、跳过采样、
+ * 「装了 ext-xhprof、缺 ext-redis」时十个采样入口的一致行为：报一句、跳过采样、
  * 报告页不进入采样路径。
  *
  * 缺扩展**没有**在进程内模拟：整个用例跑在 `php -n -d extension=…/xhprof.so` 子进程里，
@@ -23,13 +23,14 @@ use PHPUnit\Framework\TestCase;
  * 已知覆盖缺口（不在这里假装覆盖了）：
  *  - Symfony：`src/Symfony/XhprofListener.php` 只判了 `extension_loaded('xhprof')`，
  *    该目录不在本次改动范围内，故不列入 ENTRIES；
- *  - WordPress 报告页分支以 `exit` 收尾，报告路径只在真实 HTTP 下验
- *    （见 WordpressTest::reportPageAndAssetsOverRealHttp）。
+ *  - WordPress 与 Native 的报告页分支以 `exit` 收尾（原生那条没有框架响应层，不 exit
+ *    就会把应用输出叠在报告页后面），两者的报告路径只在真实 HTTP 下验
+ *    （见 WordpressTest::reportPageAndAssetsOverRealHttp / NativeTest::reportPageAssetsAndBusinessOverRealHttp）。
  */
 class MissingExtensionParityTest extends TestCase
 {
     /**
-     * 九个采样入口。Hyperf 必须排最后：它的 `markHyperfContext()` 会把 Core 的 getter
+     * 十个采样入口。Hyperf 必须排最后：它的 `markHyperfContext()` 会把 Core 的 getter
      * 切到协程 Context（进程内不可逆），此后 `Xhprof::getCache()` 读到的是 Hyperf 的容器。
      */
     private const ENTRIES = [
@@ -41,6 +42,7 @@ class MissingExtensionParityTest extends TestCase
         'drupal',
         'wordpress',
         'joomla',
+        'native',
         'hyperf',
     ];
 
@@ -514,6 +516,23 @@ $arms['joomla'] = static function (string $uri) use ($runs, $leaked, $resetWarnO
     return ['warnings' => $logger->errors, 'runs' => $runs(), 'leaked' => $leaked(), 'closed' => $app->closeCalls > 0];
 };
 
+$arms['native'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
+    $resetWarnOnce();
+    $_SERVER = ['REQUEST_URI' => $uri, 'REQUEST_METHOD' => 'GET', 'HTTP_HOST' => 'example.com', 'REMOTE_ADDR' => '127.0.0.1'];
+    $_GET = [];
+    $_POST = [];
+    $cache = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeCache();
+    $logger = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger();
+    // 一行起采样（原生没有中间件/插件那样的宿主扩展点）。止点本该由
+    // `register_shutdown_function` 触发，那要到本进程最后才跑——runs/leaked 两个观测量
+    // 都在探针里读，所以这里显式 stop()；「进程 shutdown 也会止点」另由
+    // NativeTest 的探针路径覆盖。
+    \ErikWang2013\Xhprof\Native\XhprofBootstrap::start(['enable' => true, 'ignore_url_arr' => []], $cache, $logger)
+        ->stop();
+
+    return ['warnings' => $logger->errors, 'runs' => $runs(), 'leaked' => $leaked()];
+};
+
 // Hyperf 放最后：markHyperfContext() 会把 Core 的 getter 切到协程 Context（static 在本进程里
 // 不可逆），此后的 arm 用 getCache() 会读到 Hyperf 的 cache。
 $arms['hyperf'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
@@ -587,7 +606,7 @@ if ($mode === 'report') {
     }
     $out['webman_x3'] = ['warnings' => $warnings, 'runs' => $row['runs'], 'leaked' => $row['leaked'], 'requests' => 3];
 } else {
-    foreach (['webman', 'laravel', 'thinkphp', 'yii3', 'slim', 'drupal', 'wordpress', 'joomla', 'hyperf'] as $entry) {
+    foreach (['webman', 'laravel', 'thinkphp', 'yii3', 'slim', 'drupal', 'wordpress', 'joomla', 'native', 'hyperf'] as $entry) {
         try {
             $out[$entry] = $arms[$entry]('/business');
         } catch (\Throwable $e) {

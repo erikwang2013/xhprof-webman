@@ -41,7 +41,7 @@ class XhprofMiddleware implements HttpKernelInterface
     private const REPORT_PATH = '/xhprof';
 
     /**
-     * `xhprof.assets_url` 的默认值，与 Core\StaticController::URI_PREFIX 及十份配置文件一致。
+     * `xhprof.assets_url` 的默认值，与 Core\StaticController::URI_PREFIX 及十一份配置文件一致。
      *
      * 前缀本身**从配置读**（见 isReportOrAssets()），这个常量只是缺配置时的兜底。
      * 这里曾经镜像 Core 的私有常量 '/xhprof-assets' 并注释成「两处必须一致」——Core 改成
@@ -91,17 +91,17 @@ class XhprofMiddleware implements HttpKernelInterface
         $enabled = SamplingGuard::available() && XhprofProfiler::isEnabled();
 
         // 报告页与静态资源**只跳过采样，不短路响应**：响应仍由模块路由的 Controller 产生，
-        // 短路会让 routing.yml + Controller 变成死代码（Drupal 是六家里唯一用模块路由的）。
+        // 短路会让 routing.yml + Controller 变成死代码（十一家入口里只有 Drupal 用模块路由）。
         // 不跳的话，「打开报告」这个动作本身会被写进报告，而且用户把 ignore_url_arr 清空
         // （「什么都不过滤」）时每次刷新都会新增一条 run —— 那正是 ignore_url_arr 想表达
-        // 的意图被配置覆盖掉的情形，六家里也只有 Drupal 会这样。
+        // 的意图被配置覆盖掉的情形，十一家入口里也只有 Drupal 会这样。
         if ($enabled && $this->isReportOrAssets($request)) {
             $enabled = false;
         }
 
         // 自定义 `assets_url` 前缀：模块资源路由的 path 写死在 xhprof.routing.yml
         // （'/xhprof-assets/{file}'），永远匹配不到别的前缀 —— 那一路由本中间件自己服务，
-        // 否则报告页会静默丢掉样式与脚本（十家里只有 Drupal 是「路由固定」这一形态）。
+        // 否则报告页会静默丢掉样式与脚本（十一家里只有 Drupal 是「路由固定」这一形态）。
         // 默认前缀**不接管**：仍旧由模块路由 + Controller 服务，保留 Drupal 用路由器提供
         // 报告页/资源的既有设计（routing.yml 与 Controller 因此不是死代码）。
         // 两条路的判定同源：都用下面 assetsPrefix() 归一化出来的那个前缀。
@@ -143,7 +143,7 @@ class XhprofMiddleware implements HttpKernelInterface
             return true;
         }
 
-        // 前缀从配置归一化，口径与 Core\StaticController::uriPrefix() 及另外 9 家入口类
+        // 前缀从配置归一化，口径与 Core\StaticController::uriPrefix() 及其余入口类
         // 完全一致（见 assetsPrefix()）；必须与 StaticController 同源，否则「守卫认的」与
         // 「serve() 认的」是两批路径。
         $prefix = self::assetsPrefix();

@@ -41,8 +41,9 @@ xhprof 拡張で計測データを収集し、Redis に保存します。開発�
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | `wp-content/mu-plugins/` にコピー |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | `plugins/system/` にコピーし、Discover でインストール |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` モジュール（`Drupal\XhprofMiddleware`） | 標準モジュール。有効化するだけ |
+| 素の PHP（フレームワークなし） | —（外部パッケージなし） | 8.0 | `Native\XhprofBootstrap` | 入口ファイルの先頭に 1 行 `XhprofBootstrap::start()` を書くだけ。コントローラもルート登録も不要 |
 
-入口クラスはすべて `ErikWang2013\Xhprof\` 名前空間プレフィックスの下にあります（上の表では省略）。10 のうちどれも、コントローラやルートの登録を求めてきません。レポートページと静的アセットは入口クラス自身が配信します（Drupal の場合はモジュールのルート）。
+入口クラスはすべて `ErikWang2013\Xhprof\` 名前空間プレフィックスの下にあります（上の表では省略）。11 のうちどれも、コントローラやルートの登録を求めてきません。レポートページと静的アセットは入口クラス自身が配信します（Drupal の場合はモジュールのルート）。
 
 本パッケージは `php >= 8.0` を宣言していますが、Yii3 が依存する `yiisoft/*` コンポーネントは **PHP 8.1 以上**を要求するため、**Yii3 は PHP 8.0 では使用できません**。同様に Symfony 7.x と Drupal 11.x もより高い PHP バージョンが必要です。手順の詳細は後述の「フレームワーク設定」にあります。
 
@@ -283,7 +284,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. モジュールを有効化** — パッケージの `drupal/xhprof/` は標準的な Drupal モジュールです（`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`）。サイトの `modules/custom/xhprof/` に配置し、「Extend」ページ（または `drush en xhprof`）で有効化してください。
 
-**2. レポートページと静的アセット** — Drupal は**10 フレームワーク中で唯一「モジュール + ルート」の形をとります**。`xhprof.routing.yml` がレポートパス `/xhprof` とアセットパス `/xhprof-assets` を登録し、既定ではモジュールのコントローラが配信します。残り 9 つの入口クラスは計測開始前に自前でショートサーキットしてレポートページと静的アセットを配信し、ルートを登録しません。**`assets_url` を独自プレフィックスにするとアセットはミドルウェアが配信します**: モジュールのアセットルートの path は `xhprof.routing.yml` に固定されており（`/xhprof-assets/{file}`）、別のプレフィックスには決して一致しません。
+**2. レポートページと静的アセット** — Drupal は**11 フレームワーク中で唯一「モジュール + ルート」の形をとります**。`xhprof.routing.yml` がレポートパス `/xhprof` とアセットパス `/xhprof-assets` を登録し、既定ではモジュールのコントローラが配信します。残り 10 の入口クラスは計測開始前に自前でショートサーキットしてレポートページと静的アセットを配信し、ルートを登録しません。**`assets_url` を独自プレフィックスにするとアセットはミドルウェアが配信します**: モジュールのアセットルートの path は `xhprof.routing.yml` に固定されており（`/xhprof-assets/{file}`）、別のプレフィックスには決して一致しません。
 
 **3. 設定** — 設定はモジュールレベルの typed config です。既定値は `drupal/xhprof/config/install/xhprof.settings.yml` にあり、スキーマは `drupal/xhprof/config/schema/xhprof.schema.yml` にあります。項目は「設定リファレンス」を参照してください。
 
@@ -305,6 +306,40 @@ services:
 - `priority: 1000` はミドルウェアを**ページキャッシュの外側**に置きます（コアに既存の最高優先度は negotiation の 400（D10）/ 500（D11）で、ページキャッシュは 200 です）。したがって **Drupal のページキャッシュから返されるリクエストも計測されます**。計測ツールとしては意図した挙動ですが、利用者は知っておくべきです。
 - キャッシュはすぐに動作します。ミドルウェアは既定で本パッケージ同梱の Redis アダプタを使い（本パッケージは ext-redis にハード依存しています）、`services.yml` の `arguments` で省略可能な `CacheInterface` 引数を渡して上書きもできます。キャッシュが使えない場合、保存の失敗は `XhprofProfiler::stop()` が 1 行のログに飲み込み、**エラーは発生しません**。
 - レポートページ `/xhprof` と `/xhprof-assets/*` へのリクエストは**計測されません**。ミドルウェアが `xhprofStart()` より前にパスで計測対象外と判断するためです。レスポンス自体は `xhprof.routing.yml` の Controller が生成します（**これは短絡ではありません**）。そのため `ignore_url_arr` を `[]`（何も除外しない）にしても、この 2 つのリクエストがレポートに現れることはありません。
+
+### 素の PHP（フレームワークなし）
+
+フレームワークを使わず、フロントコントローラが 1 つだけのアプリ（`public/index.php` など）向けです。
+
+**1. 入口ファイルの先頭に 1 行追加します**:
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
+```
+
+設定を変える場合はこの行に配列を渡します（キー集合は他の 10 と同一、既定値は `src/Native/config/xhprof.php`）:
+
+```php
+\ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
+    'enable' => true,
+    'auth_token' => 'xxx',
+]);
+```
+
+第 2・第 3 引数は任意の注入点です: `CacheInterface $cache` と `LoggerInterface $logger`（既定は本パッケージの Redis アダプタと `error_log`）。戻り値はこのリクエストの入口インスタンス（`stop()` は冪等）で、同一プロセス内で早めに止めたいときに呼びます。
+
+**2. レポートページと静的アセット** — **コントローラもルート登録も不要です**。この行が計測開始前にリクエストパスを判定し、レポートパス `/xhprof` に一致すればレポートページをそのまま返し（`Content-Type: text/html; charset=UTF-8` と `Cache-Control: no-cache, private` 付き、`auth_token` も従来どおり効きます）、アセットパス（プレフィックスは `assets_url` 設定から読み取り、既定は `/xhprof-assets`）に一致すれば静的アセットを直接返します。**代償は明記します**: この 2 つのパスを処理した時点で `exit` するため、そのリクエストの残り（この行より後のルート、コンテナの起動、セッション開始、アプリ自身が登録した終了処理）は実行されません。
+
+**3. 計測ウィンドウ = この行 → プロセス shutdown**（登録されるのは `register_shutdown_function`）。**境界はそのまま書きます**: この行より**前**のコード（composer autoload、フロントコントローラの起動）は含まず、別プロセスや拡張の処理（php-fpm のリクエスト解析、nginx 側の処理）も含みません。正常終了・`exit`・捕捉されなかった Error / 例外はいずれも終点に到達しますが、`SIGKILL` / OOM killer は到達しません — 計測状態はプロセスとともに消え、次のリクエストに残りません。範囲を狭めるには `ignore_url_arr` 設定（`uri()` への部分文字列一致、コード変更なしで有効）を使います。
+
+**4. `php -S` で実際に 1 回動かします**:
+
+```sh
+# public/index.php の先頭に XhprofBootstrap::start() があり、このファイルがフロントコントローラです
+php -S 127.0.0.1:8000 -t public public/index.php
+```
+
+`http://127.0.0.1:8000/` にアクセスしてデータを作り、次に `http://127.0.0.1:8000/xhprof` でレポートページを確認します — どちらも同じプロセス内なので、アセットも併せて検証できます。
 
 ---
 
@@ -389,7 +424,7 @@ Core はフレームワークに、`src/Core/Contract/` にあるちょうど 5 
 
 ![アーキテクチャ](./images/architecture.svg)
 
-1 枚目は**構造**の図です。10 フレームワークそれぞれの入口クラス、5 つの契約、Core の 3 層、そして残った 2 箇所の結合を示します。
+1 枚目は**構造**の図です。11 フレームワークそれぞれの入口クラス、5 つの契約、Core の 3 層、そして残った 2 箇所の結合を示します。
 
 ![設計のトレードオフ](./images/design.svg)
 
@@ -418,6 +453,7 @@ Core はフレームワークに、`src/Core/Contract/` にあるちょうど 5 
 | WordPress | `plugins_loaded` | `shutdown` |
 | Joomla | `onAfterInitialise` | `onAfterRespond`、加えて shutdown フォールバック |
 | Drupal | `http_middleware`（優先度 1000、最外層） | `finally` |
+| 素の PHP（フレームワークなし） | 入口ファイルの先頭に 1 行 `XhprofBootstrap::start()` | プロセス shutdown（`register_shutdown_function`）。`stop()` で早めに止めることも可 |
 
 ---
 
@@ -436,6 +472,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # 各フレームワーク Redis アダプタの共通実装
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 既存の 4 フレームワーク
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 新規 6 フレームワーク
+│   ├── Native/                   # 素の PHP（フレームワークなし）：入口クラスと 5 つのアダプタ
 │   └── html/                     # レポートページのアセット（css / js / images / pet.svg サイトアイコンとブランドアイコン）
 ├── wordpress/                    # mu-plugin ブートストラップファイル（プラグインヘッダ付き）
 ├── joomla/                       # Joomla プラグイン（CMSPlugin + マニフェスト）
@@ -467,7 +504,7 @@ src/<Fw>/
 | 項目 | 方法 |
 |------|-----|
 | アダプタと入口の配線の挙動 | `tests/Unit/Adapter/*Test.php`：有効 → 保存 / 無効 → 保存しない / 業務例外 → `finally` 経由で保存される |
-| 10 フレームワークが 1 つの設定キー集合を共有 | 設定パリティテスト（キー集合のみで、バイト単位の一致は見ない。コメントは差異を許容） |
+| 11 フレームワークが 1 つの設定キー集合を共有 | 設定パリティテスト（キー集合のみで、バイト単位の一致は見ない。コメントは差異を許容） |
 | 2 つの README が対応している | README パリティテスト：`##` / `###` の見出し列とコードブロック数を比較 |
 | アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ、**2 本のレグ**: 主レグは各フレームワークの最新パッケージを入れ、別プロジェクト `tools/contracts/legacy-symfony64` が同じ Symfony ケースを 6.4 に対して実行します）: 実フレームワークパッケージを導入し（Drupal は実物の `drupal/core`、Joomla は実物の CMS リリースパッケージ 2 本）、すべてのメソッド / 定数 / グローバル関数の存在をリフレクションで検証します — **ループに入っている 8 つのフレームワーク**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman）について。ThinkPHP / Hyperf はループ外です（下記参照） |
 | アダプタのセマンティクス | 同じループが実際の request / response オブジェクトを生成してアダプタを走らせ、2 つの不変条件（`uri()` が scheme/host を含まないこと、`file()` の後でも `withHeaders()` が適用されること）を確認します。ループの SKIP 数は凍結された定数（主レグ 2、6.4 レグ 0）で、どちらも Joomla にあります: `#__extensions.params` の実際の読み取り経路とインストーラの形態で、どちらも実行にデータベースかインストーラが要ります |
@@ -492,13 +529,15 @@ src/<Fw>/
 | 2 | アプリの任意の URL にアクセスする | Redis の `xhprof:run_id` キーの長さが 1 増える |
 | 3 | `/xhprof` を開く | レポートページがスタイル付きで描画される。`/xhprof-assets/js/xhprof_report.js` が 200 を返す |
 
+**素の PHP のスモーク**: `php -S 127.0.0.1:8000 -t public public/index.php` でビルトインサーバーを起動し（「素の PHP」の 4 番目）、3 つの手順をそのまま実行します — レポートページとアセットが業務リクエストと**同じプロセス**にあるため、3 番目はそのまま検証できます。
+
 **既知の制限：一覧に表示される `request_uri` にポートがない**
 
-`host()` 契約は「ホストのみ、ポートを含まない」（R-2）を意味し、10 のフレームワークすべてが従っています。違うのは実装方法だけです。PSR-7 の `getHost()` はポートを含みません。Joomla / WordPress は手動で `parse_url` に一度かけます。Webman と ThinkPHP は厳格引数 `host(true)` を渡す必要があります（既定の引数は `Host` ヘッダーをポートごとそのまま返します）。一覧に表示される `request_uri` は `host() . uri()` で組み立てられるため（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`）、非標準ポート（例：`:8080`）ではその行の**テキスト**にポートが現れません。**リンク自体は影響を受けません**：一覧とレポート内のリンクはすべて `XhprofLib::report_url()` が生成する相対 URL（パス + クエリのみ）で、正しいページを開き、host に依存しません。
+`host()` 契約は「ホストのみ、ポートを含まない」（R-2）を意味し、11 のフレームワークすべてが従っています。違うのは実装方法だけです。PSR-7 の `getHost()` はポートを含みません。Joomla / WordPress は手動で `parse_url` に一度かけます。Webman と ThinkPHP は厳格引数 `host(true)` を渡す必要があります（既定の引数は `Host` ヘッダーをポートごとそのまま返します）。一覧に表示される `request_uri` は `host() . uri()` で組み立てられるため（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`）、非標準ポート（例：`:8080`）ではその行の**テキスト**にポートが現れません。**リンク自体は影響を受けません**：一覧とレポート内のリンクはすべて `XhprofLib::report_url()` が生成する相対 URL（パス + クエリのみ）で、正しいページを開き、host に依存しません。
 
 **`assets_url` がカスタムプレフィックスに対応しました**
 
-アセットのプレフィックスはもうハードコード定数ではありません。`src/Core/StaticController.php` が `assets_url` 設定でアセットのパスを照合します（既定 `/xhprof-assets`、末尾スラッシュは有無どちらでも可）。サブディレクトリ配置での残りの制限は下の Drupal の項目です。 **10 フレームワークすべてがこの設定に従います**。9 つの入口クラスは計測開始前にアセットパスを自前でショートサーキットして配信し、Drupal は既定プレフィックスをモジュールルート + コントローラで、独自プレフィックスをミドルウェアで配信します。**境界**: Laravel、Hyperf、Webman、ThinkPHP はもうコントローラもルートも不要です — ミドルウェアが先に走るため、旧手順どおりに登録したコントローラと 2 本のルートは覆い隠されるだけ: エラーにはならず、二度と到達しません。
+アセットのプレフィックスはもうハードコード定数ではありません。`src/Core/StaticController.php` が `assets_url` 設定でアセットのパスを照合します（既定 `/xhprof-assets`、末尾スラッシュは有無どちらでも可）。サブディレクトリ配置での残りの制限は下の Drupal の項目です。 **11 フレームワークすべてがこの設定に従います**。10 の入口クラスは計測開始前にアセットパスを自前でショートサーキットして配信し、Drupal は既定プレフィックスをモジュールルート + コントローラで、独自プレフィックスをミドルウェアで配信します。**境界**: Laravel、Hyperf、Webman、ThinkPHP はもうコントローラもルートも不要です — ミドルウェアが先に走るため、旧手順どおりに登録したコントローラと 2 本のルートは覆い隠されるだけ: エラーにはならず、二度と到達しません。
 
 **既知の制限：Drupal がサブディレクトリにあるとパス判定が効かない**
 

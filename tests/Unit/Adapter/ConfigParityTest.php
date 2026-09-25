@@ -11,7 +11,7 @@ use ErikWang2013\Xhprof\Yii3\Adapter\ConfigAdapter as Yii3ConfigAdapter;
 use ErikWang2013\Xhprof\Yii3\XhprofMiddleware as Yii3XhprofMiddleware;
 
 /**
- * 十份配置的**键集/默认值**对照。
+ * 十一份配置的**键集/默认值**对照。
  *
  * 每条框架接入路径都自带一份 config/xhprof.php，没有共享层（见计划：刻意去中心化）。
  * 代价是键名/默认值可能悄悄走岔——用户在 A 框架里写 `'log_num' => 500` 生效，换到 B
@@ -57,6 +57,7 @@ class ConfigParityTest extends TestCase
             'Slim' => 'src/Slim/config/xhprof.php',
             'Wordpress' => 'src/Wordpress/config/xhprof.php',
             'Joomla' => 'src/Joomla/config/xhprof.php',
+            'Native' => 'src/Native/config/xhprof.php',
         ];
     }
 
@@ -190,8 +191,8 @@ class ConfigParityTest extends TestCase
     #[Test]
     public function theSharedKeySetIsExactlyTheTenDocumentedKeys(): void
     {
-        // 与上一条互补：上一条管「十份彼此一致」，这条管「一致的确实是这十个」——
-        // 十个文件被同一次改动一起加键时，只有这条会红。
+        // 与上一条互补：上一条管「十一份彼此一致」，这条管「一致的确实是这十个」——
+        // 十一个配置文件被同一次改动一起加键时，只有这条会红。
         $this->assertSame(self::EXPECTED_KEYS, array_keys($this->loadPhp('src/Slim/config/xhprof.php')));
     }
 

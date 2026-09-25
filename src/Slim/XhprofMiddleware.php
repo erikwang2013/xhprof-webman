@@ -96,7 +96,7 @@ class XhprofMiddleware implements MiddlewareInterface
             }
             // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被 HTTP 缓存
             // （反代 / 页面缓存）留存副本。两个字面量与 Drupal 控制器里的 $headers
-            // 一致（六框架同形）。
+            // 一致（十一家入口类同形）。
             // Content-Type 必须显式给：PSR-7 响应不带默认值，Slim\ResponseEmitter 也不补，
             // 缺了它浏览器会按纯文本渲染报告页。WordPress 入口类同此处理。
             return $res

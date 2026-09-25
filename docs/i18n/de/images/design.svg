@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">auch das Verhalten von Webman/Laravel bleibt unberührt</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">derselbe Vertrag 10-mal implementiert</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 Frameworks schreiben je 5 Adapter,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">derselbe Vertrag 11-mal implementiert</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 Frameworks schreiben je 5 Adapter,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">der Vertrag hält, aber die Implementierung wird neu geschrieben</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">keine Asset-Route zu registrieren</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">die Kurzschluss-Logik 10-mal wiederholt</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">die Kurzschluss-Logik 11-mal wiederholt</text>
   <text x="816" y="314" font-size="11" fill="#24292f">genau diese 3 Stellen verstecken einen Fehlgriff vor den Tests,</text>
   <text x="816" y="330" font-size="10.38" fill="#24292f">Wiederholung kauft Sicherheit (das Drupal-Standardmodul ist die Ausnahme)</text>
 

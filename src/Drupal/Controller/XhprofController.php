@@ -36,7 +36,7 @@ class XhprofController
         }
 
         // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被页面缓存留存副本。
-        // Content-Type 显式钉住（与另外五家的入口类同一个字面量）：Symfony 7.4 的
+        // Content-Type 显式钉住（与其余入口类同一个字面量）：Symfony 7.4 的
         // ResponseHeaderBag 不再自带 Content-Type 默认值，它由 prepare() 在 filterResponse()
         // 阶段补——那一步还会先看 request 的 format，我们不希望报告页的类型取决于第三方的推断。
         $headers = ['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'];

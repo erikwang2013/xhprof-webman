@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel 동작에도 영향 없음</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">같은 계약을 10번 구현</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">프레임워크 10개가 각각 Adapter 5개를 작성,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">같은 계약을 11번 구현</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">프레임워크 11개가 각각 Adapter 5개를 작성,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">계약은 그대로지만 구현은 반복 재작성</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">리소스 라우트 등록 불필요</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">단락 로직이 10번 중복</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">단락 로직이 11번 중복</text>
   <text x="816" y="314" font-size="11" fill="#24292f">그 3곳이야말로 잘못 짚어도 테스트가 못 잡는 자리,</text>
   <text x="816" y="330" font-size="11" fill="#24292f">중복이 확실성을 삼 (Drupal 표준 모듈은 예외)</text>
 

@@ -38,8 +38,8 @@
   <text x="428" y="240" font-size="11" fill="#24292f">el comportamiento de Webman/Laravel tampoco cambia</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">el mismo contrato implementado 10 veces</text>
-  <text x="816" y="224" font-size="11" fill="#24292f">10 frameworks escriben 5 Adapters cada uno,</text>
+  <text x="816" y="204" font-size="12.5" font-weight="600" fill="#bc4c00">el mismo contrato implementado 11 veces</text>
+  <text x="816" y="224" font-size="11" fill="#24292f">11 frameworks escriben 5 Adapters cada uno,</text>
   <text x="816" y="240" font-size="11" fill="#24292f">el contrato se mantiene, pero la implementación se reescribe</text>
 
   <!-- ============ 第 2 行：入口类自服务报告页 ============ -->
@@ -54,7 +54,7 @@
   <text x="428" y="330" font-size="11" fill="#24292f">sin ruta de recursos que registrar</text>
 
   <rect x="800" y="272" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
-  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">la lógica de cortocircuito repetida 10 veces</text>
+  <text x="816" y="294" font-size="12.5" font-weight="600" fill="#bc4c00">la lógica de cortocircuito repetida 11 veces</text>
   <text x="816" y="314" font-size="11" fill="#24292f">esas 3 son justo donde un error se esconde de los tests,</text>
   <text x="816" y="330" font-size="10.48" fill="#24292f">la repetición aporta certeza (el módulo estándar de Drupal es la excepción)</text>
 

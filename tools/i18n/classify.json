@@ -9,7 +9,7 @@
                 "w": 1200,
                 "h": 870
             },
-            "texts": 82,
+            "texts": 85,
             "nodes": [
                 {
                     "key": "architecture.title.1",
@@ -26,7 +26,7 @@
                     "key": "architecture.title.2",
                     "index": 2,
                     "class": "code",
-                    "source": "10 个框架入口 → 5 个契约 → 1 个 Core：新增框架不改 Core",
+                    "source": "11 个框架入口 → 5 个契约 → 1 个 Core：新增框架不改 Core",
                     "keep": [
                         "Core"
                     ],
@@ -44,7 +44,7 @@
                     "key": "architecture.legend.4",
                     "index": 4,
                     "class": "text",
-                    "source": "本次新增 6 个",
+                    "source": "本次新增 7 个",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -52,7 +52,7 @@
                     "key": "architecture.entry.5",
                     "index": 5,
                     "class": "code",
-                    "source": "① 框架入口层 — 10 个入口类",
+                    "source": "① 框架入口层 — 11 个入口类",
                     "keep": [
                         "①"
                     ],
@@ -176,7 +176,7 @@
                     "key": "architecture.entry.20",
                     "index": 20,
                     "class": "text",
-                    "source": "本次新增 6 个框架",
+                    "source": "本次新增 7 个框架",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -621,7 +621,7 @@
                     "key": "architecture.coupling.72",
                     "index": 72,
                     "class": "code",
-                    "source": "两者都只在无参 bootstrap() 的老路径上生效，不影响 6 个新框架",
+                    "source": "两者都只在无参 bootstrap() 的老路径上生效，不影响 7 个新框架",
                     "keep": [
                         "bootstrap()"
                     ],
@@ -711,7 +711,7 @@
                     "key": "architecture.coupling.81",
                     "index": 81,
                     "class": "code",
-                    "source": "6 个新框架不经过 autoDetect",
+                    "source": "7 个新框架不经过 autoDetect",
                     "keep": [
                         "autoDetect"
                     ],
@@ -729,6 +729,30 @@
                     "why": "prose surrounding code tokens that must stay verbatim"
                 },
                 {
+                    "key": "architecture.entry.83",
+                    "index": 83,
+                    "class": "copy",
+                    "source": "Native PHP",
+                    "keep": [],
+                    "why": "no prose characters — identifier, signature, number or keyword"
+                },
+                {
+                    "key": "architecture.entry.84",
+                    "index": 84,
+                    "class": "copy",
+                    "source": "Native\\XhprofBootstrap",
+                    "keep": [],
+                    "why": "no prose characters — identifier, signature, number or keyword"
+                },
+                {
+                    "key": "architecture.entry.85",
+                    "index": 85,
+                    "class": "text",
+                    "source": "新增",
+                    "keep": [],
+                    "why": "prose only — translate freely"
+                },
+                {
                     "key": "architecture.meta.title",
                     "index": null,
                     "class": "code",
@@ -743,7 +767,7 @@
                     "key": "architecture.meta.desc",
                     "index": null,
                     "class": "code",
-                    "source": "三张分层图：上层是 10 个框架入口类（已适配 4 个 + 本次新增 6 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明 6 个新框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。",
+                    "source": "三张分层图：上层是 11 个框架入口类（已适配 4 个 + 本次新增 7 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明 7 个新框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。",
                     "keep": [
                         "src/Core/Contract/",
                         "Xhprof::bootstrap",
@@ -1457,7 +1481,7 @@
                     "key": "design.row1.13",
                     "index": 13,
                     "class": "text",
-                    "source": "同一契约实现 10 遍",
+                    "source": "同一契约实现 11 遍",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -1465,7 +1489,7 @@
                     "key": "design.row1.14",
                     "index": 14,
                     "class": "code",
-                    "source": "10 个框架各写 5 个 Adapter，",
+                    "source": "11 个框架各写 5 个 Adapter，",
                     "keep": [
                         "Adapter"
                     ],
@@ -1536,7 +1560,7 @@
                     "key": "design.row2.22",
                     "index": 22,
                     "class": "text",
-                    "source": "短路逻辑重复 10 份",
+                    "source": "短路逻辑重复 11 份",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
