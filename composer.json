@@ -1,6 +1,6 @@
 {
     "name": "aaron-dev/xhprof-webman",
-    "description": "aaron-dev/xhprof-webman is a code performance analysis plugin for webman, Laravel, ThinkPHP, Hyperf, Yii3, Symfony, Slim 4, WordPress, Joomla and Drupal. Uses the xhprof extension for profiling, Redis for storage, and renders browser-based performance reports.",
+    "description": "aaron-dev/xhprof-webman is a code performance analysis plugin for webman, Laravel, ThinkPHP, Hyperf, Yii2, Yii3, Symfony, Slim 4, WordPress, Joomla and Drupal. Uses the xhprof extension for profiling, Redis for storage, and renders browser-based performance reports.",
     "keywords": [
         "erikwang2013",
         "xhprof",
@@ -8,6 +8,7 @@
         "laravel",
         "thinkphp",
         "hyperf",
+        "yii2",
         "yii3",
         "symfony",
         "slim",
@@ -45,6 +46,7 @@
         "laravel/framework": "^9.0|^10.0|^11.0",
         "topthink/framework": "^6.0|^8.0",
         "hyperf/framework": "^3.0",
+        "yiisoft/yii2": "^2.0",
         "yiisoft/middleware-dispatcher": "^5.0",
         "symfony/http-kernel": "^6.4|^7.0",
         "slim/slim": "^4.12",

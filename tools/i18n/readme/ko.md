@@ -1,6 +1,6 @@
 # XHProf 성능 프로파일러
 
-webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 과 호환되는 코드 성능 프로파일링 플러그인입니다.
+webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 과 호환되는 코드 성능 프로파일링 플러그인입니다.
 
 xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니다. 개발자는 브라우저로 성능 분석 보고서를 빠르게 열어 코드의 성능 병목을 찾아낼 수 있습니다.
 
@@ -38,8 +38,9 @@ xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | `plugins/system/` 로 복사 후 Discover로 설치 |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` 모듈 (`Drupal\XhprofMiddleware`) | 표준 모듈, 활성화만 하면 됨 |
 | 순수 PHP(프레임워크 없음) | —(외부 패키지 없음) | 8.0 | `Native\XhprofBootstrap` | 진입 파일 맨 위에 한 줄 `XhprofBootstrap::start()`, 컨트롤러나 라우트 등록 불필요 |
+| Yii2 | `yiisoft/yii2 ^2.0` | 8.0 | `Yii2\XhprofBootstrap` | `config/web.php` 의 `bootstrap` 배열에 등록, 컨트롤러나 라우트 등록 불필요 |
 
-진입 클래스는 모두 `ErikWang2013\Xhprof\` 네임스페이스 접두사 아래에 있습니다(위 표에서는 생략했습니다).  열한 개 중 어느 것도 컨트롤러나 라우트 등록을 요구하지 않습니다. 보고서 페이지와 정적 리소스는 진입 클래스가 직접 제공합니다(Drupal의 경우 모듈 라우트가 제공합니다).
+진입 클래스는 모두 `ErikWang2013\Xhprof\` 네임스페이스 접두사 아래에 있습니다(위 표에서는 생략했습니다).  열두 개 중 어느 것도 컨트롤러나 라우트 등록을 요구하지 않습니다. 보고서 페이지와 정적 리소스는 진입 클래스가 직접 제공합니다(Drupal의 경우 모듈 라우트가 제공합니다).
 
 이 패키지는 `php >= 8.0` 을 선언하지만, Yii3가 의존하는 `yiisoft/*` 컴포넌트는 **PHP 8.1 이상**을 요구하므로 **PHP 8.0에서는 Yii3를 사용할 수 없습니다**. Symfony 7.x와 Drupal 11.x도 마찬가지로 더 높은 PHP 버전이 필요합니다. 단계별 설정 방법은 아래 "프레임워크 설정"에 있습니다.
 
@@ -280,7 +281,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. 모듈 활성화** — 패키지의 `drupal/xhprof/` 는 표준 Drupal 모듈입니다(`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). 사이트의 `modules/custom/xhprof/` 에 놓은 뒤 "확장" 페이지에서 활성화하십시오(`drush en xhprof` 도 가능합니다).
 
-**2. 보고서 페이지와 정적 리소스** — Drupal은 **열한 개 프레임워크 중 유일하게 «모듈 + 라우트» 형태를 씁니다**: `xhprof.routing.yml` 이 보고서 경로 `/xhprof` 와 리소스 경로 `/xhprof-assets` 를 등록하고 기본적으로 모듈 컨트롤러가 제공합니다. 나머지 열 개 진입 클래스는 프로파일링 전에 직접 단축 처리해 보고서 페이지와 정적 리소스를 제공하며 라우트를 등록하지 않습니다. **`assets_url` 을 사용자 지정 접두사로 바꾸면 리소스는 미들웨어가 제공합니다**: 모듈 리소스 라우트의 path는 `xhprof.routing.yml` 에 고정되어 있어(`/xhprof-assets/{file}`) 다른 접두사와는 절대 맞지 않습니다.
+**2. 보고서 페이지와 정적 리소스** — Drupal은 **열두 개 프레임워크 중 유일하게 «모듈 + 라우트» 형태를 씁니다**: `xhprof.routing.yml` 이 보고서 경로 `/xhprof` 와 리소스 경로 `/xhprof-assets` 를 등록하고 기본적으로 모듈 컨트롤러가 제공합니다. 나머지 열한 개 진입 클래스는 프로파일링 전에 직접 단축 처리해 보고서 페이지와 정적 리소스를 제공하며 라우트를 등록하지 않습니다. **`assets_url` 을 사용자 지정 접두사로 바꾸면 리소스는 미들웨어가 제공합니다**: 모듈 리소스 라우트의 path는 `xhprof.routing.yml` 에 고정되어 있어(`/xhprof-assets/{file}`) 다른 접두사와는 절대 맞지 않습니다.
 
 **3. 설정** — 설정은 모듈 수준의 타입 지정 config입니다. 기본값은 `drupal/xhprof/config/install/xhprof.settings.yml` 에 있고 스키마는 `drupal/xhprof/config/schema/xhprof.schema.yml` 에 있습니다. 각 필드는 "설정 레퍼런스"를 참고하십시오.
 
@@ -313,7 +314,7 @@ services:
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
 ```
 
-설정을 바꾸려면 이 줄에 배열을 넘깁니다(키 집합은 나머지 열 곳과 동일하고, 기본값은 `src/Native/config/xhprof.php` 에 있습니다):
+설정을 바꾸려면 이 줄에 배열을 넘깁니다(키 집합은 나머지 열한 곳과 동일하고, 기본값은 `src/Native/config/xhprof.php` 에 있습니다):
 
 ```php
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
@@ -336,6 +337,35 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ```
 
 `http://127.0.0.1:8000/` 에 접속해 데이터를 만들고, 이어서 `http://127.0.0.1:8000/xhprof` 에서 보고서 페이지를 확인합니다 — 둘 다 같은 프로세스 안이라 리소스까지 함께 검증됩니다.
+
+---
+
+### Yii2
+
+Yii2(`yiisoft/yii2 ^2.0`, PHP >= 8.0)용입니다. **Yii3와는 같은 프레임워크가 아닙니다**: Yii3는 PSR-15로 다시 쓴 판이고, Yii2는 자체 `yii\web\Request` / `Response` 와 애플리케이션 수명 주기를 쓰므로 진입 클래스도 따로 둡니다.
+
+**1. 부트스트랩 클래스 등록** — `config/web.php`:
+
+```php
+'bootstrap' => [
+    [
+        'class' => \ErikWang2013\Xhprof\Yii2\XhprofBootstrap::class,
+        'config' => ['auth_token' => 'xxx'],   // optional; see src/Yii2/config/xhprof.php
+    ],
+],
+```
+
+이것이 Yii2 자체 확장점 `yii\base\BootstrapInterface` 의 표준 등록 형태입니다: 배열 정의의 `config` 키는 컨테이너가 진입 클래스의 **공용 프로퍼티**로 대입합니다(`cache` / `logger` 도 같은 방식의 주입 지점이라, 인스턴스를 넘기면 기본 Redis 어댑터나 `error_log` 를 바꿀 수 있습니다).
+
+**2. 보고서 페이지와 정적 리소스** — **컨트롤러도, 라우트도, urlManager 변경도 필요하지 않습니다**: 부트스트랩 클래스가 `Application::EVENT_BEFORE_REQUEST` 에서 요청 경로를 확인해, 보고서 경로 `/xhprof` 에 맞으면 보고서 페이지를 그대로 반환하고 요청을 끝내며, 리소스 경로(접두사는 `assets_url` 설정에서 읽으며 기본값 `/xhprof-assets`)에 맞으면 정적 리소스를 반환합니다. 두 경로 모두 프로파일링이 시작되기 전에 단축 처리됩니다.
+
+**3. 프로파일링 구간 = `EVENT_BEFORE_REQUEST` → `EVENT_AFTER_REQUEST`**. Yii2의 `EVENT_AFTER_REQUEST` 는 응답이 **나가기 전에** 발생하므로(`base/Application.php` 의 `run()`), 응답 전송 자체는 구간에 들어가지 않습니다. **예외 경로는 shutdown 폴백에 기댑니다**: `run()` 은 `ExitException` 만 잡기 때문에, 비즈니스 코드가 던진 다른 throwable은 `EVENT_AFTER_REQUEST` 를 영영 발생시키지 않습니다 — 그래서 진입 클래스는 프로파일링을 시작할 때 `register_shutdown_function` 폴백을 함께 등록합니다(Symfony / Joomla와 같은 형태입니다).
+
+**4. 콘솔 애플리케이션은 영향을 받지 않습니다** — `yii\console\Application` 은 `run()` 을 재정의하지 않으므로 CLI 명령(cron, 마이그레이션, 큐)도 `EVENT_BEFORE_REQUEST` 를 **발생시킵니다**. 진입 클래스는 `bootstrap()` 에서 `instanceof yii\web\Application` 을 먼저 확인하고 콘솔에는 훅을 하나도 붙이지 않습니다.
+
+**5. 클라이언트 IP는 프레임워크 자체 의미를 따릅니다** — `getRealIp()` 는 `Request::getUserIP()` 에 위임합니다: Yii2는 기본적으로 `X-Forwarded-For` 같은 전달 헤더를 `secureHeaders` 로 걸러내므로(안전한 기본값) 리버스 프록시 뒤에서는 `REMOTE_ADDR` 이 잡힙니다. 실제 클라이언트 IP를 기록하려면 애플리케이션의 request 컴포넌트에 `trustedHosts` 를 설정하십시오(설정하면 Yii2는 오른쪽에서 왼쪽으로 훑어 처음 만난 신뢰할 수 없는 주소를 돌려줍니다 — 첫 항목을 무조건 쓰는 다른 어댑터와 일부러 다릅니다). 이는 프레임워크 자체의 보안 판단이며, 이 패키지는 사이트가 누구를 신뢰할지 대신 정하지 않습니다.
+
+**6. 설정** — 기본값은 패키지의 `src/Yii2/config/xhprof.php` 에 있고 1단계의 `config` 키로 덮어씁니다. 선택적인 `redis` 하위 배열(`cache` 를 주입하지 않았을 때 phpredis로 직접 연결할 때 씁니다)은 다른 프레임워크와 같은 키를 받습니다: `host` / `port` / `password` / `database` / `timeout`.
 
 ---
 
@@ -393,7 +423,7 @@ Xhprof::bootstrap(
 );
 ```
 
-**신규 6개 프레임워크(Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal)는 인자 없는 `Xhprof::bootstrap()` 을 호출하면 안 됩니다**. 인자가 없으면 `autoDetect()` 를 거치는데, 이 함수는 webman / Laravel / ThinkPHP / Hyperf 분기만 알고 있어 이 여섯 프레임워크에서는 `Unsupported framework` 를 던집니다. 위 예시처럼 5개 어댑터를 모두 명시적으로 넘기십시오(각 프레임워크에 포함된 진입 클래스가 이미 이렇게 하고 있습니다).
+**`autoDetect()` 가 아는 네 프레임워크를 제외한 나머지 여덟(Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 순수 PHP)은 인자 없는 `Xhprof::bootstrap()` 을 호출하면 안 됩니다**. 인자가 없으면 `autoDetect()` 를 거치는데, 이 함수는 webman / Laravel / ThinkPHP / Hyperf 분기만 알고 있어 이 여덟 프레임워크에서는 `Unsupported framework` 를 던집니다. 위 예시처럼 5개 어댑터를 모두 명시적으로 넘기십시오(각 프레임워크에 포함된 진입 클래스가 이미 이렇게 하고 있습니다).
 
 ---
 
@@ -416,15 +446,15 @@ Core는 정확히 5개의 계약을 통해 프레임워크에 접근하며, 모�
 1. `Xhprof::autoDetect()` 의 `class_exists()` 체인 (`Webman\App` → `Illuminate\Foundation\Application` → `think\App` → `Hyperf\Context\ApplicationContext`)이며, 인자 없는 `bootstrap()` 으로만 도달합니다.
 2. 하드코딩된 Hyperf 코루틴 전환: `Xhprof::markHyperfContext()` 와 `\Hyperf\Context\Context` 존재 여부 검사로, 어댑터를 프로세스 전역 정적 프로퍼티에 넣을지 코루틴 Context에 넣을지 결정합니다.
 
-**신규 6개 프레임워크는 `autoDetect()` 를 거치지 않고 모두 명시적 주입을 씁니다**: 각 진입 클래스가 자체적으로 어댑터 5개를 만들어 `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)` 에 넘깁니다. PSR-7 프레임워크에서는 Request/Response를 요청 파이프라인에서만 얻을 수 있어 인자 없는 `bootstrap()` 은 구조적으로 동작할 수 없고, 덕분에 `autoDetect()` 는 현재의 네 프레임워크에 그대로 고정됩니다.
+**나머지 여덟 프레임워크는 `autoDetect()` 를 거치지 않고 모두 명시적 주입을 씁니다**: 각 진입 클래스가 자체적으로 어댑터 5개를 만들어 `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)` 에 넘깁니다. PSR-7이나 프레임워크 자체의 요청 객체는 요청 파이프라인에서만 얻을 수 있어 인자 없는 `bootstrap()` 은 구조적으로 동작할 수 없고, 덕분에 `autoDetect()` 는 현재의 네 프레임워크에 그대로 고정됩니다.
 
 ![아키텍처](docs/images/architecture.svg)
 
-첫 번째 그림은 **구조**입니다. 열한 프레임워크 각각의 진입 클래스, 5개 계약, Core의 세 계층, 그리고 남은 결합 두 곳을 보여 줍니다.
+첫 번째 그림은 **구조**입니다. 열두 프레임워크 각각의 진입 클래스, 5개 계약, Core의 세 계층, 그리고 남은 결합 두 곳을 보여 줍니다.
 
 ![설계 근거](docs/images/design.svg)
 
-두 번째 그림은 **근거**입니다. "신규 6개 프레임워크의 `src/Core/` 변경 = 0" 을 머리에 두고 다섯 가지 트레이드오프를 결정 / 이유 / 비용으로 정리했습니다.
+두 번째 그림은 **근거**입니다. "신규 8개 프레임워크의 `src/Core/` 변경 = 0" 을 머리에 두고 다섯 가지 트레이드오프를 결정 / 이유 / 비용으로 정리했습니다.
 
 ---
 
@@ -450,6 +480,7 @@ Core는 정확히 5개의 계약을 통해 프레임워크에 접근하며, 모�
 | Joomla | `onAfterInitialise` | `onAfterRespond`, 그리고 shutdown 폴백 |
 | Drupal | `http_middleware` (우선순위 1000, 최외곽) | `finally` |
 | 순수 PHP(프레임워크 없음) | 진입 파일 맨 위에 한 줄 `XhprofBootstrap::start()` | 프로세스 shutdown(`register_shutdown_function`), `stop()` 으로 더 일찍 중지 가능 |
+| Yii2 | `EVENT_BEFORE_REQUEST` | `EVENT_AFTER_REQUEST` (응답을 보내기 전에 발생), 그리고 shutdown 폴백 |
 
 ---
 
@@ -468,6 +499,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
+│   ├── Yii2/                     # Yii2: BootstrapInterface 진입 클래스와 어댑터 5개
 │   ├── Native/                   # 순수 PHP(프레임워크 없음): 진입 클래스와 어댑터 5개
 │   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
@@ -500,9 +532,9 @@ src/<Fw>/
 | 항목 | 방법 |
 |------|-----|
 | 어댑터와 진입 배선 동작 | `tests/Unit/Adapter/*Test.php`: 활성화 → 저장 / 비활성화 → 저장 안 함 / 비즈니스 예외 → `finally` 로 여전히 저장 |
-| 열한 프레임워크가 하나의 설정 키 집합을 공유 | config parity 테스트(키 집합 기준이며 바이트 단위가 아님, 주석은 달라도 됨) |
+| 열두 프레임워크가 하나의 설정 키 집합을 공유 | config parity 테스트(키 집합 기준이며 바이트 단위가 아님, 주석은 달라도 됨) |
 | 두 README가 서로 대응 | README parity 테스트: `##` / `###` 제목 순서와 코드 블록 수를 비교 |
-| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡, **두 개의 leg**: 메인 leg는 각 프레임워크의 최신 패키지를 설치하고, 별도 `tools/contracts/legacy-symfony64` 프로젝트가 같은 Symfony case를 6.4에 대해 실행합니다): 실제 프레임워크 패키지를 설치하고(Drupal은 실제 `drupal/core`, Joomla는 실제 CMS 릴리스 패키지 두 개) 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다 — **루프에 들어간 8개 프레임워크**(Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman)에 대해. ThinkPHP / Hyperf는 루프 밖입니다(아래 참조) |
+| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡, **두 개의 leg**: 메인 leg는 각 프레임워크의 최신 패키지를 설치하고, 별도 `tools/contracts/legacy-symfony64` 프로젝트가 같은 Symfony case를 6.4에 대해 실행합니다): 실제 프레임워크 패키지를 설치하고(Drupal은 실제 `drupal/core`, Joomla는 실제 CMS 릴리스 패키지 두 개) 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다 — **루프에 들어간 9개 프레임워크**(Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman)에 대해. ThinkPHP / Hyperf는 루프 밖입니다(아래 참조) |
 | 어댑터의 의미 | 같은 루프가 실제 request·response 객체를 만들어 어댑터를 실행하며, 두 불변식(`uri()` 에 scheme/host가 없을 것, `file()` 뒤에도 `withHeaders()` 가 적용될 것)을 확인합니다. 루프의 SKIP 수는 동결된 상수(메인 leg 2, 6.4 leg 0)이며 둘 다 Joomla에 있습니다: `#__extensions.params` 의 실제 읽기 경로와 설치 프로그램 형태이고, 둘 다 실행하려면 데이터베이스나 설치 프로그램이 필요합니다 |
 
 
@@ -515,7 +547,7 @@ src/<Fw>/
 | Symfony의 `kernel.event_subscriber` 자동 구성 | 실제 컨테이너 컴파일이 필요합니다 |
 | 장수명 프로세스에서의 정적 상태 간섭 | Webman 쪽은 미변경 (Hyperf 쪽은 격리됨: 렌더링 시점의 9개 값이 요청별로 코루틴 Context를 거치며, `tests/Unit/Lib/RenderStateCoroutineTest.php` 가 실제로 양보하는 코루틴으로 고정한다) |
 | 실제 Redis I/O, 브라우저 렌더링, 실제 부하에서의 프로파일링 오버헤드 | 실제 Redis I/O는 **이제 검증 루프 안에 있습니다**(`cases/Redis.php`: 실제 phpredis + 실제 Slim 요청을 끝에서 끝까지 — 요청 → 저장 → 목록 페이지 → 보고서 페이지). 브라우저 렌더링과 실제 부하에서의 오버헤드는 여전히 단위 테스트와 루프의 범위 밖입니다 |
-| ThinkPHP / Hyperf 어댑터의 시그니처와 시맨틱스 | 이 두 프레임워크는 검증 루프에 들어 있지 않습니다(루프는 8개 프레임워크를 커버합니다). 스텁은 패키지 안의 `tests/Stubs/framework-stubs.php`에 손으로 작성되어 있고, 실제 패키지와의 대조가 없습니다 |
+| ThinkPHP / Hyperf 어댑터의 시그니처와 시맨틱스 | 이 두 프레임워크는 검증 루프에 들어 있지 않습니다(루프는 9개 프레임워크를 커버합니다). 스텁은 패키지 안의 `tests/Stubs/framework-stubs.php`에 손으로 작성되어 있고, 실제 패키지와의 대조가 없습니다 |
 
 **수동 스모크 체크리스트 (프레임워크당 세 단계)**
 
@@ -529,11 +561,11 @@ src/<Fw>/
 
 **알려진 제한: 목록에 표시되는 `request_uri` 에 포트가 없음**
 
-`host()` 계약은 "포트 없이 호스트만"(R-2)을 뜻하며, 열한 개 프레임워크가 모두 이를 지킵니다. 다만 구현 방식은 다릅니다. PSR-7 의 `getHost()` 는 포트를 담지 않고, Joomla / WordPress 는 직접 `parse_url` 로 한 번 잘라내며, Webman 과 ThinkPHP 는 엄격 인자 `host(true)` 를 넘겨야 합니다(기본 인자는 `Host` 헤더를 포트까지 그대로 돌려줍니다). 목록에 표시되는 `request_uri` 는 `host() . uri()` 로 만들어지므로(`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), 비표준 포트(예: `:8080`) 배포에서는 목록의 그 URL **텍스트**에 포트가 드러나지 않습니다. **링크 자체는 영향을 받지 않습니다**: 목록과 보고서 안의 링크는 모두 `XhprofLib::report_url()` 이 만드는 상대 URL(경로 + 쿼리만)이라 클릭하면 올바른 페이지로 가며 host 에 의존하지 않습니다.
+`host()` 계약은 "포트 없이 호스트만"(R-2)을 뜻하며, 열두 개 프레임워크가 모두 이를 지킵니다. 다만 구현 방식은 다릅니다. PSR-7 의 `getHost()` 는 포트를 담지 않고, Joomla / WordPress 는 직접 `parse_url` 로 한 번 잘라내며, Webman 과 ThinkPHP 는 엄격 인자 `host(true)` 를 넘겨야 합니다(기본 인자는 `Host` 헤더를 포트까지 그대로 돌려줍니다). 목록에 표시되는 `request_uri` 는 `host() . uri()` 로 만들어지므로(`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), 비표준 포트(예: `:8080`) 배포에서는 목록의 그 URL **텍스트**에 포트가 드러나지 않습니다. **링크 자체는 영향을 받지 않습니다**: 목록과 보고서 안의 링크는 모두 `XhprofLib::report_url()` 이 만드는 상대 URL(경로 + 쿼리만)이라 클릭하면 올바른 페이지로 가며 host 에 의존하지 않습니다.
 
 **`assets_url` 이 사용자 정의 접두사를 지원합니다**
 
-정적 리소스 접두사는 더 이상 하드코딩된 상수가 아닙니다: `src/Core/StaticController.php` 가 `assets_url` 설정값으로 리소스 경로를 맞춥니다(기본값 `/xhprof-assets`, 끝 슬래시는 있어도 없어도 됩니다). 하위 디렉터리 배포에서 남는 제한은 아래 Drupal 항목을 참고하십시오. **열한 개 프레임워크 모두 이 설정을 따릅니다**: 열 개 진입 클래스는 프로파일링 전에 리소스 경로를 직접 단축 처리해 제공하고, Drupal은 기본 접두사를 모듈 라우트 + 컨트롤러로, 사용자 지정 접두사를 미들웨어로 제공합니다. **경계**: Laravel, Hyperf, Webman, ThinkPHP는 이제 컨트롤러도 라우트도 필요하지 않습니다 — 미들웨어가 먼저 실행되므로 예전 안내대로 등록한 컨트롤러와 두 라우트는 그저 가려질 뿐입니다: 오류가 나지 않고 다시는 도달하지 않습니다.
+정적 리소스 접두사는 더 이상 하드코딩된 상수가 아닙니다: `src/Core/StaticController.php` 가 `assets_url` 설정값으로 리소스 경로를 맞춥니다(기본값 `/xhprof-assets`, 끝 슬래시는 있어도 없어도 됩니다). 하위 디렉터리 배포에서 남는 제한은 아래 Drupal 항목을 참고하십시오. **열두 개 프레임워크 모두 이 설정을 따릅니다**: 열한 개 진입 클래스는 프로파일링 전에 리소스 경로를 직접 단축 처리해 제공하고, Drupal은 기본 접두사를 모듈 라우트 + 컨트롤러로, 사용자 지정 접두사를 미들웨어로 제공합니다. **경계**: Laravel, Hyperf, Webman, ThinkPHP는 이제 컨트롤러도 라우트도 필요하지 않습니다 — 미들웨어가 먼저 실행되므로 예전 안내대로 등록한 컨트롤러와 두 라우트는 그저 가려질 뿐입니다: 오류가 나지 않고 다시는 도달하지 않습니다.
 
 **알려진 제한: Drupal이 하위 디렉터리에 있으면 경로 가드가 실패**
 

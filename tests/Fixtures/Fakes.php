@@ -138,7 +138,7 @@ class FakeCache implements CacheInterface
  * 「原生入口接得上 Core 的落库/读取路径」，不是 phpredis 本身（那是环里 Redis case 的事）。
  *
  * 语义全部继承 FakeCache（写入时持久化、构造时载入），所以列表索引、lRange 边界、
- * mget 的返回形态与其余十家的 FakeCache 用法完全一致。
+ * mget 的返回形态与其余十一家的 FakeCache 用法完全一致。
  */
 class FileCache extends FakeCache
 {

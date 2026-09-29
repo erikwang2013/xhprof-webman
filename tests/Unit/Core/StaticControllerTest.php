@@ -27,7 +27,7 @@ class StaticControllerTest extends TestCase
     protected function setUp(): void
     {
         $this->response = new FakeResponse();
-        // Xhprof::$config 是进程级静态量：别的测试类（十一家适配器）会临时换上自己的
+        // Xhprof::$config 是进程级静态量：别的测试类（十二家适配器）会临时换上自己的
         // FakeConfig，虽然它们都在 tearDown 里还原，本类自己改了也必须还原——否则
         // 「哪些资源请求被认」这件事会随测试顺序变化。
         $this->savedConfig = Xhprof::$config;
@@ -208,7 +208,8 @@ class StaticControllerTest extends TestCase
     #[Test]
     public function readFileAndFileResponseShareOneMimeTable(): void
     {
-        // 一处新造第二张表就会红：readFile()（六个适配器的 file() 用它）与 serve()
+        // 一处新造第二张表就会红：readFile()（十个适配器的 file() 用它；只有 Laravel 与 Webman
+        // 走框架自己的 response()->file()，不调 readFile 也不自己钉类型）与 serve()
         // 钉的 Content-Type 必须永远是同一个来源。
         foreach (['css/xhprof.css', 'js/xhprof_report.js', 'images/sort_both.png'] as $asset) {
             $path = StaticController::getAssetsPath() . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $asset);
@@ -325,7 +326,7 @@ class StaticControllerTest extends TestCase
     }
 
     /**
-     * 资源前缀必须跟着 `xhprof.assets_url` 走，且归一化口径与 **11 个入口类**一致
+     * 资源前缀必须跟着 `xhprof.assets_url` 走，且归一化口径与 **12 个入口类**一致
      * （各入口类短路时用的前缀都从这一个配置项归一化出来，参照实现见 `uriPrefix()`；
      * 四个路由型入口曾经把资源 path 写死在用户路由文件里，那条边界已随中间件短路消失）。
      *

@@ -1,6 +1,6 @@
 # XHProf パフォーマンスプロファイラ
 
-webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal に対応したコードパフォーマンス計測プラグインです。
+webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal に対応したコードパフォーマンス計測プラグインです。
 
 xhprof 拡張で計測データを収集し、Redis に保存します。開発者はブラウザからパフォーマンス解析レポートをすばやく確認でき、コードのパフォーマンスボトルネックを特定できます。
 
@@ -38,8 +38,9 @@ xhprof 拡張で計測データを収集し、Redis に保存します。開発�
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | `plugins/system/` にコピーし、Discover でインストール |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | `xhprof` モジュール（`Drupal\XhprofMiddleware`） | 標準モジュール。有効化するだけ |
 | 素の PHP（フレームワークなし） | —（外部パッケージなし） | 8.0 | `Native\XhprofBootstrap` | 入口ファイルの先頭に 1 行 `XhprofBootstrap::start()` を書くだけ。コントローラもルート登録も不要 |
+| Yii2 | `yiisoft/yii2 ^2.0` | 8.0 | `Yii2\XhprofBootstrap` | `config/web.php` の `bootstrap` 配列に登録。コントローラもルート登録も不要 |
 
-入口クラスはすべて `ErikWang2013\Xhprof\` 名前空間プレフィックスの下にあります（上の表では省略）。11 のうちどれも、コントローラやルートの登録を求めてきません。レポートページと静的アセットは入口クラス自身が配信します（Drupal の場合はモジュールのルート）。
+入口クラスはすべて `ErikWang2013\Xhprof\` 名前空間プレフィックスの下にあります（上の表では省略）。12 のうちどれも、コントローラやルートの登録を求めてきません。レポートページと静的アセットは入口クラス自身が配信します（Drupal の場合はモジュールのルート）。
 
 本パッケージは `php >= 8.0` を宣言していますが、Yii3 が依存する `yiisoft/*` コンポーネントは **PHP 8.1 以上**を要求するため、**Yii3 は PHP 8.0 では使用できません**。同様に Symfony 7.x と Drupal 11.x もより高い PHP バージョンが必要です。手順の詳細は後述の「フレームワーク設定」にあります。
 
@@ -280,7 +281,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. モジュールを有効化** — パッケージの `drupal/xhprof/` は標準的な Drupal モジュールです（`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`）。サイトの `modules/custom/xhprof/` に配置し、「Extend」ページ（または `drush en xhprof`）で有効化してください。
 
-**2. レポートページと静的アセット** — Drupal は**11 フレームワーク中で唯一「モジュール + ルート」の形をとります**。`xhprof.routing.yml` がレポートパス `/xhprof` とアセットパス `/xhprof-assets` を登録し、既定ではモジュールのコントローラが配信します。残り 10 の入口クラスは計測開始前に自前でショートサーキットしてレポートページと静的アセットを配信し、ルートを登録しません。**`assets_url` を独自プレフィックスにするとアセットはミドルウェアが配信します**: モジュールのアセットルートの path は `xhprof.routing.yml` に固定されており（`/xhprof-assets/{file}`）、別のプレフィックスには決して一致しません。
+**2. レポートページと静的アセット** — Drupal は**12 フレームワーク中で唯一「モジュール + ルート」の形をとります**。`xhprof.routing.yml` がレポートパス `/xhprof` とアセットパス `/xhprof-assets` を登録し、既定ではモジュールのコントローラが配信します。残り 11 の入口クラスは計測開始前に自前でショートサーキットしてレポートページと静的アセットを配信し、ルートを登録しません。**`assets_url` を独自プレフィックスにするとアセットはミドルウェアが配信します**: モジュールのアセットルートの path は `xhprof.routing.yml` に固定されており（`/xhprof-assets/{file}`）、別のプレフィックスには決して一致しません。
 
 **3. 設定** — 設定はモジュールレベルの typed config です。既定値は `drupal/xhprof/config/install/xhprof.settings.yml` にあり、スキーマは `drupal/xhprof/config/schema/xhprof.schema.yml` にあります。項目は「設定リファレンス」を参照してください。
 
@@ -313,7 +314,7 @@ services:
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
 ```
 
-設定を変える場合はこの行に配列を渡します（キー集合は他の 10 と同一、既定値は `src/Native/config/xhprof.php`）:
+設定を変える場合はこの行に配列を渡します（キー集合は他の 11 と同一、既定値は `src/Native/config/xhprof.php`）:
 
 ```php
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
@@ -336,6 +337,35 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ```
 
 `http://127.0.0.1:8000/` にアクセスしてデータを作り、次に `http://127.0.0.1:8000/xhprof` でレポートページを確認します — どちらも同じプロセス内なので、アセットも併せて検証できます。
+
+---
+
+### Yii2
+
+Yii2（`yiisoft/yii2 ^2.0`、PHP >= 8.0）向けです。**Yii3 とは別のフレームワークです**: Yii3 は PSR-15 への書き直し版で、Yii2 は独自の `yii\web\Request` / `Response` とアプリケーションライフサイクルを持つため、入口クラスも別になっています。
+
+**1. ブートストラップクラスを登録** — `config/web.php`：
+
+```php
+'bootstrap' => [
+    [
+        'class' => \ErikWang2013\Xhprof\Yii2\XhprofBootstrap::class,
+        'config' => ['auth_token' => 'xxx'],   // optional; see src/Yii2/config/xhprof.php
+    ],
+],
+```
+
+これは Yii2 公式の拡張ポイント `yii\base\BootstrapInterface` の標準的な登録形状です。配列定義の `config` キーはコンテナによって入口クラスの**公有プロパティ**に代入されます（`cache` / `logger` も同じ注入点で、インスタンスを渡せば既定の Redis アダプタや `error_log` を差し替えられます）。
+
+**2. レポートページと静的アセット** — **コントローラもルートも、`urlManager` の変更も不要です**。ブートストラップクラスが `Application::EVENT_BEFORE_REQUEST` でリクエストパスを調べ、レポートパス `/xhprof` に命中すればレポートページをそのまま返してリクエストを終了し、アセットパス（`assets_url` 設定から読み取り、既定は `/xhprof-assets`）に命中すれば静的アセットを直接返します。どちらのパスも計測が始まる前にショートサーキットします。
+
+**3. 計測ウィンドウ = `EVENT_BEFORE_REQUEST` → `EVENT_AFTER_REQUEST`**。Yii2 の `EVENT_AFTER_REQUEST` はレスポンスが**送られる前に**発火します（`base/Application.php` の `run()`）ので、レスポンス送信そのものはウィンドウ内に入りません。**例外経路は shutdown フォールバック頼みです**: `run()` が捕まえるのは `ExitException` だけなので、業務コードが投げたその他の throwable では `EVENT_AFTER_REQUEST` が永遠に発火しません — そのため入口クラスは計測開始時に `register_shutdown_function` によるフォールバックも登録します（Symfony / Joomla と同形）。
+
+**4. コンソールアプリには何もしません** — `yii\console\Application` は `run()` をオーバーライドしないため、CLI コマンド（cron、マイグレーション、キュー）でも `EVENT_BEFORE_REQUEST` は**発火します**。そこで入口クラスは `bootstrap()` の先頭で `instanceof yii\web\Application` を確認し、コンソールにはフックを一切付けません。
+
+**5. クライアント IP はフレームワーク自身の意味論に従います** — `getRealIp()` は `Request::getUserIP()` に委譲します。Yii2 は既定で `X-Forwarded-For` のような転送ヘッダを `secureHeaders` によって**除外**するため（安全側の既定）、リバースプロキシ配下では `REMOTE_ADDR` が記録されます。実際のクライアント IP を記録するには、アプリケーションの request コンポーネントに `trustedHosts` を設定してください（設定すると Yii2 は右から左へ見て最初の信頼できないアドレスを返します — 常に先頭を取る他のアダプタとは意図的に異なります）。これはフレームワーク自身のセキュリティ判断であり、どのホストを信頼するかを本パッケージが決めることではありません。
+
+**6. 設定** — 既定値はパッケージ内の `src/Yii2/config/xhprof.php` にあり、手順 1 の `config` キーで上書きします。任意の `redis` サブ配列（`cache` を注入しないときに phpredis へ直接接続するために使います）は他のフレームワークと同じキー（`host` / `port` / `password` / `database` / `timeout`）を取ります。
 
 ---
 
@@ -393,7 +423,7 @@ Xhprof::bootstrap(
 );
 ```
 
-**新規 6 フレームワーク（Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal）は、引数なしの `Xhprof::bootstrap()` を呼んではいけません**。引数なしでは `autoDetect()` を通り、そこが知っているのは webman / Laravel / ThinkPHP / Hyperf の分岐だけで、この 6 つでは `Unsupported framework` が投げられます。上の例のように 5 つのアダプタをすべて明示的に渡してください（各フレームワークに同梱の入口クラスが既にそうしています）。
+**`autoDetect()` が知っている 4 フレームワークを除く残り 8 つ（Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 素の PHP）は、引数なしの `Xhprof::bootstrap()` を呼んではいけません** — 引数なしでは `autoDetect()` を通り、そこが知っているのは webman / Laravel / ThinkPHP / Hyperf の分岐だけで、この 8 つでは `Unsupported framework` が投げられます。上の例のように 5 つのアダプタをすべて明示的に渡してください（各フレームワークに同梱の入口クラスが既にそうしています）。
 
 ---
 
@@ -416,15 +446,15 @@ Core はフレームワークに、`src/Core/Contract/` にあるちょうど 5 
 1. `Xhprof::autoDetect()` の `class_exists()` 連鎖（`Webman\App` → `Illuminate\Foundation\Application` → `think\App` → `Hyperf\Context\ApplicationContext`）。引数なしの `bootstrap()` からのみ到達します。
 2. ハードコードされた Hyperf のコルーチン切り替え：`Xhprof::markHyperfContext()` と `\Hyperf\Context\Context` の存在チェックで、アダプタをプロセス全体の静的プロパティに置くかコルーチンの Context に置くかを決めます。
 
-**新規 6 フレームワークは `autoDetect()` を通らず、すべて明示的注入を使います**。各入口クラスが自分で 5 つのアダプタを構築し、`Xhprof::bootstrap($req, $res, $cfg, $cache, $log)` に渡します。理由は、PSR-7 系フレームワークでは Request / Response がリクエストパイプラインからしか取得できないため、引数なしの `bootstrap()` は構造上動作しえないことです。副次的な利点として、`autoDetect()` は現在の 4 フレームワークのまま凍結できます。
+**残り 8 つは `autoDetect()` を通らず、すべて明示的注入を使います**。各入口クラスが自分で 5 つのアダプタを構築し、`Xhprof::bootstrap($req, $res, $cfg, $cache, $log)` に渡します。理由は、PSR-7 系やフレームワーク固有のリクエストオブジェクトはリクエストパイプラインからしか取得できないため、引数なしの `bootstrap()` は構造上動作しえないことです。副次的な利点として、`autoDetect()` は現在の 4 フレームワークのまま凍結できます。
 
 ![アーキテクチャ](docs/images/architecture.svg)
 
-1 枚目は**構造**の図です。11 フレームワークそれぞれの入口クラス、5 つの契約、Core の 3 層、そして残った 2 箇所の結合を示します。
+1 枚目は**構造**の図です。12 フレームワークそれぞれの入口クラス、5 つの契約、Core の 3 層、そして残った 2 箇所の結合を示します。
 
 ![設計のトレードオフ](docs/images/design.svg)
 
-2 枚目は**根拠**の図です。5 つのトレードオフを判断 / 理由 / コストとして並べ、「新規 6 フレームワークによる `src/Core/` の変更 = 0」を掲げています。
+2 枚目は**根拠**の図です。5 つのトレードオフを判断 / 理由 / コストとして並べ、「新規 8 フレームワークによる `src/Core/` の変更 = 0」を掲げています。
 
 ---
 
@@ -450,6 +480,7 @@ Core はフレームワークに、`src/Core/Contract/` にあるちょうど 5 
 | Joomla | `onAfterInitialise` | `onAfterRespond`、加えて shutdown フォールバック |
 | Drupal | `http_middleware`（優先度 1000、最外層） | `finally` |
 | 素の PHP（フレームワークなし） | 入口ファイルの先頭に 1 行 `XhprofBootstrap::start()` | プロセス shutdown（`register_shutdown_function`）。`stop()` で早めに止めることも可 |
+| Yii2 | `EVENT_BEFORE_REQUEST` | `EVENT_AFTER_REQUEST`（レスポンス送出前に発火）、加えて shutdown フォールバック |
 
 ---
 
@@ -468,6 +499,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # 各フレームワーク Redis アダプタの共通実装
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 既存の 4 フレームワーク
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 新規 6 フレームワーク
+│   ├── Yii2/                     # Yii2：BootstrapInterface 入口クラスと 5 つのアダプタ
 │   ├── Native/                   # 素の PHP（フレームワークなし）：入口クラスと 5 つのアダプタ
 │   └── html/                     # レポートページのアセット（css / js / images / pet.svg サイトアイコンとブランドアイコン）
 ├── wordpress/                    # mu-plugin ブートストラップファイル（プラグインヘッダ付き）
@@ -500,9 +532,9 @@ src/<Fw>/
 | 項目 | 方法 |
 |------|-----|
 | アダプタと入口の配線の挙動 | `tests/Unit/Adapter/*Test.php`：有効 → 保存 / 無効 → 保存しない / 業務例外 → `finally` 経由で保存される |
-| 11 フレームワークが 1 つの設定キー集合を共有 | 設定パリティテスト（キー集合のみで、バイト単位の一致は見ない。コメントは差異を許容） |
+| 12 フレームワークが 1 つの設定キー集合を共有 | 設定パリティテスト（キー集合のみで、バイト単位の一致は見ない。コメントは差異を許容） |
 | 2 つの README が対応している | README パリティテスト：`##` / `###` の見出し列とコードブロック数を比較 |
-| アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ、**2 本のレグ**: 主レグは各フレームワークの最新パッケージを入れ、別プロジェクト `tools/contracts/legacy-symfony64` が同じ Symfony ケースを 6.4 に対して実行します）: 実フレームワークパッケージを導入し（Drupal は実物の `drupal/core`、Joomla は実物の CMS リリースパッケージ 2 本）、すべてのメソッド / 定数 / グローバル関数の存在をリフレクションで検証します — **ループに入っている 8 つのフレームワーク**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman）について。ThinkPHP / Hyperf はループ外です（下記参照） |
+| アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ、**2 本のレグ**: 主レグは各フレームワークの最新パッケージを入れ、別プロジェクト `tools/contracts/legacy-symfony64` が同じ Symfony ケースを 6.4 に対して実行します）: 実フレームワークパッケージを導入し（Drupal は実物の `drupal/core`、Joomla は実物の CMS リリースパッケージ 2 本）、すべてのメソッド / 定数 / グローバル関数の存在をリフレクションで検証します — **ループに入っている 9 つのフレームワーク**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）について。ThinkPHP / Hyperf はループ外です（下記参照） |
 | アダプタのセマンティクス | 同じループが実際の request / response オブジェクトを生成してアダプタを走らせ、2 つの不変条件（`uri()` が scheme/host を含まないこと、`file()` の後でも `withHeaders()` が適用されること）を確認します。ループの SKIP 数は凍結された定数（主レグ 2、6.4 レグ 0）で、どちらも Joomla にあります: `#__extensions.params` の実際の読み取り経路とインストーラの形態で、どちらも実行にデータベースかインストーラが要ります |
 
 
@@ -515,7 +547,7 @@ src/<Fw>/
 | Symfony の `kernel.event_subscriber` 自動設定 | 実際のコンテナコンパイルが必要 |
 | 長時間稼働プロセスでの静的状態の混線 | Webman 側は未変更（Hyperf 側は隔離済み：描画期の 9 つの値はリクエストごとにコルーチン Context を通り、`tests/Unit/Lib/RenderStateCoroutineTest.php` が実際に yield するコルーチンで固定している） |
 | 実際の Redis I/O、ブラウザ描画、実負荷での計測オーバーヘッド | 実際の Redis I/O は**検証ループに入りました**（`cases/Redis.php`: 実 phpredis + 実 Slim リクエストを端から端まで —— リクエスト → 保存 → 一覧ページ → レポートページ）。ブラウザ描画と実負荷でのオーバーヘッドは従来どおり単体テストと検証ループの範囲外です |
-| ThinkPHP / Hyperf のアダプタのシグネチャとセマンティクス | この 2 つは検証ループに入っていません（ループが覆うのは 8 つのフレームワーク）。スタブはパッケージ内の `tests/Stubs/framework-stubs.php` に手書きで、実パッケージとの突き合わせはありません |
+| ThinkPHP / Hyperf のアダプタのシグネチャとセマンティクス | この 2 つは検証ループに入っていません（ループが覆うのは 9 つのフレームワーク）。スタブはパッケージ内の `tests/Stubs/framework-stubs.php` に手書きで、実パッケージとの突き合わせはありません |
 
 **手動スモークチェックリスト（フレームワークごとに 3 ステップ）**
 
@@ -529,11 +561,11 @@ src/<Fw>/
 
 **既知の制限：一覧に表示される `request_uri` にポートがない**
 
-`host()` 契約は「ホストのみ、ポートを含まない」（R-2）を意味し、11 のフレームワークすべてが従っています。違うのは実装方法だけです。PSR-7 の `getHost()` はポートを含みません。Joomla / WordPress は手動で `parse_url` に一度かけます。Webman と ThinkPHP は厳格引数 `host(true)` を渡す必要があります（既定の引数は `Host` ヘッダーをポートごとそのまま返します）。一覧に表示される `request_uri` は `host() . uri()` で組み立てられるため（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`）、非標準ポート（例：`:8080`）ではその行の**テキスト**にポートが現れません。**リンク自体は影響を受けません**：一覧とレポート内のリンクはすべて `XhprofLib::report_url()` が生成する相対 URL（パス + クエリのみ）で、正しいページを開き、host に依存しません。
+`host()` 契約は「ホストのみ、ポートを含まない」（R-2）を意味し、12 のフレームワークすべてが従っています。違うのは実装方法だけです。PSR-7 の `getHost()` はポートを含みません。Joomla / WordPress は手動で `parse_url` に一度かけます。Webman と ThinkPHP は厳格引数 `host(true)` を渡す必要があります（既定の引数は `Host` ヘッダーをポートごとそのまま返します）。一覧に表示される `request_uri` は `host() . uri()` で組み立てられるため（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`）、非標準ポート（例：`:8080`）ではその行の**テキスト**にポートが現れません。**リンク自体は影響を受けません**：一覧とレポート内のリンクはすべて `XhprofLib::report_url()` が生成する相対 URL（パス + クエリのみ）で、正しいページを開き、host に依存しません。
 
 **`assets_url` がカスタムプレフィックスに対応しました**
 
-アセットのプレフィックスはもうハードコード定数ではありません。`src/Core/StaticController.php` が `assets_url` 設定でアセットのパスを照合します（既定 `/xhprof-assets`、末尾スラッシュは有無どちらでも可）。サブディレクトリ配置での残りの制限は下の Drupal の項目です。 **11 フレームワークすべてがこの設定に従います**。10 の入口クラスは計測開始前にアセットパスを自前でショートサーキットして配信し、Drupal は既定プレフィックスをモジュールルート + コントローラで、独自プレフィックスをミドルウェアで配信します。**境界**: Laravel、Hyperf、Webman、ThinkPHP はもうコントローラもルートも不要です — ミドルウェアが先に走るため、旧手順どおりに登録したコントローラと 2 本のルートは覆い隠されるだけ: エラーにはならず、二度と到達しません。
+アセットのプレフィックスはもうハードコード定数ではありません。`src/Core/StaticController.php` が `assets_url` 設定でアセットのパスを照合します（既定 `/xhprof-assets`、末尾スラッシュは有無どちらでも可）。サブディレクトリ配置での残りの制限は下の Drupal の項目です。 **12 フレームワークすべてがこの設定に従います**。11 の入口クラスは計測開始前にアセットパスを自前でショートサーキットして配信し、Drupal は既定プレフィックスをモジュールルート + コントローラで、独自プレフィックスをミドルウェアで配信します。**境界**: Laravel、Hyperf、Webman、ThinkPHP はもうコントローラもルートも不要です — ミドルウェアが先に走るため、旧手順どおりに登録したコントローラと 2 本のルートは覆い隠されるだけ: エラーにはならず、二度と到達しません。
 
 **既知の制限：Drupal がサブディレクトリにあるとパス判定が効かない**
 

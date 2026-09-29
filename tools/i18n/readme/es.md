@@ -1,6 +1,6 @@
 # Perfilador de rendimiento XHProf
 
-Un plugin de perfilado de rendimiento de código compatible con webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla y Drupal.
+Un plugin de perfilado de rendimiento de código compatible con webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla y Drupal.
 
 Recoge datos de perfilado mediante la extensión xhprof y los guarda en Redis. Los desarrolladores pueden consultar rápidamente informes de análisis de rendimiento desde el navegador para localizar cuellos de botella en el código.
 
@@ -38,8 +38,9 @@ Esa misma llamita es también el icono del sitio y el icono de marca de la esqui
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Cópialo en `plugins/system/` e instálalo con Descubrir |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | módulo `xhprof` (`Drupal\XhprofMiddleware`) | Módulo estándar: basta con activarlo |
 | PHP puro (sin framework) | — (sin paquete externo) | 8.0 | `Native\XhprofBootstrap` | Una línea al principio del archivo de entrada, `XhprofBootstrap::start()`, sin registrar controlador ni rutas |
+| Yii2 | `yiisoft/yii2 ^2.0` | 8.0 | `Yii2\XhprofBootstrap` | Registro en el array `bootstrap` de `config/web.php`, sin registrar controlador ni rutas |
 
-Todas las clases de entrada viven bajo el prefijo de espacio de nombres `ErikWang2013\Xhprof\` (omitido arriba).  Ninguno de los once necesita que registres un controlador o una ruta: la página de informe y los recursos estáticos los sirve la propia clase de entrada (en el caso de Drupal, la ruta del módulo).
+Todas las clases de entrada viven bajo el prefijo de espacio de nombres `ErikWang2013\Xhprof\` (omitido arriba).  Ninguno de los doce necesita que registres un controlador o una ruta: la página de informe y los recursos estáticos los sirve la propia clase de entrada (en el caso de Drupal, la ruta del módulo).
 
 Este paquete declara `php >= 8.0`, pero los componentes `yiisoft/*` de los que depende Yii3 exigen **PHP 8.1+**, así que **Yii3 no se puede usar en PHP 8.0**; Symfony 7.x y Drupal 11.x también necesitan una versión de PHP superior. La configuración paso a paso está en «Configuración por framework», más abajo.
 
@@ -280,7 +281,7 @@ El directorio `joomla/` del paquete *es* el plugin: el manifiesto `xhprof.xml`, 
 
 **1. Activa el módulo** — `drupal/xhprof/` en el paquete es un módulo estándar de Drupal (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Colócalo en `modules/custom/xhprof/` de tu sitio y actívalo en la página «Ampliar» (o con `drush en xhprof`).
 
-**2. Página de informe y recursos estáticos** — Drupal es **el único de los once frameworks que va por «módulo + rutas»**: `xhprof.routing.yml` registra la ruta de informe `/xhprof` y la de recursos `/xhprof-assets`, servidas por defecto por el controlador del módulo; las otras diez clases de entrada cortocircuitan antes de empezar el perfilado y sirven la página de informe y los recursos estáticos sin registrar rutas. **Con un prefijo `assets_url` propio, los recursos pasan al middleware**: la ruta de recursos del módulo está fijada en `xhprof.routing.yml` (`/xhprof-assets/{file}`) y nunca casa con otro prefijo.
+**2. Página de informe y recursos estáticos** — Drupal es **el único de los doce frameworks que va por «módulo + rutas»**: `xhprof.routing.yml` registra la ruta de informe `/xhprof` y la de recursos `/xhprof-assets`, servidas por defecto por el controlador del módulo; las otras once clases de entrada cortocircuitan antes de empezar el perfilado y sirven la página de informe y los recursos estáticos sin registrar rutas. **Con un prefijo `assets_url` propio, los recursos pasan al middleware**: la ruta de recursos del módulo está fijada en `xhprof.routing.yml` (`/xhprof-assets/{file}`) y nunca casa con otro prefijo.
 
 **3. Configuración** — la configuración es configuración tipada a nivel de módulo: los valores por defecto están en `drupal/xhprof/config/install/xhprof.settings.yml`, con el esquema en `drupal/xhprof/config/schema/xhprof.schema.yml`. Consulta «Referencia de configuración» para ver los campos.
 
@@ -313,7 +314,7 @@ Para aplicaciones sin framework, con un solo controlador frontal (como `public/i
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
 ```
 
-Para cambiar la configuración, pasa el array a esa misma línea (el conjunto de claves es el mismo que en los otros diez; los valores por defecto están en `src/Native/config/xhprof.php`):
+Para cambiar la configuración, pasa el array a esa misma línea (el conjunto de claves es el mismo que en los otros once; los valores por defecto están en `src/Native/config/xhprof.php`):
 
 ```php
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
@@ -336,6 +337,35 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ```
 
 Visita `http://127.0.0.1:8000/` para generar datos y luego `http://127.0.0.1:8000/xhprof` para ver el informe: ambos en el mismo proceso, y los recursos quedan verificados de paso.
+
+---
+
+### Yii2
+
+Para Yii2 (`yiisoft/yii2 ^2.0`, PHP >= 8.0). **No es el mismo framework que Yii3**: Yii3 es la reescritura PSR-15, mientras que Yii2 trae su propio `yii\web\Request` / `Response` y su propio ciclo de vida de aplicación, así que tiene clase de entrada propia.
+
+**1. Registra la clase de arranque** — `config/web.php`:
+
+```php
+'bootstrap' => [
+    [
+        'class' => \ErikWang2013\Xhprof\Yii2\XhprofBootstrap::class,
+        'config' => ['auth_token' => 'xxx'],   // optional; see src/Yii2/config/xhprof.php
+    ],
+],
+```
+
+Esta es la forma estándar del punto de extensión propio de Yii2, `yii\base\BootstrapInterface`: el contenedor asigna la clave `config` de la definición en array a la clase de entrada como **propiedad pública** (`cache` / `logger` son puntos de inyección de la misma manera: pasa una instancia para sustituir el adaptador Redis por defecto o `error_log`).
+
+**2. Página de informe y recursos estáticos** — **sin controlador, sin rutas y sin tocar urlManager**: la clase de arranque inspecciona la ruta de la petición en `Application::EVENT_BEFORE_REQUEST`, sirve la página de informe directamente en la ruta de informe `/xhprof` y termina la petición, y sirve los recursos estáticos en el prefijo de recursos (leído de la opción `assets_url`, por defecto `/xhprof-assets`). Ambas rutas cortocircuitan antes de que empiece el perfilado.
+
+**3. Ventana de perfilado = `EVENT_BEFORE_REQUEST` → `EVENT_AFTER_REQUEST`.** Ojo: Yii2 dispara `EVENT_AFTER_REQUEST` **antes** de enviar la respuesta (`run()` en `base/Application.php`), así que el envío de la respuesta no está dentro de la ventana. **La ruta de excepción se apoya en el respaldo de shutdown**: `run()` solo captura `ExitException`, así que cualquier otro throwable de tu código hace que `EVENT_AFTER_REQUEST` no se dispare nunca — por eso la clase de entrada registra un `register_shutdown_function` cuando empieza a perfilar (la misma forma que en Symfony / Joomla).
+
+**4. Las aplicaciones de consola quedan intactas** — `yii\console\Application` no sobrescribe `run()`, así que los comandos de CLI (cron, migraciones, colas) **sí** disparan `EVENT_BEFORE_REQUEST`; la clase de entrada comprueba primero `instanceof yii\web\Application` dentro de `bootstrap()` y no engancha ninguna hook en las consolas.
+
+**5. La IP del cliente sigue la semántica del propio framework** — `getRealIp()` delega en `Request::getUserIP()`: por defecto Yii2 filtra las cabeceras de reenvío como `X-Forwarded-For` mediante `secureHeaders` (su valor por defecto seguro), así que detrás de un proxy inverso obtienes `REMOTE_ADDR`. Para registrar la IP real del cliente hay que configurar `trustedHosts` en el componente request de la aplicación (una vez configurado, Yii2 devuelve la primera dirección no fiable recorriendo de derecha a izquierda — deliberadamente distinto de los otros adaptadores, que siempre toman la primera entrada). Esa es una decisión de seguridad del propio framework; este paquete no decide en quién debe confiar un sitio.
+
+**6. Configuración** — los valores por defecto están en `src/Yii2/config/xhprof.php` y se sobrescriben con la clave `config` del paso 1; el subarray opcional `redis` (que se usa para conectar directamente con phpredis cuando no se inyecta ningún `cache`) toma las mismas claves que los demás frameworks: `host` / `port` / `password` / `database` / `timeout`.
 
 ---
 
@@ -393,7 +423,7 @@ Xhprof::bootstrap(
 );
 ```
 
-**Los seis frameworks nuevos (Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal) no deben llamar a `Xhprof::bootstrap()` sin argumentos** — sin argumentos pasa por `autoDetect()`, que solo conoce las ramas de webman / Laravel / ThinkPHP / Hyperf y lanza `Unsupported framework` en estos seis. Pasa los 5 adaptadores explícitamente como en el ejemplo de arriba (la clase de entrada que viene con cada framework ya lo hace por ti).
+**Aparte de los cuatro frameworks que conoce `autoDetect()`, los otros ocho (Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / PHP puro) no deben llamar a `Xhprof::bootstrap()` sin argumentos** — sin argumentos pasa por `autoDetect()`, que solo conoce las ramas de webman / Laravel / ThinkPHP / Hyperf y lanza `Unsupported framework` en esos ocho. Pasa los 5 adaptadores explícitamente como en el ejemplo de arriba (la clase de entrada que viene con cada framework ya lo hace por ti).
 
 ---
 
@@ -416,15 +446,15 @@ Cada framework aporta 5 adaptadores que implementan estos contratos, registrados
 1. La cadena de `class_exists()` en `Xhprof::autoDetect()` (`Webman\App` → `Illuminate\Foundation\Application` → `think\App` → `Hyperf\Context\ApplicationContext`), a la que solo se llega con el `bootstrap()` sin argumentos.
 2. El conmutador de corrutinas de Hyperf hardcodeado: `Xhprof::markHyperfContext()` más las comprobaciones de existencia de `\Hyperf\Context\Context`, que deciden si los adaptadores van a propiedades estáticas de todo el proceso o al Context de la corrutina.
 
-**Los seis frameworks nuevos nunca pasan por `autoDetect()` — todos usan inyección explícita**: cada clase de entrada construye sus propios 5 adaptadores y los pasa a `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`. El motivo es que en los frameworks PSR-7 la Request/Response solo se pueden obtener del pipeline de la petición, así que un `bootstrap()` sin argumentos no puede funcionar por construcción; un segundo beneficio es que `autoDetect()` se queda congelado en sus cuatro frameworks actuales.
+**Los otros ocho frameworks nunca pasan por `autoDetect()` — todos usan inyección explícita**: cada clase de entrada construye sus propios 5 adaptadores y los pasa a `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`. El motivo es que los objetos de petición de PSR-7 o propios del framework solo se pueden obtener del pipeline de la petición, así que un `bootstrap()` sin argumentos no puede funcionar por construcción; un segundo beneficio es que `autoDetect()` se queda congelado en sus cuatro frameworks actuales.
 
 ![Arquitectura](docs/images/architecture.svg)
 
-El primer diagrama es la **estructura**: la clase de entrada de cada uno de los once frameworks, los 5 contratos, las tres capas de Core y los dos únicos acoplamientos que quedan.
+El primer diagrama es la **estructura**: la clase de entrada de cada uno de los doce frameworks, los 5 contratos, las tres capas de Core y los dos únicos acoplamientos que quedan.
 
 ![Razonamiento de diseño](docs/images/design.svg)
 
-El segundo diagrama es el **razonamiento**: cinco compensaciones ordenadas como decisión / motivo / coste, encabezadas por «cambios en `src/Core/` por los seis frameworks nuevos = 0».
+El segundo diagrama es el **razonamiento**: cinco compensaciones ordenadas como decisión / motivo / coste, encabezadas por «cambios en `src/Core/` por los ocho frameworks nuevos = 0».
 
 ---
 
@@ -450,6 +480,7 @@ Una petición perfilada:
 | Joomla | `onAfterInitialise` | `onAfterRespond`, más un respaldo de shutdown |
 | Drupal | `http_middleware` (prioridad 1000, el más externo) | `finally` |
 | PHP puro (sin framework) | Una línea `XhprofBootstrap::start()` al principio del archivo de entrada | Cierre del proceso (`register_shutdown_function`); además `stop()` para parar antes |
+| Yii2 | `EVENT_BEFORE_REQUEST` | `EVENT_AFTER_REQUEST` (se dispara antes de enviar la respuesta), más un respaldo de shutdown |
 
 ---
 
@@ -468,6 +499,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # shared Redis adapter implementation
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # the existing 4 frameworks
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # the 6 new frameworks
+│   ├── Yii2/                     # Yii2: clase de entrada BootstrapInterface y 5 adaptadores
 │   ├── Native/                   # PHP puro (sin framework): clase de entrada y 5 adaptadores
 │   └── html/                     # report page assets (css / js / images / pet.svg site icon and brand icon)
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
@@ -500,9 +532,9 @@ src/<Fw>/
 | Elemento | Cómo |
 |------|-----|
 | Comportamiento de los adaptadores y del cableado de entrada | `tests/Unit/Adapter/*Test.php`: activado → guardado / desactivado → no guardado / excepción de negocio → guardado igualmente vía `finally` |
-| Los once frameworks comparten un mismo conjunto de claves de configuración | test de paridad de configuración (conjuntos de claves, no byte a byte; los comentarios pueden diferir) |
+| Los doce frameworks comparten un mismo conjunto de claves de configuración | test de paridad de configuración (conjuntos de claves, no byte a byte; los comentarios pueden diferir) |
 | Los dos README se reflejan mutuamente | test de paridad de README: compara la secuencia de encabezados `##` / `###` y el número de bloques de código |
-| Los métodos que llaman los adaptadores existen de verdad | ciclo de verificación `tools/contracts/` (job de CI propio, **dos tramos**: el tramo principal instala los paquetes más recientes de cada framework y el proyecto aparte `tools/contracts/legacy-symfony64` ejecuta el mismo caso de Symfony contra 6.4): instala paquetes reales de los frameworks (`drupal/core` real para Drupal, dos paquetes de versión reales del CMS para Joomla) y comprueba por reflexión que existan todos los métodos / constantes / funciones globales **para los ocho frameworks del ciclo** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf no están en el ciclo — ver abajo |
+| Los métodos que llaman los adaptadores existen de verdad | ciclo de verificación `tools/contracts/` (job de CI propio, **dos tramos**: el tramo principal instala los paquetes más recientes de cada framework y el proyecto aparte `tools/contracts/legacy-symfony64` ejecuta el mismo caso de Symfony contra 6.4): instala paquetes reales de los frameworks (`drupal/core` real para Drupal, dos paquetes de versión reales del CMS para Joomla) y comprueba por reflexión que existan todos los métodos / constantes / funciones globales **para los nueve frameworks del ciclo** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf no están en el ciclo — ver abajo |
 | Semántica de los adaptadores | El mismo ciclo instancia objetos reales de petición y respuesta y ejecuta los adaptadores, con dos invariantes: `uri()` no lleva scheme/host, y `withHeaders()` sigue aplicándose después de `file()`. El número de SKIP del ciclo es una constante congelada (2 en el tramo principal, 0 en el tramo 6.4) y ambos SKIP están en Joomla: la ruta de lectura real de `#__extensions.params` y la forma del instalador, y para ejecutar ambas hace falta una base de datos o un instalador |
 
 
@@ -515,7 +547,7 @@ src/<Fw>/
 | La autoconfiguración de `kernel.event_subscriber` de Symfony | Requiere una compilación real del contenedor |
 | Interferencia de estado estático en procesos de larga duración | Lado de Webman sin cambios (en Hyperf están aislados: los 9 valores de estado de render por petición pasan por el Context de la corrutina, fijados por `tests/Unit/Lib/RenderStateCoroutineTest.php` con una corrutina que cede de verdad) |
 | E/S real con Redis, renderizado en navegador, sobrecarga del perfilado bajo carga real | La E/S real con Redis **ya está en el bucle** (`cases/Redis.php`: phpredis real + una petición Slim real de extremo a extremo — petición → persistencia → lista → página del informe); el renderizado en navegador y la sobrecarga bajo carga real siguen fuera del alcance de los tests unitarios y del bucle |
-| Firmas y semántica de los adaptadores de ThinkPHP / Hyperf | estos dos no están en el bucle de verificación (que cubre ocho frameworks); sus stubs están escritos a mano en `tests/Stubs/framework-stubs.php`, sin comparación con paquetes reales |
+| Firmas y semántica de los adaptadores de ThinkPHP / Hyperf | estos dos no están en el bucle de verificación (que cubre nueve frameworks); sus stubs están escritos a mano en `tests/Stubs/framework-stubs.php`, sin comparación con paquetes reales |
 
 **Lista de comprobación manual (tres pasos por framework)**
 
@@ -529,11 +561,11 @@ src/<Fw>/
 
 **Limitación conocida: el `request_uri` que muestra la lista no lleva puerto**
 
-El contrato `host()` significa «solo host, sin puerto» (R-2), y los once frameworks lo cumplen — solo cambia la implementación: el `getHost()` de PSR-7 nunca lleva el puerto, Joomla / WordPress lo recortan a mano con `parse_url`, y Webman / ThinkPHP necesitan el argumento estricto `host(true)` (el valor por defecto devuelve la cabecera `Host` tal cual, puerto incluido). El `request_uri` que muestra la lista se construye como `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), así que en un puerto no estándar (por ejemplo `:8080`) el **texto** de esa línea no muestra el puerto. **Los enlaces en sí no se ven afectados**: los de la lista y los del informe los construye `XhprofLib::report_url()` como URL relativas (solo ruta + query), abren la página correcta y no dependen de `host()`.
+El contrato `host()` significa «solo host, sin puerto» (R-2), y los doce frameworks lo cumplen — solo cambia la implementación: el `getHost()` de PSR-7 nunca lleva el puerto, Joomla / WordPress lo recortan a mano con `parse_url`, y Webman / ThinkPHP necesitan el argumento estricto `host(true)` (el valor por defecto devuelve la cabecera `Host` tal cual, puerto incluido). El `request_uri` que muestra la lista se construye como `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), así que en un puerto no estándar (por ejemplo `:8080`) el **texto** de esa línea no muestra el puerto. **Los enlaces en sí no se ven afectados**: los de la lista y los del informe los construye `XhprofLib::report_url()` como URL relativas (solo ruta + query), abren la página correcta y no dependen de `host()`.
 
 **`assets_url` ahora admite un prefijo personalizado**
 
-El prefijo de recursos ya no es una constante fija: `src/Core/StaticController.php` casa las rutas de recursos contra la opción `assets_url` (por defecto `/xhprof-assets`, con o sin barra final). La limitación restante en un despliegue en subdirectorio es la de Drupal, más abajo. **Los once frameworks siguen esa opción**: diez clases de entrada cortocircuitan el camino de los recursos antes de empezar el perfilado y los sirven ellas mismas, mientras que Drupal sirve el prefijo por defecto con la ruta del módulo + controlador y entrega el prefijo propio al middleware. **Salvedad**: Laravel, Hyperf, Webman y ThinkPHP ya no necesitan controlador ni rutas — el middleware corre primero, así que las dos rutas registradas según las instrucciones antiguas quedan solo sombreadas: no dan error y ya nunca se alcanzan.
+El prefijo de recursos ya no es una constante fija: `src/Core/StaticController.php` casa las rutas de recursos contra la opción `assets_url` (por defecto `/xhprof-assets`, con o sin barra final). La limitación restante en un despliegue en subdirectorio es la de Drupal, más abajo. **Los doce frameworks siguen esa opción**: once clases de entrada cortocircuitan el camino de los recursos antes de empezar el perfilado y los sirven ellas mismas, mientras que Drupal sirve el prefijo por defecto con la ruta del módulo + controlador y entrega el prefijo propio al middleware. **Salvedad**: Laravel, Hyperf, Webman y ThinkPHP ya no necesitan controlador ni rutas — el middleware corre primero, así que las dos rutas registradas según las instrucciones antiguas quedan solo sombreadas: no dan error y ya nunca se alcanzan.
 
 **Limitación conocida: la guarda de ruta falla cuando Drupal vive en un subdirectorio**
 

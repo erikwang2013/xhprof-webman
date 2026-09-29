@@ -25,7 +25,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FileCache;
 /**
  * 原生 PHP（无框架）入口：适配器 + 报告页/资源短路 + 采样落库。
  *
- * 与另外十家的对照用例同一组口径（报告页短路、默认前缀资源、自定义前缀资源、
+ * 与另外十一家的对照用例同一组口径（报告页短路、默认前缀资源、自定义前缀资源、
  * 近似路径仍是业务请求、guard 与 serve 同源的两票制边界表）。
  *
  * **为什么这两条路径的用例都在子进程里**：报告页/资源分支的实现里带 `exit`
@@ -396,7 +396,7 @@ class NativeTest extends TestCase
         $keys = array_keys((array) $cfg->get('xhprof'));
         sort($keys);
 
-        // 与 README「配置项说明」表一致（ConfigParityTest 会跨十一家比对 key 集与默认值）
+        // 与 README「配置项说明」表一致（ConfigParityTest 会跨十二家比对 key 集与默认值）
         $this->assertSame([
             'assets_url', 'auth_token', 'enable', 'ignore_url_arr',
             'key_prefix', 'locale', 'log_num', 'log_ttl', 'time_limit', 'view_wtred',
@@ -442,7 +442,7 @@ class NativeTest extends TestCase
         $this->assertNull($read($adapter), '构造时不得建连');
     }
 
-    /** 连接参数与 Yii3 的直连适配器同名同默认（另十家里只有它也是这种「选项数组」形态）；用户配置只覆盖给出的那几个键。 */
+    /** 连接参数与 Yii3 的直连适配器同名同默认（另十一家里只有它也是这种「选项数组」形态）；用户配置只覆盖给出的那几个键。 */
     #[Test]
     public function redisAdapterReadsConnectionOptionsFromConfig(): void
     {
@@ -646,7 +646,7 @@ class NativeTest extends TestCase
     }
 
     /**
-     * 与另十家同一组边界：入口类的短路判定与 Core 的 serve() 判定必须同源。
+     * 与另十一家同一组边界：入口类的短路判定与 Core 的 serve() 判定必须同源。
      *
      * 分叉的后果不是报错而是**静默**：报告页 CSS/JS 全空、业务代码也拿不到那些路径。
      * 单跑 serve() 或单跑入口都看不出来，只有同一条路径问两次才成立。
@@ -697,7 +697,7 @@ class NativeTest extends TestCase
         // 第 2 票：Core 自己的判定 —— 真读出包内 css ⇔ 认作资源。放在第 1 票之后，
         // 因为 serve() 读的是 bootstrap 写进去的那份配置。
         // Native 的 RequestAdapter 没有构造参数（读的是超全局），所以路径要放回 $_SERVER
-        // ——这正是「原生」的含义，也是这条用例与另十家唯一的差别（那边是 new Request(['uri'=>$path])）。
+        // ——这正是「原生」的含义，也是这条用例与另十一家唯一的差别（那边是 new Request(['uri'=>$path])）。
         $_SERVER['REQUEST_URI'] = $path;
         CoreXhprof::bootstrap(
             new RequestAdapter(),

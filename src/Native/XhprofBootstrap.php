@@ -26,7 +26,7 @@ use ErikWang2013\Xhprof\Native\Adapter\ResponseAdapter;
  *
  *     \ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
  *
- * 要改配置就把数组传进这一行（键集与另外十家的 config/xhprof.php 相同）：
+ * 要改配置就把数组传进这一行（键集与另外十一家的 config/xhprof.php 相同）：
  *
  *     \ErikWang2013\Xhprof\Native\XhprofBootstrap::start(['enable' => true, 'auth_token' => 'xxx']);
  *
@@ -46,7 +46,7 @@ use ErikWang2013\Xhprof\Native\Adapter\ResponseAdapter;
  */
 final class XhprofBootstrap
 {
-    /** 报告页路径，硬编码（与 Xhprof::$ignore_url_arr 的默认值一致，十一家同字面量）。 */
+    /** 报告页路径，硬编码（与 Xhprof::$ignore_url_arr 的默认值一致，十二家同字面量）。 */
     private const REPORT_PATH = '/xhprof';
 
     private const DEFAULT_ASSETS_URL = '/xhprof-assets';
@@ -86,7 +86,7 @@ final class XhprofBootstrap
         $this->response = new ResponseAdapter();
         $this->config = new ConfigAdapter($config);
 
-        // 连接参数与另外十家的 Redis 适配器同名同默认（host/port/password/database/timeout），
+        // 连接参数与另外十一家的 Redis 适配器同名同默认（host/port/password/database/timeout），
         // 只在用户配置里出现——包内默认配置文件没有 `redis` 键（键集仍是那十个）。
         $redisOptions = $this->config->get('xhprof.redis', []);
         $this->cache = $cache ?? new RedisAdapter(is_array($redisOptions) ? $redisOptions : []);
@@ -207,7 +207,7 @@ final class XhprofBootstrap
      * 报告页无样式无脚本）。同源的实现保证是「都读 bootstrap 后的 `Xhprof::getConfig()`」，
      * 而 bootstrap 就在短路之前（run() 第 1 步）。
      *
-     * 之所以能这样读：Core 的 uriPrefix() 是 private，十一家入口类都各自归一化一次，
+     * 之所以能这样读：Core 的 uriPrefix() 是 private，十二家入口类都各自归一化一次，
      * 语义由本仓库的用例（每家的 assets 边界表）钉住。
      */
     private function assetsPrefix(): string

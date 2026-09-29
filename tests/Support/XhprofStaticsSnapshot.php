@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace ErikWang2013\Xhprof\Tests\Support;
 
 use ErikWang2013\Xhprof\Core\Xhprof;
+use ErikWang2013\Xhprof\Core\XhprofProfiler;
 
 /**
  * 进程级静态量的**快照 / 还原**：setUp 里先照单全收，tearDown 里原样放回。
  *
- * 为什么必须有：`Xhprof` 的这 12 个量是整个进程共享的，而各测试类都会改其中几个。
- * 只"清空自己动过的那几个"是不够的 —— 曾经的做法是 tearDown 里把 5 个适配器置 null，
- * 于是 setUp 改过的 `$ignore_url_arr` / `$ui_html` 等会原样漏给后面的用例：
- * 同一个进程里 Core 先跑、Adapter 后跑时，`DrupalTest` / `WebmanTest` 的前置条件断言
- * 就会读到别人留下的值而报假红（实测：`Core+Lib+Adapter` 顺序下 3 条红，
+ * 为什么必须有：`Xhprof` 的这 13 个量（含 `XhprofProfiler::$config`）是整个进程共享的，
+ * 而各测试类都会改其中几个。只"清空自己动过的那几个"是不够的 —— 曾经的做法是 tearDown
+ * 里把 5 个适配器置 null，于是 setUp 改过的 `$ignore_url_arr` / `$ui_html` 等会原样漏给
+ * 后面的用例：同一个进程里 Core 先跑、Adapter 后跑时，`DrupalTest` / `WebmanTest` 的前置
+ * 条件断言就会读到别人留下的值而报假红（实测：`Core+Lib+Adapter` 顺序下 3 条红，
  * 单跑各文件全绿）。
  *
  * `_hyperf` 必须在名单里，而且只有反射能写（私有、无 setter、生产上刻意不可逆）：
@@ -21,6 +22,12 @@ use ErikWang2013\Xhprof\Core\Xhprof;
  * 协程 Context，于是"直接写静态属性"的用例（以及后续所有类）全部错读 —— 这是同一处
  * 泄漏在三个测试类里被先后踩到的原因。**"两种模式都能跑"的写法不等于可以不还原**：
  * 自己能在两种模式下正确，和把进程留在另一种模式下，是两件事。
+ *
+ * `XhprofProfiler::$config` 同理（也是私有静态，在 `Xhprof::bootstrap()` 里被写）：
+ * 它是 `isEnabled()` 的第二数据源，漏出去会让后面的用例读到别人的 enable/ignore_url_arr。
+ * 名单里少它一个的后果实测过：`XhprofProfilerTest`（唯一一个改了 `Xhprof::$*` 却不还原的
+ * 类）跑在 `WiringTest` 前面时，后者 setUp 时读到的 `key_prefix` 是 `'myxp'`、
+ * `time_limit` 是 `5` → 12 条接线用例在 `--order-by=random` 下变红。
  *
  * 反射写法：静态属性的单参 `setValue($v)` 在 PHP 8.3 起已废弃，用双参 `setValue(null, $v)`；
  * `setAccessible(true)` 是给 PHP 8.0 的（8.1+ 是 no-op）。
@@ -35,6 +42,7 @@ trait XhprofStaticsSnapshot
 
         return [
             '_hyperf' => $hyperf->getValue(),
+            'profilerConfig' => self::profilerConfigSnapshot(),
             'request' => Xhprof::$request,
             'response' => Xhprof::$response,
             'config' => Xhprof::$config,
@@ -57,6 +65,8 @@ trait XhprofStaticsSnapshot
         $hyperf->setAccessible(true);
         $hyperf->setValue(null, $s['_hyperf']);
 
+        self::profilerConfigRestore($s['profilerConfig'] ?? null);
+
         Xhprof::$request = $s['request'];
         Xhprof::$response = $s['response'];
         Xhprof::$config = $s['config'];
@@ -69,5 +79,26 @@ trait XhprofStaticsSnapshot
         Xhprof::$key_prefix = $s['key_prefix'];
         Xhprof::$ui_html = $s['ui_html'];
         Xhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
+    }
+
+    /**
+     * `XhprofProfiler::$config` 的读/写（私有静态、无 setter，只能反射）。
+     *
+     * 与 `_hyperf` 一条口径：进程级共享、漏出去会让别人的断言读到别的配置。
+     */
+    private static function profilerConfigSnapshot(): ?array
+    {
+        $prop = new \ReflectionProperty(XhprofProfiler::class, 'config');
+        $prop->setAccessible(true);
+        $value = $prop->getValue();
+
+        return is_array($value) ? $value : null;
+    }
+
+    private static function profilerConfigRestore(?array $config): void
+    {
+        $prop = new \ReflectionProperty(XhprofProfiler::class, 'config');
+        $prop->setAccessible(true);
+        $prop->setValue(null, $config);
     }
 }

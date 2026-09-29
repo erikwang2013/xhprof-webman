@@ -13,6 +13,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Context\Context;
 use PHPUnit\Framework\Attributes\Test;
@@ -52,6 +53,18 @@ class ProfilerFixedListCache extends FakeCache
 
 class XhprofProfilerTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
+    /**
+     * 本类是唯一改了 `Xhprof::$*` 却不还原的类（setUp 里设了 time_limit/ignore_url_arr/
+     * key_prefix 等），而这些都是**进程级**静态量：`--order-by=random` 下它跑在
+     * `WiringTest` 前面时，后者的 12 条接线用例会读到 `key_prefix='myxp'`、`time_limit=5`
+     * 而变红（实测 seed 1/8/10/11/12/14）。快照 + 还原是与其它测试类同一条口径。
+     *
+     * @var array<string, mixed>
+     */
+    private array $savedStatics = [];
+
     private FakeCache $cache;
     private FakeConfig $config;
     private FakeRequest $request;
@@ -60,6 +73,9 @@ class XhprofProfilerTest extends TestCase
 
     protected function setUp(): void
     {
+        // 必须在自己改静态量**之前**快照
+        $this->savedStatics = $this->snapshotXhprofStatics();
+
         $this->cache = new FakeCache();
         $this->request = new FakeRequest();
         $this->response = new FakeResponse();
@@ -90,6 +106,7 @@ class XhprofProfilerTest extends TestCase
     {
         Context::reset();
         ApplicationContext::reset();
+        $this->restoreXhprofStatics($this->savedStatics);
         Xhprof::$request = null;
         Xhprof::$response = null;
         Xhprof::$config = null;

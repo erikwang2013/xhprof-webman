@@ -37,6 +37,11 @@
             }
         },
         {
+            "description": "bower-asset/* 的来源。yiisoft/yii2 的 require 里硬依赖 4 个 bower 包（jquery/inputmask/punycode/yii2-pjax），packagist 上不存在，只有 asset-packagist 镜像里才有——不加这一条 `composer install` 直接解析失败。",
+            "type": "composer",
+            "url": "https://asset-packagist.org"
+        },
+        {
             "description": "Joomla CMS 4.4.14 官方发布包（完整包；用来钉住 4.4 与 5.x 的差异 —— 最要紧的是 CMSPlugin::__construct：4.4 是 `(&$subject, $config = [])` 第一个参数按引用且无型别，5.x 是 `(DispatcherInterface $dispatcher, array $config = [])`）。同样不声明 autoload。",
             "type": "package",
             "package": {
@@ -78,11 +83,13 @@
         "wordpress/sqlite-database-integration": "3.0.2",
         "workerman/webman-framework": "^2.2",
         "yiisoft/di": "^1.0",
+        "yiisoft/yii2": "^2.0",
         "yiisoft/middleware-dispatcher": "^5.0"
     },
     "config": {
         "allow-plugins": {
             "drupal/core-composer-scaffold": false,
+            "yiisoft/yii2-composer": true,
             "symfony/runtime": false
         },
         "sort-packages": true

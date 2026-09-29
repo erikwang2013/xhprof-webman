@@ -14,7 +14,7 @@ use ErikWang2013\Xhprof\Core\Contract\RequestInterface;
  *
  * **`$_COOKIE` 刻意不参与 get()/all()**：报告页的 auth_token 是从这里读的
  * （Xhprof::index() → `$req->get('token')`），能从 Cookie 里读出来就是鉴权旁路；
- * 十家里 WordPress 对 `$_REQUEST` 也是同一条理由。Cookie 里没有本包需要的输入。
+ * 十二家里 WordPress 对 `$_REQUEST` 也是同一条理由。Cookie 里没有本包需要的输入。
  */
 class RequestAdapter implements RequestInterface
 {
@@ -79,7 +79,7 @@ class RequestAdapter implements RequestInterface
 
         // 契约要求只返回主机名、不含端口（R-2）。已知代价只有一处：列表页那行
         // request_uri 的**显示文本**不体现端口（它由 `host() . uri()` 拼成）。
-        // 页面里的链接不受影响——统一由 XhprofLib::report_url() 生成相对 URL。十一家一致。
+        // 页面里的链接不受影响——统一由 XhprofLib::report_url() 生成相对 URL。十二家一致。
         $parsed = parse_url('http://' . $host, PHP_URL_HOST);
 
         return is_string($parsed) && $parsed !== '' ? $parsed : $host;

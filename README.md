@@ -2,7 +2,7 @@
 
 **中文** · [English](./docs/i18n/en/README.md) · [한국어](./docs/i18n/ko/README.md) · [Русский](./docs/i18n/ru/README.md) · [Deutsch](./docs/i18n/de/README.md) · [Français](./docs/i18n/fr/README.md) · [Español](./docs/i18n/es/README.md) · [Português](./docs/i18n/pt/README.md) · [العربية](./docs/i18n/ar/README.md) · [हिन्दी](./docs/i18n/hi/README.md) · [বাংলা](./docs/i18n/bn/README.md) · [Bahasa Indonesia](./docs/i18n/id/README.md) · [日本語](./docs/i18n/ja/README.md)
 
-兼容 webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 的代码性能分析插件。
+兼容 webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 的代码性能分析插件。
 
 基于 xhprof 扩展采集数据并存入 Redis，开发者可通过浏览器快速访问性能分析报告，排查代码性能瓶颈。
 
@@ -40,8 +40,9 @@
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | 复制到 `plugins/system/`，后台「发现」安装 |
 | Drupal | 10.x / 11.x | 8.1（10.x）/ 8.3（11.x） | `xhprof` 模块（`Drupal\XhprofMiddleware`） | 标准模块，启用即可 |
 | 原生 PHP（无框架） | —（无外部包） | 8.0 | `Native\XhprofBootstrap` | 入口文件顶部一行 `XhprofBootstrap::start()`，无需注册控制器与路由 |
+| Yii2 | `yiisoft/yii2 ^2.0` | 8.0 | `Yii2\XhprofBootstrap` | `config/web.php` 的 `bootstrap` 数组注册，无需注册控制器与路由 |
 
-入口类命名空间前缀统一为 `ErikWang2013\Xhprof\`（上表省略）。十一家都不需要你注册控制器与路由：报告页与静态资源由入口类自行接管，Drupal 则由模块路由提供（见 Drupal 一节）。
+入口类命名空间前缀统一为 `ErikWang2013\Xhprof\`（上表省略）。十二家都不需要你注册控制器与路由：报告页与静态资源由入口类自行接管，Drupal 则由模块路由提供（见 Drupal 一节）。
 
 本包声明 `php >= 8.0`，但 Yii3 依赖的 `yiisoft/*` 组件要求 **PHP 8.1+**，所以 **Yii3 在 PHP 8.0 上不可用**；Symfony 7.x、Drupal 11.x 同理需要更高的 PHP 版本。逐步接入方式见下方「框架配置」。
 
@@ -282,7 +283,7 @@ cp -r vendor/aaron-dev/xhprof-webman/joomla/ plugins/system/xhprof/
 
 **1. 启用模块** — 包内 `drupal/xhprof/` 是标准 Drupal 模块（`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`），放到站点的 `modules/custom/xhprof/` 后在后台「扩展」页勾选启用（或 `drush en xhprof`）。
 
-**2. 报告页与静态资源** — Drupal 是十一个框架里**唯一走「模块 + 路由」这一形态**的：`xhprof.routing.yml` 注册报告路径 `/xhprof` 与资源路径 `/xhprof-assets`，默认由模块 Controller 输出；其余十家的入口类在采样开始前自行短路，自服务报告页与静态资源，不注册路由。**改成自定义 `assets_url` 前缀时资源改由中间件接管**：模块的资源路由 path 写死在 `xhprof.routing.yml`（`/xhprof-assets/{file}`），匹配不到别的前缀。
+**2. 报告页与静态资源** — Drupal 是十二个框架里**唯一走「模块 + 路由」这一形态**的：`xhprof.routing.yml` 注册报告路径 `/xhprof` 与资源路径 `/xhprof-assets`，默认由模块 Controller 输出；其余十一家的入口类在采样开始前自行短路，自服务报告页与静态资源，不注册路由。**改成自定义 `assets_url` 前缀时资源改由中间件接管**：模块的资源路由 path 写死在 `xhprof.routing.yml`（`/xhprof-assets/{file}`），匹配不到别的前缀。
 
 **3. 配置** — 配置是模块内的 typed config：默认值在 `drupal/xhprof/config/install/xhprof.settings.yml`，结构定义在 `drupal/xhprof/config/schema/xhprof.schema.yml`。字段含义见「配置项说明」。
 
@@ -315,7 +316,7 @@ services:
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
 ```
 
-要改配置就把数组传进这一行（键集与另外十家一致，默认值在 `src/Native/config/xhprof.php`）：
+要改配置就把数组传进这一行（键集与另外十一家一致，默认值在 `src/Native/config/xhprof.php`）：
 
 ```php
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
@@ -338,6 +339,35 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ```
 
 访问 `http://127.0.0.1:8000/` 产生数据，再访问 `http://127.0.0.1:8000/xhprof` 看报告页——两者在同一个进程里，资源也一并验证到。
+
+---
+
+### Yii2
+
+适用于 Yii2（`yiisoft/yii2 ^2.0`，PHP >= 8.0）。**与 Yii3 不是同一个框架**：Yii3 是 PSR-15 重写版，Yii2 有自己的一套 `yii\web\Request` / `Response` 与应用生命周期，入口类也因此不同。
+
+**1. 注册引导类** — `config/web.php`：
+
+```php
+'bootstrap' => [
+    [
+        'class' => \ErikWang2013\Xhprof\Yii2\XhprofBootstrap::class,
+        'config' => ['auth_token' => 'xxx'],   // 可选，键集见 src/Yii2/config/xhprof.php
+    ],
+],
+```
+
+这是 Yii2 官方扩展点 `yii\base\BootstrapInterface` 的标准注册形状：数组定义里的 `config` 键会由容器按**公有属性**赋给入口类（`cache` / `logger` 也是同样的注入点，传实例即可替换默认的 Redis 适配器与 `error_log`）。
+
+**2. 报告页与静态资源** — **无需注册控制器、无需注册路由、无需改 urlManager**：引导类在 `Application::EVENT_BEFORE_REQUEST` 上判断请求路径，命中报告路径 `/xhprof` 直接输出报告页并结束请求，命中资源路径（前缀从配置项 `assets_url` 读，默认 `/xhprof-assets`）直接输出静态资源。两条路径都在采样开始前短路。
+
+**3. 采样窗口 = `EVENT_BEFORE_REQUEST` → `EVENT_AFTER_REQUEST`**。注意 Yii2 的 `EVENT_AFTER_REQUEST` 在响应**发出之前**触发（`base/Application.php` 的 `run()`），所以「发送响应」本身不在窗口内。**异常路径靠 shutdown 兜底**：`run()` 只捕获 `ExitException`，业务抛出的其它异常会让 `EVENT_AFTER_REQUEST` 永不触发，因此起表时同时注册一次 `register_shutdown_function`（与 Symfony / Joomla 两家同形）。
+
+**4. 控制台应用零影响** — `yii\console\Application` 不覆写 `run()`，所以 CLI 命令（cron、迁移、队列）**也会**触发 `EVENT_BEFORE_REQUEST`；引导类在 `bootstrap()` 里先判 `instanceof yii\web\Application`，控制台一条钩子都不挂。
+
+**5. 客户端 IP 用框架语义** — `getRealIp()` 走 `Request::getUserIP()`：Yii2 默认把 `X-Forwarded-For` 这类转发头按 `secureHeaders` **滤掉**（安全默认），所以反代部署下拿到的是 `REMOTE_ADDR`；要让报告页记录真实客户端 IP，得在应用的 request 组件上配 `trustedHosts`（配了之后 Yii2 取的是「从右往左第一个不可信地址」，与其余适配器「无条件取首段」刻意不同）。这是框架自己的安全判定，本包不替站点决定信任谁。
+
+**6. 配置** — 默认值在包内 `src/Yii2/config/xhprof.php`，用第 1 步里的 `config` 键覆盖；`redis` 子数组可选（不注入 `cache` 时用它直连 phpredis，键名与其余框架一致：`host` / `port` / `password` / `database` / `timeout`）。
 
 ---
 
@@ -395,7 +425,7 @@ Xhprof::bootstrap(
 );
 ```
 
-**六个新框架（Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal）不要调用无参 `Xhprof::bootstrap()`**——无参调用走 `autoDetect()`，它只认识 webman / Laravel / ThinkPHP / Hyperf 四个分支，在这六个框架上会直接抛 `Unsupported framework`。必须像上面的例子一样显式传入 5 个适配器（各框架配套的入口类已经替你做完了这件事）。
+**除 `autoDetect()` 认识的那四个框架之外，其余八个（Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 原生 PHP）都不要调用无参 `Xhprof::bootstrap()`**——无参调用走 `autoDetect()`，它只认识 webman / Laravel / ThinkPHP / Hyperf 四个分支，在这八个上会直接抛 `Unsupported framework`。必须像上面的例子一样显式传入 5 个适配器（各框架配套的入口类已经替你做完了这件事）。
 
 ---
 
@@ -418,11 +448,11 @@ Core 只通过 5 个契约访问框架，5 个契约都在 `src/Core/Contract/`�
 1. `Xhprof::autoDetect()` 里那串 `class_exists()` 分支（`Webman\App` → `Illuminate\Foundation\Application` → `think\App` → `Hyperf\Context\ApplicationContext`），只有无参 `bootstrap()` 会走到它。
 2. 硬编码的 Hyperf 协程开关：`Xhprof::markHyperfContext()` 配合 `\Hyperf\Context\Context` 的存在性判断，决定适配器存进进程静态属性还是协程 Context。
 
-**六个新框架不经过 `autoDetect()`，全部走显式注入**：入口类自己 `new` 出 5 个适配器传给 `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`。原因是 PSR-7 框架的 Request / Response 只能从请求管线里拿到，无参 `bootstrap()` 结构上不可能工作；另一个好处是 `autoDetect()` 保持「四个旧框架」的现状不再膨胀。
+**其余八个框架不经过 `autoDetect()`，全部走显式注入**：入口类自己 `new` 出 5 个适配器传给 `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`。原因是 PSR-7 / 框架自有请求对象的形态只能从请求管线里拿到，无参 `bootstrap()` 结构上不可能工作；另一个好处是 `autoDetect()` 保持「四个旧框架」的现状不再膨胀。
 
 ![架构](docs/images/architecture.svg)
 
-上图讲**结构**：十一个框架各自的入口类、5 个契约、Core 的三层划分，以及仅剩的两处耦合点。
+上图讲**结构**：十二个框架各自的入口类、5 个契约、Core 的三层划分，以及仅剩的两处耦合点。
 
 ![设计思路](docs/images/design.svg)
 
@@ -452,6 +482,7 @@ Core 只通过 5 个契约访问框架，5 个契约都在 `src/Core/Contract/`�
 | Joomla | `onAfterInitialise` | `onAfterRespond`，另有 shutdown 兜底 |
 | Drupal | `http_middleware`（priority 1000，最外层） | `finally` |
 | 原生 PHP（无框架） | 入口文件顶部一行 `XhprofBootstrap::start()` | 进程 shutdown（`register_shutdown_function`），另有 `stop()` 可提前止表 |
+| Yii2 | `EVENT_BEFORE_REQUEST` | `EVENT_AFTER_REQUEST`（在响应发出前触发），另有 shutdown 兜底 |
 
 ---
 
@@ -470,6 +501,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # 各框架 Redis 适配器的共享实现
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 既有 4 个框架
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 新增 6 个框架
+│   ├── Yii2/                     # Yii2：BootstrapInterface 入口类与 5 个适配器
 │   ├── Native/                   # 原生 PHP（无框架）：入口类与 5 个适配器
 │   └── html/                     # 报告页静态资源（css / js / images / pet.svg 站点图标与品牌图标）
 ├── wordpress/                    # mu-plugin 引导文件（带 plugin header）
@@ -502,9 +534,9 @@ src/<Fw>/
 | 项 | 怎么证明 |
 |---|---|
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
-| 十一个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
+| 十二个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 8 个框架**（Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；ThinkPHP / Hyperf 未入环，见下 |
+| `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 9 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；ThinkPHP / Hyperf 未入环，见下 |
 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑 |
 
 
@@ -517,7 +549,7 @@ src/<Fw>/
 | Symfony 的 `kernel.event_subscriber` 自动配置 | 需要真实容器编译 |
 | 长驻进程下的静态状态串扰 | Webman 侧未改（Hyperf 侧已隔离：渲染期 9 个按请求量走协程 Context，`tests/Unit/Lib/RenderStateCoroutineTest.php` 用真让出的协程钉住） |
 | 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 真实 Redis 读写**已进验证环**（`cases/Redis.php`：真 phpredis + 真 Slim 端到端——业务请求 → 落库 → 列表页 → 报告页）；浏览器渲染与真实负载下的采样开销仍超出单测与验证环的范围 |
-| ThinkPHP / Hyperf 的适配器签名与语义 | 这两家未装入验证环（环覆盖 8 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
+| ThinkPHP / Hyperf 的适配器签名与语义 | 这两家未装入验证环（环覆盖 9 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
 
 **手工冒烟清单（每个框架三步）**
 
@@ -531,11 +563,11 @@ src/<Fw>/
 
 **已知限制：列表页显示的 `request_uri` 不含端口**
 
-`host()` 契约的语义是「仅 host，不含端口」（R-2），十一个框架都遵守，只是实现方式不同：PSR-7 的 `getHost()` 天然不含端口，Joomla / WordPress 手工 `parse_url` 一次，Webman 与 ThinkPHP 要传严格参数 `host(true)`（默认参数会把 `Host` 头连同端口原样返回）。列表页显示的 `request_uri` 由 `host() . uri()` 拼成（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`），所以非标准端口（如 `:8080`）部署时，列表里那行 URL **文本**不体现端口。**链接本身不受影响**：列表页与报告页内的链接统一由 `XhprofLib::report_url()` 生成相对 URL（只含 path + query），点进去是正确的页面，不依赖 host。
+`host()` 契约的语义是「仅 host，不含端口」（R-2），十二个框架都遵守，只是实现方式不同：PSR-7 的 `getHost()` 天然不含端口，Joomla / WordPress 手工 `parse_url` 一次，Webman 与 ThinkPHP 要传严格参数 `host(true)`（默认参数会把 `Host` 头连同端口原样返回）。列表页显示的 `request_uri` 由 `host() . uri()` 拼成（`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`），所以非标准端口（如 `:8080`）部署时，列表里那行 URL **文本**不体现端口。**链接本身不受影响**：列表页与报告页内的链接统一由 `XhprofLib::report_url()` 生成相对 URL（只含 path + query），点进去是正确的页面，不依赖 host。
 
 **`assets_url` 已支持自定义前缀**
 
-静态资源前缀不再是硬编码常量：`src/Core/StaticController.php` 按配置项 `assets_url` 匹配资源路径（默认 `/xhprof-assets`，尾斜杠可有可无）。**十一个框架都跟随这个配置**：十家的入口类在采样开始前自行短路并服务资源；Drupal 的默认前缀由模块路由 + Controller 服务、自定义前缀由中间件接管。**边界**：Laravel、Hyperf、Webman、ThinkPHP 四家不再需要控制器与路由——中间件先跑，按旧版说明注册过的那两条路由只是被遮蔽：既不会报错，也不会再被命中。目录/子路径部署下的剩余限制见下一条 Drupal。
+静态资源前缀不再是硬编码常量：`src/Core/StaticController.php` 按配置项 `assets_url` 匹配资源路径（默认 `/xhprof-assets`，尾斜杠可有可无）。**十二个框架都跟随这个配置**：十一家的入口类在采样开始前自行短路并服务资源；Drupal 的默认前缀由模块路由 + Controller 服务、自定义前缀由中间件接管。**边界**：Laravel、Hyperf、Webman、ThinkPHP 四家不再需要控制器与路由——中间件先跑，按旧版说明注册过的那两条路由只是被遮蔽：既不会报错，也不会再被命中。目录/子路径部署下的剩余限制见下一条 Drupal。
 
 **已知限制：Drupal 装在子目录时路径守卫失效**
 

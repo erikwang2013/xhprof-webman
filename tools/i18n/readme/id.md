@@ -1,6 +1,6 @@
 # XHProf Profiler Performa
 
-Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPHP / Hyperf / Yii3 / Symfony / Slim 4 / WordPress / Joomla, dan Drupal.
+Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla, dan Drupal.
 
 Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pengembang dapat dengan cepat membuka laporan analisis performa melalui browser untuk menemukan hambatan performa kode.
 
@@ -38,8 +38,9 @@ Api kecil yang sama juga menjadi ikon situs dan ikon merek di kiri atas halaman 
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Salin ke `plugins/system/`, pasang lewat Discover |
 | Drupal | 10.x / 11.x | 8.1 (10.x) / 8.3 (11.x) | modul `xhprof` (`Drupal\XhprofMiddleware`) | Modul standar, cukup diaktifkan |
 | PHP murni (tanpa framework) | — (tanpa paket eksternal) | 8.0 | `Native\XhprofBootstrap` | Satu baris di atas berkas entri, `XhprofBootstrap::start()`, tanpa mendaftarkan controller atau route |
+| Yii2 | `yiisoft/yii2 ^2.0` | 8.0 | `Yii2\XhprofBootstrap` | Daftarkan di array `bootstrap` pada `config/web.php`, tanpa mendaftarkan controller atau route |
 
-Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihilangkan di atas).  Tidak satu pun dari sebelas yang meminta Anda mendaftarkan controller atau route: halaman report dan aset statis dilayani oleh kelas entri itu sendiri (pada Drupal, oleh route modul).
+Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihilangkan di atas).  Tidak satu pun dari dua belas yang meminta Anda mendaftarkan controller atau route: halaman report dan aset statis dilayani oleh kelas entri itu sendiri (pada Drupal, oleh route modul).
 
 Paket ini mendeklarasikan `php >= 8.0`, tetapi komponen `yiisoft/*` yang diandalkan Yii3 mensyaratkan **PHP 8.1+**, jadi **Yii3 tidak bisa dipakai di PHP 8.0**; Symfony 7.x dan Drupal 11.x juga butuh versi PHP yang lebih tinggi. Langkah pemasangan terperinci ada di "Konfigurasi Framework" di bawah.
 
@@ -280,7 +281,7 @@ Direktori `joomla/` di paket *adalah* pluginnya: manifes `xhprof.xml`, `services
 
 **1. Aktifkan modul** — `drupal/xhprof/` di dalam paket adalah modul Drupal standar (`xhprof.info.yml` / `xhprof.routing.yml` / `xhprof.services.yml`). Letakkan di `modules/custom/xhprof/` situs Anda, lalu aktifkan di halaman "Extend" (atau dengan `drush en xhprof`).
 
-**2. Halaman report dan aset statis** — Drupal adalah **satu-satunya dari sebelas framework yang lewat jalur «modul + route»**: `xhprof.routing.yml` mendaftarkan path report `/xhprof` dan path aset `/xhprof-assets`, yang secara default dilayani controller modul; sepuluh kelas entri lainnya memintas sendiri sebelum profiling dimulai dan melayani halaman report beserta aset statisnya tanpa mendaftarkan route. **Dengan prefiks `assets_url` kustom, aset dilayani middleware**: path route aset modul ditulis mati di `xhprof.routing.yml` (`/xhprof-assets/{file}`) dan tidak akan pernah cocok dengan prefiks lain.
+**2. Halaman report dan aset statis** — Drupal adalah **satu-satunya dari dua belas framework yang lewat jalur «modul + route»**: `xhprof.routing.yml` mendaftarkan path report `/xhprof` dan path aset `/xhprof-assets`, yang secara default dilayani controller modul; sebelas kelas entri lainnya memintas sendiri sebelum profiling dimulai dan melayani halaman report beserta aset statisnya tanpa mendaftarkan route. **Dengan prefiks `assets_url` kustom, aset dilayani middleware**: path route aset modul ditulis mati di `xhprof.routing.yml` (`/xhprof-assets/{file}`) dan tidak akan pernah cocok dengan prefiks lain.
 
 **3. Konfigurasi** — konfigurasinya adalah config bertipe tingkat modul: nilai default ada di `drupal/xhprof/config/install/xhprof.settings.yml`, dengan skemanya di `drupal/xhprof/config/schema/xhprof.schema.yml`. Lihat "Referensi Konfigurasi" untuk daftar kolomnya.
 
@@ -313,7 +314,7 @@ Untuk aplikasi tanpa framework yang hanya punya satu front controller (`public/i
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start();
 ```
 
-Untuk mengubah konfigurasi, berikan array-nya pada baris ini (set key-nya sama dengan sepuluh yang lain; nilai default ada di `src/Native/config/xhprof.php`):
+Untuk mengubah konfigurasi, berikan array-nya pada baris ini (set key-nya sama dengan sebelas yang lain; nilai default ada di `src/Native/config/xhprof.php`):
 
 ```php
 \ErikWang2013\Xhprof\Native\XhprofBootstrap::start([
@@ -336,6 +337,35 @@ php -S 127.0.0.1:8000 -t public public/index.php
 ```
 
 Buka `http://127.0.0.1:8000/` untuk menghasilkan data, lalu `http://127.0.0.1:8000/xhprof` untuk halaman report — keduanya di proses yang sama, dan asetnya ikut terverifikasi.
+
+---
+
+### Yii2
+
+Untuk Yii2 (`yiisoft/yii2 ^2.0`, PHP >= 8.0). **Ini bukan framework yang sama dengan Yii3**: Yii3 adalah penulisan ulang berbasis PSR-15, sedangkan Yii2 punya `yii\web\Request` / `Response` serta siklus hidup aplikasinya sendiri, jadi kelas entrinya juga terpisah.
+
+**1. Daftarkan kelas bootstrap** — `config/web.php`:
+
+```php
+'bootstrap' => [
+    [
+        'class' => \ErikWang2013\Xhprof\Yii2\XhprofBootstrap::class,
+        'config' => ['auth_token' => 'xxx'],   // opsional; lihat src/Yii2/config/xhprof.php
+    ],
+],
+```
+
+Ini bentuk standar untuk titik ekstensi resmi Yii2, `yii\base\BootstrapInterface`: key `config` pada definisi array itu diberikan oleh container ke kelas entri sebagai **properti publik** (`cache` / `logger` juga titik injeksi dengan cara yang sama — kirim sebuah instans untuk menggantikan adapter Redis default atau `error_log`).
+
+**2. Halaman report dan aset statis** — **tidak perlu controller, tidak perlu route, dan tidak perlu mengubah urlManager**: kelas bootstrap memeriksa path request pada `Application::EVENT_BEFORE_REQUEST`, langsung melayani halaman report pada path report `/xhprof` lalu mengakhiri request, dan melayani aset statis pada prefiks aset (dibaca dari opsi `assets_url`, default `/xhprof-assets`). Kedua path ini memintas sebelum profiling dimulai.
+
+**3. Jendela profiling = `EVENT_BEFORE_REQUEST` → `EVENT_AFTER_REQUEST`.** Perhatikan bahwa Yii2 memicu `EVENT_AFTER_REQUEST` **sebelum** respons dikirim (`run()` di `base/Application.php`), jadi pengiriman respons itu sendiri tidak masuk ke dalam jendela ini. **Jalur exception bersandar pada cadangan shutdown**: `run()` hanya menangkap `ExitException`, sehingga throwable lain dari kode Anda membuat `EVENT_AFTER_REQUEST` tidak pernah menyala — karena itu kelas entri juga mendaftarkan `register_shutdown_function` sebagai cadangan saat mulai sampling (bentuk yang sama dengan Symfony / Joomla).
+
+**4. Aplikasi console tidak tersentuh** — `yii\console\Application` tidak menimpa `run()`, jadi perintah CLI (cron, migrasi, antrean) **tetap** memicu `EVENT_BEFORE_REQUEST`; kelas entri lebih dulu memeriksa `instanceof yii\web\Application` di `bootstrap()` dan tidak memasang hook apa pun untuk console.
+
+**5. IP klien mengikuti semantik framework itu sendiri** — `getRealIp()` mendelegasikan ke `Request::getUserIP()`: secara default Yii2 menyaring header penerusan seperti `X-Forwarded-For` lewat `secureHeaders` (nilai default amannya), jadi di belakang reverse proxy Anda mendapatkan `REMOTE_ADDR`. Untuk mencatat IP klien yang sebenarnya, konfigurasikan `trustedHosts` pada komponen request aplikasi (setelah dikonfigurasi, Yii2 mengembalikan alamat pertama yang tidak tepercaya dengan menelusuri dari kanan ke kiri — sengaja berbeda dari adapter lain, yang selalu mengambil entri pertama). Itu keputusan keamanan framework itu sendiri; paket ini tidak menentukan siapa yang boleh dipercaya sebuah situs.
+
+**6. Konfigurasi** — nilai default ada di `src/Yii2/config/xhprof.php` dan ditimpa dengan key `config` dari langkah 1; sub-array `redis` yang opsional (dipakai untuk terhubung langsung ke phpredis bila tidak ada `cache` yang disuntikkan) memakai key yang sama seperti framework lain: `host` / `port` / `password` / `database` / `timeout`.
 
 ---
 
@@ -393,7 +423,7 @@ Xhprof::bootstrap(
 );
 ```
 
-**Keenam framework baru (Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal) tidak boleh memanggil `Xhprof::bootstrap()` tanpa argumen** — tanpa argumen ia melewati `autoDetect()`, yang hanya mengenal cabang webman / Laravel / ThinkPHP / Hyperf dan melempar `Unsupported framework` untuk keenam framework ini. Kirimkan kelima adapter secara eksplisit seperti pada contoh di atas (kelas entri yang disertakan tiap framework sudah melakukannya untuk Anda).
+**Selain keempat framework yang dikenali `autoDetect()`, delapan framework lainnya (Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / PHP murni) tidak boleh memanggil `Xhprof::bootstrap()` tanpa argumen** — tanpa argumen ia melewati `autoDetect()`, yang hanya mengenal cabang webman / Laravel / ThinkPHP / Hyperf dan melempar `Unsupported framework` untuk kedelapan framework ini. Kirimkan kelima adapter secara eksplisit seperti pada contoh di atas (kelas entri yang disertakan tiap framework sudah melakukannya untuk Anda).
 
 ---
 
@@ -416,11 +446,11 @@ Setiap framework menyediakan 5 adapter yang mengimplementasikan kontrak-kontrak 
 1. Rantai `class_exists()` di `Xhprof::autoDetect()` (`Webman\App` → `Illuminate\Foundation\Application` → `think\App` → `Hyperf\Context\ApplicationContext`), yang hanya dicapai oleh `bootstrap()` tanpa argumen.
 2. Sakelar korutin Hyperf yang di-hardcode: `Xhprof::markHyperfContext()` plus pemeriksaan keberadaan `\Hyperf\Context\Context`, yang menentukan apakah adapter masuk ke properti statis seluruh proses atau ke Context korutin.
 
-**Keenam framework baru tidak pernah lewat `autoDetect()` — semuanya memakai injeksi eksplisit**: setiap kelas entri membangun sendiri 5 adapter-nya dan mengirimkannya ke `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`. Alasannya, pada framework PSR-7 Request/Response hanya bisa diperoleh dari pipeline request, jadi `bootstrap()` tanpa argumen memang tidak mungkin bekerja; manfaat keduanya, `autoDetect()` tetap beku pada empat framework yang sekarang.
+**Kedelapan framework lainnya tidak pernah lewat `autoDetect()` — semuanya memakai injeksi eksplisit**: setiap kelas entri membangun sendiri 5 adapter-nya dan mengirimkannya ke `Xhprof::bootstrap($req, $res, $cfg, $cache, $log)`. Alasannya, objek request PSR-7 / bawaan framework hanya bisa diperoleh dari pipeline request, jadi `bootstrap()` tanpa argumen memang tidak mungkin bekerja; manfaat keduanya, `autoDetect()` tetap beku pada empat framework yang sekarang.
 
 ![Arsitektur](docs/images/architecture.svg)
 
-Diagram pertama adalah **strukturnya**: kelas entri dari kesebelas framework, 5 kontraknya, tiga lapisan Core, dan satu-satunya dua coupling yang tersisa.
+Diagram pertama adalah **strukturnya**: kelas entri dari kedua belas framework, 5 kontraknya, tiga lapisan Core, dan satu-satunya dua coupling yang tersisa.
 
 ![Alasan desain](docs/images/design.svg)
 
@@ -450,6 +480,7 @@ Satu request yang diprofilkan:
 | Joomla | `onAfterInitialise` | `onAfterRespond`, plus cadangan shutdown |
 | Drupal | `http_middleware` (prioritas 1000, terluar) | `finally` |
 | PHP murni (tanpa framework) | Satu baris `XhprofBootstrap::start()` di atas berkas entri | Shutdown proses (`register_shutdown_function`), plus `stop()` untuk berhenti lebih awal |
+| Yii2 | `EVENT_BEFORE_REQUEST` | `EVENT_AFTER_REQUEST` (dipicu sebelum respons dikirim), plus cadangan shutdown |
 
 ---
 
@@ -468,6 +499,7 @@ xhprof-webman/
 │   │   └── RedisAdapterTrait.php # implementasi adapter Redis bersama
 │   ├── Webman/ Laravel/ Thinkphp/ Hyperf/            # 4 framework yang sudah ada
 │   ├── Yii3/ Symfony/ Slim/ Wordpress/ Joomla/ Drupal/   # 6 framework baru
+│   ├── Yii2/                     # Yii2: kelas entri BootstrapInterface dan 5 adapter
 │   ├── Native/                   # PHP murni (tanpa framework): kelas entri dan 5 adapter
 │   └── html/                     # aset halaman report (css / js / images / pet.svg ikon situs dan ikon merek)
 ├── wordpress/                    # berkas bootstrap mu-plugin (dengan header plugin)
@@ -500,9 +532,9 @@ src/<Fw>/
 | Butir | Caranya |
 |------|-----|
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
-| Kesebelas framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
+| Kedua belas framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
-| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk delapan framework yang masuk loop** (Slim / Symfony / Yii3 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
+| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk sembilan framework yang masuk loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
 | Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, dengan dua invarian: `uri()` tidak membawa scheme/host, dan `withHeaders()` tetap berlaku setelah `file()`. Jumlah SKIP loop adalah konstanta beku (2 di leg utama, 0 di leg 6.4) dan keduanya ada di Joomla: jalur baca asli `#__extensions.params` dan bentuk installer, keduanya butuh database atau installer untuk dijalankan |
 
 
@@ -515,7 +547,7 @@ src/<Fw>/
 | Konfigurasi otomatis `kernel.event_subscriber` Symfony | Membutuhkan kompilasi container asli |
 | Cakap-silang state statis di proses berjalan lama | Sisi Webman tidak diubah (di Hyperf sudah diisolasi: 9 nilai state render per permintaan melewati Context coroutine, dipatok oleh `tests/Unit/Lib/RenderStateCoroutineTest.php` dengan coroutine yang benar-benar menyerahkan kendali) |
 | I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | I/O Redis asli **kini ada di dalam loop** (`cases/Redis.php`: phpredis asli + permintaan Slim asli dari awal sampai akhir — permintaan → penyimpanan → halaman daftar → halaman laporan); rendering browser dan overhead di bawah beban nyata tetap di luar cakupan unit test dan loop |
-| Signature dan semantik adapter untuk ThinkPHP / Hyperf | keduanya tidak masuk loop verifikasi (loop mencakup delapan framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
+| Signature dan semantik adapter untuk ThinkPHP / Hyperf | keduanya tidak masuk loop verifikasi (loop mencakup sembilan framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
 
 **Daftar periksa smoke manual (tiga langkah per framework)**
 
@@ -529,11 +561,11 @@ src/<Fw>/
 
 **Keterbatasan yang diketahui: `request_uri` yang ditampilkan di daftar tidak punya port**
 
-Kontrak `host()` berarti "hanya host, tanpa port" (R-2), dan kesebelas framework mematuhinya — hanya implementasinya yang berbeda: `getHost()` dari PSR-7 tidak pernah membawa port, Joomla / WordPress memotongnya sendiri dengan `parse_url`, dan Webman / ThinkPHP butuh argumen ketat `host(true)` (nilai default mengembalikan header `Host` apa adanya, termasuk port). `request_uri` yang ditampilkan di daftar disusun sebagai `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), jadi pada port non-standar (misalnya `:8080`) **teks** baris itu tidak menampilkan port. **Tautannya sendiri tidak terpengaruh**: tautan di daftar dan di laporan semuanya dibuat `XhprofLib::report_url()` sebagai URL relatif (hanya path + query), membuka halaman yang benar, dan tidak bergantung pada `host()`.
+Kontrak `host()` berarti "hanya host, tanpa port" (R-2), dan kedua belas framework mematuhinya — hanya implementasinya yang berbeda: `getHost()` dari PSR-7 tidak pernah membawa port, Joomla / WordPress memotongnya sendiri dengan `parse_url`, dan Webman / ThinkPHP butuh argumen ketat `host(true)` (nilai default mengembalikan header `Host` apa adanya, termasuk port). `request_uri` yang ditampilkan di daftar disusun sebagai `host() . uri()` (`src/Core/XhprofLib/Utils/XHProfRunsDefault.php`), jadi pada port non-standar (misalnya `:8080`) **teks** baris itu tidak menampilkan port. **Tautannya sendiri tidak terpengaruh**: tautan di daftar dan di laporan semuanya dibuat `XhprofLib::report_url()` sebagai URL relatif (hanya path + query), membuka halaman yang benar, dan tidak bergantung pada `host()`.
 
 **`assets_url` kini mendukung prefiks khusus**
 
-Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Kesebelas framework mengikuti opsi ini**: sepuluh kelas entri memintas jalur aset sendiri sebelum profiling dimulai dan melayaninya, sedangkan Drupal melayani prefiks default lewat route modul + controller dan menyerahkan prefiks kustom ke middleware. **Batas**: Laravel, Hyperf, Webman, dan ThinkPHP tidak lagi perlu controller atau route — middleware berjalan lebih dulu, jadi controller dan dua route yang didaftarkan menurut petunjuk lama hanya tertutupi: tidak error dan tidak pernah lagi tersentuh.
+Prefiks aset bukan lagi konstanta yang di-hardcode: `src/Core/StaticController.php` mencocokkan path aset dengan opsi `assets_url` (default `/xhprof-assets`, garis miring di akhir opsional). Keterbatasan yang tersisa saat deployment di subdirektori adalah keterbatasan Drupal di bawah. **Kedua belas framework mengikuti opsi ini**: sebelas kelas entri memintas jalur aset sendiri sebelum profiling dimulai dan melayaninya, sedangkan Drupal melayani prefiks default lewat route modul + controller dan menyerahkan prefiks kustom ke middleware. **Batas**: Laravel, Hyperf, Webman, dan ThinkPHP tidak lagi perlu controller atau route — middleware berjalan lebih dulu, jadi controller dan dua route yang didaftarkan menurut petunjuk lama hanya tertutupi: tidak error dan tidak pernah lagi tersentuh.
 
 **Keterbatasan yang diketahui: penjaga path gagal kalau Drupal berada di subdirektori**
 

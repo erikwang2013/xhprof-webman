@@ -55,6 +55,7 @@ use ErikWang2013\Xhprof\Webman\XhprofMiddleware;
 use ErikWang2013\Xhprof\Hyperf\Middleware as HyperfMiddleware;
 use ErikWang2013\Xhprof\Hyperf\ConfigProvider;
 use ErikWang2013\Xhprof\Wordpress\XhprofPlugin;
+use ErikWang2013\Xhprof\Yii2\XhprofBootstrap;
 use ErikWang2013\Xhprof\Yii3\XhprofMiddleware as Yii3XhprofMiddleware;
 use Psr\Http\Message\ResponseInterface as PsrResponseInterface;
 use Psr\Http\Message\ServerRequestInterface as PsrServerRequestInterface;
@@ -66,7 +67,7 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 /**
- * 跨框架接线冒烟：门面类存在性 + 10 框架入口类的三条接线
+ * 跨框架接线冒烟：门面类存在性 + 11 框架入口类的三条接线
  * （enable=true 记录 / enable=false 不记录 / handler 抛异常时止点仍执行）。
  *
  * 命名统一用 `{framework}Middleware*`，这里的「Middleware」是**入口类**的代称，
@@ -77,6 +78,8 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
  *   wordpressMiddleware*→ Wordpress\XhprofPlugin（钩子：plugins_loaded → shutdown）
  *   joomlaMiddleware*   → Joomla\Extension\Xhprof（事件：onAfterInitialise → onAfterRespond + shutdown 兜底）
  *   drupalMiddleware*   → Drupal\XhprofMiddleware（HttpKernel 装饰器，有 try/finally）
+ *   yii2Middleware*     → Yii2\XhprofBootstrap（BootstrapInterface：EVENT_BEFORE_REQUEST → EVENT_AFTER_REQUEST
+ *                         + shutdown 兜底；没有 try/finally，同 Symfony）
  *
  * 驱动方式一律照搬各自 tests/Unit/Adapter/<Fw>Test.php 里既有那套（各自的假件/钩子注册表/
  * 缓存实现不同），不另造一套。
@@ -118,6 +121,7 @@ class WiringTest extends TestCase
         Context::reset();
         ApplicationContext::reset();
         Registry::reset();
+        $this->resetYii2EntryStatics();
         $this->saved = $this->snapshotXhprofStatics();
     }
 
@@ -127,6 +131,10 @@ class WiringTest extends TestCase
         // 就会这样），残留状态会污染下一个用例。补一次收尾，且放在 restore 之前 ——
         // 此刻落库打的是本用例注入的 FakeCache，不会碰真 Redis。
         JoomlaXhprof::stopSampling();
+
+        // Yii2 入口的 `$stopped` / `$shutdownRegistered` 与 Joomla 那个静态量同因：
+        // 用例若停在「采样中」，残留会污染下一个用例。
+        $this->resetYii2EntryStatics();
 
         $_SERVER = $this->savedServer;
         $_GET = $this->savedGet;
@@ -1048,5 +1056,180 @@ PHP
         $this->assertSame('handler boom', $e->getMessage(), '业务异常必须继续上抛，不能被中间件吞掉');
         $this->assertRunSavedInCache($cache);
         $this->assertNull(xhprof_disable(), '异常路径也必须停掉采样');
+    }
+
+    // ---------- Yii2 全流程 ----------
+
+    /** Yii2 入口的两个私有静态量归位（跨用例存活，见 tearDown 的注释） */
+    private function resetYii2EntryStatics(): void
+    {
+        foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
+            $prop = new \ReflectionProperty(XhprofBootstrap::class, $name);
+            $prop->setAccessible(true);
+            $prop->setValue(null, $value);
+        }
+    }
+
+    /**
+     * 按文档里的注册形状造一个 Web 应用：`bootstrap` 数组定义 + `config`/`cache` 键
+     * （Yii2 的容器对非 Configurable 类是构造之后按**公有属性**赋值）。
+     */
+    private function yii2App(FakeCache $cache, array $config, string $uri = '/business', bool $businessThrows = false): \yii\web\Application
+    {
+        return new class ([
+            'bootstrap' => [[
+                'class' => XhprofBootstrap::class,
+                'config' => $config,
+                'cache' => $cache,
+            ]],
+            'request' => new \yii\web\Request([
+                'url' => $uri,
+                'hostInfo' => 'http://example.com',
+                'remoteAddr' => '127.0.0.1',
+            ]),
+        ], $businessThrows) extends \yii\web\Application {
+            private bool $businessThrows;
+
+            public function __construct(array $config, bool $businessThrows)
+            {
+                parent::__construct($config);
+                $this->businessThrows = $businessThrows;
+            }
+
+            public function handleRequest($request)
+            {
+                $this->handleRequestCalled = true;
+                if ($this->businessThrows) {
+                    throw new \RuntimeException('handler boom');
+                }
+
+                return $this->getResponse();
+            }
+        };
+    }
+
+    /** 跑一次完整请求；短路路径以 ExitException 收尾（桩里不能 exit，真包生产下是 exit(0)） */
+    private function yii2Run(\yii\web\Application $app): void
+    {
+        ob_start();
+        try {
+            $app->run();
+        } catch (\yii\base\ExitException $e) {
+            // 报告页/资源路径的正常收尾
+        }
+        ob_end_clean();
+    }
+
+    #[Test]
+    public function yii2MiddlewareRecordsWhenEnabled(): void
+    {
+        $cache = new FakeCache();
+        $app = $this->yii2App($cache, ['enable' => true]);
+
+        $this->yii2Run($app);
+
+        $this->assertTrue($app->handleRequestCalled, '业务请求必须走到业务处理');
+        $this->assertRunSavedInCache($cache);
+        $this->assertNull(xhprof_disable(), 'EVENT_AFTER_REQUEST 之后不该还有可导出的采样状态');
+    }
+
+    #[Test]
+    public function yii2MiddlewareSkipsWhenDisabled(): void
+    {
+        $cache = new FakeCache();
+        $app = $this->yii2App($cache, ['enable' => false]);
+
+        $this->yii2Run($app);
+
+        $this->assertTrue($app->handleRequestCalled);
+        $this->assertNull(xhprof_disable(), 'enable=false 不应启动采样');
+        $this->assertSame([], $cache->calls, '不采样就不该碰缓存');
+    }
+
+    #[Test]
+    public function yii2MiddlewareShutdownStopRunsWhenBusinessThrows(): void
+    {
+        // Yii2 入口没有 try/finally，也没有「业务抛异常也一定会跑」的响应事件：
+        // `Application::run()` 只捕 ExitException（base/Application.php:393），
+        // 其它 Throwable 会让 EVENT_AFTER_REQUEST 永不触发 —— 止点只能靠
+        // BEFORE_REQUEST 时注册的 shutdown 兜底。所以这条与 Symfony 同形：真子进程 + 观测落库。
+        $this->assertSame(
+            ['runs' => 1, 'hasMain' => true],
+            $this->yii2RethrowScenario(),
+            '业务抛异常时 shutdown 兜底必须把采样落库，且恰好一条（不是空数据、不是两条）'
+        );
+    }
+
+    /**
+     * @return array{runs:int, hasMain:bool}
+     */
+    private function yii2RethrowScenario(): array
+    {
+        $script = sys_get_temp_dir() . '/xhprof-wiring-yii2-' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($script, <<<'PHP'
+<?php
+
+use ErikWang2013\Xhprof\Tests\Fixtures\FileCache;
+use ErikWang2013\Xhprof\Yii2\XhprofBootstrap;
+
+require $argv[1] . '/vendor/autoload.php';
+require $argv[1] . '/tests/Fixtures/Fakes.php';
+require $argv[1] . '/tests/Stubs/Framework/Yii2.php';
+
+$cache = new FileCache($argv[2]);
+
+// 业务处理直接抛异常：EVENT_AFTER_REQUEST 不会触发
+$app = new class ([
+    'bootstrap' => [['class' => XhprofBootstrap::class, 'config' => ['enable' => true], 'cache' => $cache]],
+    'request' => new yii\web\Request(['url' => '/business', 'hostInfo' => 'http://example.com', 'remoteAddr' => '127.0.0.1']),
+]) extends yii\web\Application {
+    public function handleRequest($request)
+    {
+        throw new RuntimeException('handler boom');
+    }
+};
+
+try {
+    $app->run();
+} catch (Throwable $e) {
+    // 异常穿出去，采样仍开着；进程结束时的 shutdown 兜底才落库
+}
+
+register_shutdown_function(static function () use ($cache): void {
+    $runs = $cache->lRange('xhprof:run_id', 0, -1);
+    $data = $runs === [] ? null : unserialize((string) $cache->get('xhprof:xhprof_log:' . $runs[0]));
+    echo json_encode([
+        'runs' => count($runs),
+        'hasMain' => is_array($data) && array_key_exists('main()', $data),
+    ]), "\n";
+});
+PHP
+        );
+
+        $store = (string) tempnam(sys_get_temp_dir(), 'xhprof-wiring-yii2-store-');
+
+        try {
+            $proc = proc_open(
+                [PHP_BINARY, '-d', 'display_errors=stderr', '-d', 'error_reporting=E_ALL', $script, dirname(__DIR__, 3), $store],
+                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes
+            );
+            $this->assertIsResource($proc, 'proc_open 失败');
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $code = proc_close($proc);
+        } finally {
+            unlink($script);
+            if (is_file($store)) {
+                unlink($store);
+            }
+        }
+
+        $decoded = json_decode(trim($stdout), true);
+        $this->assertIsArray($decoded, "子进程未输出合法 JSON（exit {$code}）：" . trim($stderr !== '' ? $stderr : $stdout));
+
+        return $decoded;
     }
 }

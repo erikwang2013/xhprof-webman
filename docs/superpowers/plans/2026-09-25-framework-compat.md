@@ -435,3 +435,17 @@ services:
 3. **`tests/Stubs/Framework/Symfony.php` 里的 `ResponseHeaderBag` 是空子类**，Drupal 与 Symfony 各有两条
    no-cache 断言的判别力**依赖这一点**。`stubDoesNotComputeCacheControlDefaults` 是**设计好的绊线**：
    谁给桩补忠实度，它先红——届时必须把那两条改成扰动式判别，**而不是删掉绊线或把断言改弱**。
+
+---
+
+## 五、本文件之后框架数还在长（读数前先看这里）
+
+本文件是 **2026-09-25 那一波（第 5–10 家）** 的记录，文中「六个」「十个」「11 个入口类」等计数
+都是**当时**的实测值，不作事后改写（改写会让「4.2 被推翻的前提」那一段失去意义）。
+
+之后的第 11 家（原生 PHP）与第 12 家（Yii2）各有自己的 commit；**当前**的框架数、配置键集、
+契约环覆盖面一律以 `README.md`「兼容框架与最低版本」与代码为准：
+
+- 入口类各自目录：`src/<Fw>/`（新增 Yii2 后为 12 家，`src/Native/` 与 `src/Yii2/` 不在本文的六张卡里）；
+- 契约环 `tools/contracts/run.php` 的冻结 SKIP 常量与腿定义、`EXPECTED_SKIPS` 以该文件为准；
+- 本文件 4.3 里「L2 语义覆盖率是 4.5/6」只对那一波的六家成立。

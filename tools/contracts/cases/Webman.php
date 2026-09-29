@@ -208,7 +208,7 @@ return static function (): array {
     // ================= ② L2：RequestAdapter（本卡重点 1/2） =================
     //
     // 一份带 query + body + XFF 的真报文。body 里的 `run` 与 query 里的 `run` **故意不同值**，
-    // 因为"query 胜还是 body 胜"正是十家最容易分叉的地方（webman: `all()` = `get() + post()`，
+    // 因为"query 胜还是 body 胜"正是十二家最容易分叉的地方（webman: `all()` = `get() + post()`，
     // query 胜；Laravel: body 胜）。
     $raw = "POST /list?page=2&run=legal&sort[]=wt&sort[]=mem HTTP/1.1\r\n"
         . "Host: example.com:8080\r\n"
@@ -336,7 +336,7 @@ return static function (): array {
     $expect('L2 正文挂在公开的 $file 上而不是 body 里', $afterFile->file['file'] ?? null, $cssPath);
     // 真包在**对象层**不设 Content-Type：类型是序列化时按**扩展名**从 `$mimeTypeMap` 取的
     // （css → text/css），与 Laravel/Symfony 用 finfo 按**内容**嗅探完全是两回事。
-    // 所以"Core 显式钉头"在 webman 上的意义是让响应对象自己带着类型（十家一致），
+    // 所以"Core 显式钉头"在 webman 上的意义是让响应对象自己带着类型（十二家一致），
     // 而不是"不然浏览器收不到类型"。
     $expect('L2 file() 本身不设 Content-Type（webman 在序列化时按扩展名补）', $afterFile->getHeaders(), []);
     $expect('L2 真包的扩展名→类型表认得 css', $afterFile->getMimeType('css'), 'text/css');

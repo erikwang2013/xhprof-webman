@@ -30,7 +30,7 @@ use PHPUnit\Framework\TestCase;
 class MissingExtensionParityTest extends TestCase
 {
     /**
-     * 十个采样入口。Hyperf 必须排最后：它的 `markHyperfContext()` 会把 Core 的 getter
+     * 十一个采样入口。Hyperf 必须排最后：它的 `markHyperfContext()` 会把 Core 的 getter
      * 切到协程 Context（进程内不可逆），此后 `Xhprof::getCache()` 读到的是 Hyperf 的容器。
      */
     private const ENTRIES = [
@@ -43,6 +43,7 @@ class MissingExtensionParityTest extends TestCase
         'wordpress',
         'joomla',
         'native',
+        'yii2',
         'hyperf',
     ];
 
@@ -72,6 +73,7 @@ class MissingExtensionParityTest extends TestCase
         $this->assertTrue($out['slim']['handler'], 'Slim: 业务请求不该被入口吞掉');
         $this->assertTrue($out['drupal']['handler'], 'Drupal: 业务请求要进内核');
         $this->assertFalse($out['joomla']['closed'], 'Joomla: 业务请求不该 close()');
+        $this->assertTrue($out['yii2']['handler'], 'Yii2: 业务请求不该被入口吞掉');
 
         foreach (self::ENTRIES as $entry) {
             if ($entry === 'yii3') {
@@ -98,10 +100,10 @@ class MissingExtensionParityTest extends TestCase
         $out = $this->probe($result);
 
         $this->assertMissingRedisEnvironment($out);
-        $this->assertSame(['__env__', '__positive_control__', 'yii3', 'slim', 'drupal', 'joomla'], array_keys($out));
+        $this->assertSame(['__env__', '__positive_control__', 'yii3', 'slim', 'drupal', 'joomla', 'yii2'], array_keys($out));
         $this->assertSame(1, $out['__positive_control__']['runs'], '正控没落库 → 探针空转，本用例失去判别力');
 
-        foreach (['yii3', 'slim', 'drupal', 'joomla'] as $entry) {
+        foreach (['yii3', 'slim', 'drupal', 'joomla', 'yii2'] as $entry) {
             $row = $out[$entry];
 
             $this->assertArrayNotHasKey('error', $row, "$entry: 报告页抛异常（缺 redis 时报告页不该致命）");
@@ -113,6 +115,8 @@ class MissingExtensionParityTest extends TestCase
         $this->assertFalse($out['yii3']['handler'], 'Yii3: 报告页应由入口短路输出，下游 handler 不该跑');
         $this->assertFalse($out['slim']['handler'], 'Slim: 报告页应由入口短路输出，下游 handler 不该跑');
         $this->assertTrue($out['joomla']['closed'], 'Joomla: 报告页分支应以 close() 收尾（真实实现是 exit）');
+        $this->assertFalse($out['yii2']['handler'], 'Yii2: 报告页应由入口短路输出，业务处理不该跑');
+        $this->assertTrue($out['yii2']['shortCircuit'], 'Yii2: 报告页分支应以 end() 收尾（桩里是 ExitException，真实实现是 exit）');
 
         // Drupal 是例外且是既知设计：报告页由路由 + Controller/XhprofController 提供，
         // 入口不短路，只保证不采样。这里如实断言这条差异，不当成 bug 抹平。
@@ -533,6 +537,42 @@ $arms['native'] = static function (string $uri) use ($runs, $leaked, $resetWarnO
     return ['warnings' => $logger->errors, 'runs' => $runs(), 'leaked' => $leaked()];
 };
 
+$arms['yii2'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
+    $resetWarnOnce();
+    $cache = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeCache();
+    $logger = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger();
+    // 走文档里的注册形状（bootstrap 数组定义 + 属性注入），再跑一次真实的应用生命周期：
+    // BEFORE_REQUEST 起表/短路、AFTER_REQUEST 止点，都由入口类自己挂的钩子完成。
+    $app = new \yii\web\Application([
+        'bootstrap' => [[
+            'class' => \ErikWang2013\Xhprof\Yii2\XhprofBootstrap::class,
+            'config' => ['enable' => true, 'ignore_url_arr' => []],
+            'cache' => $cache,
+            'logger' => $logger,
+        ]],
+        'request' => new \yii\web\Request(['url' => $uri, 'hostInfo' => 'http://example.com', 'remoteAddr' => '127.0.0.1']),
+    ]);
+
+    $shortCircuit = false;
+    ob_start();
+    try {
+        $app->run();
+    } catch (\yii\base\ExitException $e) {
+        // 桩的 end() 一律抛 ExitException（单测进程不能被 exit 杀掉）；
+        // 真包在生产环境下这里是 exit(0)。报告页/资源路径靠它短路。
+        $shortCircuit = true;
+    }
+    ob_end_clean();
+
+    return [
+        'warnings' => $logger->errors,
+        'runs' => $runs(),
+        'leaked' => $leaked(),
+        'handler' => $app->handleRequestCalled,
+        'shortCircuit' => $shortCircuit,
+    ];
+};
+
 // Hyperf 放最后：markHyperfContext() 会把 Core 的 getter 切到协程 Context（static 在本进程里
 // 不可逆），此后的 arm 用 getCache() 会读到 Hyperf 的 cache。
 $arms['hyperf'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
@@ -587,7 +627,7 @@ $out['__positive_control__'] = (static function () use ($runs, $leaked): array {
 })();
 
 if ($mode === 'report') {
-    foreach (['yii3', 'slim', 'drupal', 'joomla'] as $entry) {
+    foreach (['yii3', 'slim', 'drupal', 'joomla', 'yii2'] as $entry) {
         try {
             $out[$entry] = $arms[$entry]('/xhprof');
         } catch (\Throwable $e) {
@@ -606,7 +646,7 @@ if ($mode === 'report') {
     }
     $out['webman_x3'] = ['warnings' => $warnings, 'runs' => $row['runs'], 'leaked' => $row['leaked'], 'requests' => 3];
 } else {
-    foreach (['webman', 'laravel', 'thinkphp', 'yii3', 'slim', 'drupal', 'wordpress', 'joomla', 'native', 'hyperf'] as $entry) {
+    foreach (['webman', 'laravel', 'thinkphp', 'yii3', 'slim', 'drupal', 'wordpress', 'joomla', 'native', 'yii2', 'hyperf'] as $entry) {
         try {
             $out[$entry] = $arms[$entry]('/business');
         } catch (\Throwable $e) {

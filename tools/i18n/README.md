@@ -10,7 +10,7 @@ of them claims to.
 | file | what it does |
 |---|---|
 | `extract.php` | derives `templates/*.svg` and `classify.json` from the diagram originals listed in `I18N_DOCS` (`lib.php`). Already run; only re-run it if the Chinese originals change. |
-| `classify.json` | the 203 text nodes, each marked `copy`, `code` or `text`, with the tokens that must survive translation. Reviewable by hand — this is the file to argue with. |
+| `classify.json` | the 203 text nodes, each marked `copy`, `code` or `text`, with the tokens that must survive translation. Reviewable by hand — this is the file to argue with. (203 = every `<text>` in the three diagrams; the six `*.meta.title` / `*.meta.desc` nodes are the SVGs' own title/desc, not on-canvas text.) |
 | `templates/*.svg` | the originals with each translatable string replaced by `{{key}}`. |
 | `glossary/<lang>.json` | one file per language. **This is what you write.** |
 | `generate.php` | glossary → `docs/i18n/<lang>/images/*.svg` + `docs/i18n/<lang>/README.md`. |
@@ -84,7 +84,7 @@ Flat JSON. `_meta` plus one entry per key:
 
 ## The three classes, and what each demands of you
 
-203 keys: **76 copy**, **57 code**, **70 text**.
+203 keys: **80 copy**, **53 code**, **70 text**.
 
 | class | count | what it means |
 |---|---|---|

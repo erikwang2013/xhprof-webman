@@ -16,17 +16,17 @@
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">XHProf-Webman-Schichtenarchitektur</text>
-  <text x="32" y="70" font-size="13" fill="#57606a">11 Framework-Einträge → 5 Verträge → 1 Core: neue Frameworks ändern Core nicht</text>
+  <text x="32" y="70" font-size="13" fill="#57606a">12 Framework-Einträge → 5 Verträge → 1 Core: neue Frameworks ändern Core nicht</text>
 
   <!-- 图例 -->
   <rect x="700" y="32" width="18" height="18" rx="4" fill="#ffffff" stroke="#1a7f37" stroke-width="2"/>
   <text x="726" y="46" font-size="12.5" fill="#57606a">4 unterstützt</text>
   <rect x="830" y="32" width="18" height="18" rx="4" fill="#ddf4ff" stroke="#0969da" stroke-width="2" stroke-dasharray="5 3"/>
-  <text x="856" y="46" font-size="12.5" fill="#57606a">7 neu</text>
+  <text x="856" y="46" font-size="12.5" fill="#57606a">8 neu</text>
 
   <!-- ============ ① 框架入口层 ============ -->
   <rect x="24" y="100" width="1152" height="236" rx="12" fill="#ffffff" stroke="#e1e4e8" stroke-width="1.5"/>
-  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f">① Framework-Eintragsschicht — 11 Eintragsklassen</text>
+  <text x="44" y="128" font-size="14" font-weight="600" fill="#24292f">① Framework-Eintragsschicht — 12 Eintragsklassen</text>
   <text x="1156" y="128" font-size="11.5" fill="#57606a" text-anchor="end">Eintragsklassen lassen das Namespace-Präfix ErikWang2013\Xhprof\ weg</text>
 
   <text x="44" y="152" font-size="12" font-weight="600" fill="#1a7f37">4 Frameworks bereits unterstützt</text>
@@ -59,44 +59,44 @@
   <rect x="1098" y="166" width="48" height="18" rx="9" fill="#1a7f37"/>
   <text x="1122" y="179" font-size="7.89" fill="#ffffff" text-anchor="middle">unterstützt</text>
 
-  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da">7 neue Frameworks in diesem Release</text>
+  <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da">8 neue Frameworks in diesem Release</text>
 
-  <!-- 新增 7 个 -->
-  <rect x="44" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <!-- 新增 8 个 -->
+  <rect x="44" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
   <text x="56" y="279" font-size="13" font-weight="600" fill="#24292f">Yii3</text>
   <text x="56" y="300" font-size="10.5" fill="#57606a">Yii3\XhprofMiddleware</text>
-  <rect x="144" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="166" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <rect x="128" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="150" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 
-  <rect x="204" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="216" y="279" font-size="13" font-weight="600" fill="#24292f">Symfony</text>
-  <text x="216" y="300" font-size="10.5" fill="#57606a">Symfony\XhprofListener</text>
-  <rect x="304" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="326" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <rect x="186" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="198" y="279" font-size="13" font-weight="600" fill="#24292f">Symfony</text>
+  <text x="198" y="300" font-size="10.5" fill="#57606a">Symfony\XhprofListener</text>
+  <rect x="270" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="292" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 
-  <rect x="364" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="376" y="279" font-size="13" font-weight="600" fill="#24292f">Slim 4</text>
-  <text x="376" y="300" font-size="10.5" fill="#57606a">Slim\XhprofMiddleware</text>
-  <rect x="464" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="486" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <rect x="328" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="340" y="279" font-size="13" font-weight="600" fill="#24292f">Slim 4</text>
+  <text x="340" y="300" font-size="10.5" fill="#57606a">Slim\XhprofMiddleware</text>
+  <rect x="412" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="434" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 
-  <rect x="524" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="536" y="279" font-size="13" font-weight="600" fill="#24292f">WordPress</text>
-  <text x="536" y="300" font-size="10.5" fill="#57606a">Wordpress\XhprofPlugin</text>
-  <rect x="624" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="646" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <rect x="470" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="482" y="279" font-size="13" font-weight="600" fill="#24292f">WordPress</text>
+  <text x="482" y="300" font-size="10.5" fill="#57606a">Wordpress\XhprofPlugin</text>
+  <rect x="554" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="576" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 
-  <rect x="684" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="696" y="279" font-size="13" font-weight="600" fill="#24292f">Joomla</text>
-  <text x="696" y="300" font-size="10.5" fill="#57606a">Joomla\Extension\Xhprof</text>
-  <rect x="784" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="806" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <rect x="612" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="624" y="279" font-size="13" font-weight="600" fill="#24292f">Joomla</text>
+  <text x="624" y="300" font-size="10.5" fill="#57606a">Joomla\Extension\Xhprof</text>
+  <rect x="696" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="718" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 
-  <rect x="844" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="856" y="279" font-size="13" font-weight="600" fill="#24292f">Drupal</text>
-  <text x="856" y="300" font-size="10.5" fill="#57606a">Drupal\XhprofMiddleware</text>
-  <rect x="944" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="966" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <rect x="754" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="766" y="279" font-size="13" font-weight="600" fill="#24292f">Drupal</text>
+  <text x="766" y="300" font-size="10.5" fill="#57606a">Drupal\XhprofMiddleware</text>
+  <rect x="838" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="860" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 
   <!-- ① → ② -->
   <line x1="600" y1="340" x2="600" y2="358" stroke="#57606a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
@@ -169,7 +169,7 @@
   <rect x="24" y="654" width="1152" height="200" rx="12" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
   <rect x="44" y="668" width="252" height="26" rx="13" fill="#cf222e"/>
   <text x="170" y="686" font-size="10.22" font-weight="600" fill="#ffffff" text-anchor="middle">Nur zwei Framework-Kopplungen bleiben im Core</text>
-  <text x="312" y="686" font-size="11.5" fill="#57606a">Beide wirken nur auf dem alten argumentlosen bootstrap()-Pfad; die 7 neuen Frameworks sind nicht betroffen</text>
+  <text x="312" y="686" font-size="11.5" fill="#57606a">Beide wirken nur auf dem alten argumentlosen bootstrap()-Pfad; die 8 neuen Frameworks sind nicht betroffen</text>
 
   <rect x="45" y="698" width="546" height="76" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
   <text x="61" y="719" font-size="12.5" font-weight="600" fill="#cf222e">① Die class_exists-Kette in Xhprof::autoDetect()</text>
@@ -184,12 +184,18 @@
   <text x="627" y="768" font-size="10.5" fill="#57606a">Der einzige Code in Core, der eine Framework-Klasse direkt nennt</text>
 
   <rect x="44" y="792" width="1112" height="42" rx="8" fill="#ffffff" stroke="#cf222e" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">Die 7 neuen Frameworks laufen nie durch autoDetect</text>
+  <text x="600" y="812" font-size="12.5" font-weight="600" fill="#cf222e" text-anchor="middle">Die 8 neuen Frameworks laufen nie durch autoDetect</text>
   <text x="600" y="829" font-size="11.5" fill="#24292f" text-anchor="middle">Alle nutzen explizite Injektion: Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
-  <!-- ① 框架入口层 -->
-  <rect x="1004" y="254" width="152" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <text x="1016" y="279" font-size="13" font-weight="600" fill="#24292f">Native PHP</text>
-  <text x="1016" y="300" font-size="10.5" fill="#57606a">Native\XhprofBootstrap</text>
-  <rect x="1104" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
-  <text x="1126" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+  <!-- ① 框架入口层（Native PHP 与 Yii2 两组盒与上面同规格：宽 136、间距 6） -->
+  <rect x="896" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="908" y="279" font-size="13" font-weight="600" fill="#24292f">Native PHP</text>
+  <text x="908" y="300" font-size="10.5" fill="#57606a">Native\XhprofBootstrap</text>
+  <rect x="980" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="1002" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
+
+  <rect x="1038" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="1050" y="279" font-size="13" font-weight="600" fill="#24292f">Yii2</text>
+  <text x="1050" y="300" font-size="10.5" fill="#57606a">Yii2\XhprofBootstrap</text>
+  <rect x="1122" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
+  <text x="1144" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">neu</text>
 </svg>
