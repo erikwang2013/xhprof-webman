@@ -30,24 +30,20 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: redis, xhprof
           coverage: none
-      # joomla/ wordpress/ 是随包交付的 PHP：仓库没有 .gitattributes（无 export-ignore）、
-      # composer.json 也没有 archive.exclude，`git archive HEAD` 实测带出这两个目录。
-      # 它们与 src/ 一样声明要跑在 composer.json 的 php >= 8.0 上，此前的**唯一**解析点
-      # 却是契约环，而契约环钉在单一 PHP 8.3（contracts.yml 的 setup-php 步）—— 也就是说
-      # 这两个目录在 8.0–8.5 矩阵里一次 php -l 都没跑过。并进扫描面，让下限真正被覆盖。
+      # joomla/ wordpress/ 是随包交付的 PHP（.gitattributes 的 export-ignore 清单刻意
+      # 不含它们，理由写在那份文件里），与 src/ 一样声明要跑在 composer.json 的
+      # php >= 8.0 上，此前的**唯一**解析点却是契约环，而契约环钉在单一 PHP 8.3
+      # （contracts.yml 的 setup-php 步）—— 这两个目录在 8.0–8.5 矩阵里一次 php -l
+      # 都没跑过。并进扫描面，让下限真正被覆盖。
       #
-      # tools/i18n/ 并入同一矩阵：它声明"全部合 PHP 8.0 语法"（i18n.yml 头部；generate.php
-      # 的 Sink 构造器里就留着一处 "Not readonly" 注释 —— readonly 属性是 8.1+），而它此前
-      # 唯一被 php -l 的地方是 i18n.yml 那步、跑在单一 PHP 8.3 上，只能证明"是合法 8.3"。
-      # 并进来后 8.0 那一格才是那句声明的机器证据。并入前已按 8.0 逐文件核过：php-parser
-      # createForVersion('8.0') 解析六份全过，并补扫了它按实测抓不到的形态（never / 首类
-      # 可调用 / new in initializer / 交叉类型 / 0o777 / final const / 独立 true·false·null
-      # 类型 / DNF / 类型化类常量）—— 零命中；照 smoke job 的 8.1+ 函数黑名单 grep 也是零。
-      #
-      # tools/contracts 不在此列：它声明 php >= 8.2（两份 composer.json），放进 8.0/8.1
-      # 的矩阵格是假红。
+      # 扫描面与逐项理由的**单一来源**是 tools/ci/php80-smoke.php 的 checkLint()：
+      # tools/i18n（它声明"全部合 PHP 8.0 语法"，此前唯一被 php -l 的地方是 i18n.yml、
+      # 跑在单一 PHP 8.3 上，只能证明"是合法 8.3"）、tools/ci 与 tools/purge.php
+      # （同样的 8.0 声明，此前不在任何 lint 面上）并进扫描面的原因都写在那个函数里。
+      # tools/contracts 不在面上（声明 php >= 8.2，放进 8.0/8.1 矩阵格是假红），也在那里。
+      # 这一格只负责把那份清单交给 8.0–8.5 六种解释器各跑一遍。
       - name: Lint all PHP files
-        run: find src tests joomla wordpress tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: php tools/ci/php80-smoke.php lint
 
   # composer.json 声明 php >= 8.0，但 PHPUnit 11 要求 >= 8.2，
   # 单测无法在 8.0/8.1 上运行。此 job 用 --no-dev 只装运行时依赖，
@@ -76,38 +72,15 @@ jobs:
       # dump-autoload 不做依赖求解，正合此处所需。
       - name: Generate autoloader
         run: composer dump-autoload --no-interaction
-      # 扫描面与上面的 lint 一致：joomla/ wordpress/ 同样是随包交付、声明要能在 8.0 上跑的 PHP。
+      # 下面两步与 lint 用**同一份实现**（tools/ci/php80-smoke.php），release.yml 的
+      # php80 前置 job 调的也是它：函数黑名单、类加载清单（从盘上推，不再手写）都只维护
+      # 一处。抽取前这里是逐字复制，并且已经漂移过 —— ci 的类加载清单有 FlameGraph、
+      # release 没有（类加载步不能省：只有 lint + 黑名单时，「语法过、函数名过、类加载/
+      # 纯逻辑即崩」的提交照样会被打 tag，那正是这个 job 存在的理由）。
       - name: No post-8.0 functions in shipped PHP
-        run: |
-          if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ joomla/ wordpress/ --include='*.php'; then
-            echo "::error::src/ joomla/ wordpress/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
-            exit 1
-          fi
+        run: php tools/ci/php80-smoke.php functions
       - name: Load shipped classes and exercise pure logic
-        run: |
-          php -r '
-          require "vendor/autoload.php";
-          $ns = "ErikWang2013\\Xhprof\\";
-          $classes = [
-            "Core\\Xhprof",
-            "Core\\XhprofProfiler",
-            "Core\\StaticController",
-            "Core\\Analysis\\Analyzer",
-            "Core\\Analysis\\Finding",
-            "Core\\XhprofLib\\Utils\\XhprofLib",
-            "Core\\XhprofLib\\Utils\\XHProfRunsDefault",
-            "Core\\XhprofLib\\Display\\XhprofDisplay",
-            "Core\\XhprofLib\\Display\\FlameGraph",
-          ];
-          foreach ($classes as $c) {
-            if (!class_exists($ns . $c)) { fwrite(STDERR, "cannot load {$ns}{$c}\n"); exit(1); }
-          }
-          $lib  = $ns . "Core\\XhprofLib\\Utils\\XhprofLib";
-          $disp = $ns . "Core\\XhprofLib\\Display\\XhprofDisplay";
-          if (count($lib::xhprof_get_possible_metrics()) !== 7) { exit(1); }
-          if ($disp::xhprof_count_format(1234) !== "1,234") { exit(1); }
-          echo "runtime smoke ok on ", PHP_VERSION, "\n";
-          '
+        run: php tools/ci/php80-smoke.php classes
 
   test:
     name: PHP ${{ matrix.php }} unit tests
@@ -171,8 +144,17 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
       - name: Run unit tests
-        if: matrix.coverage != 'pcov'
+        if: matrix.coverage != 'pcov' && matrix.php != '8.4'
         run: vendor/bin/phpunit --no-coverage
+      # 随机顺序格（8.4）：用例之间互相污染（共享静态状态、依赖执行顺序）是最隐蔽的
+      # 一类失效 —— 按声明顺序跑永远绿，只有换序才暴露。种子写死 = 每次同一顺序，红了
+      # 能在本地逐字复现；不写种子则 PHPUnit 每次随机取，同一条污染可能再也复现不出，
+      # 那就不叫闸门。固定种子换来的是"一个确定的乱序"，抓"完全依赖声明顺序"的污染够用。
+      # phpunit.xml 里没有 executionOrder 配置（单一来源在那里，这里不重复钉），命令行
+      # 的 --order-by 优先，不会被默认值盖掉。
+      - name: Run unit tests (random order, fixed seed)
+        if: matrix.coverage != 'pcov' && matrix.php == '8.4'
+        run: vendor/bin/phpunit --no-coverage --order-by=random --random-order-seed=20261004
       # clover 落在哪里由 phpunit.xml:26-32 的 <coverage><report> 决定
       # （test-reports/clover.xml，已 gitignore）：产出位置只有一个来源，
       # 这条命令里不另写一遍路径。
@@ -201,3 +183,41 @@ jobs:
         with:
           name: coverage-clover
           path: test-reports/clover.xml
+
+  # PHPStan 基线闸：分析 src/，**存量**的已知问题留在 phpstan-baseline.neon，
+  # 新增问题必须红。等级、扫描面、符号来源、忽略语义与每条理由都写在
+  # phpstan.neon.dist（含实测数字），这个 job 只负责把它跑起来。
+  phpstan:
+    name: PHPStan (level 5, baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          # 8.3：与本仓其它"分析用"门禁（tools/contracts、i18n）同一个版本。
+          # 分析所"看到"的 PHP 版本由 phpstan.neon.dist 的 phpVersion: 80300 决定 ——
+          # 实测 80000/80100/80300/80400/80500/80506 六档报错集逐条相同，所以这里
+          # 换版本不改分析结果；但两处一起改才算一次刻意的动作。
+          php-version: '8.3'
+          # 刻意不装扩展：静态分析不需要它们，且实测（冷缓存 + `php -n` 零扩展）
+          # 装载与否，31 条报错集逐条相同 —— 装了只是拖慢 setup。
+          coverage: none
+      # 与 test job 同一个键：两边装的是同一份根依赖树（phpunit + phpstan），
+      # 谁先跑谁暖。键与 release.yml 的根 install 也是刻意同名，改要一起改。
+      - name: Cache composer vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-root-${{ hashFiles('composer.json') }}
+      # phpstan 在 require-dev 里被钉到**精确小版本**（composer.json: "2.2.16"）：
+      # 根项目刻意不提交锁（.gitignore 的 /composer.lock），而基线是按报错文本 +
+      # identifier + 计数匹配的 —— PHPStan 版本一浮动，匹配语义就可能悄悄改变
+      # （旧版本多报/少报一类检查）。钉死 = 这份基线只对这一个版本负责；
+      # 升级 PHPStan 是一次刻意的动作，升完重新生成基线。
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
+      # 无参数：PHPStan 自动发现项目根的 phpstan.neon.dist，配置不在命令行里
+      # 复制第二遍。非零退出 = 红，两种来源：新增了报错，或基线里的忽略项
+      # 不再匹配任何报错（reportUnmatchedIgnoredErrors: true，理由见 dist）。
+      - name: PHPStan must report nothing new
+        run: vendor/bin/phpstan analyse --no-progress

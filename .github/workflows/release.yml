@@ -23,9 +23,11 @@ jobs:
   # release job（以及其中打 tag 的那一步）在 8.0 没跑绿时根本不会启动。
   # 只取 8.0 这一格：语法检查单调（8.0 解析器接受的，8.2/8.4/8.5 全部接受），更高
   # 版本不带来新信息；单测下限由 release job 自己的 PHP 8.3 phpunit 覆盖。
-  # 步骤与 ci.yml 的 8.0 侧逐字对应：lint job 的 "Lint all PHP files"（扫描面与 ci 相同，
-  # 含 tools/i18n）；smoke job 的 "No post-8.0 functions in shipped PHP"、"Generate autoloader"、
-  # "Load shipped classes and exercise pure logic"（autoloader 是类加载步的前置）。
+  # 三段逻辑（lint 扫描面 / 8.1+ 函数黑名单 / 类加载 + 纯逻辑）的实现在
+  # tools/ci/php80-smoke.php —— **与 ci.yml 调的是同一份**。这里以前是逐字复制，
+  # 复制品已经漂移过：ci 的类加载清单有 FlameGraph、这里没有，而当时的注释还写着
+  # "与 ci.yml 的 8.0 侧逐字对应"。共享一份实现后，"release 少检一块"在结构上不再
+  # 可能；四步的步骤名与 ci.yml 保持一一对应（autoloader 是类加载步的前置）。
   # 类加载步不能省：只有 lint + 黑名单时，「语法过、函数名过、类加载/纯逻辑即崩」的提交
   # 照样会被打 tag —— 这正是本 job 存在的理由。
   php80:
@@ -39,44 +41,19 @@ jobs:
           extensions: redis, xhprof
           coverage: none
       - name: Lint all PHP files
-        run: find src tests joomla wordpress tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: php tools/ci/php80-smoke.php lint
       # 只生成 autoloader。不能写 composer install --no-dev：--no-dev 并不会让
       # composer 跳过 require-dev 的依赖求解（官方原话：no-dev 只代表不安装），
       # 而 phpunit/phpunit ^11.5 要求 php >= 8.2，在 8.0/8.1 上解析阶段就直接失败。
       # 本项目 require 里没有任何包（仅 php + 两个扩展），故只需 autoloader；
       # dump-autoload 不做依赖求解，正合此处所需。
+      # （根 require-dev 新增 phpstan 同样只影响 install 的求解，dump-autoload 不看它。）
       - name: Generate autoloader
         run: composer dump-autoload --no-interaction
       - name: No post-8.0 functions in shipped PHP
-        run: |
-          if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ joomla/ wordpress/ --include='*.php'; then
-            echo "::error::src/ joomla/ wordpress/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
-            exit 1
-          fi
+        run: php tools/ci/php80-smoke.php functions
       - name: Load shipped classes and exercise pure logic
-        run: |
-          php -r '
-          require "vendor/autoload.php";
-          $ns = "ErikWang2013\\Xhprof\\";
-          $classes = [
-            "Core\\Xhprof",
-            "Core\\XhprofProfiler",
-            "Core\\StaticController",
-            "Core\\Analysis\\Analyzer",
-            "Core\\Analysis\\Finding",
-            "Core\\XhprofLib\\Utils\\XhprofLib",
-            "Core\\XhprofLib\\Utils\\XHProfRunsDefault",
-            "Core\\XhprofLib\\Display\\XhprofDisplay",
-          ];
-          foreach ($classes as $c) {
-            if (!class_exists($ns . $c)) { fwrite(STDERR, "cannot load {$ns}{$c}\n"); exit(1); }
-          }
-          $lib  = $ns . "Core\\XhprofLib\\Utils\\XhprofLib";
-          $disp = $ns . "Core\\XhprofLib\\Display\\XhprofDisplay";
-          if (count($lib::xhprof_get_possible_metrics()) !== 7) { exit(1); }
-          if ($disp::xhprof_count_format(1234) !== "1,234") { exit(1); }
-          echo "runtime smoke ok on ", PHP_VERSION, "\n";
-          '
+        run: php tools/ci/php80-smoke.php classes
 
   release:
     needs: php80
@@ -94,6 +71,21 @@ jobs:
           --health-timeout 3s
           --health-retries 5
     steps:
+      # 早失败守卫：release 流程只许在 refs/heads/main 上跑。
+      # push 触发时 GITHUB_REF 恒为 refs/heads/main（本 workflow 的 on.push 只挂 main），
+      # 所以这条只挡 `workflow_dispatch` 手选了别的分支的情况 —— 那种情况下有两件坏事：
+      #   * Create tag 会给**那个分支的 HEAD** 打 tag 并推送：版本号指向未合并的代码，
+      #     Packagist 随之发布它（比下面第 2 条更糟）；
+      #   * 回写步的 `git push origin HEAD:main` 会把该分支的 HEAD 直接推到 main。
+      # 位置在 job 第一步（checkout 之前，只读环境变量）：release job 里最早能失败的点，
+      # 早于下面几十分钟的门禁与 tag。php80 job 是只读 lint、不 tag 不推送，不受影响。
+      - name: Release must run on refs/heads/main
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::release must run on refs/heads/main（当前 ${GITHUB_REF}）—— tag 与 CHANGELOG 回写都作用于这个 ref，请换到 main 上重新触发"
+            exit 1
+          fi
+          echo "ok: ${GITHUB_REF}"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -135,14 +127,17 @@ jobs:
       # 「提交只破坏契约环」或「只破坏某语言的门禁」时，tag 与 Release 照常产生，
       # Packagist 随之发布坏版本。两道门禁在 tag 之前补跑（下面的命令与那两个
       # workflow 逐字一致，只是不再按 workflow 隔离）。
-      # 两条腿，与 contracts.yml 的 matrix 同一组：README 声明 Symfony 支持 `^6.4|^7.0`，
-      # 而一个 composer 项目里装不下两版（laravel/framework v11 要 symfony/http-foundation
+      # 三条腿，与 contracts.yml 的 matrix 同一组：README 声明 Symfony 支持 `^6.4|^7.0`，
+      # 而一个 composer 项目里装不下两版（laravel/framework 12+ 要 symfony/http-foundation
       # ^7.2），所以 6.4 是**独立嵌套项目** tools/contracts/legacy-symfony64，跑的是同一份
-      # cases/Symfony.php（`--leg=symfony64` 只换 vendor 根，不复制 case）。
-      # **两条腿都必须在 tag 之前过**：只留 7.x 那条，这道门禁就漏掉半个矩阵 —— 而上一轮
-      # 正是靠 6.4 才抓出两条只在 7.4 上成立的过拟合断言。
-      # 两条契约腿各装一次 vendor（main 腿的 lock 375KB，6.4 腿 35KB）。缓存键就是
-      # 对应锁文件的 hash：lock 没动就不重装，lock 一动键就变、必然重装。
+      # cases/Symfony.php（`--leg=symfony64` 只换 vendor 根，不复制 case）；第三条腿
+      # legacy-symfony8 同形，装 Symfony 8.1 + Laravel 13（PHP >= 8.4.1，见下面的独立
+      # setup-php），跑 Symfony.php + Laravel.php。
+      # **三条腿都必须在 tag 之前过**：只留 7.x 那条，这道门禁就漏掉半个矩阵 —— 而上一轮
+      # 正是靠 6.4 才抓出两条只在 7.4 上成立的过拟合断言；8.x 侧同理（Request::get() 在
+      # Symfony 8 已被删掉，而本包 Laravel 适配器正在用它）。
+      # 三条契约腿各装一次 vendor（main 腿的 lock 四百多 KB，6.4 腿 35KB，8 腿 100+KB）。
+      # 缓存键就是对应锁文件的 hash：lock 没动就不重装，lock 一动键就变、必然重装。
       - name: Cache main-leg contract vendor
         uses: actions/cache@v4
         with:
@@ -160,8 +155,8 @@ jobs:
           php tools/contracts/run.php --leg=main
       # if: always() 不是装饰：main 腿红的时候这条腿**仍然要跑**并打印自己的结论，不然
       # 一条腿的红会把另一条腿的结论盖掉（掩盖结论等于少跑一条腿）。
-      # 两条腿的红都会让 job 失败，而下面打 tag / 发 Release 是默认的 if: success()，
-      # 于是 tag 门禁就是「两条腿都过」——这正是要的。
+      # 各条腿的红都会让 job 失败，而下面打 tag / 发 Release 是默认的 if: success()，
+      # 于是 tag 门禁就是「三条腿全过」——这正是要的。
       - name: Cache Symfony 6.4-leg contract vendor
         uses: actions/cache@v4
         with:
@@ -200,14 +195,43 @@ jobs:
             echo "::endgroup::"
           done
 
+      # 第三条契约腿（Symfony 8.1 + Laravel 13）**排在最后，且自带一个 PHP 8.5 的
+      # setup-php**：它的硬门槛是 PHP >= 8.4.1（composer.json 里写死，Symfony 8 的要求），
+      # 而本 job 其余步骤都是**刻意**钉在 8.3 的（单测下限、两条 8.3 契约腿、i18n 门禁各自
+      # 对齐 ci.yml / i18n.yml 的 pin）。切换放最后，8.5 就不会把那些步骤的 PHP 顺带抬走。
+      # if: always() 与另外两条腿同义：前面任何一条腿/门禁红了，这条腿仍要跑并打印自己的
+      # 结论（掩盖结论等于少跑一条腿）；它红了照样让 job 失败，下面打 tag 仍是 if: success()。
+      - uses: shivammathur/setup-php@v2
+        if: always()
+        with:
+          php-version: '8.5'
+          # 与 contracts.yml 的同一条腿逐字一致：xhprof 决定 Symfony.php 的采样类断言
+          # 是真跑还是记 SKIP（该腿期望 SKIP 是冻结常量 0，缺扩展就红）；redis 与本 job
+          # 其它腿共享同一个 service 容器，留着与 contracts.yml 同名同形。
+          extensions: xhprof, redis
+          coverage: none
+      - name: Cache Symfony 8-leg contract vendor
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: tools/contracts/legacy-symfony8/vendor
+          key: composer-contracts-symfony8-${{ hashFiles('tools/contracts/legacy-symfony8/composer.lock') }}
+      - name: Contract checks must pass before tagging（Symfony 8 腿）
+        if: always()
+        run: |
+          composer install -d tools/contracts/legacy-symfony8 --no-interaction --prefer-dist
+          php tools/contracts/run.php --leg=symfony8
+
       - name: Compute next version
         id: version
         run: |
           INPUT_VERSION="${{ github.event.inputs.version }}"
+          # LATEST 提到分支外：除了照旧参与下面的递增计算，它还作为 notes/CHANGELOG 段落的
+          # 起点输出去（previous=，见 Generate release notes 一步）。递增逻辑本身一字未动。
+          LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
           if [ -n "$INPUT_VERSION" ]; then
             NEW_VERSION="$INPUT_VERSION"
           else
-            LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
             if [ -z "$LATEST" ]; then
               NEW_VERSION="v0.1.0"
             else
@@ -236,6 +260,7 @@ jobs:
             exit 1
           fi
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "previous=$LATEST" >> "$GITHUB_OUTPUT"
 
       # 两个清单文件里的版本号必须等于**本次将发的新版本**，等于上一版也不放行：
       # 审计发现它们曾长期滞后（停在 3.0.6 而 tag 已到 v3.6.0，其间 6 个版本照常发布，
@@ -264,6 +289,42 @@ jobs:
           check wordpress/xhprof-webman.php "$(grep -m1 -oP '(?<=Version: )[0-9.]+' wordpress/xhprof-webman.php)"
           [ "$fail" = 0 ]
 
+      # 与上面的 i18n selftest 同一条纪律（先证明检查会红，绿才值得信）：notes 的分组/过滤/
+      # 引用/范围边界都由它自己的夹具仓库钉住（22 条断言，含 compare 链接用版本名、CHANGELOG
+      # 插入幂等）。放在生成步之前 —— 一个分类错乱的 notes 不会让发布失败，只会静默发出去，
+      # 所以它必须自己先红。
+      - name: release-notes.php self-test must pass before the notes are trusted
+        run: php tools/ci/release-notes.php --selftest
+
+      # Release 正文与 CHANGELOG 段落是**同一份**内容，由 tools/ci/release-notes.php 从
+      # conventional commits 分组生成（为什么不用 --generate-notes：它只列合并的 PR 与
+      # 新贡献者，本仓直推 main —— 实测 v3.7.0/v3.8.0 的 Release 正文只有一行 compare 链接）。
+      # 三个位置上的决定：
+      #   * 排在**打 tag 之前**：这个脚本会红（坏 ref / 空范围 / 全是发版杂务 / CHANGELOG
+      #     缺标记行），而 tag 一推 Packagist 就跟着发版 —— 凡是可能失败的检查都必须先于
+      #     tag 跑，红了就不发布。这也是本步与 Create tag 之间不能调换的原因。
+      #   * --to=HEAD 而不是版本号：此刻 tag 还不存在。链接不会因此失真 —— 脚本把 compare
+      #     链接写成 `<from>...<version>`（版本名），落在即将存在的 tag 上，不随 main 前进漂移。
+      #   * --from 必须有值：仓库还没有任何 tag 时（首次发版，previous 为空）从根提交起算
+      #     （根提交自身落在 git 的 `..` 范围外，漏一条初始提交，首次发版可接受）。
+      # 本步只读 git 历史，写 release-notes.md 与 CHANGELOG.md 两个文件；php 与 git 在 runner
+      # 上都已就位（本 job 的 PHP 此刻是 8.5 —— 上面 Symfony 8 腿的 setup-php 换过；脚本与版本无关）。
+      - name: Generate release notes and the CHANGELOG section
+        run: |
+          PREV="${{ steps.version.outputs.previous }}"
+          if [ -z "$PREV" ]; then
+            PREV=$(git rev-list --max-parents=0 HEAD | head -1)
+          fi
+          php tools/ci/release-notes.php \
+            --from="$PREV" \
+            --to=HEAD \
+            --version="${{ steps.version.outputs.version }}" \
+            --date="$(date -u +%F)" \
+            --changelog=CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          echo "::group::release-notes.md（前 40 行）"
+          head -40 "$RUNNER_TEMP/release-notes.md"
+          echo "::endgroup::"
+
       - name: Create tag
         run: |
           git config user.name "github-actions[bot]"
@@ -271,7 +332,38 @@ jobs:
           git tag -a "${{ steps.version.outputs.version }}" -m "Release ${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.version }}"
 
+      # 正文用上面生成的那份（--generate-notes 已去掉：对直推 main 的仓等于空正文）。
+      # 文件放在 $RUNNER_TEMP，不落在工作树里 —— 免得被下面那步的 git add 之类顺手带上。
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ steps.version.outputs.version }}" --generate-notes --title "${{ steps.version.outputs.version }}"
+        run: gh release create "${{ steps.version.outputs.version }}" --notes-file "$RUNNER_TEMP/release-notes.md" --title "${{ steps.version.outputs.version }}"
+
+      # CHANGELOG.md 回写：段落已在 Generate release notes 一步插好（标记行下方），这里只负责
+      # 提交回 main。提交信息用 `chore(changelog):` —— 即便它落进下个版本的范围，也会被
+      # release-notes.php 当发版杂务过滤掉（PLUMBING_SCOPES），不会自己说自己。
+      #
+      # **为什么这次 push 不会再触发任何 workflow —— 这是设计，不是 bug**：
+      # 用默认 GITHUB_TOKEN 推送的提交不会触发 `on: push` 的 workflow run（GitHub 的防递归
+      # 机制），否则本 workflow 会被自己的回写提交再触发一遍，每发一版多跑一次，也可能形成
+      # 版本环。代价要说清：这个提交**不跑任何 CI**（含 8.0 门禁），所以它的改动面必须小到
+      # 一眼看完 —— 脚本对 CHANGELOG.md 只有一种写法：在标记行下方插入整段，绝不改写既往
+      # 段落（这条由 release-notes.php --selftest 钉住）。
+      #
+      # 合并冲突策略：CHANGELOG.md 归**发布机器**所有 —— 人工不碰既往条目，新条目也由发版
+      # 流程写，于是这个 push 正常永远快进。若仍被拒（发版期间有人推了会碰 CHANGELOG.md 的
+      # 提交），**不要**在这里自动 rebase 或强推：让这一步红着，人工用同一条命令把这一节
+      # 补成一个 chore(changelog): 提交（chore 属 patch 类，不会把下一次要算的版本抬走，
+      # 纠错是收敛的）：
+      #   php tools/ci/release-notes.php --from=<上一版 tag> --to=<本次 tag> \
+      #       --version=<本次 tag> --date=<发布日期> --changelog=CHANGELOG.md
+      # 失败时的状态：tag 与 Release 都已存在（发布本身没丢），只是 CHANGELOG 落后一节。
+      - name: Commit this release's CHANGELOG section back to main
+        run: |
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "CHANGELOG.md 无变化，跳过提交（段落已存在？）"
+            exit 0
+          fi
+          git commit -m "chore(changelog): ${{ steps.version.outputs.version }} 段落（发版流程自动回写）"
+          git push origin HEAD:main

@@ -1,0 +1,47 @@
+# PHPStan 基线闸：分析 src/，对**存量**的已知问题留基线，新问题必须红。
+# 运行入口是 ci.yml 的 phpstan job；本文件里每条参数都写了下它的理由。
+parameters:
+    # level 5 是实测选的：本仓 level 4 与 level 5 的报错集**完全相同**（31 条，
+    # 2026-10-04 本机 PHP 8.5 + 全部扩展），5 比 4 多出的检查在这里零成本；
+    # 再往上（6）会涌进 415 条 missingType.*（缺参数/返回/属性类型标注），基线
+    # 会从"能逐条读"变成"读不动"，而那道闸门要防的是**退化**，不是补注释债。
+    level: 5
+    # 分析用的 PHP 版本**显式钉死**。不写的话 PHPStan 取"运行它的解释器版本"
+    # （本机 8.5.6 与 CI 的 8.3 是两套），而基线按**报错文本**匹配 —— 目标版本一变，
+    # PHPStan 按版本启停的检查就变，基线可能整体失配（那类"本地绿、CI 红"最难查）。
+    # 实测本仓当前这 31 条在 80000/80100/80300/80400/80500/80506 六档下**逐条相同**
+    # （钉它今天不改变结果），但"今天相同"不是保证，写下来才是。
+    # 80300 与 ci.yml phpstan job 的 setup-php 8.3 对齐（也是本仓 contracts / i18n
+    # 门禁用的那个"分析用版本"）；改这里要连 ci.yml 一起改。
+    phpVersion: 80300
+    paths:
+        - src
+    # src/ 引用了 12 家框架的类型，而根 composer.json 的 require 里一个都没有
+    # （全在 suggest，随包只声明 php + 两个扩展）。不给符号来源，src 会出 336 条
+    # class.notFound + 32 条 function.notFound（webman 的 response()/app() 这类
+    # 全局助手函数），基线被噪声淹没，真信号读不出来。
+    # 取 tests/bootstrap.php 当符号来源（PHPStan 先 require 它再分析）而不是
+    # scanFiles/scanDirectories：它就是单测装载框架桩的**同一个入口**（glob
+    # Framework/*.php、再装 framework-stubs.php），于是静态分析看到的最小 API 面
+    # 与单测逐字一致，且没有第二份文件清单要维护（scanFiles 不吃通配符 —— 实测写
+    # `Framework/*.php` 会直接 "Scanned file ... does not exist." 退出，而
+    # scanDirectories 一旦被下面的 excludePaths 覆盖，符号会一起消失：
+    # 实测扫描面从 31 条报错退化成 395 条）。
+    bootstrapFiles:
+        - tests/bootstrap.php
+    # 假包永远不是分析对象：桩是手写的、只覆盖被调用 API 面的最小实现，分析它们
+    # 没有意义 —— 它们与真实包的**行为**一致性由 tools/contracts 的真实包验证环
+    # 负责（桩头顶部写明了"保真性不靠这份文件自证"）。paths 只有 src/ 时它们本来
+    # 也不会被分析，这条是防呆：将来有人把 tests/ 并进 paths 时，假包不会变成
+    # "被分析的一等公民"。
+    excludePaths:
+        - tests/Stubs
+    # 本仓纪律：基线里的忽略项**若不再匹配**必须报出来。默认值 false 会让基线悄悄
+    # 变成"永久白名单"—— 修掉的问题还躺在里面，没有人知道那条忽略已经死了。
+    # 匹配键是 message（正则）+ identifier + path + count（--generate-baseline 写出
+    # 的条目里**没有行号**：src 内重构造成的纯行号漂移不会让条目失配；会红的是
+    # 「这类报错被修掉/文本变了」= 条目零匹配，与「同一 path 上同类报错多了一条」
+    # = count 对不上，两个方向都是红）。实测：删掉任一条 → 非零退出。
+    reportUnmatchedIgnoredErrors: true
+includes:
+    - phpstan-baseline.neon

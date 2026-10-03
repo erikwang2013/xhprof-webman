@@ -9,11 +9,12 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 契约环三道硬闸门的**负路径**单测（tools/contracts/lib/gates.php）。
+ * 契约环四道硬闸门的**负路径**单测（tools/contracts/lib/gates.php）。
  *
- * 为什么需要：run.php 的三道闸门（腿身份 exit 2、SKIP 冻结数、FAIL 汇总）此前只有正路径
- * 跑过 —— 环红过是因为有 case 真红，不是因为闸门被喂过坏输入。本仓库的规矩是「检查必须
- * 被证明会红」，所以判定逻辑搬进 lib/gates.php 后，这里对每种坏输入断言它的判决。
+ * 为什么需要：run.php 的四道闸门（腿身份 exit 2、SKIP 冻结数、断言数下限、FAIL 汇总）
+ * 此前只有正路径跑过 —— 环红过是因为有 case 真红，不是因为闸门被喂过坏输入。本仓库的
+ * 规矩是「检查必须被证明会红」，所以判定逻辑搬进 lib/gates.php 后，这里对每种坏输入
+ * 断言它的判决。
  *
  * 不依赖 Redis / xhprof / 任何 vendor：gates.php 是纯判定（唯一 IO 是读 composer.lock，
  * 这里用真临时文件喂它 —— 顺带把「没有 lock」「lock 不是 JSON」两条也测了）。
@@ -175,6 +176,57 @@ class GatesTest extends TestCase
         $this->assertSame($expected, contracts_case_skips($status, $declared));
     }
 
+    // ================= 闸门 4：per-case 断言数下限（逐腿冻结） =================
+
+    /**
+     * @return array<string, array{array<string, int>, array<string, int>, list<string>}>
+     *         observed（只含 PASS 的 case）, floors, 期望的问题清单（原样比对，含顺序）
+     */
+    public static function assertionFloors(): array
+    {
+        return [
+            // 恰好等于下限**不算**问题 —— 这条钉「≥」语义：把实现改成 `>`，它第一个红
+            '全部达标（含恰好等于下限）⇒ 无问题' => [
+                ['Redis' => 52, 'Symfony' => 240],
+                ['Redis' => 52, 'Symfony' => 232],
+                [],
+            ],
+            // 掉几条要报得出算术（「31 < 52（掉了 21 条）」），不是只给一个布尔
+            '掉到线下 ⇒ 点名 + 差多少' => [
+                ['Redis' => 31, 'Symfony' => 232],
+                ['Redis' => 52, 'Symfony' => 232],
+                ['Redis：31 < 冻结下限 52（掉了 21 条）'],
+            ],
+            // 把 case 改名/复制成新文件就能绕开下限 —— 表里没有的名字一律算问题
+            '未签字的 case 名 ⇒ 也是问题（改名/复制的堵口）' => [
+                ['RedisX' => 52],
+                ['Redis' => 52],
+                ['RedisX：不在冻结下限表里（新增/改名的 case 要签字进环；本次实测 52 条断言）'],
+            ],
+            // 两条问题并存时互不掩盖，顺序跟随 observed（诊断可读性）
+            '掉线 + 未签字并存 ⇒ 两条都报，顺序跟随 observed' => [
+                ['Drupal' => 10, 'NewCase' => 3],
+                ['Drupal' => 167],
+                [
+                    'Drupal：10 < 冻结下限 167（掉了 157 条）',
+                    'NewCase：不在冻结下限表里（新增/改名的 case 要签字进环；本次实测 3 条断言）',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, int> $observed
+     * @param array<string, int> $floors
+     * @param list<string> $expected
+     */
+    #[Test]
+    #[DataProvider('assertionFloors')]
+    public function assertionFloorErrors(array $observed, array $floors, array $expected): void
+    {
+        $this->assertSame($expected, contracts_assertion_floor_errors($observed, $floors));
+    }
+
     // ================= 闸门 1+2：终审判决与退出码 =================
 
     /** @return array<string, array{int, int, int, string}> failed, skipped, 冻结值, 期望判决 */
@@ -209,23 +261,61 @@ class GatesTest extends TestCase
         $this->assertSame(1, contracts_verdict_exit_code('BOGUS'));
     }
 
+    #[Test]
+    public function verdictAssertionShrinkPriority(): void
+    {
+        // 第四个参数（断言缩水条数）只在「没有 FAIL 且 SKIP 恰好」时才单独出场：
+        // 环境降级（缺 ext-xhprof / ext-redis）会同时让 SKIP 涨、断言掉，此时结论必须是
+        // SKIP-MISMATCH（覆盖面签字变了），不是「有人删了断言」；两条都不对时 FAIL 优先。
+        // 删掉/调换 contracts_verdict() 里任一优先级分支，这里必红。
+        $this->assertSame('OK', contracts_verdict(0, 2, 2, 0));
+        $this->assertSame('ASSERTION-SHRINK', contracts_verdict(0, 2, 2, 1));
+        $this->assertSame('SKIP-MISMATCH', contracts_verdict(0, 3, 2, 1));
+        $this->assertSame('FAIL', contracts_verdict(1, 2, 2, 1));
+    }
+
     // ================= 调用点 tripwire =================
 
     /**
-     * run.php 必须真的调用 gates.php 的四个函数。
+     * 去掉注释后的源码：字面量扫描必须扫**代码**，不然一句注释就能冒充调用点。
+     *
+     * 实测（2026-10-04）：run.php 的头部注释里写着「见 lib/gates.php 的
+     * contracts_assertion_floor_errors()」—— 光一个提及就满足了字符串断言，把真调用删掉
+     * 也照样绿（`contracts_leg_identity_error(` 早就有同样的一处注释提及）。用 token 剥掉
+     * T_COMMENT/T_DOC_COMMENT 后，「调用点存在」这条才名副其实：删调用必红，注释提及不算。
+     */
+    private static function sourceWithoutComments(string $source): string
+    {
+        $out = '';
+        foreach (token_get_all($source) as $token) {
+            if (!is_array($token)) {
+                $out .= $token;
+            } elseif ($token[0] !== T_COMMENT && $token[0] !== T_DOC_COMMENT) {
+                $out .= $token[1];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * run.php 必须真的调用 gates.php 的五个函数。
      *
      * 这条只证明**调用点存在**，不证明传参正确（那是上面各条的事）。它拦的是一种具体的
-     * 腐化方式：有人把判定又内联回 run.php，四个函数变成只被单测调用、环本体不再经过
+     * 腐化方式：有人把判定又内联回 run.php，五个函数变成只被单测调用、环本体不再经过
      * 它们 —— 那时上面的绿全是假绿。删掉 run.php 里任何一处调用，这条就红。
      */
     #[Test]
     public function runPhpIsWiredToTheGateFunctions(): void
     {
-        $source = (string) file_get_contents(dirname(__DIR__, 3) . '/tools/contracts/run.php');
+        $source = self::sourceWithoutComments(
+            (string) file_get_contents(dirname(__DIR__, 3) . '/tools/contracts/run.php')
+        );
 
         foreach ([
             'contracts_leg_identity_error(',
             'contracts_case_skips(',
+            'contracts_assertion_floor_errors(',
             'contracts_verdict(',
             'contracts_verdict_exit_code(',
         ] as $call) {

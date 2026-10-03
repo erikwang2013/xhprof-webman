@@ -1,0 +1,165 @@
+name: Demo (docker compose)
+
+# 演示环境（demo/）的端到端体检：一条命令起容器 → 打业务请求 → 报告页必须出数。
+#
+# 为什么值得一条独立 workflow：`docker compose up -d --build` 是 README 教给用户的
+# **第一条命令**，而它依赖的三样东西都在仓库之外、会无声漂移 ——
+# php:8.3-cli-alpine 基础镜像、pecl.php.net 上写死版本号的 tarball URL
+# （xhprof 2.3.10 / phpredis 6.3.0）、composer:2 镜像；外加 php -S 内置服务器与
+# 懒连接 Redis 的时序。这些没有一个被 ci.yml / contracts.yml / i18n.yml 碰到：
+# 它们在 runner 上装的是 setup-php 的扩展，与镜像里 PECL 现编译的那套是**两条路**。
+# 只在某台开发机上验过一次的"一条命令能跑通"，会随上游漂移而失效且无人知道。
+#
+# 为什么挂 schedule 而不是 push：一次 docker build（拉三个基础镜像 + 编译两个扩展）
+# 比现有任一 job 都贵得多，push 上跑是给每次提交加一笔固定开销；而它要防的漂移
+# 是按周计的上游变化。workflow_dispatch 留给"改了 demo/ 或 src/ 想立刻验一遍"。
+# cron 刻意避开整点（GitHub 的定时任务在整点最挤，常被推迟几十秒到几分钟）。
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+# 与 ci.yml 同一个理由：同一 ref 上新轮取消旧轮（手工触发连点两下时，旧的那轮
+# 测的已是同一个提交，没必要占满 runner 跑完）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    name: docker compose demo end-to-end
+    runs-on: ubuntu-latest
+    # 首次构建的耗时完全看网络（本地实测：换镜像源 83s；默认源 61 KB/s 时 40 分钟
+    # 没装完）。GitHub runner 走官方 CDN 通常几分钟，但这不是能假设的事 —— 超时给宽，
+    # 真出问题时的信号是失败日志，不是"超时杀进程"。
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # **不设 APK_MIRROR**：这里要验的就是 README 里那条原样命令，
+      # 即 docker-compose.yml 里 APK_MIRROR 的默认值（官方 CDN）。换源是给
+      # 国内网络的一条旁路，不是默认路径 —— 拿换源版本去验，验的是另一条路。
+      - name: docker compose up -d --build
+        run: cd demo && docker compose up -d --build
+
+      # app 容器的 command 是「先 composer update 再 php -S」，所以起来的瞬间
+      # 端口可能还没人听；而且 php -S 是单进程的，构建/更新期间来的请求会失败。
+      # 轮询而不是 sleep 固定秒数：固定秒数要么白等要么偶发假红。
+      - name: Wait for the sample page to serve 200
+        run: |
+          code=""
+          for i in $(seq 1 90); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)
+            if [ "$code" = 200 ]; then echo "sample page up (try $i)"; exit 0; fi
+            sleep 2
+          done
+          echo "sample page never returned 200（最后一次 HTTP $code）" >&2
+          exit 1
+
+      # 三次业务请求。示例应用里 fib(23) 约 9.3 万次调用 + 20000 轮字符串拼接，
+      # 每次请求都会落一条 run 进 Redis（README 第 82 行本地实测 0.24–0.34s/次）。
+      - name: Three business requests must all be 200
+        run: |
+          cd demo
+          for i in 1 2 3; do
+            code=$(curl -s -o "/tmp/sample-$i.html" -w '%{http_code}' http://127.0.0.1:8080/)
+            if [ "$code" != 200 ]; then echo "第 $i 次业务请求 HTTP $code" >&2; exit 1; fi
+            echo "sample $i → 200（$(wc -c < "/tmp/sample-$i.html") 字节）"
+          done
+
+      # 报告页必须列出 run。run id 的合法形态 `[a-f0-9]{13,32}` 单一来源在
+      # src/Core/XhprofLib/Utils/XHProfRunsDefault.php:69（XHProfRuns 的校验正则），
+      # 这里按它抓链接里的 `run=` 参数 —— 抓不到合法 id 就是列表页与存储对不上了。
+      # 同时也钉住 `/xhprof` 自己的请求**不**产生新 run（ignore_url_arr）：拉起页面
+      # 之前/之后各抓一次 id 列表，集合不变才算过 —— 这条是报告页最容易被写坏的行为
+      # （一旦被采样，`/xhprof` 每刷新一次就自我累积一条）。
+      - name: /xhprof must list the runs, and must not record itself
+        run: |
+          cd demo
+          # 最后一条业务请求的落库发生在响应发出之后的 shutdown 里，先让它落定，
+          # 否则第一次抓取可能比它早一步（下面的「集合不变」断言就会假红）。
+          sleep 2
+          code=$(curl -s -o /tmp/list-1.html -w '%{http_code}' http://127.0.0.1:8080/xhprof)
+          if [ "$code" != 200 ]; then echo "/xhprof HTTP $code" >&2; exit 1; fi
+          curl -s -o /tmp/list-2.html http://127.0.0.1:8080/xhprof
+          ids1=$(grep -oE 'run=[a-f0-9]{13,32}' /tmp/list-1.html | sort -u)
+          ids2=$(grep -oE 'run=[a-f0-9]{13,32}' /tmp/list-2.html | sort -u)
+          echo "第一次抓到的 run id："; echo "$ids1"
+          n=$(printf '%s\n' "$ids1" | grep -c . || true)
+          if [ "$n" -lt 3 ]; then
+            echo "列表里只有 $n 条 run；打了 3 次业务请求（外加等待阶段的探测请求），期望 ≥3" >&2
+            exit 1
+          fi
+          if [ "$ids1" != "$ids2" ]; then
+            echo "连抓两次 /xhprof 的 run 集合变了 —— 报告页自己的请求被采样了（ignore_url_arr 失效？）" >&2
+            diff <(printf '%s\n' "$ids1") <(printf '%s\n' "$ids2") >&2 || true
+            exit 1
+          fi
+          echo "列表页 200，$n 条 run，且两次抓取集合不变（未自我采样）"
+
+      # 抽列表页里第一条 run，打开详情页：200 且调用树里出现 `fib@N`
+      # （xhprof 渲染的函数名形态「函数名@调用序」，README 第 84 行的本地实测
+      # 是 fib@1 … fib@22）。这一步是整条链路的证据：采样真的写进了 Redis、
+      # 报告页真的读得出来并渲染了调用树。
+      #
+      # 走**列表页自己的 href**而不是自己拼 `?run=<id>`：实测（本机，真实渲染路径
+      # XhprofDisplay::displayXHProfReport）不带 `source` 的单 run 请求渲染出的是
+      # 一份 1682 字节的空页 —— `get_run()` 的 source 白名单把 null 挡在外面，
+      # 于是「200 但没数据」。href 里带着 `source=xhprof_foo`（列表页渲染时写死，
+      # 见 XHProfRunsDefault::list_runs()），跟随它就等于走用户点进去的那条路。
+      # href 是 HTML 转义过的（`&amp;`），取出来要先还原成 `&`。
+      - name: The run detail page must render the call tree
+        run: |
+          cd demo
+          link=$(grep -oE 'href="[^"]*run=[a-f0-9]{13,32}[^"]*"' /tmp/list-1.html | head -1 | sed 's/^href="//; s/"$//; s/&amp;/\&/g')
+          if [ -z "$link" ]; then echo "列表页里没有 run 链接（href 里没有合法 run id）" >&2; exit 1; fi
+          run=$(printf '%s' "$link" | grep -oE 'run=[a-f0-9]{13,32}' | head -1 | cut -d= -f2)
+          echo "跟随列表页链接：$link"
+          code=$(curl -s -o /tmp/run.html -w '%{http_code}' "http://127.0.0.1:8080${link}")
+          if [ "$code" != 200 ]; then echo "详情页 HTTP $code（run=$run）" >&2; exit 1; fi
+          if ! grep -q 'fib@1' /tmp/run.html; then
+            echo "详情页里没有 fib@1 —— 采样/渲染链路断了（run=$run）。页面上与 fib 相关的片段：" >&2
+            grep -o 'fib[@0-9]*' /tmp/run.html | sort -u | head -5 >&2 || true
+            echo "（一个都没有 = 调用树根本没渲染；有 fib 但没有 fib@N = 函数名渲染形态变了）" >&2
+            exit 1
+          fi
+          echo "run $run 详情页 200，调用树里有 fib@1"
+
+      # 静态资产走的是另一条路（assets_url 前缀，demo 是 /xhprof-assets），
+      # 报告页的样式表 404 不会让上面的断言变红，单独钉一下。
+      - name: The report stylesheet must be served as text/css
+        run: |
+          cd demo
+          code=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' http://127.0.0.1:8080/xhprof-assets/css/xhprof.css)
+          case "$code" in
+            "200 text/css"*) echo "xhprof.css → $code" ;;
+            *) echo "xhprof.css → $code（期望 200 text/css…）" >&2; exit 1 ;;
+          esac
+
+      # 镜像本身的两条硬承诺（Dockerfile 里 PECL 现编译的那两个扩展）：扩展没进镜像
+      # 或 vendor 不是指向 /app 的软链（README 第 85 行）时，上面的 HTTP 断言也可能
+      # 全绿（适配器对扩展缺失有兜底），所以直接对着容器问。
+      - name: The image must really have xhprof+redis, and vendor must link to /app
+        run: |
+          cd demo
+          docker compose exec -T app sh -lc '
+            php -m | grep -qx xhprof || { echo "容器里没有 xhprof 扩展" >&2; exit 1; }
+            php -m | grep -qx redis  || { echo "容器里没有 redis 扩展" >&2; exit 1; }
+            test -L vendor/aaron-dev/xhprof-webman || { echo "vendor/aaron-dev/xhprof-webman 不是软链（path 仓库被拷贝了？）" >&2; exit 1; }
+            target=$(readlink vendor/aaron-dev/xhprof-webman)
+            [ "$target" = /app ] || { echo "软链指向 $target，期望 /app" >&2; exit 1; }
+            echo "容器检查通过：xhprof+redis 已装载，vendor 软链指向 /app"
+          '
+
+      # 失败时把现场打出来。--no-color 让日志可读、`ps -a` 能看出容器是退出还是
+      # 卡在健康检查；末尾两条 `|| true` 是刻意的：日志本身取不到（容器根本没起来）
+      # 时，这一步也不能反过来把失败原因盖掉。不加 continue-on-error：
+      # 这一步红了 = 现场没打出来，那也该看见。
+      - name: Dump compose logs on failure
+        if: failure()
+        run: |
+          cd demo
+          echo "================ docker compose ps -a ================" >&2
+          docker compose ps -a >&2 || true
+          echo "================ docker compose logs ================" >&2
+          docker compose logs --no-color >&2 || true

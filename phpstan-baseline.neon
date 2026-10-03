@@ -1,0 +1,109 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Core/StaticController.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-falsy\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Core/StaticController.php
+
+		-
+			message: '#^Function app not found\.$#'
+			identifier: function.notFound
+			count: 2
+			path: src/Core/Xhprof.php
+
+		-
+			message: '#^Function response not found\.$#'
+			identifier: function.notFound
+			count: 3
+			path: src/Core/Xhprof.php
+
+		-
+			message: '#^Instanceof between ErikWang2013\\Xhprof\\Core\\Analysis\\Finding and ErikWang2013\\Xhprof\\Core\\Analysis\\Finding will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Core/XhprofLib/Display/XhprofDisplay.php
+
+		-
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 1
+			path: src/Core/XhprofLib/Display/XhprofDisplay.php
+
+		-
+			message: '#^Variable \$base_info might not be defined\.$#'
+			identifier: variable.undefined
+			count: 2
+			path: src/Core/XhprofLib/Display/XhprofDisplay.php
+
+		-
+			message: '#^Variable \$fake_edge might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Core/XhprofLib/Utils/XhprofLib.php
+
+		-
+			message: '#^Variable \$new_main might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: src/Core/XhprofLib/Utils/XhprofLib.php
+
+		-
+			message: '#^Property ErikWang2013\\Xhprof\\Hyperf\\Adapter\\ResponseAdapter\:\:\$response \(Hyperf\\HttpServer\\Response\) does not accept Psr\\Http\\Message\\MessageInterface\.$#'
+			identifier: assign.propertyType
+			count: 3
+			path: src/Hyperf/Adapter/ResponseAdapter.php
+
+		-
+			message: '#^Property ErikWang2013\\Xhprof\\Hyperf\\Adapter\\ResponseAdapter\:\:\$response \(Hyperf\\HttpServer\\Response\) does not accept Psr\\Http\\Message\\ResponseInterface\.$#'
+			identifier: assign.propertyType
+			count: 2
+			path: src/Hyperf/Adapter/ResponseAdapter.php
+
+		-
+			message: '#^Constant BASE_PATH not found\.$#'
+			identifier: constant.notFound
+			count: 1
+			path: src/Hyperf/ConfigProvider.php
+
+		-
+			message: '#^Access to an undefined property Joomla\\Input\\Input\:\:\$server\.$#'
+			identifier: property.notFound
+			count: 6
+			path: src/Joomla/Adapter/RequestAdapter.php
+
+		-
+			message: '#^Call to an undefined static method Illuminate\\Support\\Facades\\Log\:\:error\(\)\.$#'
+			identifier: staticMethod.notFound
+			count: 1
+			path: src/Laravel/Adapter/LogAdapter.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Native/Adapter/RequestAdapter.php
+
+		-
+			message: '#^Property ErikWang2013\\Xhprof\\Slim\\Adapter\\ResponseAdapter\:\:\$response \(Psr\\Http\\Message\\ResponseInterface\) does not accept Psr\\Http\\Message\\MessageInterface\.$#'
+			identifier: assign.propertyType
+			count: 2
+			path: src/Slim/Adapter/ResponseAdapter.php
+
+		-
+			message: '#^Property ErikWang2013\\Xhprof\\Symfony\\XhprofListener\:\:\$cache \(ErikWang2013\\Xhprof\\Core\\Contract\\CacheInterface\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Symfony/XhprofListener.php
+
+		-
+			message: '#^Property ErikWang2013\\Xhprof\\Symfony\\XhprofListener\:\:\$logger \(ErikWang2013\\Xhprof\\Core\\Contract\\LoggerInterface\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Symfony/XhprofListener.php
