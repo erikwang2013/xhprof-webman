@@ -443,6 +443,12 @@ return static function (): array {
         'js' => 'application/javascript',
         'png' => 'image/png',
         'gif' => 'image/gif',
+        // 2026-10-03 进的 `svg`：报告页的排序图标落在 `src/html/images/`（两层，
+        // 正是下面这个 glob 的深度），而它之前的 .svg（pet.svg）在 `src/html/`
+        // 顶层、扫不到 —— 换句话说这张表此前从没被 svg 触发过，一加就红是它的本职
+        // （「出现未登记的新扩展名就 FAIL，强迫后来者显式补 MIME 表」）。
+        // 无 charset：prepare() 只给 text/* 补（见上）。
+        'svg' => 'image/svg+xml',
     ];
     $shipped = 0;
     $shippedDirs = [];
@@ -463,10 +469,11 @@ return static function (): array {
         );
     }
     // 地板只用来证明 glob 真扫到了文件（不是空目录），不是「资源配额」：
-    // 2026-09-25 删掉 7 个零引用文件后 src/html 是 11 个（18→11），地板跟着降到 11，
-    // 此后任何一次删除都会在这里显式红一次 —— 想降就得连带改这行。
+    // 2026-09-25 删掉 7 个零引用文件后 src/html 是 11 个（18→11）；2026-10-03 排序图标
+    // 进了 3 张 svg（11→14），地板跟着抬到 14 —— 它跟的是「当前应有几个」，这样
+    // 此后任何一次删除都会在这里显式红一次；想降就得连带改这行。
     // 光看总数看不出「某个子目录被清空」，所以四个子目录也必须各自贡献至少一个文件。
-    $expect('L2 资源类型：包内资源确实被遍历到（不是空目录）', $shipped >= 11, true);
+    $expect('L2 资源类型：包内资源确实被遍历到（不是空目录）', $shipped >= 14, true);
     foreach (['css', 'js', 'images', 'jquery'] as $assetDir) {
         $expect("L2 资源类型：src/html/{$assetDir} 至少一个资源（子目录没被清空）", isset($shippedDirs[$assetDir]), true);
     }
