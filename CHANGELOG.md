@@ -9,6 +9,93 @@
 生成的一行 compare 链接），2026-10-04 由同一工具按同一规则回溯生成。
 <!-- CHANGELOG:INSERT：新段落插在这一行下面（保持新→旧） -->
 
+## v3.9.0 — 2026-10-03
+
+### feat（新增）
+
+- **contracts**：三腿（+Symfony 8/Laravel 13）、ThinkPHP 入环、WP 7.1、Joomla 5.4.9、断言数下限（f76dfd5）
+  > - 新增第三条腿 legacy-symfony8（Symfony 8.1 + Laravel 13，PHP 8.5；CI 分腿给 php）；主腿升 Laravel 12.69
+  > - 记录实测陷阱：Symfony 8 删除 Request::get()（Laravel 12 继承不可用，13 自覆写才成立）
+  > - ThinkPHP 入环（topthink/framework v8.1.4，231 断言 0 skip，58 条冻结差异重签）；Hyperf 如实不入：能装但真跑要 ext-swoole（Context::set() 抛 Class "Swoole\Coroutine" not found）
+  > - WordPress 真核 ^6.9→7.1.2（重跑无漂移，新增版本身份断言）；Joomla 5.2.2→5.4.9（在线核到 5.x 顶点、4.4 EOL 保留作对照，差异集按先跑红重签）
+  > - 新增 per-case 断言数逐腿冻结下限（EXPECTED_ASSERTIONS，≥ 语义；防编辑型缩水）；GatesTest 负路径 + 4 数据集（tripwire 剥注释后扫描，堵住「注释满足字符串扫描」的假绿洞）
+  > - 修复 Symfony.php 缺扩展守卫死码（$ext 被循环变量覆盖 → 缺 ext-xhprof 会 fatal 而非记 36 条 skip；A/B 实测，已装环境三腿输出逐字节不变）
+  > - 三腿全绿：main 12 PASS/2 SKIP、6.4 腿 1/0/0、8 腿 2/0/0；SKIP 冻结常量未动
+- **laravel**：CLI 与队列采样入口（xhprof:profile 自动注册）（e7b74bd）
+  > - XhprofCli：深度计数的采样窗口（真机实测 SyncQueue 嵌套会再派一对事件，bool 会提前关外层窗口）
+  > - XhprofQueueListener：JobProcessing/Processed/Failed/ExceptionOccurred 四事件按消息开停（JobFailed 覆盖 max-attempts 在 fire 前判失败的路径）
+  > - XhprofProfileCommand（xhprof:profile {line}）：start → 真 Console\Application::call() → finally stop；null 守卫
+  > - 命令经包内 XhprofServiceProvider::boot() 自动注册（用户零配置）；队列事件保持用户侧 4 行接线
+  > - CliRequestAdapter：无 HTTP 请求的适配器（uri()=''，CLI 契约）
+  > - tests：13 例 60 断言（真 Stubs Console\Application 上内层命令真跑、--flag 透传、退出码穿回、恰 1 条 cli: run）；5 变异全红（含桩变异证明非自说自话）
+  > - 真机两腿（Laravel 12.69.3 / 13.34.0）arm8 各 38 检查 PASS：has() 真/假对照、自动注册路径、窗口关闭
+  > - Illuminate\Console 双桩（Command/Application，收窄处逐条差异注释）；phpstan 归零、php80-smoke 三段 rc=0
+- 报告页接线、协程上下文与导出扩展（同 URI 对比/导出入口与列表 JSON/状态条/requrl/火焰图图例与指标/数字本地化）（d9b724a）
+  > - 同 URI 上次运行对比链接、动作栏 JSON/CSV 导出入口；?format=json 无 run 返回运行列表 JSON（单读、与 runsOverview 同源），symbol= 带值一律 400
+  > - ?requrl= 接线（列表页 JS 预填可见搜索框 + 报告页「该 URI 的其他运行」生产者链接）
+  > - 列表状态条（已存 N/上限/保留天数/最早最新，与 list_runs 单次 mget 合并）
+  > - 火焰图三档图例 + ?flamemetric= 白名单切换（mu 含子调用说明）
+  > - 按请求渲染态的协程上下文后端：Hyperf/workerman 自动侦测（coroutineContextClass()），验证环 Webman 卡以真服务器+真 TCP 交错钉住；htmlLang 收编
+  > - 数字本地化（num.thousands/decimal 经 ICU 实测取值，HTML 侧；导出与列表页保持机器口径）
+  > - B2 修复：N/A <= 0 恒假导致的 N/A 单元格染红；deny() 死分支清理；respond()/deny() 补 no-store；拒绝路径日志进程级节流
+  > - a11y：th scope=col、横滚容器 tabindex、diff 回归侧 + 通道；响应的 N/A→中性
+  > - 词表 168 键 ×13（新增 runs.aggregate/path.*/search.matches/flame.*/run.previous/flame.muInclusive/num.*/run.otherRuns/footer.credit），键序同 zh_CN 契约
+  > 验收：全量 phpunit 1183 tests / 9862 assertions / 0 failure；generate --verify 48/48；check ×12 PASS
+- 报告页接线、协程上下文与导出扩展（同 URI 对比/导出入口与列表 JSON/状态条/requrl/火焰图图例与指标/数字本地化）（e4c4ef7）
+  > - 同 URI 上次运行对比链接、动作栏 JSON/CSV 导出入口；?format=json 无 run 返回运行列表 JSON（单读、与 runsOverview 同源），symbol= 带值一律 400
+  > - ?requrl= 接线（列表页 JS 预填可见搜索框 + 报告页「该 URI 的其他运行」生产者链接）
+  > - 列表状态条（已存 N/上限/保留天数/最早最新，与 list_runs 单次 mget 合并）
+  > - 火焰图三档图例 + ?flamemetric= 白名单切换（mu 含子调用说明）
+  > - 按请求渲染态的协程上下文后端：Hyperf/workerman 自动侦测（coroutineContextClass()），验证环 Webman 卡以真服务器+真 TCP 交错钉住；htmlLang 收编
+  > - 数字本地化（num.thousands/decimal 经 ICU 实测取值，HTML 侧；导出与列表页保持机器口径）
+  > - B2 修复：N/A <= 0 恒假导致的 N/A 单元格染红；deny() 死分支清理；respond()/deny() 补 no-store；拒绝路径日志进程级节流
+  > - a11y：th scope=col、横滚容器 tabindex、diff 回归侧 + 通道；响应的 N/A→中性
+  > - 词表 168 键 ×13（新增 runs.aggregate/path.*/search.matches/flame.*/run.previous/flame.muInclusive/num.*/run.otherRuns/footer.credit），键序同 zh_CN 契约
+  > 验收：全量 phpunit 1183 tests / 9862 assertions / 0 failure；generate --verify 48/48；check ×12 PASS
+
+### fix（修复）
+
+- **test**：截图画布指纹钉 UTC——修「本机 +0800 / CI UTC」两个 sha 的环境分叉（9f2fb36）
+  > CI 四条 PHP 矩阵格同点红（65462fe0 vs 01b8c961）：报告页把夹具时间戳经 date()
+  > 渲染，而 date() 取 date.timezone。page() 内钉 UTC（用完还原），gate 与
+  > shots.php 同源生效；26 张截图与清单按 UTC 重新生成。两种时区（本机默认与
+  > -d date.timezone=UTC）下 gate 均绿。
+
+### docs（文档）
+
+- 13 份 README 文档批（版本表/Laravel 挂载与 CLI/环三腿/导出/限制表）+ 三图刷新与版权 + 27 张截图重拍（82d0118）
+  > - 版本表：Laravel ^12|^13（11+ 用 bootstrap/app.php 的 withMiddleware）、Symfony ^8.0（PHP 8.4）；挂载说明改 slim skeleton 现实
+  > - Laravel 节新增「CLI 与队列」（命令自动注册 + 队列四事件 + 手动包裹；三代码块全语种逐字）
+  > - 环回填：三腿/10 家/ThinkPHP 入环/Hyperf 的 ext-swoole 运行前提/SKIP 2,0,0/断言数下限
+  > - 新增「导出与机器消费」段；限制表：串扰行改写为按协程隔离 + 新增 Hyperf 采样串扰与 Octane 两行
+  > - 三张图刷新（本次新增→扩展 8 个；采样判定序；鉴权短路）并加版权行 `© erik · https://erik.xyz`；design.meta.desc 的 six 残留 12 语种清齐
+  > - 26 张本地化截图重拍（新 UI：导出按钮/状态条）+ 页脚版权；HTML 指纹清单重生成，LocaleScreenshotGate 4 例 254 断言绿
+  > - 12 份产物重生成：--verify 48/48；check ×12 PASS
+  > - 顺带修复：pt 的 user:password 标识符回正、zh/en 表标签格恢复、树注释两条旧版腿、设计图句 6→8（fr 首发发现）
+  > - demo 示例页补版权行；LICENSE 版权行补 https://erik.xyz（随 feat 提交）
+
+### test（测试）
+
+- **docs**：文档与 i18n 闸批（截图指纹/字面 key/endonym/许可头/配置表/链接改写）（8a989da）
+  > - LocaleScreenshotGateTest：26 页 HTML 指纹清单 + 回落扫描（含双向滤除：本语种自己含的汉字块不算回落；ja 的「最新」假阳实测修复）+ 静态量快照防跨文件泄漏
+  > - I18nKeyReferenceTest：src/ 字面 i18n key 存在性（99 处字面引用，动态前缀白名单）；I18nParityTest：endonym 双表对齐 + zh↔zh_CN 映射入断言
+  > - DocsIntegrityTest：NOTICE 声明的 Apache 头文件集合逐一含头（前 40 行）；ConfigParityTest：13 份 README 配置表键列双向对账（ar 的 LRM 解析伪差先剥再判）
+  > - ReadmeLinkRewriteTest：生成器本语种前缀剥除（en/ko 角色对调）；GenerateVerifyTest 交付树普查扩到 6 件/语种
+  > - LoadBombTest：落库路径 1 万函数炸弹（阈值 2.0s = 基线 49× 余量）；RenderBombTest 阈值按 xdebug 模式缩放（profile 下实测 61.3s/负载 139.7s 贴着 60s 假红）
+  > - DrupalTest 顺序依赖修复（前置条件显式建立，不再依赖类进入时的环境）
+
+### chore（杂务）
+
+- **ci**：PHPStan 闸、php80-smoke 抽取、demo 端到端、随机序格、release notes 与 CHANGELOG 回写（8739de0）
+  > - PHPStan 2.2.16（精确 pin）level 5 + 基线 31 条 + ci.yml 新 job；已知基线须在 src 静默后复确认（在制报错不入基线，避免 reportUnmatchedIgnoredErrors 反噬）
+  > - 三块 8.0 冒烟逻辑（lint/函数黑名单/类加载）抽成 tools/ci/php80-smoke.php，ci 与 release 同源调用；类清单从盘上按 PSR-4 推导（修掉 ci/release 已发生的清单漂移）；扫描面并入 tools/i18n、tools/ci、tools/purge.php
+  > - demo.yml（schedule 周一 + dispatch）：真 compose 构建起栈、业务请求、列表不自我采样、详情页 fib@1、资源 200、容器内扩展与软链校验；失败 dump 日志、不设 continue-on-error
+  > - 8.4 测试格固定种子随机序（--random-order-seed=20261004）
+  > - tools/ci/release-notes.php（conventional commits 分组、22 断言 selftest）+ CHANGELOG.md 回写（幂等、GITHUB_TOKEN 不重触发的坑入注释、compare 链接钉版本名）
+  > - release.yml：非 main 守卫提前到流程首（同时挡住「tag 打错分支」）；notes selftest 与生成排在 tag 之前
+
+**完整变更**：https://github.com/erikwang2013/xhprof-webman/compare/v3.8.0...v3.9.0
+
 ## v3.8.0 — 2026-10-03
 
 ### feat（新增）
