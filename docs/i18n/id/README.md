@@ -4,6 +4,8 @@
 
 # XHProf Profiler Performa
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla, Drupal, dan PHP murni (tanpa framework).
 
 Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pengembang dapat dengan cepat membuka laporan analisis performa melalui browser untuk menemukan hambatan performa kode.
@@ -14,11 +16,11 @@ Api kecil yang sama juga menjadi ikon situs, ikon merek di kiri atas, dan ikon p
 
 **Riwayat Request**
 
-![Riwayat Request](../../../docs/images/runs-list.png)
+![Riwayat Request](images/runs-list.png)
 
 **Laporan satu eksekusi**
 
-![Laporan satu eksekusi](../../../docs/images/run-report.png)
+![Laporan satu eksekusi](images/run-report.png)
 
 **Membandingkan dua eksekusi** — di daftar Riwayat Request centang tepat dua baris (satu kotak centang per baris, pilih-semua ada di header) lalu klik "Bandingkan yang dipilih" untuk membuka tampilan diff. Kedua sisi diurutkan menurut waktu (run1 = eksekusi yang lebih awal, run2 = yang lebih akhir, tidak bergantung pada urutan daftar saat ini); warnanya bermakna perbaikan / regresi "dari run1 ke run2", dan tautan "Balikkan Laporan" di dalam halaman dapat menukar kedua sisi kapan saja.
 
@@ -71,6 +73,26 @@ Pasang lewat Composer:
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### Mulai Cepat
+
+Jalur terpendek dalam tiga langkah:
+
+1. **Pasang ekstensi** — `pecl install xhprof`, lalu tambahkan bagian `[xhprof]` di php.ini (`extension=xhprof.so`, `xhprof.output_dir=/tmp/xhprof`).
+2. **Jalankan Redis** — `redis-server --daemonize yes`; atau pakai instans yang sudah ada (parameter koneksi ada di sub-array `redis` pada `config/xhprof.php` tiap framework).
+3. **Pasang dan buka halaman report** — `composer require aaron-dev/xhprof-webman`, pasang kelas entri di salah satu framework mengikuti "Konfigurasi Framework", lakukan satu request bisnis lalu buka `http://<situs Anda>/xhprof`.
+
+> **Tidak ingin memasang apa pun?** `demo/` menyertakan demo docker compose yang siap pakai (entri PHP murni, tanpa framework): `cd demo && docker compose up -d`, lalu buka `http://127.0.0.1:8080/xhprof` untuk melihat halaman report sungguhan; penjelasannya ada di `demo/README.md`.
+
+### Pemecahan Masalah
+
+| Gejala | Yang dicek lebih dulu |
+|---------|-------------|
+| Halaman report kosong dan daftar tidak berisi catatan | Apakah `enable` bernilai `true`; apakah `sample_rate` diubah ke `0` (maka hanya request dengan header `X-Xhprof-Token` yang disampling); apakah `<key_prefix>:run_id` kosong di Redis |
+| Halaman report mengembalikan 403 / 401 | 403: `ip_allowlist` memblokir IP saat ini (atau IP request berasal dari header penerusan sementara `trusted_proxies` kosong), atau `auth_token` dikonfigurasi dan URL tidak membawa `?token=`; 401 disertai dialog kredensial browser: `auth_basic` dikonfigurasi dan nama pengguna/kata sandi yang dimasukkan tidak cocok |
+| Error tidak bisa terhubung ke Redis | Apakah ekstensi redis terpasang (`php -m` memuat `redis`), apakah Redis berjalan, apakah host / port / password / database pada sub-array `redis` cocok dengan instansnya |
+| Ekstensi terpasang tapi request bisnis tidak tersimpan | Apakah kelas entri benar-benar terpasang (lihat "Konfigurasi Framework"); apakah path request mengenai `ignore_url_arr`; apakah `max_runs_per_minute` sudah mencapai batas (kelebihannya tidak disampling sampai menit berikutnya) |
+| Halaman report bisa dibuka tapi CSS/JS-nya 404 | Apakah prefiks `assets_url` cocok dengan path deployment; apakah reverse proxy juga meneruskan prefiks itu ke aplikasi |
 
 ---
 
@@ -400,6 +422,14 @@ Semua framework berbagi opsi konfigurasi berikut:
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Aktifkan/nonaktifkan profiling |
 | `sample_rate` | float | `1.0` | Sampling proporsional: tiap request direkam dengan probabilitas ini (mis. `0.05` = 5% request disampling); `1.0` = semua request disampling, `<=0` atau `false` = tidak ada yang disampling |
+| `trigger_token` | string\|null | `null` | Sampling sesuai permintaan: setelah diisi, request yang membawa header `X-Xhprof-Token: <nilai tersebut>` **selalu disampling** (mengabaikan `sample_rate`, bahkan `0`); `null` atau string kosong = mati, header itu diabaikan sepenuhnya. Hanya header, **tidak menerima query** (query akan tertulis ke log akses dan `Referer`). Ia bisa memaksa sampling penuh atas request apa pun, jadi kuncinya harus string acak yang cukup panjang dan hanya diberikan kepada orang tepercaya |
+| `auth_basic` | string\|null | `null` | Kredensial HTTP Basic (`user:password`, dipisah pada titik dua pertama; kata sandi boleh mengandung titik dua). Hubungannya dengan `auth_token` adalah **atau**: salah satu dikonfigurasi berarti berlaku, salah satu lolos berarti diterima; keduanya tidak dikonfigurasi = tanpa autentikasi. **Apache+CGI/FastCGI menghapus header `Authorization` secara default** (perlu `CGIPassAuth On`, 2.4.13+); nginx+php-fpm tidak terpengaruh |
+| `ip_allowlist` | array | `[]` | Allowlist IP halaman report, dicocokkan **persis byte per byte**: tidak mendukung rentang CIDR dan tidak menormalkan IPv6 (`2001:0db8::1` dan `2001:db8::1` adalah dua string yang berbeda). Kosong = mati; nilai yang bukan array = tolak semua (fail closed, satu entri log error). Nilainya berasal dari `getRealIp()`, pahami bersama `trusted_proxies` |
+| `trusted_proxies` | array | `[]` | **Deklarasi deployment, bukan penegakan teknis**: hanya setelah menyatakan "ada proxy tepercaya di depan saya", `ip_allowlist` menerima IP klien yang diambil dari `X-Forwarded-For`/`X-Real-IP`. Sebagian besar adapter mengambil header penerusan tanpa syarat — deklarasi ini **tidak** menahan XFF palsu, jadi aman hanya bila berada di belakang proxy yang Anda kendalikan |
+| `webhook_url` | string\|null | `null` | Setelah run lambat (`wt >= view_wtred`) tersimpan, POST JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) ke alamat ini. Kosong = tidak dikirim. **Bukan antrean**: tidak menunggu respons, tanpa percobaan ulang dan tanpa kompensasi di disk; endpoint yang lambat atau mati hanya kehilangan satu notifikasi ini |
+| `sample_cli` | bool | `false` | Sampling juga berlaku untuk CLI/tanpa request HTTP: bila `true`, `request_uri` run yang tersimpan dicatat sebagai `cli:<nama skrip>`; `false` = selalu diabaikan (default, termasuk worker antrean dan tugas terjadwal) |
+| `symbol_lookup_url` | string\|null | `null` | Templat tautan kode sumber: halaman report merender `<templat>?symbol=<nama fungsi urlencoded>`; `null`/kosong = tanpa tautan |
+| `max_runs_per_minute` | int\|null | `null` | Anggaran adaptif: maksimum berapa catatan yang direkam per menit (dihitung per menit; kelebihannya tidak disampling); `null`/non-positif = mati. Bila cache tidak tersedia/melempar exception, fail-open (tetap mengikuti `sample_rate`); **sampling terpicu tidak dibatasi olehnya** |
 | `time_limit` | int | `0` | Hanya profilkan request yang melebihi n detik, 0 berarti semua |
 | `log_num` | int | `1000` | Jumlah maksimum rekaman |
 | `view_wtred` | int | `3` | Sorot merah baris dengan waktu respons > n detik |
@@ -415,6 +445,26 @@ Keterbatasan yang diketahui dari opsi-opsi ini pada tiap framework tercantum di 
 Menurunkan `sample_rate` adalah satu-satunya cara menekan overhead secara proporsional (`0.05` = hanya merekam 5% request); `ignore_url_arr` tetap mengecualikan seluruh path, dan keduanya bisa digabungkan. Keputusannya diambil sekali per request di titik masuk sampling dan tidak memengaruhi cara run yang sudah ada dibaca maupun masa simpannya. Nilai tidak valid (mis. `'5%'`, `'disabled'`) diperlakukan sebagai `1.0`: mengambil sampel berlebih lebih baik daripada diam-diam tidak merekam apa pun, yang akan membuat halaman report tampak rusak.
 
 Untuk membersihkan data profil: kalau hanya ingin mengosongkan halaman daftar, pakai `DEL <prefix>:run_id` — key datanya akan kedaluwarsa sendiri lewat `log_ttl`, dan id menggantung yang tertinggal di indeks akan dilewati oleh daftar; kalau ingin membersihkan semuanya, pindai `<prefix>:request_log:*` dan `<prefix>:xhprof_log:*` lalu hapus bersama daftar indeksnya (`DEL` tidak menerima wildcard, jadi daftarkan dulu key-nya dengan `redis-cli --scan --pattern '<prefix>:*'` lalu hapus — jangan pakai `KEYS`). Daftar indeks sengaja tidak diberi TTL: ukurannya dibatasi `log_num`, dan isinya hanya pointer ke key data (`<prefix>` adalah nilai `key_prefix` yang dikonfigurasi untuk proyek ini).
+
+**Sampling terpicu (`trigger_token`)**
+
+Trigger sesuai permintaan dan sampling proporsional adalah dua poros yang independen — trigger dinilai lebih dulu, undian menyusul: dengan `trigger_token` terisi, produksi bisa menekan `sample_rate` sampai `0` (normalnya tidak menyampling apa pun), dan saat perlu menelusuri masalah cukup kirim satu request dengan header `X-Xhprof-Token`, request itu akan disampling penuh. Perbandingan kunci memakai `hash_equals` dengan waktu konstan; kunci hanya diterima lewat header request, jangan lewat query (query akan tertulis ke log akses, `Referer`, dan riwayat browser). Trigger tidak melewati `ignore_url_arr` (request halaman report/aset statis tetap dilewati meski membawa kunci), dan `enable: false` tetap menjadi sakelar utama.
+
+**Autentikasi halaman report (`auth_token` dan `auth_basic`)**
+
+`auth_token` (`?token=xxx`) dan `auth_basic` (HTTP Basic) berhubungan **atau**: salah satu dikonfigurasi berarti berlaku, salah satu lolos berarti diterima; keduanya tidak dikonfigurasi = tanpa autentikasi (default, setiap render mencatat satu peringatan log). Kredensial Basic berbentuk `user:password` (dipisah pada titik dua pertama; kata sandi boleh mengandung titik dua, dan bagian nama pengguna maupun kata sandi sama-sama dibandingkan dengan `hash_equals`); bila Basic dikonfigurasi dan pemeriksaannya gagal, responsnya 401 dengan `WWW-Authenticate` — inilah satu-satunya pemicu dialog kredensial browser — sedangkan kegagalan yang hanya memakai token mengembalikan 403. **Tidak mengaktifkan autentikasi secara default adalah keputusan yang disengaja**: halaman report diambil alih kelas entri **sebelum** autentikasi aplikasi host berjalan, jadi tanpa konfigurasi siapa pun yang bisa menjangkau path itu dapat membaca URI request, IP sumber, dan nama fungsi dari semua run — deployment publik dan multi-tenant **wajib** mengonfigurasi salah satunya. **Jebakan deployment**: Apache + CGI/FastCGI menghapus header `Authorization` secara default, sehingga Basic tidak akan pernah cocok (gejalanya terus 401) — perlu `CGIPassAuth On` (2.4.13+) atau variabel penerusan yang setara; nginx + php-fpm tidak terpengaruh.
+
+**Allowlist IP dan proksi tepercaya (`ip_allowlist` / `trusted_proxies`)**
+
+Allowlist dicocokkan **persis byte per byte**: tidak mendukung rentang CIDR dan tidak menormalkan IPv6 (`2001:0db8::1` dan `2001:db8::1` adalah dua string yang berbeda); kosong = mati; nilai yang bukan array **menolak semuanya** dan mencatat satu entri log error (fail closed — mematikannya secara diam-diam sama dengan diam-diam melepas satu lapis kontrol keamanan). Nilai yang diperiksa berasal dari `getRealIp()` milik adapter, sementara sebagian besar adapter mengambil header penerusan **tanpa syarat** begitu melihat `X-Forwarded-For` / `X-Real-IP`: membandingkannya langsung berarti klien mana pun bisa melaporkan alamatnya sendiri dan melewati allowlist. Karena itu ada `trusted_proxies`: bila nilai IP datang dari header penerusan, deklarasi `trusted_proxies` yang tidak kosong disyaratkan, kalau tidak request ditolak dan dicatat. **Ini deklarasi deployment, bukan penegakan teknis**: mendeklarasikannya pun tidak menahan XFF palsu, dan aman hanya bila aplikasi benar-benar berjalan di belakang proxy yang Anda kendalikan — hop perantara mana yang tepercaya adalah tanggung jawab konfigurasi proxy Anda. Gerbang allowlist berjalan sebelum verifikasi kredensial (penolakan berarti 403).
+
+**Webhook request lambat (`webhook_url`)**
+
+Setelah run dengan waktu respons `wt >= view_wtred` tersimpan, muatan JSON (field: `run_id` / `uri` / `wt` / `ct` / `ip` / `time`) di-POST ke alamat ini. Kosong = tidak dikirim. **Ia bukan antrean**: fire-and-forget — menyambung, menulis request, lalu menutup koneksi; tidak menunggu respons dan tidak membaca status code, tanpa percobaan ulang dan tanpa kompensasi di disk; endpoint yang lambat atau mati hanya kehilangan satu notifikasi ini (timeout koneksi ditekan ke 200ms, tetapi resolusi DNS tidak dibatasi itu). Kegagalan apa pun hanya mencatat satu entri log error dan tidak pernah memengaruhi request bisnis. Halaman daftar menandai merah dengan `>` yang ketat, sedangkan kondisi webhook adalah `>=` — beda satu tingkat di batasnya.
+
+**Anggaran adaptif (`max_runs_per_minute`)**
+
+Maksimum berapa catatan yang direkam per menit: yang dihitung adalah **jumlah request yang sampai ke titik masuk sampling** (termasuk yang tidak terpilih — penilaiannya dilakukan sebelum undian); kelebihannya tidak disampling dan otomatis kembali ke nol pada menit berikutnya; `null`/non-positif = mati. Hitungannya lewat cache: akan muncul key `<key_prefix>:budget:<YmdHi>` di Redis (mis. `xhprof:budget:202610032316`), diberi TTL 120 detik saat incr pertama lalu kedaluwarsa kembali ke nol dengan sendirinya — melihatnya saat memeriksa operasional adalah hal yang normal. Bila cache tidak tersedia/melempar exception, **fail-open**: sampling tetap mengikuti `sample_rate`, dan mekanisme anggaran tidak pernah membuat request gagal atau menghentikan sampling secara diam-diam. **Sampling terpicu tidak dibatasi olehnya**: orang yang membawa kunci untuk menelusuri masalah tidak boleh dihalangi anggaran (urutan penilaian: trigger → anggaran → undian).
 
 **Pengalih bahasa halaman report**
 
@@ -537,6 +587,7 @@ xhprof-webman/
 ├── tools/i18n/                   # rantai alat terjemahan untuk README dan ketiga SVG (generate / check / selftest)
 ├── docs/i18n/                    # 12 hasil terjemahan (Inggris, Korea, Rusia, Jerman, Prancis, Spanyol, Portugis, Arab, Hindi, Bengali, Indonesia, Jepang)
 ├── tests/                        # PHPUnit: test adapter, test wiring, test Core, paritas struktural di 14 README
+├── demo/                         # demo docker compose (entri PHP murni, lihat halaman report tanpa memasang apa pun)
 └── docs/images/                  # diagram README
 ```
 
@@ -546,7 +597,7 @@ Kecuali Drupal, setiap direktori `src/<Fw>/` memiliki bentuk yang sama:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # 10 key konfigurasi yang sama seperti framework lain
+└── config/xhprof.php             # 19 key konfigurasi yang sama seperti framework lain
 ```
 
 `src/Drupal/` adalah satu-satunya pengecualian: ia tidak punya direktori `config/` — konfigurasinya berada di config bertipe tingkat modul (`drupal/xhprof/config/install/xhprof.settings.yml`).

@@ -4,6 +4,8 @@
 
 # Profileur de performance XHProf
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 Un plugin de profilage de performance du code, compatible avec webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal et PHP natif (sans framework).
 
 Il collecte les données de profilage via l'extension xhprof et les stocke dans Redis. Les développeurs accèdent rapidement, depuis un navigateur, aux rapports d'analyse de performance pour identifier les goulots d'étranglement du code.
@@ -14,11 +16,11 @@ La même petite flamme sert aussi d'icône de site, d'icône de marque en haut �
 
 **Journal des requêtes**
 
-![Journal des requêtes](../../../docs/images/runs-list.png)
+![Journal des requêtes](images/runs-list.png)
 
 **Rapport d’une exécution**
 
-![Rapport d’une exécution](../../../docs/images/run-report.png)
+![Rapport d’une exécution](images/run-report.png)
 
 **Comparer deux exécutions** — dans la liste du journal des requêtes, cochez exactement deux lignes (une case à cocher par ligne, une case « Tout sélectionner » dans l'en-tête) et cliquez sur « Comparer la sélection » pour ouvrir la vue diff. Les deux côtés sont ordonnés par heure (run1 = l'exécution la plus ancienne, run2 = la plus récente, indépendamment du tri courant de la liste) ; les couleurs signifient amélioration / régression « de run1 à run2 », et le lien « Inverser le rapport » de la page échange les deux côtés à tout moment.
 
@@ -71,6 +73,26 @@ Installez via Composer :
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### Démarrage rapide
+
+Le chemin le plus court en trois étapes :
+
+1. **Installer l'extension** — `pecl install xhprof`, et ajoutez une section `[xhprof]` au php.ini (`extension=xhprof.so`, `xhprof.output_dir=/tmp/xhprof`).
+2. **Démarrer Redis** — `redis-server --daemonize yes`, ou utilisez une instance que vous avez déjà (les paramètres de connexion vont dans le sous-tableau `redis` du `config/xhprof.php` de chaque framework).
+3. **Brancher et ouvrir la page de rapport** — `composer require aaron-dev/xhprof-webman`, montez la classe d'entrée dans un framework au choix en suivant « Configuration par framework », puis émettez une requête métier et ouvrez `http://<votre site>/xhprof`.
+
+> **Pas envie d'installer quoi que ce soit ?** `demo/` fournit une démo docker compose prête à l'emploi (entrée PHP natif, sans aucun framework) : `cd demo && docker compose up -d`, puis ouvrez `http://127.0.0.1:8080/xhprof` pour voir une vraie page de rapport ; les explications sont dans `demo/README.md`.
+
+### Dépannage rapide
+
+| Symptôme | À vérifier en premier |
+|---------|-------------|
+| La page de rapport est vide et la liste ne contient aucune exécution | `enable` est-il à `true` ; `sample_rate` a-t-il été mis à `0` (seules les requêtes portant l'en-tête `X-Xhprof-Token` sont alors échantillonnées) ; `<key_prefix>:run_id` est-il vide dans Redis |
+| La page de rapport renvoie 403 / 401 | 403 : `ip_allowlist` bloque l'IP courante (ou l'IP de la requête vient d'un en-tête de transfert alors que `trusted_proxies` est vide), ou `auth_token` est configuré et l'URL ne porte pas `?token=` ; 401 avec une invite d'identification du navigateur : `auth_basic` est configuré et le nom d'utilisateur / mot de passe saisi ne correspond pas |
+| Erreurs de connexion à Redis | L'extension redis est-elle installée (`php -m` liste `redis`), Redis tourne-t-il, le host / port / password / database du sous-tableau `redis` correspondent-ils à l'instance |
+| L'extension est installée mais les requêtes métier ne sont pas enregistrées | La classe d'entrée est-elle réellement montée (voir « Configuration par framework ») ; le chemin de la requête tombe-t-il dans `ignore_url_arr` ; `max_runs_per_minute` a-t-il atteint son plafond (plus rien n'est échantillonné avant la minute suivante) |
+| La page de rapport s'ouvre mais son CSS/JS renvoie 404 | Le préfixe `assets_url` correspond-il au chemin déployé ; le reverse proxy transmet-il aussi ce préfixe à l'application |
 
 ---
 
@@ -400,6 +422,14 @@ Tous les frameworks partagent ces options de configuration :
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Active/désactive le profilage |
 | `sample_rate` | float | `1.0` | Échantillonnage proportionnel : chaque requête est enregistrée avec cette probabilité (p. ex. `0.05` = 5 % des requêtes) ; `1.0` = tout échantillonner, `<=0` ou `false` = ne rien échantillonner |
+| `trigger_token` | string\|null | `null` | Échantillonnage à la demande : une fois défini, toute requête portant l'en-tête `X-Xhprof-Token: <value>` est **toujours échantillonnée** (ignore `sample_rate`, même `0`) ; `null` ou chaîne vide = désactivé, l'en-tête est alors totalement ignoré. En-tête uniquement, **jamais de paramètre de requête**. Il peut forcer l'échantillonnage complet de n'importe quelle requête : utilisez une valeur longue et aléatoire, et ne la partagez qu'avec des personnes de confiance |
+| `auth_basic` | string\|null | `null` | Identifiant HTTP Basic (`user:password`, coupé au premier deux-points ; le mot de passe peut contenir des deux-points). Relation **ou** avec `auth_token` : l'un configuré est appliqué, l'un validé laisse passer ; aucun des deux = pas d'authentification. **Apache+CGI/FastCGI supprime l'en-tête `Authorization` par défaut** (nécessite `CGIPassAuth On`, 2.4.13+) ; nginx+php-fpm n'est pas concerné |
+| `ip_allowlist` | array | `[]` | Liste d'autorisation d'IP de la page de rapport, comparée **octet par octet** : pas de plages CIDR, pas de normalisation IPv6 (`2001:0db8::1` et `2001:db8::1` sont deux chaînes différentes). Vide = désactivé ; une valeur qui n'est pas un tableau refuse tout (fail closed, une entrée d'erreur dans les logs). La valeur vient de `getRealIp()` et se lit avec `trusted_proxies` |
+| `trusted_proxies` | array | `[]` | **Une déclaration de déploiement, pas une contrainte technique** : ce n'est qu'après avoir déclaré « il y a un proxy de confiance devant moi » que `ip_allowlist` acceptera une IP client tirée de `X-Forwarded-For`/`X-Real-IP`. La plupart des adaptateurs prennent les en-têtes de transfert sans condition — cette déclaration n'empêche **pas** un XFF falsifié, elle n'est donc sûre que derrière un proxy que vous contrôlez |
+| `webhook_url` | string\|null | `null` | Après l'enregistrement d'une exécution lente (`wt >= view_wtred`), POST d'un JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) vers cette adresse. Vide = rien n'est envoyé. **Ce n'est pas une file d'attente** : il n'attend pas de réponse, sans réessai ni repli sur disque ; un point de terminaison lent ou mort perd simplement cette notification |
+| `sample_cli` | bool | `false` | Échantillonner aussi la CLI / les requêtes sans HTTP : à `true`, le `request_uri` enregistré d'une exécution vaut `cli:<nom du script>` ; `false` = toujours ignoré (le défaut, y compris les workers de file d'attente et les tâches planifiées) |
+| `symbol_lookup_url` | string\|null | `null` | Modèle de lien vers le code source : la page de rapport rend `<modèle>?symbol=<nom de fonction urlencodé>` ; `null`/vide = aucun lien |
+| `max_runs_per_minute` | int\|null | `null` | Budget adaptatif : nombre maximal d'exécutions enregistrées par minute (compteur par minute ; au-delà, plus rien n'est échantillonné) ; `null`/non positif = désactivé. Quand le cache est indisponible ou lève une exception, échec ouvert (fail-open) : l'échantillonnage suit `sample_rate` comme d'habitude ; **l'échantillonnage déclenché n'y est pas soumis** |
 | `time_limit` | int | `0` | Ne profiler que les requêtes dépassant n secondes, 0 signifie toutes |
 | `log_num` | int | `1000` | Nombre maximal d'enregistrements |
 | `view_wtred` | int | `3` | Met en rouge les lignes dont le temps de réponse dépasse n secondes |
@@ -415,6 +445,26 @@ Les limites connues de ces options sur chaque framework sont listées dans [Vér
 Réduire `sample_rate` est le seul moyen de réduire la surcharge proportionnellement (`0.05` n'enregistre que 5 % des requêtes) ; `ignore_url_arr` exclut toujours des chemins entiers, et les deux se cumulent. La décision est prise une fois par requête, au point d'entrée de l'échantillonnage, et n'affecte pas la lecture ni la conservation des données déjà enregistrées. Les valeurs invalides (p. ex. `'5%'`, `'disabled'`) retombent sur `1.0` : mieux vaut trop échantillonner que ne rien enregistrer en silence, ce qui ferait paraître la page de rapport cassée.
 
 Pour purger les données de profilage : pour ne vider que la page de liste, utilisez `DEL <prefix>:run_id` — les clés de données expirent d'elles-mêmes via `log_ttl`, et les id orphelins laissés dans l'index sont ignorés par la liste ; pour tout purger, listez `<prefix>:request_log:*` et `<prefix>:xhprof_log:*` puis supprimez-les ainsi que la liste d'index (`DEL` n'accepte pas de jokers : listez d'abord les clés avec `redis-cli --scan --pattern '<prefix>:*'`, et n'utilisez pas `KEYS`). La liste d'index n'a volontairement pas de TTL : elle est bornée par `log_num` et n'est qu'une liste de pointeurs vers les clés de données (`<prefix>` est la valeur de `key_prefix` configurée pour ce projet).
+
+**Échantillonnage déclenché (`trigger_token`)**
+
+Le déclenchement à la demande et l'échantillonnage proportionnel sont deux axes indépendants — le déclencheur est jugé d'abord, le tirage ensuite : une fois `trigger_token` défini, la production peut abaisser `sample_rate` à `0` (aucun échantillonnage en fonctionnement normal) et, en cas de besoin d'investigation, envoyer une requête avec l'en-tête `X-Xhprof-Token`, qui sera alors échantillonnée intégralement. La clé est comparée avec `hash_equals`, à temps constant ; elle n'est acceptée que sur l'en-tête de requête — ne la passez pas dans la chaîne de requête (les chaînes de requête finissent dans les journaux d'accès, le `Referer` et l'historique du navigateur). Un déclenchement ne contourne pas `ignore_url_arr` (les requêtes vers la page de rapport et vers les ressources statiques restent ignorées même avec la clé), et `enable: false` reste l'interrupteur principal.
+
+**Authentification de la page de rapport (`auth_token` et `auth_basic`)**
+
+`auth_token` (`?token=xxx`) et `auth_basic` (HTTP Basic) sont en relation **ou** : l'un configuré est appliqué, l'un validé laisse passer ; aucun des deux = pas d'authentification (le défaut, avec une entrée d'avertissement dans les logs à chaque rendu). Un identifiant Basic a la forme `user:password` (coupé au premier deux-points ; le mot de passe peut contenir des deux-points, et les deux segments — nom d'utilisateur et mot de passe — sont comparés avec `hash_equals`) ; quand Basic est configuré et que la vérification échoue, la réponse est 401 avec `WWW-Authenticate` — la seule chose qui fait apparaître l'invite d'identification du navigateur — tandis qu'un échec du seul jeton renvoie 403. **Ne pas authentifier par défaut est une décision délibérée** : la classe d'entrée prend en charge la page de rapport **avant** l'authentification de l'application hôte, donc sans rien de configuré, quiconque peut atteindre ce chemin peut lire l'URI de requête, l'IP source et les noms de fonctions de toutes les exécutions — les déploiements publics et multi-locataires **doivent** configurer l'un des deux. **Piège de déploiement** : Apache + CGI/FastCGI supprime l'en-tête `Authorization` par défaut, donc Basic ne peut jamais correspondre (il renvoie simplement 401 en boucle) — il faut `CGIPassAuth On` (2.4.13+) ou une variable transférée équivalente ; nginx + php-fpm n'est pas concerné.
+
+**Liste d'autorisation d'IP et proxys de confiance (`ip_allowlist` / `trusted_proxies`)**
+
+La liste d'autorisation compare **octet par octet** : pas de plages CIDR et pas de normalisation IPv6 (`2001:0db8::1` et `2001:db8::1` sont deux chaînes différentes) ; vide = désactivé ; une valeur qui n'est pas un tableau **refuse tout** et consigne une entrée d'erreur (fail closed — la désactiver en silence reviendrait à abandonner discrètement une couche de contrôle de sécurité). La valeur vérifiée vient du `getRealIp()` de l'adaptateur, et la plupart des adaptateurs prennent l'en-tête de transfert **sans condition** quand ils voient `X-Forwarded-For` / `X-Real-IP` : comparer directement cette valeur permettrait à n'importe quel client de falsifier sa propre adresse et de contourner la liste d'autorisation. D'où `trusted_proxies` : quand la valeur d'IP vient précisément d'un en-tête de transfert, une déclaration `trusted_proxies` non vide est exigée, sinon la requête est refusée et consignée dans les logs. **C'est une déclaration de déploiement, pas une contrainte technique** : la déclarer n'empêche pas un XFF falsifié, et elle n'est sûre que lorsque l'application tourne réellement derrière un proxy que vous contrôlez — la confiance dans les sauts intermédiaires relève de votre configuration de proxy. Le filtre de la liste d'autorisation s'exécute avant la vérification des identifiants (un refus renvoie 403).
+
+**Webhook des requêtes lentes (`webhook_url`)**
+
+Après l'enregistrement d'une exécution dont le temps de réponse est `wt >= view_wtred`, un JSON (champs : `run_id` / `uri` / `wt` / `ct` / `ip` / `time`) est POSTé vers cette adresse. Vide = rien n'est envoyé. **Ce n'est pas une file d'attente** : fire-and-forget — connexion, écriture de la requête, fermeture de la socket, sans jamais attendre de réponse ni lire le code de statut, sans réessai ni repli sur disque ; un point de terminaison lent ou mort perd simplement cette notification (le délai de connexion est réduit à 200 ms, la résolution DNS n'y étant pas soumise). Toute défaillance consigne une entrée d'erreur et n'affecte jamais la requête métier. La liste met en rouge les lignes avec un `>` strict, alors que la condition du webhook est `>=` — la borne diffère d'un cran.
+
+**Budget adaptatif (`max_runs_per_minute`)**
+
+Nombre maximal d'exécutions enregistrées par minute : ce qui est compté est **le nombre de requêtes atteignant le point d'entrée de l'échantillonnage** (y compris celles qui perdent le tirage — il est jugé avant le tirage), au-delà plus rien n'est échantillonné jusqu'au passage à la minute suivante ; `null`/non positif = désactivé. Le compteur vit dans le cache : une clé `<key_prefix>:budget:<YmdHi>` (p. ex. `xhprof:budget:202610032316`) apparaît dans Redis, dotée d'un TTL de 120 secondes à son premier incr et expirant d'elle-même (retour à zéro) — la voir pendant une vérification d'exploitation est normal. Quand le cache est indisponible ou lève une exception, le mécanisme **échoue ouvert** (fail-open) : l'échantillonnage suit `sample_rate` comme d'habitude, et jamais le budget ne fait échouer une requête ni n'arrête silencieusement l'échantillonnage. **L'échantillonnage déclenché n'y est pas soumis** : quelqu'un qui détient le jeton pour investiguer ne doit pas être bloqué par le budget (ordre de décision : déclenchement → budget → tirage).
 
 **Sélecteur de langue de la page de rapport**
 
@@ -537,6 +587,7 @@ xhprof-webman/
 ├── tools/i18n/                   # chaîne d'outils de traduction pour le README et les trois SVG (générer / vérifier / autotest)
 ├── docs/i18n/                    # les 12 livrables traduits (anglais, coréen, russe, allemand, français, espagnol, portugais, arabe, hindi, bengali, indonésien, japonais)
 ├── tests/                        # PHPUnit : tests des adaptateurs, du câblage, du Core, et parité structurelle des 14 README
+├── demo/                         # démo docker compose (entrée PHP natif, page de rapport sans rien installer)
 └── docs/images/                  # schémas du README
 ```
 
@@ -546,7 +597,7 @@ Sauf pour Drupal, chaque répertoire `src/<Fw>/` a la même forme :
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # les mêmes 10 clés de configuration que tout autre framework
+└── config/xhprof.php             # les mêmes 19 clés de configuration que tout autre framework
 ```
 
 `src/Drupal/` est la seule exception : il n'a pas de répertoire `config/` — sa configuration vit dans la configuration typée au niveau du module (`drupal/xhprof/config/install/xhprof.settings.yml`).

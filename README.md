@@ -1,5 +1,7 @@
 # XHProf 性能分析插件
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 **中文** · [English](./docs/i18n/en/README.md) · [한국어](./docs/i18n/ko/README.md) · [Русский](./docs/i18n/ru/README.md) · [Deutsch](./docs/i18n/de/README.md) · [Français](./docs/i18n/fr/README.md) · [Español](./docs/i18n/es/README.md) · [Português](./docs/i18n/pt/README.md) · [العربية](./docs/i18n/ar/README.md) · [हिन्दी](./docs/i18n/hi/README.md) · [বাংলা](./docs/i18n/bn/README.md) · [Bahasa Indonesia](./docs/i18n/id/README.md) · [日本語](./docs/i18n/ja/README.md)
 
 兼容 webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 原生 PHP（无框架）的代码性能分析插件。
@@ -69,6 +71,26 @@ Composer 安装：
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### 快速开始
+
+三步走完最短路径：
+
+1. **装扩展** —— `pecl install xhprof`，并在 php.ini 里加上 `[xhprof]` 段（`extension=xhprof.so`、`xhprof.output_dir=/tmp/xhprof`）。
+2. **起 Redis** —— `redis-server --daemonize yes`；或用你已有的实例（连接参数落在各框架配置文件 `config/xhprof.php` 的 `redis` 子数组里）。
+3. **接入并打开报告页** —— `composer require aaron-dev/xhprof-webman`，在任一家框架按「框架配置」把入口类挂上，产生一次业务请求后访问 `http://<你的站点>/xhprof`。
+
+> **不想装环境？** `demo/` 里有一套 docker compose 演示（原生 PHP 入口，不依赖任何框架）：`cd demo && docker compose up -d`，然后打开 `http://127.0.0.1:8080/xhprof` 就能看到一份真实报告页；说明见 `demo/README.md`。
+
+### 排障速查
+
+| 症状 | 先查什么 |
+|------|---------|
+| 报告页空白，列表里没有记录 | `enable` 是否为 `true`；`sample_rate` 是否被调成 `0`（此时只有带 `X-Xhprof-Token` 头的请求会被采样）；Redis 里 `<key_prefix>:run_id` 是否为空 |
+| 报告页返回 403 / 401 | 403：`ip_allowlist` 挡住了当前 IP（或请求 IP 来自转发头而 `trusted_proxies` 为空），或配了 `auth_token` 而 URL 没带 `?token=`；401 并弹出浏览器凭据框：配了 `auth_basic` 且输入的用户名/密码与配置不符 |
+| 报错连不上 Redis | redis 扩展是否装上（`php -m` 输出里有 `redis`）、Redis 是否在运行、`redis` 子数组的 host / port / password / database 是否与实例一致 |
+| 装了扩展，业务请求却不落库 | 入口类是否真的挂上（见「框架配置」）；请求路径是否命中 `ignore_url_arr`；`max_runs_per_minute` 是否已达上限（超出即不采，要等下一分钟） |
+| 报告页能打开，样式/脚本却 404 | `assets_url` 前缀是否与部署路径一致；反向代理是否把该前缀也转发到应用 |
 
 ---
 
@@ -398,6 +420,14 @@ php -S 127.0.0.1:8000 -t public public/index.php
 |------|------|--------|------|
 | `enable` | bool | `true` | 是否启用性能分析 |
 | `sample_rate` | float | `1.0` | 按比例采样：每个请求以该概率记录（如 `0.05` = 5% 请求被采样）；`1.0` = 全采，`<=0` 或 `false` = 不采 |
+| `trigger_token` | string\|null | `null` | 按需触发采样：配置后，带请求头 `X-Xhprof-Token: <该值>` 的请求**强制采样**（无视 `sample_rate`，`0` 也采）；`null` 或空串 = 关闭，该请求头完全被无视。只认请求头、**不认 query**（query 会写进访问日志与 `Referer`）。它能强制任意请求全采样，密钥必须是够长的随机串且只发给可信的人 |
+| `auth_basic` | string\|null | `null` | HTTP Basic 凭据（`user:password`，第一个冒号分隔、密码可含冒号）。与 `auth_token` 是**或**关系：任一配置即生效、任一通过即放行；都不配 = 不鉴权。**Apache+CGI/FastCGI 默认剥离 `Authorization` 头**（需 `CGIPassAuth On`，2.4.13+），nginx+php-fpm 不受此限 |
+| `ip_allowlist` | array | `[]` | 报告页 IP 白名单，**逐字比对**：不支持 CIDR 网段、不做 IPv6 规范化（`2001:0db8::1` 与 `2001:db8::1` 是两个字符串）。空 = 关闭；写得不是数组 = 一律拒绝（fail closed，记一条 error 日志）。取值来自 `getRealIp()`，需与 `trusted_proxies` 一起理解 |
+| `trusted_proxies` | array | `[]` | **部署声明，不是技术强制**：声明「我前面有可信代理」后，`ip_allowlist` 才接受来自 `X-Forwarded-For`/`X-Real-IP` 的客户端 IP。多数适配器无条件取转发头——声明了也**挡不住伪造 XFF**，仅当部署在可信代理之后才安全 |
+| `webhook_url` | string\|null | `null` | 慢请求（`wt >= view_wtred`）落库后 POST JSON（`run_id`/`uri`/`wt`/`ct`/`ip`/`time`）到该地址。留空 = 不发送。**不是队列**：不等响应、无重试、无落盘补偿，端点慢或挂掉只丢这一条通知 |
+| `sample_cli` | bool | `false` | CLI/无 HTTP 请求也采样：`true` 时落库的 `request_uri` 记为 `cli:<脚本名>`；`false` = 一律忽略（默认，含队列 worker 与定时任务） |
+| `symbol_lookup_url` | string\|null | `null` | 源码链接模板：报告页渲染 `<模板>?symbol=<urlencoded 函数名>`；`null`/空 = 不显示链接 |
+| `max_runs_per_minute` | int\|null | `null` | 自适应预算：每分钟最多记录多少条（分钟桶计数，超出不采）；`null`/非正数 = 关闭。缓存不可用/抛异常时 fail-open（照常按 `sample_rate`）；**触发采样不受它限制** |
 | `time_limit` | int | `0` | 仅记录响应超过 n 秒的请求，0 表示全部 |
 | `log_num` | int | `1000` | 最大记录条数 |
 | `view_wtred` | int | `3` | 列表耗时超过 n 秒标红 |
@@ -413,6 +443,26 @@ php -S 127.0.0.1:8000 -t public public/index.php
 调低 `sample_rate` 是唯一的按比例降压手段（`0.05` = 只记录 5% 的请求）；`ignore_url_arr` 仍是整条路径的兜底，两者可叠加。判定发生在采样入口（每次请求一次），不影响已存数据的读取与保留。非法值（如 `'5%'`、`'disabled'`）按 `1.0` 处理：宁可多采，也不静默变成「什么都不采」，让报告页看起来像坏了。
 
 要清理性能数据：只清空列表页用 `DEL <prefix>:run_id`——数据键会随 `log_ttl` 自然过期，索引里的悬空 id 会被列表跳过；全清则把 `<prefix>:request_log:*` 与 `<prefix>:xhprof_log:*` 扫出来连同索引一起删（`DEL` 不接受通配符，先用 `redis-cli --scan --pattern '<prefix>:*'` 列出再删，别用 `KEYS`）。索引列表没有 TTL 是刻意的：它有界于 `log_num`，且只是指向数据键的指针（`<prefix>` 即本项目配置的 `key_prefix` 值）。
+
+**触发采样（`trigger_token`）**
+
+按需触发与按比例采样是两条独立轴，先判触发、再抽签：配上 `trigger_token` 后，生产环境可以把 `sample_rate` 压到 `0`（平时完全不采），要排查时给某个请求带上 `X-Xhprof-Token` 头，这次请求就会被完整采样。密钥比较用常量时间的 `hash_equals`；只在请求头上认，不要用 query 传（会写进访问日志、`Referer` 与浏览器历史）。触发不绕过 `ignore_url_arr`（报告页/静态资源请求即使带密钥也照常跳过），`enable: false` 依然是总开关。
+
+**报告页鉴权（`auth_token` 与 `auth_basic`）**
+
+`auth_token`（`?token=xxx`）与 `auth_basic`（HTTP Basic）是**或**关系：任一配置即生效、任一通过即放行；都不配 = 不鉴权（默认，每次渲染记一条警告日志）。Basic 凭据形如 `user:password`（第一个冒号分隔、密码可含冒号，用户名与密码两段都用 `hash_equals` 比对）；配了 Basic 而校验不通过时返回 401 并带 `WWW-Authenticate`——这是浏览器弹出凭据框的唯一触发方式，只用 token 且不通过则返回 403。**默认不鉴权是刻意的**：报告页由入口类在宿主鉴权**之前**接管，未配置时任何能访问到该路径的人都能读到全部 run 的请求 URI、来源 IP 与函数名，公网/多租户部署**必须**配上其中之一。**部署坑**：Apache + CGI/FastCGI 默认剥离 `Authorization` 头，Basic 会永远校不过（表现是一直 401）——需要 `CGIPassAuth On`（2.4.13+）或等效的转发变量；nginx + php-fpm 不受此限。
+
+**IP 白名单与可信代理（`ip_allowlist` / `trusted_proxies`）**
+
+白名单是**逐字比对**：不支持 CIDR 网段，也不做 IPv6 规范化（`2001:0db8::1` 与 `2001:db8::1` 是两个不同的字符串）；空 = 关闭；写得不是数组 = **一律拒绝**并记一条 error 日志（fail closed——静默关闭等于悄悄丢掉一层安全控制）。判定来源是适配器的 `getRealIp()`，而多数适配器收到 `X-Forwarded-For` / `X-Real-IP` 时**无条件**取转发头：直接拿它比对，任何客户端都能自报地址绕过白名单。所以还看 `trusted_proxies`：IP 值恰好来自转发头时，要求 `trusted_proxies` 非空，否则拒绝并记日志。**这是部署声明，不是技术强制**：声明了也挡不住伪造的 XFF，仅当部署在自己控制的代理之后才安全，中间跳数是否可信由你的代理配置负责。白名单闸门跑在凭据校验之前（拒绝即 403）。
+
+**慢请求 webhook（`webhook_url`）**
+
+响应耗时 `wt >= view_wtred` 的 run 落库后，向该地址 POST 一份 JSON（字段：`run_id` / `uri` / `wt` / `ct` / `ip` / `time`）。留空 = 不发送。**它不是队列**：fire-and-forget——连上、写完请求即断，不等响应、不读状态码，无重试、无落盘补偿，端点慢或挂掉只丢这一条通知（连接超时压到 200ms，DNS 解析不受此限）；任何失败只记一条 error 日志，绝不影响业务请求。列表页标红用的是严格 `>`，webhook 条件是 `>=`，边界差一档。
+
+**自适应预算（`max_runs_per_minute`）**
+
+每分钟最多记录多少条：计数的是**走到采样入口的请求数**（含没抽中的，判在抽签之前），超出即不采、下一分钟自动清零；`null`/非正数 = 关闭。计数走缓存：Redis 里会出现 `<key_prefix>:budget:<YmdHi>` 键（如 `xhprof:budget:202610032316`），首次 incr 时设 120 秒 TTL、过期自然清零——运维排查时看到它属于正常现象。缓存不可用/抛异常时 **fail-open**：照常按 `sample_rate` 采样，绝不因预算机制让请求失败或让采样静默停摆。**触发采样不受它限制**：拿着密钥来排查的人不该被预算挡在门外（判定顺序：触发 → 预算 → 抽签）。
 
 **报告页的语言切换器**
 
@@ -535,6 +585,7 @@ xhprof-webman/
 ├── tools/i18n/                   # README 与三张 SVG 的翻译工具链（生成 / 校验 / 自检）
 ├── docs/i18n/                    # 12 份译文产物（英文、韩语、俄语、德语、法语、西班牙语、葡萄牙语、阿拉伯语、印地语、孟加拉语、印尼语、日语）
 ├── tests/                        # PHPUnit：适配器单测、接线测试、Core 单测、14 份 README 的结构一致性
+├── demo/                         # docker compose 演示（原生 PHP 入口，不装环境看报告页）
 └── docs/images/                  # README 配图
 ```
 
@@ -544,7 +595,7 @@ xhprof-webman/
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <入口类>.php
-└── config/xhprof.php             # 10 个配置键，与其它框架一致
+└── config/xhprof.php             # 19 个配置键，与其它框架一致
 ```
 
 `src/Drupal/` 是唯一的例外：它没有 `config/`，配置改用模块内的 typed config（`drupal/xhprof/config/install/xhprof.settings.yml`）。
@@ -560,8 +611,8 @@ src/<Fw>/
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
 | 十二个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 9 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；原生 PHP / ThinkPHP / Hyperf 未入环，原因各不相同，见下 |
-| 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑 |
+| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 9 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；原生 PHP / ThinkPHP / Hyperf 未入环，原因各不相同，见下 |
+| 适配器语义正确 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑 |
 
 
 **未自动化验证的（不要当成已验过）**

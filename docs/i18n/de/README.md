@@ -4,6 +4,8 @@
 
 # XHProf Performance Profiler
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 Ein Plugin zur Performance-Profilerstellung für Code, kompatibel mit webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla und Drupal sowie reinem PHP (ohne Framework).
 
 Sammelt Profiling-Daten über die xhprof-Erweiterung und legt sie in Redis ab. Entwickler erreichen die Performance-Analyseberichte schnell über den Browser und finden so Performance-Engpässe im Code auf.
@@ -14,11 +16,11 @@ Dieselbe kleine Flamme ist auch das Site-Icon der Report-Seite, das Marken-Icon 
 
 **Request-Protokoll**
 
-![Request-Protokoll](../../../docs/images/runs-list.png)
+![Request-Protokoll](images/runs-list.png)
 
 **Report eines einzelnen Laufs**
 
-![Report eines einzelnen Laufs](../../../docs/images/run-report.png)
+![Report eines einzelnen Laufs](images/run-report.png)
 
 **Zwei Läufe vergleichen** — im „Request-Protokoll" genau zwei Zeilen ankreuzen (eine Checkbox pro Zeile, im Kopf „Alle auswählen") und auf „Ausgewählte vergleichen" klicken, um die Diff-Ansicht zu öffnen. Die beiden Seiten werden nach der Zeit geordnet (run1 = der frühere Lauf, run2 = der spätere, unabhängig von der aktuellen Sortierung der Liste); die Farben bedeuten Verbesserung / Regression „von run1 nach run2", und der Link „Diff-Report invertieren" in der Seite tauscht die beiden Seiten jederzeit.
 
@@ -71,6 +73,26 @@ xhprof.output_dir=/tmp/xhprof
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### Schnellstart
+
+Der kürzeste Weg in drei Schritten:
+
+1. **Erweiterung installieren** — `pecl install xhprof`, und in der php.ini einen Abschnitt `[xhprof]` ergänzen (`extension=xhprof.so`, `xhprof.output_dir=/tmp/xhprof`).
+2. **Redis starten** — `redis-server --daemonize yes`, oder eine bereits vorhandene Instanz verwenden (die Verbindungsdaten stehen im Unter-Array `redis` der `config/xhprof.php` des jeweiligen Frameworks).
+3. **Einbinden und Report-Seite öffnen** — `composer require aaron-dev/xhprof-webman`, in einem beliebigen Framework die Eintragsklasse gemäß „Framework-Konfiguration" einhängen, dann einen Business-Request auslösen und `http://<deine Seite>/xhprof` öffnen.
+
+> **Nichts installieren wollen?** `demo/` bringt eine sofort nutzbare Docker-Compose-Demo mit (nativer PHP-Einstieg, kein Framework): `cd demo && docker compose up -d`, dann `http://127.0.0.1:8080/xhprof` öffnen — schon erscheint eine echte Report-Seite; Erläuterungen in `demo/README.md`.
+
+### Fehlersuche
+
+| Symptom | Zuerst prüfen |
+|---------|---------------|
+| Die Report-Seite ist leer und die Liste enthält keine Läufe | Ist `enable` `true`; wurde `sample_rate` auf `0` gesetzt (dann werden nur Requests mit dem Header `X-Xhprof-Token` gesampelt); ist `<key_prefix>:run_id` in Redis leer |
+| Die Report-Seite liefert 403 / 401 | 403: `ip_allowlist` blockiert die aktuelle IP (oder die Request-IP stammt aus einem Weiterleitungs-Header, während `trusted_proxies` leer ist), oder `auth_token` ist gesetzt und die URL trägt kein `?token=`; 401 mit Browser-Anmeldedialog: `auth_basic` ist gesetzt und Benutzername bzw. Passwort stimmen nicht |
+| Fehler beim Verbinden mit Redis | Ist die redis-Erweiterung installiert (`php -m` zeigt `redis`), läuft Redis, stimmen host / port / password / database des Unter-Arrays `redis` mit der Instanz überein |
+| Die Erweiterung ist installiert, Business-Requests werden aber nicht gespeichert | Ist die Eintragsklasse wirklich eingehängt (siehe „Framework-Konfiguration"); trifft der Request-Pfad auf `ignore_url_arr`; ist `max_runs_per_minute` an der Obergrenze (darüber wird nichts gesampelt, bis die nächste Minute beginnt) |
+| Die Report-Seite öffnet sich, aber CSS/JS liefern 404 | Passt das `assets_url`-Präfix zum Deployment-Pfad; leitet der Reverse-Proxy dieses Präfix ebenfalls an die Anwendung weiter |
 
 ---
 
@@ -400,6 +422,14 @@ Alle Frameworks teilen diese Konfigurationsoptionen:
 |---------------|-----|----------|--------------|
 | `enable` | bool | `true` | Profiling ein-/ausschalten |
 | `sample_rate` | float | `1.0` | Proportionales Sampling: jeder Request wird mit dieser Wahrscheinlichkeit aufgezeichnet (z. B. `0.05` = 5 % der Requests); `1.0` = alles aufzeichnen, `<=0` oder `false` = nichts aufzeichnen |
+| `trigger_token` | string\|null | `null` | Bedarfsgesteuertes Sampling: sobald gesetzt, wird jeder Request mit dem Header `X-Xhprof-Token: <Wert>` **immer gesampelt** (ignoriert `sample_rate`, auch `0`); `null` oder leer = aus, der Header wird vollständig ignoriert. Nur der Request-Header zählt, **niemals ein Query-Parameter**. Er kann das vollständige Sampling beliebiger Requests erzwingen — daher einen langen Zufallswert verwenden und nur an vertrauenswürdige Personen weitergeben |
+| `auth_basic` | string\|null | `null` | HTTP-Basic-Zugangsdaten (`user:password`, getrennt am ersten Doppelpunkt; das Passwort darf Doppelpunkte enthalten). Eine **Oder**-Beziehung zu `auth_token`: eines konfiguriert wird durchgesetzt, eines bestanden lässt herein; keines konfiguriert = keine Authentifizierung. **Apache+CGI/FastCGI entfernt den Header `Authorization` standardmäßig** (benötigt `CGIPassAuth On`, 2.4.13+); nginx+php-fpm ist nicht betroffen |
+| `ip_allowlist` | array | `[]` | IP-Allowlist der Report-Seite, **byteweise** verglichen: keine CIDR-Bereiche, keine IPv6-Normalisierung (`2001:0db8::1` und `2001:db8::1` sind zwei verschiedene Strings). Leer = aus; ein Wert, der kein Array ist, **lehnt alles ab** (fail closed, ein error-Log-Eintrag). Der Wert stammt aus `getRealIp()` und ist zusammen mit `trusted_proxies` zu lesen |
+| `trusted_proxies` | array | `[]` | **Eine Deployment-Erklärung, keine technische Durchsetzung**: Erst nach der Erklärung „vor mir steht ein vertrauenswürdiger Proxy" akzeptiert `ip_allowlist` eine Client-IP aus `X-Forwarded-For`/`X-Real-IP`. Die meisten Adapter übernehmen Weiterleitungs-Header bedingungslos — die Erklärung **stoppt kein gefälschtes XFF**; sicher ist das nur hinter einem Proxy, den man selbst kontrolliert |
+| `webhook_url` | string\|null | `null` | Nach dem Speichern eines langsamen Laufs (`wt >= view_wtred`) wird JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) per POST an diese Adresse geschickt. Leer = nichts wird gesendet. **Keine Queue**: es wird nicht auf eine Antwort gewartet, ohne Wiederholungen und ohne Auslagerung auf die Platte; ein langsamer oder toter Endpunkt verliert nur diese eine Benachrichtigung |
+| `sample_cli` | bool | `false` | Auch CLI-/Requests ohne HTTP sampeln: bei `true` wird die `request_uri` eines gespeicherten Laufs als `cli:<Skriptname>` aufgezeichnet; `false` = stets ignoriert (Standard, inklusive Queue-Workern und Cronjobs) |
+| `symbol_lookup_url` | string\|null | `null` | Quellcode-Link-Vorlage: die Report-Seite rendert `<Vorlage>?symbol=<urlencodierter Funktionsname>`; `null`/leer = kein Link |
+| `max_runs_per_minute` | int\|null | `null` | Adaptives Budget: pro Minute werden höchstens so viele Läufe aufgezeichnet (minutengenauer Zähler; darüber wird nichts gesampelt); `null`/nicht positiv = aus. Ist der Cache nicht verfügbar oder wirft er, gilt fail-open (Sampling folgt wie gewohnt `sample_rate`); **vom Trigger ausgelöstes Sampling unterliegt ihm nicht** |
 | `time_limit` | int | `0` | Nur Requests über n Sekunden profilieren, 0 bedeutet alle |
 | `log_num` | int | `1000` | Maximale Anzahl Datensätze |
 | `view_wtred` | int | `3` | Zeilen mit Antwortzeit > n Sekunden rot hervorheben |
@@ -415,6 +445,26 @@ Die bekannten Einschränkungen dieser Optionen auf den einzelnen Frameworks steh
 Ein niedrigerer Wert für `sample_rate` ist der einzige Weg, den Overhead anteilig zu senken (`0.05` zeichnet 5 % der Requests auf); `ignore_url_arr` schließt weiterhin ganze Pfade aus, und beides lässt sich kombinieren. Die Entscheidung fällt einmal pro Request am Einstiegspunkt des Samplings und ändert nichts daran, wie bestehende Läufe gelesen oder aufbewahrt werden. Ungültige Werte (z. B. `'5%'`, `'disabled'`) werden wie `1.0` behandelt: lieber zu viel aufzeichnen, als stillschweigend gar nichts aufzuzeichnen und damit die Report-Seite wie defekt aussehen zu lassen.
 
 Zum Bereinigen der Profiling-Daten: Um nur das Request-Protokoll zu leeren, `DEL <prefix>:run_id` verwenden — die Datenschlüssel laufen über `log_ttl` von selbst ab, und im Index zurückgebliebene verwaiste IDs überspringt das Request-Protokoll; für eine vollständige Bereinigung `<prefix>:request_log:*` und `<prefix>:xhprof_log:*` aufsammeln und samt der Indexliste löschen (`DEL` akzeptiert keine Wildcards, die Schlüssel daher zuerst mit `redis-cli --scan --pattern '<prefix>:*'` auflisten und dann löschen — nicht `KEYS` verwenden). Dass die Indexliste keine TTL hat, ist Absicht: Sie ist durch `log_num` begrenzt und nur eine Zeigerliste auf die Datenschlüssel (`<prefix>` ist der für dieses Projekt konfigurierte Wert von `key_prefix`).
+
+**Ausgelöstes Sampling (`trigger_token`)**
+
+Bedarfsgesteuertes Auslösen und proportionales Sampling sind zwei unabhängige Achsen — zuerst wird der Trigger beurteilt, dann das Los: Ist `trigger_token` gesetzt, kann die Produktion `sample_rate` auf `0` drücken (im Normalbetrieb wird gar nichts gesampelt) und zur Untersuchung einen Request mit dem Header `X-Xhprof-Token` senden — dieser Request wird vollständig gesampelt. Der Schlüssel wird mit dem konstantzeitigen `hash_equals` verglichen; akzeptiert wird er nur im Request-Header — nicht im Query-String übergeben (Queries landen in Zugriffslogs, im `Referer` und im Browser-Verlauf). Ein Trigger umgeht `ignore_url_arr` nicht (Report-Seiten- und statische Asset-Requests werden auch mit Schlüssel weiterhin übersprungen), und `enable: false` bleibt der Hauptschalter.
+
+**Authentifizierung der Report-Seite (`auth_token` und `auth_basic`)**
+
+`auth_token` (`?token=xxx`) und `auth_basic` (HTTP Basic) sind eine **Oder**-Beziehung: eines konfiguriert wird durchgesetzt, eines bestanden lässt herein; keines konfiguriert = keine Authentifizierung (der Standard, mit einem Warn-Log-Eintrag pro Rendern). Basic-Zugangsdaten haben die Form `user:password` (getrennt am ersten Doppelpunkt; das Passwort darf Doppelpunkte enthalten, und sowohl Benutzername als auch Passwort werden mit `hash_equals` verglichen); ist Basic konfiguriert und schlägt die Prüfung fehl, lautet die Antwort 401 mit `WWW-Authenticate` — das Einzige, was den Browser seinen Anmeldedialog öffnen lässt — während ein reiner Token-Fehlschlag 403 zurückgibt. **Standardmäßig nicht zu authentifizieren ist eine bewusste Entscheidung**: Die Eintragsklasse übernimmt die Report-Seite **bevor** die Authentifizierung der Host-Anwendung läuft; ohne Konfiguration kann daher jeder, der diesen Pfad erreicht, die Request-URI, die Quell-IP und die Funktionsnamen sämtlicher Läufe lesen — öffentliche und Multi-Tenant-Deployments **müssen** eines der beiden konfigurieren. **Deployment-Falle**: Apache + CGI/FastCGI entfernt den Header `Authorization` standardmäßig, Basic passt daher nie (es kommt immer wieder 401) — nötig ist `CGIPassAuth On` (2.4.13+) oder eine gleichwertig weitergereichte Variable; nginx + php-fpm ist nicht betroffen.
+
+**IP-Allowlist und vertrauenswürdige Proxies (`ip_allowlist` / `trusted_proxies`)**
+
+Die Allowlist vergleicht **byteweise**: keine CIDR-Bereiche und keine IPv6-Normalisierung (`2001:0db8::1` und `2001:db8::1` sind zwei verschiedene Strings); leer = aus; ein Wert, der kein Array ist, **lehnt alles ab** und protokolliert einen error-Eintrag (fail closed — stilles Abschalten würde eine Sicherheitsschicht lautlos verlieren). Der geprüfte Wert stammt aus dem `getRealIp()` des Adapters, und die meisten Adapter übernehmen den Weiterleitungs-Header **bedingungslos**, sobald sie `X-Forwarded-For` / `X-Real-IP` sehen: Würde man diesen Wert direkt vergleichen, könnte jeder Client seine eigene Adresse fälschen und die Allowlist umgehen. Deshalb gibt es `trusted_proxies`: Stammt der IP-Wert tatsächlich aus einem Weiterleitungs-Header, ist eine nicht-leere `trusted_proxies`-Erklärung erforderlich, sonst wird der Request abgelehnt und protokolliert. **Das ist eine Deployment-Erklärung, keine technische Durchsetzung**: Sie stoppt kein gefälschtes XFF und ist nur sicher, wenn die Anwendung wirklich hinter einem selbst kontrollierten Proxy läuft — welche Hops dazwischen vertrauenswürdig sind, ist Sache der Proxy-Konfiguration. Das Allowlist-Gate läuft vor der Zugangsdatenprüfung (Ablehnung ist 403).
+
+**Webhook für langsame Requests (`webhook_url`)**
+
+Nach dem Speichern eines Laufs mit Antwortzeit `wt >= view_wtred` wird ein JSON-Payload (Felder: `run_id` / `uri` / `wt` / `ct` / `ip` / `time`) per POST an diese Adresse geschickt. Leer = nichts wird gesendet. **Es ist keine Queue**: fire-and-forget — verbinden, Request schreiben, Socket schließen, nie auf eine Antwort warten und nie den Statuscode lesen, ohne Wiederholungen und ohne Auslagerung auf die Platte; ein langsamer oder toter Endpunkt verliert schlicht diese eine Benachrichtigung (der Verbindungs-Timeout ist auf 200 ms zusammengedrückt, die DNS-Auflösung unterliegt ihm aber nicht). Jeder Fehlschlag protokolliert einen error-Eintrag und beeinträchtigt den Business-Request nie. Die Liste hebt Zeilen mit einem strikten `>` hervor, die Webhook-Bedingung ist dagegen `>=` — die Grenze unterscheidet sich um eine Stufe.
+
+**Adaptives Budget (`max_runs_per_minute`)**
+
+Pro Minute werden höchstens so viele Läufe aufgezeichnet: Gezählt wird **die Anzahl der Requests, die den Sampling-Einstiegspunkt erreichen** (auch die, die das Los verlieren — gezählt wird vor dem Ziehen); darüber hinaus wird nichts gesampelt, bis die Minute wechselt; `null`/nicht positiv = aus. Der Zähler liegt im Cache: In Redis erscheint ein Schlüssel `<key_prefix>:budget:<YmdHi>` (z. B. `xhprof:budget:202610032316`), der beim ersten incr eine TTL von 120 Sekunden erhält und von selbst wieder auf null abläuft — ihn bei einer Prüfung im Betrieb zu sehen, ist normal. Ist der Cache nicht verfügbar oder wirft er, gilt **fail-open**: Das Sampling folgt wie gewohnt `sample_rate`, und der Budget-Mechanismus lässt niemals einen Request fehlschlagen oder das Sampling stillschweigend ganz zum Erliegen kommen. **Vom Trigger ausgelöstes Sampling unterliegt ihm nicht**: Wer mit dem Schlüssel zur Untersuchung ankommt, soll nicht durch das Budget ausgesperrt werden (Entscheidungsreihenfolge: Trigger → Budget → Los).
 
 **Sprachumschalter auf der Report-Seite**
 
@@ -537,6 +587,7 @@ xhprof-webman/
 ├── tools/i18n/                   # Übersetzungswerkzeugkette für das README und die drei SVGs (Generieren / Prüfen / Selbsttest)
 ├── docs/i18n/                    # die 12 übersetzten Ergebnisse (Englisch, Koreanisch, Russisch, Deutsch, Französisch, Spanisch, Portugiesisch, Arabisch, Hindi, Bengali, Indonesisch, Japanisch)
 ├── tests/                        # PHPUnit: Adapter-Tests, Wiring-Tests, Core-Tests, strukturelle Parität über alle 14 READMEs
+├── demo/                         # Docker-Compose-Demo (nativer PHP-Einstieg, Report-Seite ohne Installation)
 └── docs/images/                  # README-Diagramme
 ```
 
@@ -546,7 +597,7 @@ Außer bei Drupal hat jedes `src/<Fw>/`-Verzeichnis dieselbe Form:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # dieselben 10 Konfigurationsschlüssel wie jedes andere Framework
+└── config/xhprof.php             # dieselben 19 Konfigurationsschlüssel wie jedes andere Framework
 ```
 
 `src/Drupal/` ist die eine Ausnahme: es hat kein `config/`-Verzeichnis — seine Konfiguration liegt in typisierter Konfiguration auf Modulebene (`drupal/xhprof/config/install/xhprof.settings.yml`).
