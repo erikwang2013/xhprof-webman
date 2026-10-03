@@ -3,7 +3,7 @@
  * Plugin Name: xhprof-webman
  * Plugin URI: https://github.com/erikwang2013/xhprof-webman
  * Description: 基于 xhprof 扩展 + Redis 的 PHP 性能采样，提供浏览器报告页。作为 mu-plugin 使用：不需要激活、不进数据库、升级不丢。
- * Version: 3.8.0
+ * Version: 3.9.0
  * Requires at least: 6.4
  * Requires PHP: 8.0
  * Author: erik
