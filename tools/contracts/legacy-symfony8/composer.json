@@ -1,0 +1,18 @@
+{
+    "name": "erikwang2013/xhprof-contracts-symfony8",
+    "description": "契约验证环的第三条腿：Symfony 8.1 + Laravel 13（主腿的 7.x 与 6.4 腿都覆盖不到的另一侧）。与主环共用同一份 cases/Symfony.php 与 cases/Laravel.php，只换 vendor 根（run.php --leg=symfony8）。**为什么要这条腿**：(1) Symfony 8 删掉了 `Request::get()`（7.4 起 trigger_deprecation、8.0 移除；8.1.8 的 Request.php 里已无此方法），而本包 src/Laravel/Adapter/RequestAdapter.php:22 正在用它 —— Laravel 12 的 get() 是 `return parent::get(...)`（且 12 线的约束是 symfony ^7.2，装不出 8.x），Laravel 13 把它内联成自己的一份拷贝；这个分界只有把真 13 + 真 8 装在一起跑才看得见，所以 laravel/framework 是这条腿的一部分，不是顺带装的。(2) Symfony 8.0 起 `EventSubscriberInterface::getSubscribedEvents()` 声明 `array`（6.4/7.x 无返回类型）—— 这条腿第一次跑就红在这里，是它有判别力的第一个证据。Symfony 8 要求 php >= 8.4.1（8.0 线 >= 8.4），故这条腿在 CI 里跑 PHP 8.5（contracts.yml 的 matrix 逐腿给 php，主腿/6.4 腿仍 8.3）。symfony/error-handler 与 symfony/var-dumper 是 http-kernel 的传递依赖、约束写的是 ^7.4|^8.0，不显式钉就会解析到 7.4 —— 那样这条腿就不是纯 8.x 线，而它的全部价值就在「这是 8.x」这句话上，故一并钉住。注意这条腿装了 symfony/mime（Laravel 13 的传递依赖），所以 Symfony case 走的是「有 mime、按内容嗅探」分支；无 mime 的 LogicException 分支由 6.4 腿覆盖。",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "laravel/framework": "^13.0",
+        "php": ">=8.4.1",
+        "symfony/error-handler": "^8.0",
+        "symfony/event-dispatcher": "^8.0",
+        "symfony/http-foundation": "^8.0",
+        "symfony/http-kernel": "^8.0",
+        "symfony/var-dumper": "^8.0"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

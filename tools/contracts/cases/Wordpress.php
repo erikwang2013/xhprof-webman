@@ -21,11 +21,13 @@ declare(strict_types=1);
  * `wp-settings.php`。本卡 2026-09-25 之前标 SKIP，理由是「php-stubs 的函数体是空的，加载它
  * 只能得到 null」——那半句是真的（桩确实空），但结论推错了：**要用真语义不必装站**。真
  * `wp-includes/{plugin,load,formatting,functions}.php` 只需 `ABSPATH`/`WPINC` 两个常量就能
- * 独立包含（实测 6.9.9 下 4 个文件 15ms，无 DB、无引导），里面是真实现：
+ * 独立包含（实测 7.1.2 下 4 个文件 31ms，无 DB、无引导），里面是真实现：
  * `wp_unslash()` 走 `stripslashes_deep()`（递归 + 非字符串透传）、`is_ssl()` 是真分支表、
  * `status_header()` 会过真 `apply_filters('status_header', ...)`、`add_action()` 背后是真的
  * `WP_Hook`。所以这张卡现在是 L2-lite：**真 WP 核心 + 真适配器**，只有缓存是假的
- * （采样链路本身由 Redis 卡用真服务器覆盖）。
+ * （采样链路本身由 Redis 卡用真服务器覆盖）。核心版本是**身份断言**：真核心自报的
+ * `$wp_version` 必须等于 composer 锁住的包版本（2026-10-04 升到 `^7.0` → 实测 7.1.2），
+ * 升版后对不上一律先红在「跑的是哪一版」这一步，再去逐条看语义差异。
  *
  * 仍在进程外跑：本 case 进程要加载 php-stubs 与 `tests/Stubs` 两份同名函数声明，与真 WP 核心
  * 撞函数名是加载期 fatal（不可 catch）。探针脚本写在临时文件里、由子进程执行，输出一份
@@ -350,7 +352,7 @@ $out['is_ssl'] = [
     'https_off_443' => $urlWith(['HTTPS' => 'off', 'SERVER_PORT' => 443]),
     'port_443' => $urlWith(['SERVER_PORT' => 443]),
     'port_80' => $urlWith(['SERVER_PORT' => 80]),
-    // 真 is_ssl() **不认** X-Forwarded-Proto（实测 6.9.9 与 6.6.2 一致）
+    // 真 is_ssl() **不认** X-Forwarded-Proto（实测 7.1.2 与 6.9.9 一致，与 6.6.2 的早期测量同结论）
     'xfp_https' => $urlWith(['HTTP_X_FORWARDED_PROTO' => 'https']),
 ];
 
@@ -499,6 +501,32 @@ PROBE);
             'skips' => 0,
         ];
     }
+
+    // 版本身份：真核心自己声明的 `$wp_version` 必须与 composer 锁住的包版本一致。
+    // 没有这条，「环跑的是哪一版 WP」只能靠 vendor 目录名猜 —— 目录名是 'wordpress-no-content'，
+    // 本卡早先的 FAIL 文案就把它当版本打出来过，是个会误导人的空话。
+    // 读取用文本匹配而不是 require：version.php 只是给几个变量赋值，但**匹配不到就红**
+    // （不是静默通过），比在断言进程里执行一个第三方文件更稳。
+    $wpVersionFile = $wpRoot . '/wp-includes/version.php';
+    $wpVersion = preg_match(
+        '/\$wp_version\s*=\s*[\'"]([^\'"]+)[\'"]/',
+        (string) @file_get_contents($wpVersionFile),
+        $wpVersionMatch
+    ) === 1 ? $wpVersionMatch[1] : null;
+    // 锁版从 composer.lock 直读（本 case 不 require 环的 autoloader，InstalledVersions 不在场；
+    // 而且 lock 才是 CI 真正照装的那份身份，比 vendor 里已装状态更贴题）。
+    $wpLocked = null;
+    foreach ((json_decode((string) @file_get_contents(contracts_dir() . '/composer.lock'), true)['packages'] ?? []) as $lockedPackage) {
+        if (($lockedPackage['name'] ?? '') === 'roots/wordpress-no-content') {
+            $wpLocked = $lockedPackage['version'] ?? null;
+            break;
+        }
+    }
+    $expect(
+        'WP 核心自报 $wp_version = composer.lock 锁住的包版本（本环跑的就是这一版）',
+        $wpVersion,
+        $wpLocked
+    );
 
     // 真 wp_unslash()：递归、非字符串透传、三个调用点都过它
     $expect('uri() 剥掉 REQUEST_URI 上的反斜杠（夹具确实带反斜杠）', $obs['request']['server_uri_raw'], "/xhprof?run=a\\'b&x=1");
@@ -749,7 +777,7 @@ PROBE);
         return [
             'status' => 'FAIL',
             'detail' => count($failures) . '/' . $checks . " 项断言失败（L2-lite 真 WP 核心源码 + L3 真 WP 引导，"
-                . 'WordPress ' . basename($wpRoot) . "）：\n  - " . implode("\n  - ", $failures)
+                . 'WordPress ' . var_export($wpVersion, true) . "）：\n  - " . implode("\n  - ", $failures)
                 . "\n（L3 夹具留在 {$site}，可进去复现）",
             'skips' => 0,
         ];
@@ -759,7 +787,9 @@ PROBE);
 
     return [
         'status' => 'PASS',
-        'detail' => count($sources) . ' 个源文件语法通过；源码里的 '
+        'detail' => 'WordPress ' . $wpVersion . '（composer 锁定 roots/wordpress-no-content ' . $wpVersion . '，'
+            . '核心自报版本与包版本已互相钉住）；'
+            . count($sources) . ' 个源文件语法通过；源码里的 '
             . count(WORDPRESS_EXPECTED_FUNCTIONS) . ' 个 WP 全局函数（'
             . implode('、', WORDPRESS_EXPECTED_FUNCTIONS) . '）在真实 wordpress-stubs 中逐一存在，'
             . '参数名/可选性/默认值/返回类型与 tests/Stubs/Framework/Wordpress.php 逐字段一致；'
@@ -773,6 +803,7 @@ PROBE);
             . 'do_action(plugins_loaded) 真调到本包处理器（正对照：普通插件 @10 同轮也跑了）；'
             . '正常与**致命错误**两条路径下 WP 都触发了 shutdown 动作、本包止点都执行了、'
             . '采样都真的落了库（Redis 里按 run_id 差分验证，跑完按 id 删净）。',
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

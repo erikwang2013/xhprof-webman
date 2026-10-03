@@ -1,6 +1,6 @@
 {
     "name": "erikwang2013/xhprof-contracts",
-    "description": "契约验证环：用真实 PSR 包校验 tests/Stubs 的框架桩与真实框架 API 是否一致。独立嵌套项目，不与主仓库共享依赖。",
+    "description": "契约验证环：用真实 PSR 包校验 tests/Stubs 的框架桩与真实框架 API 是否一致。独立嵌套项目，不与主仓库共享依赖。主腿是 PHP 8.3 线（contracts.yml 的 matrix 逐腿 pin：主腿/6.4 腿 8.3，symfony8 腿 8.5）；config.platform.php 把**解析平台**钉在 8.3，这样在更高版本的开发机（本机 8.5.6）上跑 composer update 也不会解析出要求 > 8.3 的包 —— 那种锁在 CI 上装不上，而「装不上」与「验不过」是两回事，别让它变成某天突然的 CI 噪声。legacy-symfony8 是独立嵌套项目、有自己的 platform 语义（php >= 8.4.1）。",
     "type": "project",
     "license": "MIT",
     "repositories": [
@@ -21,18 +21,18 @@
             }
         },
         {
-            "description": "Joomla CMS 5.2.2 官方发布包（**完整包**，非 update/patch 包：只有完整包自带可用的 libraries/vendor/autoload.php，仓库里的 tarball 没有 libraries/vendor）。Joomla\\CMS\\* 不在 packagist 上，只能这样锁进 composer；版本与 sha1 都钉死。故意**不声明 autoload**：环自己的进程绝不能自动加载到 CMS（会与 tests/Stubs 的桩撞名），只有 cases/Joomla.php 起的子进程显式 require 它的 libraries/vendor/autoload.php。",
+            "description": "Joomla CMS 5.4.9 官方发布包（**完整包**，非 update/patch 包：只有完整包自带可用的 libraries/vendor/autoload.php，仓库里的 tarball 没有 libraries/vendor）。Joomla\\CMS\\* 不在 packagist 上，只能这样锁进 composer；版本与 sha1 都钉死。故意**不声明 autoload**：环自己的进程绝不能自动加载到 CMS（会与 tests/Stubs 的桩撞名），只有 cases/Joomla.php 起的子进程显式 require 它的 libraries/vendor/autoload.php。",
             "type": "package",
             "package": {
                 "name": "joomla/cms-full-package-5",
-                "version": "5.2.2",
-                "description": "Joomla! CMS 5.2.2 full release package (official GitHub release asset, no autoload on purpose).",
+                "version": "5.4.9",
+                "description": "Joomla! CMS 5.4.9 full release package (official GitHub release asset, no autoload on purpose).",
                 "type": "library",
                 "license": "GPL-2.0-or-later",
                 "dist": {
-                    "url": "https://github.com/joomla/joomla-cms/releases/download/5.2.2/Joomla_5.2.2-Stable-Full_Package.zip",
+                    "url": "https://github.com/joomla/joomla-cms/releases/download/5.4.9/Joomla_5.4.9-Stable-Full_Package.zip",
                     "type": "zip",
-                    "shasum": "1767712af0a714deaea2b597742150ecf193d15a"
+                    "shasum": "111a03c2c65f28bdb67935c7a7486bb68507cec1"
                 }
             }
         },
@@ -42,7 +42,7 @@
             "url": "https://asset-packagist.org"
         },
         {
-            "description": "Joomla CMS 4.4.14 官方发布包（完整包；用来钉住 4.4 与 5.x 的差异 —— 最要紧的是 CMSPlugin::__construct：4.4 是 `(&$subject, $config = [])` 第一个参数按引用且无型别，5.x 是 `(DispatcherInterface $dispatcher, array $config = [])`）。同样不声明 autoload。",
+            "description": "Joomla CMS 4.4.14 官方发布包（完整包；用来钉住 4.4 与 5.x 的差异 —— 最要紧的是 CMSPlugin::__construct：4.4 是 `(&$subject, $config = [])` 第一个参数按引用且无型别，5.4.9 是 `($config = [])` 单参，首参传 DispatcherInterface 的写法仍被接住但已弃用、7.0 移除）。4.4.14 是 4.4 线的最后一版（2025-09-30 发布，4.4 已停止维护，不会再有 4.4.15），所以这枚钉子不会被「版本过期」追着走。同样不声明 autoload。",
             "type": "package",
             "package": {
                 "name": "joomla/cms-full-package-4",
@@ -62,31 +62,35 @@
         "php": ">=8.2",
         "drupal/core": "^11.4",
         "joomla/cms-full-package-4": "4.4.14",
-        "joomla/cms-full-package-5": "5.2.2",
+        "joomla/cms-full-package-5": "5.4.9",
         "joomla/event": "^3.0",
         "joomla/input": "^3.0",
         "joomla/registry": "^3.0",
         "joomla/uri": "^3.0",
-        "laravel/framework": "^11.0",
+        "laravel/framework": "^12.0",
         "nyholm/psr7": "^1.8",
         "nyholm/psr7-server": "^1.1",
         "php-stubs/wordpress-stubs": "*",
         "psr/http-factory": "^1.0",
         "psr/http-message": "^2.0",
-        "roots/wordpress-no-content": "^6.9",
+        "roots/wordpress-no-content": "^7.0",
         "slim/psr7": "^1.8",
         "slim/slim": "^4.12",
         "symfony/event-dispatcher": "^7.0",
         "symfony/http-foundation": "^7.0",
         "symfony/http-kernel": "^7.0",
         "symfony/mime": "^7.0",
+        "topthink/framework": "^8.0",
         "wordpress/sqlite-database-integration": "3.0.2",
         "workerman/webman-framework": "^2.2",
         "yiisoft/di": "^1.0",
-        "yiisoft/yii2": "^2.0",
-        "yiisoft/middleware-dispatcher": "^5.0"
+        "yiisoft/middleware-dispatcher": "^5.0",
+        "yiisoft/yii2": "^2.0"
     },
     "config": {
+        "platform": {
+            "php": "8.3.0"
+        },
         "allow-plugins": {
             "drupal/core-composer-scaffold": false,
             "yiisoft/yii2-composer": true,

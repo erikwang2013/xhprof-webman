@@ -40,14 +40,18 @@ declare(strict_types=1);
  *     配置文件**、`Xhprof::bootstrap()` 把配置灌进静态量、`Webman\StaticController::serve()`
  *     的四条路径（命中 / 不存在 / `..` / 空路径）与 Content-Type 钉头、配置化 assets_url
  *     的前缀跟随。
- *   - **不**覆盖：真 HTTP 往返与 workerman 事件循环（`Worker::runAll()` 起的服务器）。本卡直接
- *     构造 `Webman\Http\Request`（真包构造函数，raw 报文）+ 用 `Webman\Context::set()` 摆出
- *     framework 自己每请求都会摆的那份状态 —— 这是 webman 的公开 API，`Webman\App::request()`
- *     的实现就是读它。
+ *   - ①–⑤ 直接构造 `Webman\Http\Request`（真包构造函数，raw 报文）+ 用 `Webman\Context::set()`
+ *     摆出 framework 自己每请求都会摆的那份状态 —— 这是 webman 的公开 API，`Webman\App::request()`
+ *     的实现就是读它。**⑥** 补上真 HTTP 往返与 workerman 事件循环：`Worker::runAll()` 起真服务器
+ *     （`Events\Fiber`，每回调一层 Fiber），真 TCP 发两个请求在同一 worker 里**协程交错** ——
+ *     A 渲染到一半真挂起、B 把整页渲染完（此刻 A 必须还没醒）、A 被事件循环唤醒后接着渲染完。
+ *   - **⑥ 的边界**：本环没有异步 Redis 客户端，所以"渲染中途那次会让出协程的 Redis GET"用缓存桩里
+ *     一次**真 socket 等待**顶上（Revolt onReadable + `Fiber::suspend()`；挂起的是同一条渲染调用栈、
+ *     唤醒它的是同一个事件循环）。验的是"协程让出后每请求状态不串"，不是"真 Redis 客户端会让出"。
  *   - **不**覆盖：`Request::getRealIp()` 里"远端 IP 非内网就直接返回它、不看 XFF"那条短路。
- *     它要 `$request->connection`（真 TcpConnection，受 workerman 事件循环约束）才可达，本环
- *     起不了服务器。已用真包的 `isIntranetIp()` 谓词逐项钉住该分支的**判据**（6 项断言），
- *     所以少的只是"那一行 return 被执行过"，不是"判据没验"。不记 SKIP：这是**框架内部**分支，
+ *     safeMode 的判据已用真包 `isIntranetIp()` 逐项钉住（6 项断言），⑥ 里又加了一条**真连接**
+ *     实测（remote=127.0.0.1 内网 → 看 XFF 首项）。缺的只剩"远端是公网 IP 时那一行 return 被
+ *     执行过" —— 本环的请求只能从环回地址发，没有判别性输入。不记 SKIP：这是**框架内部**分支，
  *     不在本仓适配器契约面上；SKIP 留给"整块适配器语义验不了"（WordPress 那类）。
  */
 
@@ -583,6 +587,63 @@ PHP);
         );
     }
 
+    // ================= ⑥ 真服务器 + 真 TCP：两请求在同一 worker 里协程交错 =================
+    //
+    // ①–⑤ 都直接构造 Request 调适配器，从不跑 `Worker::runAll()`。而「常驻 worker 里一个请求
+    // 渲染到一半让出、另一个请求把整页渲染完」只有真事件循环里才存在 —— 也正是在生产里把每请求
+    // 静态量搅在一起的那种形状。探针（lib/webman-coroutine-interleave.php）起真 workerman 服务器
+    // （`Events\Fiber` 每回调一层 Fiber；Http 协议按 stock webman 换成 `support\Request`），
+    // 顺序确定、不靠 sleep 竞速：A 渲染到 `:request_log:` 读时真挂起（Revolt onReadable +
+    // `Fiber::suspend()`）→ B 经**真 TCP** 整页渲染完（此刻 A 必须还没醒）→ 写下"A 的 Redis 回包"
+    // → A 被事件循环唤醒、接着渲染完 → 父进程读回两条响应。断言全部落在探针报出的字段上；
+    // 探针自带看门狗（40s 报警 + SIGTERM 收摊并等 3s 再 SIGKILL），因为 contracts_run_php
+    // 没有超时、也不会替它收尸。
+    $interleave = contracts_run_php([
+        contracts_dir() . '/lib/webman-coroutine-interleave.php',
+        $repoRoot,
+        contracts_dir() . '/vendor/autoload.php',
+        '0',                              // 端口 0 = 探针自己挑空闲端口（并发跑用例不会撞端口）
+    ]);
+    $il = json_decode(trim($interleave['stdout']), true);
+    $checks++;
+    if (!is_array($il) || ($il['error'] ?? null) !== null) {
+        $failures[] = '⑥ 协程交错探针未跑通（exit ' . $interleave['code'] . '）：' . trim((string) (
+            $il['error'] ?? ($interleave['stderr'] !== '' ? $interleave['stderr'] : $interleave['stdout'])
+        ));
+    } else {
+        $obsA = $il['obs'][$il['run_a']] ?? [];
+        $obsB = $il['obs'][$il['run_b']] ?? [];
+
+        // 先钉"这一跑确实是那个形状"：真服务器、真 Events\Fiber、A 真挂起过、B 跑完时 A 还没醒。
+        // 醒不醒由父进程决定（只有 /__go 会写那个 fd），所以这几条是确定性断言，不是抢跑。
+        $expect('⑥ 探针正常收尾（stage=done）', $il['stage'] ?? null, 'done');
+        $expect('⑥ 服务器事件循环是 workerman 的 Events\Fiber', $il['server']['event_loop_class'] ?? null, \Workerman\Events\Fiber::class);
+        $expect('⑥ 请求类与 stock webman 一致（support\Request，正对照）', [$obsA['req_class'] ?? null, $obsB['req_class'] ?? null], [\support\Request::class, \support\Request::class]);
+        $expect('⑥ A 在渲染中途真挂起过（不是没走到）', $il['suspends'] ?? null, 1);
+        $expect('⑥ B 整页渲染完时 A 还没被唤醒（顺序确定）', $il['resumes_at_b_done'] ?? null, 0);
+        $expect('⑥ /__go 之后 A 被事件循环真唤醒（恰好一次）', $il['resumes_at_end'] ?? null, 1);
+        $expect('⑥ /__go 有应答（那次写真的发生了）', $il['go_answered'] ?? null, true);
+        // 两个请求都在真 Fiber 里、后端解析出的都是 workerman 的协程 Context —— 不是 null、
+        // 不是静态回退。这是本仓 xhprof 侧要报的事实，探针原样带出来。
+        $expect('⑥ 两个请求都在协程里（isCoroutine + Fiber::getCurrent）', [$obsA['is_coroutine'] ?? null, $obsA['fiber'] ?? null, $obsB['is_coroutine'] ?? null, $obsB['fiber'] ?? null], [true, true, true, true]);
+        $expect('⑥ 后端解析 = Workerman\Coroutine\Context（真服务器里两请求一致）', [$obsA['context_class'] ?? null, $obsB['context_class'] ?? null], [\Workerman\Coroutine\Context::class, \Workerman\Coroutine\Context::class]);
+        // 隔离本体：A 的页面必须是 A 的 run。串扰在这里有三种醒目形状，逐条钉住 ——
+        // 函数名列被 B 覆盖（函数名错）、排序跟着 B 的 sort 参数走（**行序**错）、
+        // 指标列多出 B 才有的 pmu（列集合错）。
+        $expect('⑥ A 的页面是 A 的 run（函数名 + 行序都按 A 自己的 wt）', $il['rows_a'] ?? null, ['main()', 'zzz()', 'aaa()']);
+        $expect('⑥ B 的页面是 B 的 run', $il['rows_b'] ?? null, ['main()', 'other()']);
+        $expect('⑥ B 的 pmu 指标列没漏进 A（列集合隔离）', $il['pmu_in_a'] ?? null, false);
+        $expect('⑥ B 的页面有 pmu（对照：该字段本来就随 run 变）', $il['pmu_in_b'] ?? null, true);
+        $expect('⑥ 语言也没串（A=en、B=zh-CN，各自上下文里协商）', [$il['lang_a'] ?? null, $il['lang_b'] ?? null], ['en', 'zh-CN']);
+        // 真 TCP 连接的顺带收获：这条请求的 `$request->connection` 是**真 TcpConnection**，
+        // ② 里只能验"无连接 → 0.0.0.0 兜底"，这里验"有连接且 remote 是内网环回 → 看 XFF 首项"。
+        $expect(
+            '⑥ 真连接下 getRealIp 走 XFF 首项（remote=127.0.0.1 → 内网）',
+            [$obsA['remote_ip'] ?? null, $obsA['is_intranet'] ?? null, $obsA['real_ip'] ?? null],
+            ['127.0.0.1', true, '9.9.9.9']
+        );
+    }
+
     // 清理：临时目录里只有本进程生成的东西
     $rmrf = static function (string $path) use (&$rmrf): void {
         if (is_dir($path)) {
@@ -616,7 +677,11 @@ PHP);
             . '参数合并 query 胜（与真包 input() 同口径）、getRealIp 的 XFF 首项与 isIntranetIp 判据、'
             . 'withStatus/withHeaders/withBody/withFile 就地改 $this、withHeaders 的 merge_recursive 坑、'
             . 'file() 需 Webman Context、Clean 子进程里真 response()->file() + 真配置文件驱动的'
-            . 'ConfigAdapter/bootstrap/StaticController（含非默认 assets_url 前缀跟随）',
+            . 'ConfigAdapter/bootstrap/StaticController（含非默认 assets_url 前缀跟随）；'
+            . '⑥ 真 workerman 服务器（Events\Fiber + support\Request）上两请求协程交错：'
+            . 'A 渲染中途真挂起、B 整页渲染完时 A 未醒、唤醒后 A 的页面仍是 A 的 run/语言/指标列'
+            . '（附真连接下的 getRealIp）',
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

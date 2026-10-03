@@ -315,6 +315,7 @@ return static function (): array {
             . ' → 列表页含 run_id 与请求 URI → 从列表页抓 href 请求报告页 → run_desc/main()/URI 均渲染出来'
             . '；ignore_url_arr 命中不落库；原语 set(ttl>0)=SETEX、set(ttl 缺省)=SET 且永不过期、'
             . '裸 phpredis mget([])=false 且零命令 vs 适配器 []；惰性建连只在未注入时生效',
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

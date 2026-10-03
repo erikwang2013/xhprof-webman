@@ -1177,6 +1177,7 @@ PHP;
         'status' => 'PASS',
         'detail' => $note . ' —— ' . $checks . ' 项断言全部通过'
             . ($ext ? '' : '；' . $extDeclared . ' 项采样断言因缺 ext-xhprof 未验'),
+        'assertions' => $checks,
         'skips' => $skips + ($ext ? 0 : $extDeclared),
     ];
 };

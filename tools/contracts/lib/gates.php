@@ -65,20 +65,64 @@ function contracts_case_skips(string $status, int $declaredSkips): int
 }
 
 /**
- * 环的终审判决：'FAIL' | 'SKIP-MISMATCH' | 'OK'。
+ * 每个 case 的**断言数下限**核对（run.php 的 EXPECTED_ASSERTIONS，逐腿）。
  *
- * FAIL 优先于 SKIP-MISMATCH：真有 case 失败时，SKIP 数对不对没人关心，
- * 「看哪一行 FAIL」才是该引导人去看的结论（两者都非零退出，含义完全不同，
- * 混在一起会把人引去查错方向）。SKIP 必须**恰好**等于冻结常量：多了是覆盖面变了，
- * 少了等于少签一个字 —— 两个方向都判不符。
+ * 这个闸门防的只有一件事：**编辑型缩水** —— 有人在 case 里加早退、把断言包进没跑到的分支、
+ * 或整段删掉，而 status 仍是 PASS。SKIP 冻结常量防的是「跳过」，防不了这个。
+ *
+ * 规则：`观测值 >= 下限`。用「≥」不用「==」是有意的 —— 加断言不该红（那是变强），
+ * 掉断言必须红（那是变弱）；等号会让每次加强 case 都变成需要改常量的琐事，而琐事会训练人
+ * 闭眼改常量，反而把闸门变软。代价（诚实标注）：换掉 M 条再补 M 条等量、但更弱的断言，
+ * 这条闸门看不出来 —— 那类腐化只能靠 case 内容评审与变异测试，不在这条闸门的射程内。
+ *
+ * `$observed` 只装 **PASS 的 case**（名字 => 断言数），由调用点过滤：FAIL/SKIP 的 case 由别的
+ * 闸门说话，把它们的 0 也拿来比只会把「哪一行真出事了」搅浑。反向也要堵：**表里没有的
+ * case 名字一律算问题**（新 case 要签字才能进环），否则「把 case 改名/复制成新文件」就能
+ * 绕开下限。
+ *
+ * @param array<string, int> $observed
+ * @param array<string, int> $floors
+ * @return list<string> 问题清单（空 = 全部达标）
  */
-function contracts_verdict(int $failed, int $skipped, int $expectedSkips): string
+function contracts_assertion_floor_errors(array $observed, array $floors): array
+{
+    $problems = [];
+    foreach ($observed as $name => $count) {
+        if (!array_key_exists($name, $floors)) {
+            $problems[] = "{$name}：不在冻结下限表里（新增/改名的 case 要签字进环；本次实测 {$count} 条断言）";
+            continue;
+        }
+        if ($count < $floors[$name]) {
+            $problems[] = "{$name}：{$count} < 冻结下限 {$floors[$name]}（掉了 " . ($floors[$name] - $count) . ' 条）';
+        }
+    }
+
+    return $problems;
+}
+
+/**
+ * 环的终审判决：'FAIL' | 'SKIP-MISMATCH' | 'ASSERTION-SHRINK' | 'OK'。
+ *
+ * 优先级 = 诊断顺序，理由逐条：
+ *   - FAIL 优先于一切：真有 case 失败时，「看哪一行 FAIL」才是该引导人去看的结论
+ *     （混在一起会把人引去查错方向）。
+ *   - SKIP-MISMATCH 优先于 ASSERTION-SHRINK：环境降级（缺 ext-xhprof / ext-redis）会**同时**
+ *     让两个闸门响 —— 断言数掉了，SKIP 数也涨了。而前者是后者的**后果**（那些断言就是被
+ *     环境门控掉的），此时正确的结论是「覆盖面签字变了」，不是「有人删了断言」。
+ *     SKIP 恰好、断言数却掉了，才是编辑型缩水的签名 —— 那正是 SHRINK 单独出场的时刻。
+ *   - SKIP 必须**恰好**等于冻结常量：多了是覆盖面变了，少了等于少签一个字，两个方向都判不符。
+ */
+function contracts_verdict(int $failed, int $skipped, int $expectedSkips, int $shrunk = 0): string
 {
     if ($failed > 0) {
         return 'FAIL';
     }
 
-    return $skipped !== $expectedSkips ? 'SKIP-MISMATCH' : 'OK';
+    if ($skipped !== $expectedSkips) {
+        return 'SKIP-MISMATCH';
+    }
+
+    return $shrunk > 0 ? 'ASSERTION-SHRINK' : 'OK';
 }
 
 /**

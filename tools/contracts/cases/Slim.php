@@ -482,6 +482,7 @@ return static function (): array {
         'status' => 'PASS',
         'detail' => "L1 签名存在 + L2 真实 slim/slim 4.15.3 语义，PSR-7 用 nyholm/psr7 与 slim/psr7 两种实现各跑一套，"
             . "共 {$checks} 项断言通过（含 add() 顺序 LIFO、getResponseFactory() 返回类型、类名字符串解析、body 就地写）",
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

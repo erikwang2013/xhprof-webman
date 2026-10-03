@@ -580,6 +580,7 @@ return static function (): array {
             . "共 {$checks} 项断言通过（含 withMiddlewares 顺序=第一位最外层、__construct 无 middlewares 参数、"
             . "实例定义在 dispatch 期抛 TypeError、DI 自动装配走反射默认值、报告页/资源短路、R-1~R-7）。"
             . ' ' . $redisNote,
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

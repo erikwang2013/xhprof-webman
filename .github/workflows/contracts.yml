@@ -5,12 +5,16 @@ name: Contracts
 # 而 ci.yml 的 test job 跑的是零运行依赖的单测，两者的失败含义完全不同。
 # 也因此 `tools/` 不进 ci.yml 的 `find src tests` —— ci.yml 保持零改动。
 #
-# 两条腿（matrix）：README 声明 Symfony 支持 `^6.4|^7.0`，而一个 composer 项目里装不下两版
-# （laravel/framework v11 要求 symfony/http-foundation ^7.2），所以 6.4 那条腿是**独立嵌套
+# 三条腿（matrix）：README 声明 Symfony 支持 `^6.4|^7.0`，而一个 composer 项目里装不下两版
+# （laravel/framework 12+ 要求 symfony/http-foundation ^7.2），所以 6.4 那条腿是**独立嵌套
 # 项目** tools/contracts/legacy-symfony64，跑的是同一份 cases/Symfony.php —— run.php
-# `--leg=symfony64` 只把 vendor 根换过去，不复制 case 文件。
-# 两条腿都必须在：只跑 7.x 时，一条只在 6.4 上不成立的断言（6.4 的属性没有原生类型声明、
-# prepare() 补的 charset 大小写不同）永远不会被看见 —— 上一轮就是靠手工探针才抓到的。
+# `--leg=symfony64` 只把 vendor 根换过去，不复制 case 文件。第三条腿 legacy-symfony8 同形，
+# 装 Symfony 8.1 + Laravel 13（跑 Symfony.php + Laravel.php）：Symfony 8 删掉了
+# `Request::get()`（7.4 弃用、8.0 移除）而本包 Laravel 适配器正在用它，这个差异只在真 8.x 上
+# 看得见；Symfony 8 要求 PHP >= 8.4.1，所以 php 进了 matrix **逐腿给**（前两条腿仍是 8.3）。
+# 三条腿都必须在：只跑 7.x 时，一条只在 6.4 上不成立的断言（6.4 的属性没有原生类型声明、
+# prepare() 补的 charset 大小写不同）永远不会被看见 —— 上一轮就是靠手工探针才抓到的；
+# 8.x 同理（getSubscribedEvents() 的返回类型 8.0 起变成 array，第一次跑 8 腿就红在这）。
 
 on:
   push:
@@ -36,15 +40,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 主腿：cases/*.php 全部，用 tools/contracts/vendor（当前 Symfony 7.4 线）。
+          # 主腿：cases/*.php 全部，用 tools/contracts/vendor（当前 Laravel 12 + Symfony 7.4 线）。
           - leg: main
             install_dir: tools/contracts
+            # 与 6.4 腿同为 8.3：tools/contracts 的两个 composer.json 都要求 php >= 8.2，
+            # 不写死版本的话 runner 默认 PHP 变了会变成"环在某天开始失败"的噪声。
+            php: '8.3'
           # 第二腿：Symfony 6.4 线，只跑 Symfony.php（别的 case 与 Symfony 的版本矩阵无关，
           # 主腿已用各自的最新包跑过）。它没装 symfony/mime，于是恰好走到 MIME 陷阱的**另一
           # 条分支**（不钉 Content-Type 时 prepare() 直接抛 LogicException）—— 与主腿的
           # 「有 mime、按内容嗅探」互补，两条腿合起来才把那个陷阱的两个分支都钉住。
           - leg: symfony64
             install_dir: tools/contracts/legacy-symfony64
+            php: '8.3'
+          # 第三腿：Symfony 8.1 + Laravel 13（跑 Symfony.php + Laravel.php）。php 只能 8.4.1+：
+          # Symfony 8 的硬门槛（8.0 线 >= 8.4，8.1 线 >= 8.4.1，composer.json 里如实写死），
+          # 选 8.5 的理由：与本仓开发机（PHP 8.5.6）同一条线，且 ci.yml 的 test
+          # matrix 里本就有 8.5 —— 不是引入一条没人测过的版本线。这条腿的 vendor 同时装了
+          # symfony/mime（Laravel 13 传递依赖），所以它走的是「有 mime、按内容嗅探」那条分支，
+          # 与 6.4 腿的无 mime 分支互补（两条都不是 skip：case 里两种环境各有一条真断言）。
+          - leg: symfony8
+            install_dir: tools/contracts/legacy-symfony8
+            php: '8.5'
 
     # cases/Redis.php 是**真 Redis 端到端**（业务请求 → 落库 → 报告页读回），前置就是
     # 127.0.0.1:6379 上有一个真服务器。用 service container 而不是 step 里现装：
@@ -66,20 +83,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          # 两个 tools/contracts*/composer.json 都要求 php >= 8.2（对齐 ci.yml 的 test job）。
-          # 不写死版本的话，runner 默认 PHP 变了会变成"环在某天开始失败"的噪声。
-          php-version: '8.3'
+          # 逐腿给 php（matrix.php），不是全局一个：主腿与 6.4 腿仍是 8.3（两个
+          # tools/contracts*/composer.json 都要求 php >= 8.2，对齐 ci.yml 的 test job），
+          # 而 symfony8 腿的 Symfony 8 硬门槛是 >= 8.4.1。不写死版本的话，runner 默认
+          # PHP 变了会变成"环在某天开始失败"的噪声。
+          php-version: ${{ matrix.php }}
           # 必须显式装 xhprof（与 ci.yml 一致）。理由不是"多测一点"：几个 case 在缺
           # ext-xhprof 时会把采样类断言**诚实地计入 SKIP**而不是静默通过，于是
-          # run.php 的 SKIP 总数会随环境漂移（本机两条腿合计 8；缺扩展时仅 Symfony 一个
-          # case 就会多出 36），而两条腿的期望 SKIP 都是冻结常量 —— 它们一旦随环境变化，
-          # 这道签字闸门就失去意义。
+          # run.php 的 SKIP 总数会随环境漂移（三条腿的冻结值合计 2：main 2 / symfony64 0 /
+          # symfony8 0；缺扩展时仅 Symfony 一个 case 就会多出 36——该 case 的 no-ext 守卫
+          # 此前是死码、缺扩展会 fatal，2026-10-04 修好后此表才成立），而三条腿的期望 SKIP
+          # 都是冻结常量 —— 它们一旦随环境变化，这道签字闸门就失去意义。
           extensions: xhprof, redis
           coverage: none
       # 与 release.yml 的契约腿缓存**同名同键**（同一份 composer.lock、同一个 vendor 路径）：
       # 两份 workflow 并行触发，先跑完的那个暖缓存，另一个直接命中 —— 键若各自起名，
-      # 同一份依赖会在同一次 push 里被下载两遍。两条腿的路径不同，故拆成两条带 if 的
-      # 步骤，键与 release.yml 那两条逐字一致（改一处就得两处一起改）。
+      # 同一份依赖会在同一次 push 里被下载两遍。三条腿的路径不同，故拆成三条带 if 的
+      # 步骤，键与 release.yml 那三条逐字一致（改一处就得两处一起改）。
       - name: Cache main-leg contract vendor
         if: matrix.leg == 'main'
         uses: actions/cache@v4
@@ -92,9 +112,15 @@ jobs:
         with:
           path: tools/contracts/legacy-symfony64/vendor
           key: composer-contracts-symfony64-${{ hashFiles('tools/contracts/legacy-symfony64/composer.lock') }}
+      - name: Cache Symfony 8-leg contract vendor
+        if: matrix.leg == 'symfony8'
+        uses: actions/cache@v4
+        with:
+          path: tools/contracts/legacy-symfony8/vendor
+          key: composer-contracts-symfony8-${{ hashFiles('tools/contracts/legacy-symfony8/composer.lock') }}
       # 故意**不加** --ignore-platform-reqs：PHP 或扩展不满足时这里就该炸，
       # 而不是装出一套残缺依赖让环在下面假装通过。
-      # 两腿各自 install 自己那份 composer.lock（都在仓库里），所以"这条腿装了什么"
+      # 三腿各自 install 自己那份 composer.lock（都在仓库里），所以"这条腿装了什么"
       # 是可复核的，不会随上游发包漂移。
       - name: Install contract dependencies
         run: composer install -d ${{ matrix.install_dir }} --no-interaction --prefer-dist

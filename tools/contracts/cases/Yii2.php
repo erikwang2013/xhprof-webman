@@ -440,6 +440,7 @@ return static function (): array {
             . 'secureHeaders 过滤与 trustedHosts 两态、end() 的 ExitException 收尾、'
             . 'console run() 声明类、容器按公有属性赋值、/xhprof 真报告页）。'
             . ' 已知未覆盖：采样落库（本 case 注入内存 cache，不连 Redis）与真实 header() 发送。',
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

@@ -15,10 +15,27 @@ declare(strict_types=1);
  * 全部走真实现。代价是 53 个新包（含 illuminate/* 与 symfony/console 等），
  * 已在 composer.json 里如实写明。
  *
- * 版本选择：README.md:29 声称支持 `laravel/framework ^9.0|^10.0|^11.0`，本卡钉住其中
- * **最新的一档 ^11.0**（v11 要求 php ^8.2，与本环 composer.json 的 `php: >=8.2`
- * 一致）。已知副作用：v11 传递依赖 symfony/http-foundation ^7.0，因此**无法**再在
- * 同一个 composer.json 里拼出 symfony 6.4 的矩阵腿（composer 会直接拒绝求解）。
+ * 版本选择（2026-10-04 更新）：README 声明支持 `laravel/framework ^9|^10|^11`，本卡现在
+ * 在**两条腿**上跑同一个文件，覆盖声明线之外的两档：
+ *   * 主腿钉 `^12.0`（实测锁到 v12.69.3。v12 要求 php ^8.2，与本环 composer.json 的
+ *     `php: >=8.2` 一致；v13 要求 php ^8.3，所以它当不了"php >= 8.2"的主腿 —— 这就是
+ *     主腿停在 12 而不是 13 的原因）。
+ *   * 第三腿 symfony8（`legacy-symfony8`）钉 `^13.0` + Symfony 8.1（实测 v13.34.0 +
+ *     8.1.8），因为 13 是上游当前线、且它与 Symfony 8 的组合是下面那条陷阱的现场。
+ * 本卡对真包**没有版本分支**：两条腿上 109 条断言逐条相同、都通过（2026-10-04 实测）。
+ *
+ * 陷阱（本卡进第三腿的理由）：本包 `src/Laravel/Adapter/RequestAdapter.php:22` 调
+ * `$request->get()`，而 **Symfony 8 把 `Request::get()` 删掉了**（7.4 起
+ * trigger_deprecation，8.0 移除）。两条 Laravel 线的分界只有真包能钉住：
+ *   * Laravel 12 的 `Illuminate\Http\Request::get()` 是 `return parent::get(...)`，
+ *     所以 12 线**只能**配 Symfony 7.x（它的 composer 约束 `symfony/* ^7.2` 没有 `|| ^8.0`
+ *     分支，装不出 8.x —— 同一个 composer 项目里装不下两版 symfony，这正是 6.4 腿作为
+ *     独立嵌套项目存在的由来，现在 8 腿也是同一个理由）；在 7.4 上调用会**触发一条被 @ 静音的弃用**
+ *     （实测 E_USER_DEPRECATED："Since symfony/http-foundation 7.4: Request::get() is
+ *     deprecated…"，用 set_error_handler 才观测得到）。
+ *   * Laravel 13 把 get() 的**函数体内联**成自己的一份拷贝（不再调 parent），于是 13 线
+ *     在 Symfony 8 上成立、也不再触发那条弃用。第三腿把真 13 + 真 8 装在一起跑，就是钉
+ *     这个分界；本卡不断言版本号本身（断言的是行为：query 胜出、all() 与 get() 同源）。
  *
  * 覆盖到哪一层（诚实边界）：
  *   - 覆盖：十个 L1 方法签名 + L2 真语义（Request/Response/Config/Log 四个适配器
@@ -551,6 +568,7 @@ return static function (): array {
             . 'host() 不含端口（对比 getHttpHost() 含端口）、uri() 只含 path+query、url() 不含 query、'
             . 'ip() 默认不轻信 XFF、all() 与 get() 同源、setContent/withHeaders/setStatusCode 就地改、'
             . 'BinaryFileResponse 按内容嗅探故必须钉 Content-Type、入口类 handle() 透传与两条 deny 分支',
+        'assertions' => $checks,
         'skips' => 0,
     ];
 };

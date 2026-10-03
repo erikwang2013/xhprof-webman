@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * 本卡的可验证面**全部**建立在真实包上：环的 composer 里既有四个独立小包
  * （joomla/event、joomla/input、joomla/registry、joomla/uri），也钉了两个**完整 CMS
- * 发布包**（JOOMLA_CMS_PACKAGES：5.2.2 与 4.4.14，官方 Full_Package zip，版本 + sha1）。
+ * 发布包**（JOOMLA_CMS_PACKAGES：5.4.9 与 4.4.14，官方 Full_Package zip，版本 + sha1）。
  * 两个 CMS 包故意不声明 autoload —— 环自己的进程绝不能自动加载到 Joomla\CMS\*（会与桩
  * 的同名声明在加载期对撞），只有本卡起的子进程显式 require 它们的 vendor/autoload.php。
  *
@@ -118,14 +118,15 @@ const JOOMLA_CMS_VERIFIABLE = [
  *
  * 都是官方 **Full_Package** zip（不是 update/patch 包）：只有完整包自带可用的
  * `libraries/vendor/autoload.php`（GitHub 上 tag 的 tar 包里没有 libraries/vendor，
- * 实测 API 查 `libraries/vendor?ref=5.2.2` 404）。Joomla\CMS\* 不在 packagist 上，
+ * 实测 API 查 `libraries/vendor?ref=5.2.2` 404）。换 5.4.9 时重查过同结构（2026-10-04：
+ * `contents/libraries?ref=5.4.9` = 200 而 `contents/libraries/vendor?ref=5.4.9` = 404）。Joomla\CMS\* 不在 packagist 上，
  * 只能这么钉进 composer。
  *
  * 两个包在 composer.json 里**故意不声明 autoload**：环自己的进程不许自动加载到真实
  * Joomla\CMS\*（会与桩的同名声明在加载期对撞），只有本卡起的子进程显式 require。
  */
 const JOOMLA_CMS_PACKAGES = [
-    '5.2.2' => 'joomla/cms-full-package-5',
+    '5.4.9' => 'joomla/cms-full-package-5',
     '4.4.14' => 'joomla/cms-full-package-4',
 ];
 
@@ -185,14 +186,22 @@ const JOOMLA_CMS_REAL_MISSING = [
  * 冻结：每个版本**允许且必须出现**的差异（精确相等 —— 多一条是桩漂了/包换了，
  * 少一条是这条差异的依据消失了，两种都要人重看一遍）。差异串由 joomla_cms_compare() 生成。
  *
- * 5.2.2 是 0 条：桩的 CMS 侧声明与 5.2.2 **逐字段一致**（含 CMSPlugin::__construct）。
+ * 5.4.9 是 1 条：5.3 起 `CMSPlugin::__construct` 从老 5.x 的
+ * `(DispatcherInterface $dispatcher, array $config = [])` 改成 `($config = [])` 单参数
+ * （首参若**是** DispatcherInterface 仍按老语义接住 —— 内部
+ * `func_num_args() > 1 ? func_get_arg(1) : []`，只是 `@trigger_error(..., E_USER_DEPRECATED)`
+ * 提示 7.0 起不再支持，见 vendor 里 CMSPlugin.php:119-135）。桩写的是老 5.x 两参形状，
+ * 于是差异收敛成**声明参数个数**这一条（桩 2 > 真实 1，比较器对个数只看大小、不作方向判断）。
+ * 方向仍是桩更窄：真实收得下 `new Plugin(['name' => ...])` 这种单参配置形态，桩的 p0
+ * 有型别且必填、那种调用当场 TypeError；反过来桩收得下的两参形态真实全收 —— §9 在 5.4.9 上
+ * 就是 `new Xhprof($dispatcher, [], $cache, null)` 真的 new 了一次入口类。
  * 4.4.14 只差 1 条：4.4 的 `__construct(&$subject, $config = [])` 第一个参数**按引用**
  * 且无型别，桩是 `DispatcherInterface $dispatcher`（= 5.x 的形状，本包的目标版本）。
  * 桩无法建模「调用点必须传变量」这件事，代价由 joomla/services/provider.php「先用变量接住
  * 容器结果再传」的写法兜住 —— §9 在 4.4.14 上真的 new 了一次入口类，证明这条兜得住。
  */
 const JOOMLA_CMS_EXPECTED_DIFFS = [
-    '5.2.2' => [],
+    '5.4.9' => ['Joomla\CMS\Plugin\CMSPlugin::__construct.params(count)'],
     '4.4.14' => ['Joomla\CMS\Plugin\CMSPlugin::__construct.p0.byRef'],
 ];
 
@@ -259,7 +268,7 @@ const JOOMLA_E2E_MODES = ['report', 'deny', 'assets', 'sample'];
  * **名字**，所以两者都能收 —— 但这条差异必须有人钉住，否则「4.4 也能跑」就成了没依据的说法。
  */
 const JOOMLA_CMS_EVENT_CLASS = [
-    '5.2.2' => 'Joomla\CMS\Event\Application\AfterInitialiseEvent',
+    '5.4.9' => 'Joomla\CMS\Event\Application\AfterInitialiseEvent',
     '4.4.14' => 'Joomla\Event\Event',
 ];
 
@@ -924,6 +933,30 @@ return static function (): array {
     $cmsRealDumps = [];
     foreach (JOOMLA_CMS_PACKAGES as $version => $package) {
         $pkgDir = contracts_dir() . '/vendor/' . $package;
+
+        // 版本身份：下面那些冻结集都是**按版本号键住的**（JOOMLA_CMS_EXPECTED_DIFFS 等），
+        // 所以「vendor 里装的确实是那一版」必须是断言而不是命名约定 —— CMS 自己的
+        // Version.php 常量、冻结键、composer.lock 锁住的版本三者逐字一致。
+        // （WordPress 卡的 $wp_version 断言同款做法；5.4.9 升档时对称补上。）
+        $versionPhp = (string) @file_get_contents($pkgDir . '/libraries/src/Version.php');
+        $cmsVersion = (
+            preg_match('/MAJOR_VERSION\s*=\s*(\d+)/', $versionPhp, $vMajor) === 1
+            && preg_match('/MINOR_VERSION\s*=\s*(\d+)/', $versionPhp, $vMinor) === 1
+            && preg_match('/PATCH_VERSION\s*=\s*(\d+)/', $versionPhp, $vPatch) === 1
+        ) ? "{$vMajor[1]}.{$vMinor[1]}.{$vPatch[1]}" : null;
+        $lockedCmsVersion = null;
+        foreach ((json_decode((string) @file_get_contents(contracts_dir() . '/composer.lock'), true)['packages'] ?? []) as $lockedPackage) {
+            if (($lockedPackage['name'] ?? '') === $package) {
+                $lockedCmsVersion = $lockedPackage['version'] ?? null;
+                break;
+            }
+        }
+        $expect(
+            "§8 {$version} 版本身份：CMS 自报 Version.php = 冻结键 = composer.lock 锁住的包版本",
+            [$cmsVersion, $lockedCmsVersion],
+            [$version, $version]
+        );
+
         $cmsRun = contracts_run_php([
             '-r',
             joomla_cms_boot_script($pkgDir . '/libraries/vendor/autoload.php', $pkgDir . '/libraries', $siteRoot) . $dumpScript,
@@ -1005,19 +1038,26 @@ return static function (): array {
     // §8c 比较器正对照：把桩快照的副本改坏，比较器必须报出对应的两条。
     // 一个从没红过的比较器不是检查（Drupal 卡同款做法）。两条改动落在两个不同的比较分叉上：
     // 常量值（精确相等那一支）与参数型别（方向比较那一支）。
+    // 期望集是 3 条 = 两条变异 **加上** 桩未变异时就有的那条基线差异（5.4.9 的
+    // `__construct.params(count)`，见 JOOMLA_CMS_EXPECTED_DIFFS）。精确相等依然逐条钉住：
+    // 任一条改动没落地，它对应的差异串就消失、集合变小，这条断言当场 FAIL。
     $mutant = $stubCms;
     $mutant['types']['Joomla\CMS\Log\Log']['constants']['ERROR'] = '16';
     $mutant['types']['Joomla\CMS\Plugin\CMSPlugin']['methods']['setApplication']['params'][0]['type'] = 'stdClass';
     $mutantDiffs = [];
     $mutantNotes = [];
     foreach (JOOMLA_CMS_SHARED_SPEC as $fqn => $_members) {
-        joomla_cms_compare($mutant['types'][$fqn], $cmsRealDumps['5.2.2']['types'][$fqn], $fqn, JOOMLA_CMS_REAL_MISSING, $mutantDiffs, $mutantNotes);
+        joomla_cms_compare($mutant['types'][$fqn], $cmsRealDumps['5.4.9']['types'][$fqn], $fqn, JOOMLA_CMS_REAL_MISSING, $mutantDiffs, $mutantNotes);
     }
     sort($mutantDiffs);
     $expect(
-        '§8c 比较器正对照：改坏桩快照后必须报出这两处差异',
+        '§8c 比较器正对照：改坏桩快照后必须报出这两处差异（外加基线那条）',
         $mutantDiffs,
-        ['Joomla\CMS\Log\Log::ERROR.constant', 'Joomla\CMS\Plugin\CMSPlugin::setApplication.p0.type']
+        [
+            'Joomla\CMS\Log\Log::ERROR.constant',
+            'Joomla\CMS\Plugin\CMSPlugin::__construct.params(count)',
+            'Joomla\CMS\Plugin\CMSPlugin::setApplication.p0.type',
+        ]
     );
 
     // ================= §9 L2：真 CMS 端到端（每版本四个请求） =================
@@ -1110,7 +1150,15 @@ return static function (): array {
                     $redisExpect("{$label} 报告页响应头逐字", $obs['headers'], ['Cache-Control: no-cache, private', 'Content-Type: text/html; charset=UTF-8']);
                 } else {
                     $redisExpect("{$label} token 不符时正文是拒绝页", $body, '403 Forbidden');
-                    $redisExpect("{$label} token 不符时 Status 头是 403", $obs['headers'], ['Status: 403']);
+                    // 2026-10-04 重签：Core 的 deny() 现在无条件补 `Cache-Control: no-store`
+                    // （src/Core/Xhprof.php:277-295，`+=` 口径：调用方给了就不覆盖），
+                    // 与 respond() 的导出路径对齐 —— token 在 query 串里，拒绝页/数据页都不该被
+                    // 中间层缓存。环里只有这一处逐字钉了拒绝响应头，所以只有这里跟着动。
+                    $redisExpect(
+                        "{$label} token 不符时响应头逐字（Status: 403 + no-store）",
+                        $obs['headers'],
+                        ['Cache-Control: no-store', 'Status: 403']
+                    );
                 }
             }
         }
@@ -1304,7 +1352,7 @@ return static function (): array {
     //  (2) 5.x 用**有型别**的事件类派发、4.4 用通用 Joomla\Event\Event（§9 的 dispatched 观测
     //      与之呼应：一个是 AfterInitialiseEvent，一个是 Event）。
     $dispatchPins = [
-        '5.2.2' => [
+        '5.4.9' => [
             'libraries/src/Application/CMSApplication.php' => [
                 "new AfterInitialiseEvent('onAfterInitialise', ['subject' => \$this])",
                 "new AfterRespondEvent('onAfterRespond', ['subject' => \$this])",
@@ -1346,8 +1394,8 @@ return static function (): array {
     // 两个裸名必须都在 CMS 自己分发的名字集合里 —— 这一条把入口类的字面量与真实分发点绑在
     // 一起：Joomla 改名 → 这里红 → 入口类的 getSubscribedEvents() 必须跟着改。
     $expect(
-        '§12 入口类订阅的裸名事件名都在真实 CMS 的分发点里（5.2.2）',
-        array_values(array_filter(['onAfterInitialise', 'onAfterRespond'], static fn (string $n): bool => in_array($n, $cmsEventNames['5.2.2'], true))),
+        '§12 入口类订阅的裸名事件名都在真实 CMS 的分发点里（5.4.9）',
+        array_values(array_filter(['onAfterInitialise', 'onAfterRespond'], static fn (string $n): bool => in_array($n, $cmsEventNames['5.4.9'], true))),
         ['onAfterInitialise', 'onAfterRespond']
     );
     $expect(
@@ -1411,9 +1459,11 @@ return static function (): array {
         'detail' => $note . '；' . $phpFiles . ' 个源文件语法通过；'
             . '源码用到的 ' . count(JOOMLA_MEMBERS) . ' 个框架成员与冻结清单双向相等'
             . '（可安装侧 ' . $verifiable . ' 个、CMS 侧 ' . $cmsVerifiable . ' 个）；'
-            . '两个真实 CMS 发布包（5.2.2 / 4.4.14，composer 钉死版本）全程参与：'
-            . '可安装侧签名与常量逐字段一致，CMS 侧的桩与 5.2.2 差异 0 条、与 4.4.14 恰好 1 条'
-            . '（4.4 的 CMSPlugin::__construct 首参按引用 —— 已冻结并解释）；'
+            . '两个真实 CMS 发布包（5.4.9 / 4.4.14，composer 钉死版本）全程参与：'
+            . '可安装侧签名与常量逐字段一致，CMS 侧的桩与两版各差恰好 1 条、且都冻结在案'
+            . '（5.4.9 是 CMSPlugin::__construct 声明参数个数 2>1 —— 桩更窄（少收单参配置形态）；'
+            . '4.4 是首参按引用 —— 这一格桩反而更宽（不要求传变量），缺口由 provider「先用变量接住'
+            . '再传」的写法和 §9 的真 new 兜住；两条都在卡内解释了为什么）；'
             . '真 SiteApplication + 真 CMSPlugin + 真事件类跑了 4 模式 × 2 版本共 8 个请求'
             . '（报告页/鉴权失败/静态资源/常开采样，真 exit、真响应头、真落库）；'
             . '真 Joomla\CMS\Log\Log 上验通本包 LogAdapter，provider 在真容器上 register() 成功；'
@@ -1429,6 +1479,7 @@ return static function (): array {
             . ' 要真安装器写 namespacemap —— 目录按装好的样子摆齐后 bootPlugin 仍拿不到插件'
             . '（provider.php 当场 `Class "Joomla\Plugin\System\Xhprof\Extension\Xhprof" not found`；'
             . '§11 另静态钉住机制 + 容器协议的实测抛点）。',
+        'assertions' => $checks,
         'skips' => $skips,
     ];
 };

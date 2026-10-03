@@ -102,6 +102,7 @@ return static function (): array {
         'status' => 'PASS',
         'detail' => count($interfaces) . ' 个接口签名逐字段一致；'
             . $fakeResult['checks'] . ' 项 fake 行为通过',
+        'assertions' => count($interfaces) + (int) $fakeResult['checks'],
         'skips' => 0,
     ];
 };

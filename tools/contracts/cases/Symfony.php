@@ -189,10 +189,16 @@ return static function (): array {
 
     // ---- 桩与真实包的**声明**一致性：桩唯一自证不了的部分 ----
 
+    // 返回类型的形态随版本变（**实测**，不是推断）：6.4 / 7.x 没有返回类型，8.0 起声明 `array`
+    // （8.1.8 实测）。声明一条固定值就会把另一条腿变成假红，所以与下面 Request 属性的写法
+    // 同形：只允许这两种已知形态，真出现第三种（换类型/丢掉 8.x 的类型）还是要红。
+    // 本仓的 XhprofListener 声明的是 `: array` —— 在两种形态下都合法（加返回类型是允许的
+    // 协变方向），所以这个差异不需要改 src/；它需要的是**桩别比真包更松**这件事被看见。
+    $subscribedReturn = (string) (new ReflectionMethod(Symfony\Component\EventDispatcher\EventSubscriberInterface::class, 'getSubscribedEvents'))->getReturnType();
     $expect(
-        'L1 真实 EventSubscriberInterface::getSubscribedEvents() 没有返回类型（桩照抄了这一点）',
-        (string) (new ReflectionMethod(Symfony\Component\EventDispatcher\EventSubscriberInterface::class, 'getSubscribedEvents'))->getReturnType(),
-        ''
+        "L1 真实 EventSubscriberInterface::getSubscribedEvents() 的返回类型只允许 ''(6.4/7.x) 或 array(8.x)，得到 '{$subscribedReturn}'",
+        in_array($subscribedReturn, ['', 'array'], true),
+        true
     );
     // 这条是 RequestAdapter 绕过 InputBag::get() 的根据：它的返回类型里没有 array，
     // 数组值只能抛异常，而 Core 契约声明的是 mixed（Xhprof::index() 靠 is_string() 自己给 400）
@@ -458,14 +464,19 @@ return static function (): array {
         }
         $shipped++;
         $shippedDirs[basename(dirname((string) $assetPath))] = true;
-        $ext = pathinfo((string) $assetPath, PATHINFO_EXTENSION);
-        $expect("L2 资源类型：src/html 里出现的是已登记扩展名（{$ext}）", array_key_exists($ext, $assetTypes), true);
+        // 变量名**不能**叫 $ext：它是本 closure 里的 ext-xhprof 布尔（见 116 行），
+        // 在同一个作用域里复用会把布尔覆盖成文件扩展名字符串（非空 = 真），
+        // 于是 711 行的 `if (!$ext)` 永不成立 —— 缺 ext-xhprof 的环境会一路跑进采样块，
+        // 在第一条 xhprof_disable() 上 fatal，而不是记 36 条 skip。
+        // 2026-10-04 用 `php -n`（无扩展）实测到这条 fatal，才有此改名。
+        $assetExt = pathinfo((string) $assetPath, PATHINFO_EXTENSION);
+        $expect("L2 资源类型：src/html 里出现的是已登记扩展名（{$assetExt}）", array_key_exists($assetExt, $assetTypes), true);
         $srv = (new \ErikWang2013\Xhprof\Symfony\Adapter\ResponseAdapter())->file((string) $assetPath)->send();
         $srv->prepare($assetsRequest);
         $expect(
             'L2 资源类型：' . str_replace($repoRoot . '/', '', (string) $assetPath),
             strtolower((string) $srv->headers->get('Content-Type')),
-            strtolower($assetTypes[$ext] ?? '（未登记）')
+            strtolower($assetTypes[$assetExt] ?? '（未登记）')
         );
     }
     // 地板只用来证明 glob 真扫到了文件（不是空目录），不是「资源配额」：
@@ -551,6 +562,11 @@ return static function (): array {
     $dispatcher->addListener(Symfony\Component\HttpKernel\KernelEvents::REQUEST, $thrower, 32);
     $orderBeforeReport = $order;
 
+    // 报告页要真读 profile 数据（列表/main/URI 渲染），这组断言因此带着一个**不降级**的前提：
+    // ext-redis 必须在位。缺它时入口类返回 500（2026-10-04 `php -n` 实测：
+    // "ext-redis is not installed, so the report page cannot read profile data"），这里响亮 FAIL。
+    // team-lead 拍板（2026-10-04）：ext-redis 是环声明的运行前提（Laravel.php:519-520 /
+    // Thinkphp.php:251-252 显式断言它），缺前提就该红 —— 降级成 skip 会让前提静默消失。
     $report = $kernel->handle(Symfony\Component\HttpFoundation\Request::create('http://example.com/xhprof'));
     $expect('L2 报告页：短路后 32 上的"路由"监听器一次都没跑', $routerCalled, 0);
     $expect(
@@ -947,6 +963,7 @@ return static function (): array {
         'status' => 'PASS',
         'detail' => $note . ' —— ' . $checks . ' 项断言全部通过'
             . ($skips > 0 ? '；' . $skips . ' 项采样断言因缺 ext-xhprof 未验' : ''),
+        'assertions' => $checks,
         'skips' => $skips,
     ];
 };
