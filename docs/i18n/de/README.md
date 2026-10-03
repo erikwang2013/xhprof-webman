@@ -4,13 +4,13 @@
 
 # XHProf Performance Profiler
 
-Ein Plugin zur Performance-Profilerstellung für Code, kompatibel mit webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla und Drupal.
+Ein Plugin zur Performance-Profilerstellung für Code, kompatibel mit webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla und Drupal sowie reinem PHP (ohne Framework).
 
 Sammelt Profiling-Daten über die xhprof-Erweiterung und legt sie in Redis ab. Entwickler erreichen die Performance-Analyseberichte schnell über den Browser und finden so Performance-Engpässe im Code auf.
 
 ![Projektmaskottchen: kleine Flamme](../../../docs/images/pet.svg)
 
-Dieselbe kleine Flamme ist auch das Site-Icon der Report-Seite und das Marken-Icon oben links (`src/html/pet.svg`, ausgeliefert unter dem `assets_url`-Präfix).
+Dieselbe kleine Flamme ist auch das Site-Icon der Report-Seite, das Marken-Icon oben links und die Sortier-Icons in den Tabellen (`src/html/pet.svg`, `src/html/images/sort_*.svg`, ausgeliefert unter dem `assets_url`-Präfix).
 
 **Request-Protokoll**
 
@@ -19,6 +19,8 @@ Dieselbe kleine Flamme ist auch das Site-Icon der Report-Seite und das Marken-Ic
 **Report eines einzelnen Laufs**
 
 ![Report eines einzelnen Laufs](../../../docs/images/run-report.png)
+
+**Zwei Läufe vergleichen** — im „Request-Protokoll" genau zwei Zeilen ankreuzen (eine Checkbox pro Zeile, im Kopf „Alle auswählen") und auf „Ausgewählte vergleichen" klicken, um die Diff-Ansicht zu öffnen. Die beiden Seiten werden nach der Zeit geordnet (run1 = der frühere Lauf, run2 = der spätere, unabhängig von der aktuellen Sortierung der Liste); die Farben bedeuten Verbesserung / Regression „von run1 nach run2", und der Link „Diff-Report invertieren" in der Seite tauscht die beiden Seiten jederzeit.
 
 ## Voraussetzungen
 
@@ -49,6 +51,12 @@ Alle Eintragsklassen liegen unter dem Namespace-Präfix `ErikWang2013\Xhprof\` (
 Dieses Paket deklariert `php >= 8.0`, aber die `yiisoft/*`-Komponenten, auf die sich Yii3 stützt, verlangen **PHP 8.1+**; **Yii3 ist auf PHP 8.0 daher nicht nutzbar**; Symfony 7.x und Drupal 11.x brauchen ebenso eine höhere PHP-Version. Die Schritt-für-Schritt-Einrichtung steht unten unter „Framework-Konfiguration".
 
 ## Installation
+
+Die xhprof-Erweiterung aus PECL installieren (unter PHP 8 derzeit 2.3.x):
+
+```sh
+pecl install xhprof
+```
 
 xhprof-Konfiguration in php.ini ergänzen:
 
@@ -259,6 +267,17 @@ cp vendor/aaron-dev/xhprof-webman/wordpress/xhprof-webman.php wp-content/mu-plug
 
 **3. Konfiguration** — die Standardwerte liegen im Paket unter `src/Wordpress/config/xhprof.php`; die Felder stehen unter „Konfigurationsreferenz". Mit `ignore_url_arr` lassen sich hochfrequente Pfade wie `wp-cron.php` und `admin-ajax.php` ausschließen.
 
+Zum Überschreiben der Konfiguration (Redis-Adresse, `auth_token`, …) genügt eine Konstante in `wp-config.php` (das mu-Plugin wird spät genug geladen, die Konstante ist dann bereits verfügbar):
+
+```php
+define('XHPROF_WEBMAN_CONFIG', [
+    'auth_token' => 'your-token',
+    'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0],
+]);
+```
+
+Alternativ den Filter `xhprof_webman_config` einhängen (aus einem Theme oder Plugin): er wird über der Konstante angewendet, mit derselben Array-Form.
+
 **4. Eine strukturelle Grenze des Profiling-Fensters** — das Fenster ist `plugins_loaded` → `shutdown`, was den `wp-settings.php`-Bootstrap und das Laden der Plugins selbst **nicht einschließt**. Das ist eine strukturelle Grenze von WordPress: Arbeit in dieser Phase lässt sich nicht profilieren.
 
 ---
@@ -380,17 +399,22 @@ Alle Frameworks teilen diese Konfigurationsoptionen:
 | Konfiguration | Typ | Standard | Beschreibung |
 |---------------|-----|----------|--------------|
 | `enable` | bool | `true` | Profiling ein-/ausschalten |
+| `sample_rate` | float | `1.0` | Proportionales Sampling: jeder Request wird mit dieser Wahrscheinlichkeit aufgezeichnet (z. B. `0.05` = 5 % der Requests); `1.0` = alles aufzeichnen, `<=0` oder `false` = nichts aufzeichnen |
 | `time_limit` | int | `0` | Nur Requests über n Sekunden profilieren, 0 bedeutet alle |
 | `log_num` | int | `1000` | Maximale Anzahl Datensätze |
 | `view_wtred` | int | `3` | Zeilen mit Antwortzeit > n Sekunden rot hervorheben |
 | `ignore_url_arr` | array | `["/xhprof"]` | Zu ignorierende URL-Pfade |
 | `assets_url` | string | `/xhprof-assets` | URL-Präfix für statische Assets |
-| `auth_token` | string\|null | `null` | Wenn gesetzt, verlangt die Report-Seite `?token=xxx`; für öffentliche Deployments empfohlen |
+| `auth_token` | string\|null | `null` | Wenn gesetzt, verlangt die Report-Seite `?token=xxx`. **Standard `null` bedeutet keine Authentifizierung**: Die Eintragsklasse übernimmt Report-Seite und statische Assets **bevor** die Authentifizierung der Host-Anwendung läuft (Abwägung siehe „Report-Seite und statische Assets"), ohne Token kann daher jeder, der diesen Pfad erreicht, die Request-URI, die Quell-IP und die Funktionsnamen sämtlicher Läufe lesen — öffentliche und Multi-Tenant-Deployments **müssen** ihn setzen; ist er nicht gesetzt, protokolliert jedes Rendern eine Warnung |
 | `key_prefix` | string | `xhprof` | Redis-Schlüsselpräfix; bei gemeinsam genutztem Redis je Projekt unterschiedlich setzen |
 | `log_ttl` | int | `604800` | Aufbewahrungsdauer der Daten in Sekunden (Standard 7 Tage) |
 | `locale` | string\|null | `null` | Sprache der Report-Seite: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = dem `Accept-Language` des Browsers folgen, sonst Chinesisch; `?lang=xx` überschreibt sie für eine Anfrage |
 
 Die bekannten Einschränkungen dieser Optionen auf den einzelnen Frameworks stehen unter [Verifikation und bekannte Einschränkungen](#verifikation-und-bekannte-einschränkungen).
+
+Ein niedrigerer Wert für `sample_rate` ist der einzige Weg, den Overhead anteilig zu senken (`0.05` zeichnet 5 % der Requests auf); `ignore_url_arr` schließt weiterhin ganze Pfade aus, und beides lässt sich kombinieren. Die Entscheidung fällt einmal pro Request am Einstiegspunkt des Samplings und ändert nichts daran, wie bestehende Läufe gelesen oder aufbewahrt werden. Ungültige Werte (z. B. `'5%'`, `'disabled'`) werden wie `1.0` behandelt: lieber zu viel aufzeichnen, als stillschweigend gar nichts aufzuzeichnen und damit die Report-Seite wie defekt aussehen zu lassen.
+
+Zum Bereinigen der Profiling-Daten: Um nur das Request-Protokoll zu leeren, `DEL <prefix>:run_id` verwenden — die Datenschlüssel laufen über `log_ttl` von selbst ab, und im Index zurückgebliebene verwaiste IDs überspringt das Request-Protokoll; für eine vollständige Bereinigung `<prefix>:request_log:*` und `<prefix>:xhprof_log:*` aufsammeln und samt der Indexliste löschen (`DEL` akzeptiert keine Wildcards, die Schlüssel daher zuerst mit `redis-cli --scan --pattern '<prefix>:*'` auflisten und dann löschen — nicht `KEYS` verwenden). Dass die Indexliste keine TTL hat, ist Absicht: Sie ist durch `log_num` begrenzt und nur eine Zeigerliste auf die Datenschlüssel (`<prefix>` ist der für dieses Projekt konfigurierte Wert von `key_prefix`).
 
 **Sprachumschalter auf der Report-Seite**
 
@@ -538,7 +562,7 @@ src/<Fw>/
 | Verhalten von Adaptern und Eintragsverdrahtung | `tests/Unit/Adapter/*Test.php`: aktiviert → gespeichert / deaktiviert → nicht gespeichert / Business-Exception → trotzdem über `finally` gespeichert |
 | Alle zwölf Frameworks teilen einen Satz von Konfigurationsschlüsseln | Parity-Test der Konfiguration (Schlüsselmengen, nicht byteweise; Kommentare dürfen abweichen) |
 | Die beiden READMEs spiegeln einander | README-Parity-Test: vergleicht die Reihenfolge der `##`/`###`-Überschriften und die Anzahl der Codeblöcke |
-| Die von den Adaptern aufgerufenen Methoden existieren wirklich | `tools/contracts/`-Verifikationsschleife (eigener CI-Job, **zwei Beine**: das Hauptbein installiert die jeweils neuesten Pakete, und das separate Projekt `tools/contracts/legacy-symfony64` fährt denselben Symfony-Case gegen 6.4): sie installiert echte Framework-Pakete (echtes `drupal/core` für Drupal, zwei echte CMS-Release-Pakete für Joomla) und prüft per Reflection, dass jede Methode / Konstante / globale Funktion existiert — **für die neun Frameworks in der Schleife** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf sind nicht in der Schleife, siehe unten |
+| Die von den Adaptern aufgerufenen Methoden existieren wirklich | `tools/contracts/`-Verifikationsschleife (eigener CI-Job, **zwei Beine**: das Hauptbein installiert die jeweils neuesten Pakete, und das separate Projekt `tools/contracts/legacy-symfony64` fährt denselben Symfony-Case gegen 6.4): sie installiert echte Framework-Pakete (echtes `drupal/core` für Drupal, zwei echte CMS-Release-Pakete für Joomla) und prüft per Reflection, dass jede Methode / Konstante / globale Funktion existiert — **für die neun Frameworks in der Schleife** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); reines PHP / ThinkPHP / Hyperf sind nicht in der Schleife, aus jeweils unterschiedlichen Gründen — siehe unten |
 | Semantik der Adapter | Dieselbe Schleife erzeugt echte Request- und Response-Objekte und fährt die Adapter, inklusive zweier Invarianten: `uri()` trägt kein scheme/host, und `withHeaders()` gilt auch nach `file()`. Die SKIP-Zahl der Schleife ist eine eingefrorene Konstante (2 auf dem Hauptbein, 0 auf dem 6.4-Bein), und beide SKIPs liegen in Joomla: der echte Lesepfad von `#__extensions.params` und die Form des Installers — beide brauchen eine Datenbank oder einen Installer, um zu laufen |
 
 
@@ -551,7 +575,7 @@ src/<Fw>/
 | Die Auto-Konfiguration von Symfonys `kernel.event_subscriber` | Verlangt eine echte Container-Kompilierung |
 | Übersprechen von statischem Zustand in lang laufenden Prozessen | Webman-Seite unverändert (auf Hyperf isoliert: die 9 Render-Zustandswerte pro Anfrage laufen über den Coroutine-Context, festgenagelt von `tests/Unit/Lib/RenderStateCoroutineTest.php` mit einer echt abgebenden Coroutine) |
 | Echte Redis-I/O, Browser-Rendering, Profiling-Overhead unter echter Last | Echte Redis-I/O ist **jetzt im Zyklus** (`cases/Redis.php`: echtes phpredis + eine echte Slim-Anfrage von Ende zu Ende – Aufruf → Persistenz → Listenansicht → Berichtsseite); Browser-Rendering und Profiling-Overhead unter echter Last bleiben außerhalb des Umfangs von Unit-Tests und Zyklus |
-| Adapter-Signaturen und -Semantik für ThinkPHP / Hyperf | Diese zwei sind nicht im Verifikationszyklus (er deckt neun Frameworks ab); ihre Stubs sind paketintern in `tests/Stubs/framework-stubs.php` handgeschrieben, ohne Abgleich mit echten Paketen |
+| Adapter-Signaturen und -Semantik für reines PHP / ThinkPHP / Hyperf | Diese drei sind nicht im Verifikationszyklus (er deckt neun Frameworks ab), aus jeweils unterschiedlichen Gründen: **für reines PHP gibt es kein Drittanbieter-Paket zum Installieren** — die Schleife vergleicht gegen echte Framework-Pakete, und für reines PHP existiert keines, deshalb deckt `tests/Unit/Adapter/NativeTest.php` seine Adapter-Semantik über echte Superglobals und einen echten Durchlauf unter `php -S` ab (eine stärkere Beobachtungsfläche als die CLI der Schleife); **ThinkPHP / Hyperf haben echte Pakete, sie sind nur nicht installiert**, deshalb sind ihre Stubs paketintern in `tests/Stubs/framework-stubs.php` handgeschrieben, ohne Abgleich mit echten Paketen |
 
 **Manuelle Smoke-Checkliste (drei Schritte pro Framework)**
 

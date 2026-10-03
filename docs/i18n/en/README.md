@@ -2,13 +2,13 @@
 
 # XHProf Performance Profiler
 
-A code performance profiling plugin compatible with webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla and Drupal.
+A code performance profiling plugin compatible with webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal and native PHP (no framework).
 
 Collects profiling data via the xhprof extension and stores it in Redis. Developers can quickly access performance analysis reports through a browser to identify code performance bottlenecks.
 
 ![Project pet: a little flame](../../../docs/images/pet.svg)
 
-The same little flame is also the report page's site icon and the top-left brand icon (`src/html/pet.svg`, served under the `assets_url` prefix).
+The same little flame is also the report page's site icon, the top-left brand icon and the tables' sort icons (`src/html/pet.svg`, `src/html/images/sort_*.svg`, served under the `assets_url` prefix).
 
 **Request Log**
 
@@ -17,6 +17,8 @@ The same little flame is also the report page's site icon and the top-left brand
 **Single run report**
 
 ![Single run report](../../../docs/images/run-report.png)
+
+**Comparing two runs** — in the Request Log list tick exactly two rows (one checkbox per row, select-all in the header) and click "Compare selected" to open the diff view. The two sides are ordered by time (run1 = the earlier run, run2 = the later one, independent of how the list is currently sorted); colours mean improvement / regression "from run1 to run2", and the in-page "Invert" link swaps the sides at any time.
 
 ## Requirements
 
@@ -47,6 +49,12 @@ Entry classes all live under the `ErikWang2013\Xhprof\` namespace prefix (omitte
 This package declares `php >= 8.0`, but the `yiisoft/*` components Yii3 relies on require **PHP 8.1+**, so **Yii3 is not usable on PHP 8.0**; Symfony 7.x and Drupal 11.x likewise need a higher PHP version. Step-by-step setup is in "Framework Configuration" below.
 
 ## Installation
+
+Install the xhprof extension from PECL (2.3.x as of PHP 8):
+
+```sh
+pecl install xhprof
+```
 
 Add xhprof configuration in php.ini:
 
@@ -257,6 +265,17 @@ cp vendor/aaron-dev/xhprof-webman/wordpress/xhprof-webman.php wp-content/mu-plug
 
 **3. Configuration** — defaults live in the package at `src/Wordpress/config/xhprof.php`; see "Configuration Reference" for the fields. Use `ignore_url_arr` to exclude high-frequency paths such as `wp-cron.php` and `admin-ajax.php`.
 
+To override configuration (Redis address, `auth_token`, …) define a constant in `wp-config.php` (the mu-plugin loads late enough that the constant is already available):
+
+```php
+define('XHPROF_WEBMAN_CONFIG', [
+    'auth_token' => 'your-token',
+    'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0],
+]);
+```
+
+Alternatively hook the `xhprof_webman_config` filter (from a theme or plugin): it is applied on top of the constant, with the same array shape.
+
 **4. A structural limit of the profiling window** — the window is `plugins_loaded` → `shutdown`, which **does not include** the `wp-settings.php` bootstrap or plugin loading itself. That is a structural limit of WordPress: work done in that phase cannot be profiled.
 
 ---
@@ -378,17 +397,22 @@ All frameworks share these configuration options:
 | Config | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Enable/disable profiling |
+| `sample_rate` | float | `1.0` | Proportional sampling: each request is recorded with this probability (e.g. `0.05` = 5% of requests); `1.0` = sample everything, `<=0` or `false` = sample nothing |
 | `time_limit` | int | `0` | Only profile requests exceeding n seconds, 0 means all |
 | `log_num` | int | `1000` | Maximum number of records |
 | `view_wtred` | int | `3` | Highlight rows with response time > n seconds in red |
 | `ignore_url_arr` | array | `["/xhprof"]` | URL paths to ignore |
 | `assets_url` | string | `/xhprof-assets` | Static asset URL prefix |
-| `auth_token` | string\|null | `null` | When set, report page requires `?token=xxx`; recommended for public deployments |
+| `auth_token` | string\|null | `null` | When set, report page requires `?token=xxx`. **Default `null` means no authentication**: the entry class takes over the report page and its static assets **before** the host application's authentication runs (see the trade-off under "Report Page and Static Assets"), so with no token anyone who can reach that path can read every run's request URI, source IP and function names — public and multi-tenant deployments **must** set it; when unset, each render logs one warning |
 | `key_prefix` | string | `xhprof` | Redis key prefix; set distinct values per project when sharing one Redis |
 | `log_ttl` | int | `604800` | Data retention in seconds (default 7 days) |
 | `locale` | string\|null | `null` | Report page language: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = follow the browser's `Accept-Language`, falling back to Chinese; `?lang=xx` overrides it for a single request |
 
 Known limitations of these options on each framework are listed in [Verification and Known Limitations](#verification-and-known-limitations).
+
+Lowering `sample_rate` is the only way to cut overhead proportionally (`0.05` records 5% of requests); `ignore_url_arr` still excludes whole paths, and the two combine. The decision happens once per request at the sampling entry point and does not affect how existing runs are read or retained. Invalid values (e.g. `'5%'`, `'disabled'`) fall back to `1.0`: over-sampling beats silently recording nothing, which would make the report page look broken.
+
+To purge profiling data: to empty just the list page use `DEL <prefix>:run_id` — the data keys expire on their own via `log_ttl`, and dangling ids left in the index are skipped by the list; to purge everything, scan `<prefix>:request_log:*` and `<prefix>:xhprof_log:*` and delete them together with the index list (`DEL` takes no wildcards, so list the keys with `redis-cli --scan --pattern '<prefix>:*'` first — don't use `KEYS`). The index list carries no TTL on purpose: it is bounded by `log_num` and is only a pointer list to the data keys (`<prefix>` is the `key_prefix` value configured for this project).
 
 **Language switcher on the report page**
 
@@ -536,7 +560,7 @@ src/<Fw>/
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
 | All twelve frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
-| `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the nine frameworks in the loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf are not in the loop — see below |
+| `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the nine frameworks in the loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); native PHP / ThinkPHP / Hyperf are not in the loop, for different reasons each — see below |
 | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run |
 
 
@@ -549,7 +573,7 @@ src/<Fw>/
 | Symfony's `kernel.event_subscriber` auto-configuration | Requires a real container compile |
 | Static-state crosstalk in long-running processes | Unchanged on the Webman side (on Hyperf the 9 per-request render-state values are isolated in the coroutine Context, pinned by `tests/Unit/Lib/RenderStateCoroutineTest.php` with a genuinely yielding coroutine) |
 | Real Redis I/O, browser rendering, profiling overhead under real load | Real Redis I/O is **in the loop** (`cases/Redis.php`: real phpredis + a real Slim request end to end — hit → persist → list page → report page); browser rendering and profiling overhead under real load stay outside the scope of unit tests and the loop |
-| Adapter signatures and semantics for ThinkPHP / Hyperf | these two are not in the verification loop (it covers nine frameworks); their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
+| Adapter signatures and semantics for native PHP / ThinkPHP / Hyperf | these three are not in the verification loop (it covers nine frameworks), for different reasons: **native PHP has no third-party package to install** — the loop compares against real framework packages, and none exists for it, so its adapter semantics are covered by `tests/Unit/Adapter/NativeTest.php` through real superglobals and a real `php -S` round trip (a stronger observation surface than the loop's CLI); **ThinkPHP / Hyperf have real packages that simply are not installed**, so their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
 
 **Manual smoke checklist (three steps per framework)**
 

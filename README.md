@@ -2,13 +2,13 @@
 
 **中文** · [English](./docs/i18n/en/README.md) · [한국어](./docs/i18n/ko/README.md) · [Русский](./docs/i18n/ru/README.md) · [Deutsch](./docs/i18n/de/README.md) · [Français](./docs/i18n/fr/README.md) · [Español](./docs/i18n/es/README.md) · [Português](./docs/i18n/pt/README.md) · [العربية](./docs/i18n/ar/README.md) · [हिन्दी](./docs/i18n/hi/README.md) · [বাংলা](./docs/i18n/bn/README.md) · [Bahasa Indonesia](./docs/i18n/id/README.md) · [日本語](./docs/i18n/ja/README.md)
 
-兼容 webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 的代码性能分析插件。
+兼容 webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 原生 PHP（无框架）的代码性能分析插件。
 
 基于 xhprof 扩展采集数据并存入 Redis，开发者可通过浏览器快速访问性能分析报告，排查代码性能瓶颈。
 
 ![项目宠物：小火苗](docs/images/pet.svg)
 
-同一只小火苗也是报告页的站点图标与左上角品牌图标（`src/html/pet.svg`，随 `assets_url` 前缀服务）。
+同一只小火苗也是报告页的站点图标、左上角品牌图标与表格排序图标（`src/html/pet.svg`、`src/html/images/sort_*.svg`，随 `assets_url` 前缀服务）。
 
 **请求记录**
 
@@ -17,6 +17,8 @@
 **单次运行报告**
 
 ![单次运行报告](docs/images/run-report.png)
+
+**对比两次运行** — 在「请求记录」列表里勾选恰好两条（每行一个复选框，表头可全选），点「对比选中」进入 diff 视图。两侧按时间取先后（run1 = 较早、run2 = 较晚，与列表当前排序无关），着色语义是「从 run1 到 run2」的改善 / 回归，页内「反转」链接可随时交换两侧。
 
 ## 环境要求
 
@@ -47,6 +49,12 @@
 本包声明 `php >= 8.0`，但 Yii3 依赖的 `yiisoft/*` 组件要求 **PHP 8.1+**，所以 **Yii3 在 PHP 8.0 上不可用**；Symfony 7.x、Drupal 11.x 同理需要更高的 PHP 版本。逐步接入方式见下方「框架配置」。
 
 ## 安装
+
+xhprof 扩展从 PECL 安装（PHP 8 下当前是 2.3.x）：
+
+```sh
+pecl install xhprof
+```
 
 php.ini 中增加 xhprof 配置：
 
@@ -257,6 +265,17 @@ cp vendor/aaron-dev/xhprof-webman/wordpress/xhprof-webman.php wp-content/mu-plug
 
 **3. 配置** — 默认值在包内 `src/Wordpress/config/xhprof.php`，字段含义见「配置项说明」。用 `ignore_url_arr` 排除 `wp-cron.php`、`admin-ajax.php` 等高频路径。
 
+需要覆盖配置（Redis 地址、`auth_token` 等）时，在 `wp-config.php` 里定义常量即可（mu-plugin 加载很早，常量此时已可用）：
+
+```php
+define('XHPROF_WEBMAN_CONFIG', [
+    'auth_token' => 'your-token',
+    'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0],
+]);
+```
+
+也可以挂 `xhprof_webman_config` 过滤器（在主题或插件里）：它在常量之上叠加，返回值与上面数组同形。
+
 **4. 采样窗口的结构性限制** — 采样窗口是 `plugins_loaded` → `shutdown`，**不包含** `wp-settings.php` 的引导与插件加载本身。这是 WordPress 的结构性限制，该阶段的工作量无法被采样。
 
 ---
@@ -378,17 +397,22 @@ php -S 127.0.0.1:8000 -t public public/index.php
 | 配置 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enable` | bool | `true` | 是否启用性能分析 |
+| `sample_rate` | float | `1.0` | 按比例采样：每个请求以该概率记录（如 `0.05` = 5% 请求被采样）；`1.0` = 全采，`<=0` 或 `false` = 不采 |
 | `time_limit` | int | `0` | 仅记录响应超过 n 秒的请求，0 表示全部 |
 | `log_num` | int | `1000` | 最大记录条数 |
 | `view_wtred` | int | `3` | 列表耗时超过 n 秒标红 |
 | `ignore_url_arr` | array | `["/xhprof"]` | 忽略的 URL 路径 |
 | `assets_url` | string | `/xhprof-assets` | 静态资源 URL 前缀 |
-| `auth_token` | string\|null | `null` | 设置后报告页必须带 `?token=xxx` 才能访问；建议公网部署时设置 |
+| `auth_token` | string\|null | `null` | 设置后报告页必须带 `?token=xxx` 才能访问。**默认 `null` 即不鉴权**：报告页与静态资源由入口类在宿主鉴权**之前**接管（代价见「报告页与静态资源」一节），未设置时任何能访问到该路径的人都能读到全部 run 的请求 URI、来源 IP 与函数名——公网/多租户部署**必须**设置；未设置时每次渲染记一条警告日志 |
 | `key_prefix` | string | `xhprof` | Redis key 前缀，多项目共用 Redis 时务必改成各自独立的值 |
 | `log_ttl` | int | `604800` | 性能数据保留时间（秒），默认 7 天 |
 | `locale` | string\|null | `null` | 报告页语言：`zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`；`null` = 跟随浏览器 `Accept-Language`，都匹配不上则中文；任意语言下都可用 `?lang=xx` 临时覆盖 |
 
 各配置项在不同框架上的已知限制见[验证与已知限制](#验证与已知限制)。
+
+调低 `sample_rate` 是唯一的按比例降压手段（`0.05` = 只记录 5% 的请求）；`ignore_url_arr` 仍是整条路径的兜底，两者可叠加。判定发生在采样入口（每次请求一次），不影响已存数据的读取与保留。非法值（如 `'5%'`、`'disabled'`）按 `1.0` 处理：宁可多采，也不静默变成「什么都不采」，让报告页看起来像坏了。
+
+要清理性能数据：只清空列表页用 `DEL <prefix>:run_id`——数据键会随 `log_ttl` 自然过期，索引里的悬空 id 会被列表跳过；全清则把 `<prefix>:request_log:*` 与 `<prefix>:xhprof_log:*` 扫出来连同索引一起删（`DEL` 不接受通配符，先用 `redis-cli --scan --pattern '<prefix>:*'` 列出再删，别用 `KEYS`）。索引列表没有 TTL 是刻意的：它有界于 `log_num`，且只是指向数据键的指针（`<prefix>` 即本项目配置的 `key_prefix` 值）。
 
 **报告页的语言切换器**
 
@@ -536,7 +560,7 @@ src/<Fw>/
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
 | 十二个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 9 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；ThinkPHP / Hyperf 未入环，见下 |
+| `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 9 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；原生 PHP / ThinkPHP / Hyperf 未入环，原因各不相同，见下 |
 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑 |
 
 
@@ -549,7 +573,7 @@ src/<Fw>/
 | Symfony 的 `kernel.event_subscriber` 自动配置 | 需要真实容器编译 |
 | 长驻进程下的静态状态串扰 | Webman 侧未改（Hyperf 侧已隔离：渲染期 9 个按请求量走协程 Context，`tests/Unit/Lib/RenderStateCoroutineTest.php` 用真让出的协程钉住） |
 | 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 真实 Redis 读写**已进验证环**（`cases/Redis.php`：真 phpredis + 真 Slim 端到端——业务请求 → 落库 → 列表页 → 报告页）；浏览器渲染与真实负载下的采样开销仍超出单测与验证环的范围 |
-| ThinkPHP / Hyperf 的适配器签名与语义 | 这两家未装入验证环（环覆盖 9 个框架），桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
+| 原生 PHP / ThinkPHP / Hyperf 的适配器签名与语义 | 三家未装入验证环（环覆盖 9 个框架），原因不同：**原生 PHP 没有第三方包可装**——环的对照物是真实框架包，对它不存在，其适配器语义由 `tests/Unit/Adapter/NativeTest.php` 用真超全局量 + 真 `php -S` 往返覆盖（观测面比环的 CLI 更强）；**ThinkPHP / Hyperf 有真包但未装**，桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
 
 **手工冒烟清单（每个框架三步）**
 

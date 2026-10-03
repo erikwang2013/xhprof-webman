@@ -4,13 +4,13 @@
 
 # XHProf Profiler Performa
 
-Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla, dan Drupal.
+Plugin profiling performa kode yang kompatibel dengan webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla, Drupal, dan PHP murni (tanpa framework).
 
 Mengumpulkan data profiling lewat ekstensi xhprof dan menyimpannya di Redis. Pengembang dapat dengan cepat membuka laporan analisis performa melalui browser untuk menemukan hambatan performa kode.
 
 ![Maskot proyek: nyala api kecil](../../../docs/images/pet.svg)
 
-Api kecil yang sama juga menjadi ikon situs dan ikon merek di kiri atas halaman report (`src/html/pet.svg`, disajikan di bawah prefiks `assets_url`).
+Api kecil yang sama juga menjadi ikon situs, ikon merek di kiri atas, dan ikon pengurutan tabel di halaman report (`src/html/pet.svg`, `src/html/images/sort_*.svg`, disajikan di bawah prefiks `assets_url`).
 
 **Riwayat Request**
 
@@ -19,6 +19,8 @@ Api kecil yang sama juga menjadi ikon situs dan ikon merek di kiri atas halaman 
 **Laporan satu eksekusi**
 
 ![Laporan satu eksekusi](../../../docs/images/run-report.png)
+
+**Membandingkan dua eksekusi** — di daftar Riwayat Request centang tepat dua baris (satu kotak centang per baris, pilih-semua ada di header) lalu klik "Bandingkan yang dipilih" untuk membuka tampilan diff. Kedua sisi diurutkan menurut waktu (run1 = eksekusi yang lebih awal, run2 = yang lebih akhir, tidak bergantung pada urutan daftar saat ini); warnanya bermakna perbaikan / regresi "dari run1 ke run2", dan tautan "Balikkan Laporan" di dalam halaman dapat menukar kedua sisi kapan saja.
 
 ## Persyaratan
 
@@ -49,6 +51,12 @@ Semua kelas entri berada di bawah prefiks namespace `ErikWang2013\Xhprof\` (dihi
 Paket ini mendeklarasikan `php >= 8.0`, tetapi komponen `yiisoft/*` yang diandalkan Yii3 mensyaratkan **PHP 8.1+**, jadi **Yii3 tidak bisa dipakai di PHP 8.0**; Symfony 7.x dan Drupal 11.x juga butuh versi PHP yang lebih tinggi. Langkah pemasangan terperinci ada di "Konfigurasi Framework" di bawah.
 
 ## Instalasi
+
+Pasang ekstensi xhprof dari PECL (2.3.x untuk PHP 8):
+
+```sh
+pecl install xhprof
+```
 
 Tambahkan konfigurasi xhprof di php.ini:
 
@@ -259,6 +267,17 @@ cp vendor/aaron-dev/xhprof-webman/wordpress/xhprof-webman.php wp-content/mu-plug
 
 **3. Konfigurasi** — nilai default ada di dalam paket pada `src/Wordpress/config/xhprof.php`; lihat "Referensi Konfigurasi" untuk daftar kolomnya. Pakai `ignore_url_arr` untuk mengecualikan path berfrekuensi tinggi seperti `wp-cron.php` dan `admin-ajax.php`.
 
+Untuk menimpa konfigurasi (alamat Redis, `auth_token`, …), definisikan konstanta di `wp-config.php` (mu-plugin dimuat cukup belakangan sehingga konstanta sudah tersedia):
+
+```php
+define('XHPROF_WEBMAN_CONFIG', [
+    'auth_token' => 'your-token',
+    'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0],
+]);
+```
+
+Sebagai alternatif, pasang filter `xhprof_webman_config` (dari tema atau plugin): filter ini ditumpuk di atas konstanta, dengan bentuk array yang sama.
+
 **4. Batas struktural jendela profiling** — jendelanya adalah `plugins_loaded` → `shutdown`, yang **tidak mencakup** bootstrap `wp-settings.php` maupun pemuatan plugin itu sendiri. Itu batas struktural WordPress: pekerjaan yang dilakukan pada fase tersebut tidak bisa diprofilkan.
 
 ---
@@ -380,17 +399,22 @@ Semua framework berbagi opsi konfigurasi berikut:
 | Konfigurasi | Tipe | Default | Deskripsi |
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Aktifkan/nonaktifkan profiling |
+| `sample_rate` | float | `1.0` | Sampling proporsional: tiap request direkam dengan probabilitas ini (mis. `0.05` = 5% request disampling); `1.0` = semua request disampling, `<=0` atau `false` = tidak ada yang disampling |
 | `time_limit` | int | `0` | Hanya profilkan request yang melebihi n detik, 0 berarti semua |
 | `log_num` | int | `1000` | Jumlah maksimum rekaman |
 | `view_wtred` | int | `3` | Sorot merah baris dengan waktu respons > n detik |
 | `ignore_url_arr` | array | `["/xhprof"]` | Path URL yang diabaikan |
 | `assets_url` | string | `/xhprof-assets` | Prefiks URL aset statis |
-| `auth_token` | string\|null | `null` | Kalau diisi, halaman report mensyaratkan `?token=xxx`; disarankan untuk deployment publik |
+| `auth_token` | string\|null | `null` | Kalau diisi, halaman report mensyaratkan `?token=xxx`. **Default `null` berarti tanpa autentikasi**: halaman report dan aset statisnya diambil alih kelas entri **sebelum** autentikasi aplikasi host berjalan (trade-off-nya dibahas di "Halaman report dan aset statis"), jadi tanpa token siapa pun yang bisa menjangkau path itu dapat membaca URI request, IP sumber, dan nama fungsi dari semua run — deployment publik dan multi-tenant **wajib** mengisinya; kalau tidak diisi, setiap render mencatat satu peringatan log |
 | `key_prefix` | string | `xhprof` | Prefiks key Redis; isi nilai berbeda per proyek bila berbagi satu Redis |
 | `log_ttl` | int | `604800` | Masa simpan data dalam detik (default 7 hari) |
 | `locale` | string\|null | `null` | Bahasa halaman report: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = ikuti `Accept-Language` peramban, kalau tidak ada yang cocok pakai bahasa Mandarin; `?lang=xx` menimpanya untuk satu permintaan |
 
 Keterbatasan yang diketahui dari opsi-opsi ini pada tiap framework tercantum di [Verifikasi dan Keterbatasan yang Diketahui](#verifikasi-dan-keterbatasan-yang-diketahui).
+
+Menurunkan `sample_rate` adalah satu-satunya cara menekan overhead secara proporsional (`0.05` = hanya merekam 5% request); `ignore_url_arr` tetap mengecualikan seluruh path, dan keduanya bisa digabungkan. Keputusannya diambil sekali per request di titik masuk sampling dan tidak memengaruhi cara run yang sudah ada dibaca maupun masa simpannya. Nilai tidak valid (mis. `'5%'`, `'disabled'`) diperlakukan sebagai `1.0`: mengambil sampel berlebih lebih baik daripada diam-diam tidak merekam apa pun, yang akan membuat halaman report tampak rusak.
+
+Untuk membersihkan data profil: kalau hanya ingin mengosongkan halaman daftar, pakai `DEL <prefix>:run_id` — key datanya akan kedaluwarsa sendiri lewat `log_ttl`, dan id menggantung yang tertinggal di indeks akan dilewati oleh daftar; kalau ingin membersihkan semuanya, pindai `<prefix>:request_log:*` dan `<prefix>:xhprof_log:*` lalu hapus bersama daftar indeksnya (`DEL` tidak menerima wildcard, jadi daftarkan dulu key-nya dengan `redis-cli --scan --pattern '<prefix>:*'` lalu hapus — jangan pakai `KEYS`). Daftar indeks sengaja tidak diberi TTL: ukurannya dibatasi `log_num`, dan isinya hanya pointer ke key data (`<prefix>` adalah nilai `key_prefix` yang dikonfigurasi untuk proyek ini).
 
 **Pengalih bahasa halaman report**
 
@@ -538,7 +562,7 @@ src/<Fw>/
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
 | Kedua belas framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
-| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk sembilan framework yang masuk loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); ThinkPHP / Hyperf tidak masuk loop — lihat di bawah |
+| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk sembilan framework yang masuk loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); PHP murni / ThinkPHP / Hyperf tidak masuk loop, masing-masing dengan alasan berbeda — lihat di bawah |
 | Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, dengan dua invarian: `uri()` tidak membawa scheme/host, dan `withHeaders()` tetap berlaku setelah `file()`. Jumlah SKIP loop adalah konstanta beku (2 di leg utama, 0 di leg 6.4) dan keduanya ada di Joomla: jalur baca asli `#__extensions.params` dan bentuk installer, keduanya butuh database atau installer untuk dijalankan |
 
 
@@ -551,7 +575,7 @@ src/<Fw>/
 | Konfigurasi otomatis `kernel.event_subscriber` Symfony | Membutuhkan kompilasi container asli |
 | Cakap-silang state statis di proses berjalan lama | Sisi Webman tidak diubah (di Hyperf sudah diisolasi: 9 nilai state render per permintaan melewati Context coroutine, dipatok oleh `tests/Unit/Lib/RenderStateCoroutineTest.php` dengan coroutine yang benar-benar menyerahkan kendali) |
 | I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | I/O Redis asli **kini ada di dalam loop** (`cases/Redis.php`: phpredis asli + permintaan Slim asli dari awal sampai akhir — permintaan → penyimpanan → halaman daftar → halaman laporan); rendering browser dan overhead di bawah beban nyata tetap di luar cakupan unit test dan loop |
-| Signature dan semantik adapter untuk ThinkPHP / Hyperf | keduanya tidak masuk loop verifikasi (loop mencakup sembilan framework); stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
+| Signature dan semantik adapter untuk PHP murni / ThinkPHP / Hyperf | ketiganya tidak masuk loop verifikasi (loop mencakup sembilan framework), dengan alasan yang berbeda: **PHP murni tidak punya paket pihak ketiga untuk dipasang** — loop membandingkan terhadap paket framework asli, dan untuk PHP murni paket itu tidak ada, jadi semantik adapter-nya dicakup oleh `tests/Unit/Adapter/NativeTest.php` lewat superglobal asli dan uji bolak-balik `php -S` sungguhan (permukaan observasi yang lebih kuat daripada CLI milik loop); **ThinkPHP / Hyperf punya paket asli yang memang tidak dipasang**, jadi stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
 
 **Daftar periksa smoke manual (tiga langkah per framework)**
 

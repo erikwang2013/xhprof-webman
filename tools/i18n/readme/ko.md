@@ -1,12 +1,12 @@
 # XHProf 성능 프로파일러
 
-webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal 과 호환되는 코드 성능 프로파일링 플러그인입니다.
+webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 순수 PHP(프레임워크 없음)과 호환되는 코드 성능 프로파일링 플러그인입니다.
 
 xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니다. 개발자는 브라우저로 성능 분석 보고서를 빠르게 열어 코드의 성능 병목을 찾아낼 수 있습니다.
 
 ![프로젝트 펫: 작은 불꽃](docs/images/pet.svg)
 
-같은 작은 불꽃이 보고서 페이지의 사이트 아이콘과 왼쪽 위 브랜드 아이콘이기도 합니다(`src/html/pet.svg`, `assets_url` 접두사로 제공).
+같은 작은 불꽃이 보고서 페이지의 사이트 아이콘, 왼쪽 위 브랜드 아이콘, 그리고 표 정렬 아이콘이기도 합니다(`src/html/pet.svg`, `src/html/images/sort_*.svg`, `assets_url` 접두사로 제공).
 
 **요청 기록**
 
@@ -15,6 +15,8 @@ xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니
 **단일 실행 보고서**
 
 ![단일 실행 보고서](docs/images/run-report.png)
+
+**두 실행 비교** — 「요청 기록」 목록에서 정확히 두 행을 선택하고(행마다 체크박스 하나, 표 헤더에서 전체 선택 가능) 「선택 항목 비교」를 누르면 diff 뷰가 열립니다. 두 쪽은 시간 순서로 정해집니다(run1 = 이른 쪽, run2 = 늦은 쪽이며, 목록의 현재 정렬과는 무관합니다). 색은 「run1 → run2」 방향의 개선 / 회귀를 뜻하고, 페이지 안의 「보고서 반전」 링크로 언제든 두 쪽을 바꿀 수 있습니다.
 
 ## 요구 사항
 
@@ -45,6 +47,12 @@ xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니
 이 패키지는 `php >= 8.0` 을 선언하지만, Yii3가 의존하는 `yiisoft/*` 컴포넌트는 **PHP 8.1 이상**을 요구하므로 **PHP 8.0에서는 Yii3를 사용할 수 없습니다**. Symfony 7.x와 Drupal 11.x도 마찬가지로 더 높은 PHP 버전이 필요합니다. 단계별 설정 방법은 아래 "프레임워크 설정"에 있습니다.
 
 ## 설치
+
+xhprof 확장은 PECL에서 설치합니다(PHP 8 기준 현재 2.3.x):
+
+```sh
+pecl install xhprof
+```
 
 php.ini 에 xhprof 설정을 추가합니다:
 
@@ -255,6 +263,17 @@ cp vendor/aaron-dev/xhprof-webman/wordpress/xhprof-webman.php wp-content/mu-plug
 
 **3. 설정** — 기본값은 패키지의 `src/Wordpress/config/xhprof.php` 에 있습니다. 각 필드는 "설정 레퍼런스"를 참고하십시오. `ignore_url_arr` 로 `wp-cron.php` 나 `admin-ajax.php` 같은 고빈도 경로를 제외할 수 있습니다.
 
+설정(Redis 주소, `auth_token` 등)을 덮어써야 할 때는 `wp-config.php` 에 상수를 정의하면 됩니다(mu-plugin 로드 시점에는 상수를 이미 쓸 수 있습니다):
+
+```php
+define('XHPROF_WEBMAN_CONFIG', [
+    'auth_token' => 'your-token',
+    'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0],
+]);
+```
+
+또는 `xhprof_webman_config` 필터를 걸 수 있습니다(테마나 플러그인에서): 이 필터는 상수 위에 겹쳐 적용되며, 반환값은 위 배열과 같은 형태입니다.
+
 **4. 프로파일링 구간의 구조적 한계** — 구간은 `plugins_loaded` → `shutdown` 이며, 여기에는 `wp-settings.php` 부트스트랩과 플러그인 로딩 자체가 **포함되지 않습니다**. 이는 WordPress의 구조적 한계로, 그 단계에서 수행되는 작업은 프로파일링할 수 없습니다.
 
 ---
@@ -376,17 +395,22 @@ Yii2(`yiisoft/yii2 ^2.0`, PHP >= 8.0)용입니다. **Yii3와는 같은 프레임
 | 설정 | 타입 | 기본값 | 설명 |
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | 프로파일링 활성화/비활성화 |
+| `sample_rate` | float | `1.0` | 비례 샘플링: 각 요청은 이 확률로 기록됩니다(예: `0.05` = 요청의 5%가 샘플링됨); `1.0` = 전부 샘플링, `<=0` 또는 `false` = 샘플링 안 함 |
 | `time_limit` | int | `0` | n초를 초과한 요청만 프로파일링, 0은 전체 |
 | `log_num` | int | `1000` | 최대 기록 수 |
 | `view_wtred` | int | `3` | 응답 시간이 n초를 넘는 행을 빨간색으로 강조 |
 | `ignore_url_arr` | array | `["/xhprof"]` | 무시할 URL 경로 |
 | `assets_url` | string | `/xhprof-assets` | 정적 리소스 URL 접두사 |
-| `auth_token` | string\|null | `null` | 설정하면 보고서 페이지에 `?token=xxx` 가 필요합니다. 공개 배포에 권장합니다 |
+| `auth_token` | string\|null | `null` | 설정하면 보고서 페이지에 `?token=xxx` 가 필요합니다. **기본값 `null` 은 곧 인증 없음**: 보고서 페이지와 정적 리소스는 진입 클래스가 호스트 애플리케이션의 인증 **전에** 가로챕니다(대가는 「보고서 페이지와 정적 리소스」 절 참조). 따라서 토큰을 설정하지 않으면 그 경로에 접근할 수 있는 사람은 누구나 모든 run의 요청 URI, 출처 IP와 함수 이름을 읽을 수 있습니다 — 공용·멀티 테넌트 배포는 **반드시** 설정해야 합니다; 미설정 시 렌더링할 때마다 경고 로그를 한 줄 기록합니다 |
 | `key_prefix` | string | `xhprof` | Redis 키 접두사. Redis를 공유할 때 프로젝트마다 다른 값을 설정하십시오 |
 | `log_ttl` | int | `604800` | 데이터 보존 기간(초), 기본 7일 |
 | `locale` | string\|null | `null` | 보고서 페이지 언어: `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja`; `null` = 브라우저 `Accept-Language` 를 따르고, 맞는 언어가 없으면 중국어; `?lang=xx` 는 요청 하나에 대해 이를 덮어씁니다 |
 
 각 프레임워크에서 이 옵션들의 알려진 제한은 [검증과 알려진 제한 사항](#검증과-알려진-제한-사항)에 정리되어 있습니다.
+
+`sample_rate` 를 낮추는 것이 비례적으로 부하를 줄이는 유일한 수단입니다(`0.05` = 요청의 5%만 기록); `ignore_url_arr` 는 여전히 경로 전체를 배제하는 안전장치이고, 둘은 겹쳐 쓸 수 있습니다. 판정은 샘플링 진입점에서 요청마다 한 번 일어나며, 이미 저장된 데이터의 읽기와 보존에는 영향을 주지 않습니다. 잘못된 값(예: `'5%'`, `'disabled'`)은 `1.0` 으로 처리합니다: 많이 샘플링하는 편이, 조용히 「아무것도 기록하지 않음」이 되어 보고서 페이지가 고장 난 것처럼 보이는 것보다 낫습니다.
+
+프로파일링 데이터를 정리하려면: 목록 페이지만 비울 때는 `DEL <prefix>:run_id` 를 씁니다 — 데이터 키는 `log_ttl` 에 따라 자연히 만료되고, 인덱스에 남은 끊긴 id는 목록에서 건너뜁니다. 전부 지울 때는 `<prefix>:request_log:*` 와 `<prefix>:xhprof_log:*` 를 스캔해 인덱스 목록과 함께 삭제합니다(`DEL` 은 와일드카드를 받지 않으므로 `redis-cli --scan --pattern '<prefix>:*'` 로 먼저 키를 나열한 뒤 지우십시오 — `KEYS` 는 쓰지 마십시오). 인덱스 목록에 TTL이 없는 것은 의도된 것입니다: `log_num` 으로 상한이 정해져 있고, 데이터 키를 가리키는 포인터 목록일 뿐입니다(`<prefix>` 는 이 프로젝트에 설정된 `key_prefix` 값입니다).
 
 **보고서 페이지의 언어 전환기**
 
@@ -534,7 +558,7 @@ src/<Fw>/
 | 어댑터와 진입 배선 동작 | `tests/Unit/Adapter/*Test.php`: 활성화 → 저장 / 비활성화 → 저장 안 함 / 비즈니스 예외 → `finally` 로 여전히 저장 |
 | 열두 프레임워크가 하나의 설정 키 집합을 공유 | config parity 테스트(키 집합 기준이며 바이트 단위가 아님, 주석은 달라도 됨) |
 | 두 README가 서로 대응 | README parity 테스트: `##` / `###` 제목 순서와 코드 블록 수를 비교 |
-| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡, **두 개의 leg**: 메인 leg는 각 프레임워크의 최신 패키지를 설치하고, 별도 `tools/contracts/legacy-symfony64` 프로젝트가 같은 Symfony case를 6.4에 대해 실행합니다): 실제 프레임워크 패키지를 설치하고(Drupal은 실제 `drupal/core`, Joomla는 실제 CMS 릴리스 패키지 두 개) 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다 — **루프에 들어간 9개 프레임워크**(Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman)에 대해. ThinkPHP / Hyperf는 루프 밖입니다(아래 참조) |
+| 어댑터가 호출하는 메서드가 실제로 존재 | `tools/contracts/` 검증 루프(별도 CI 잡, **두 개의 leg**: 메인 leg는 각 프레임워크의 최신 패키지를 설치하고, 별도 `tools/contracts/legacy-symfony64` 프로젝트가 같은 Symfony case를 6.4에 대해 실행합니다): 실제 프레임워크 패키지를 설치하고(Drupal은 실제 `drupal/core`, Joomla는 실제 CMS 릴리스 패키지 두 개) 모든 메서드 / 상수 / 전역 함수의 존재를 리플렉션으로 단언합니다 — **루프에 들어간 9개 프레임워크**(Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman)에 대해. 순수 PHP / ThinkPHP / Hyperf는 루프 밖이며, 이유는 각각 다릅니다(아래 참조) |
 | 어댑터의 의미 | 같은 루프가 실제 request·response 객체를 만들어 어댑터를 실행하며, 두 불변식(`uri()` 에 scheme/host가 없을 것, `file()` 뒤에도 `withHeaders()` 가 적용될 것)을 확인합니다. 루프의 SKIP 수는 동결된 상수(메인 leg 2, 6.4 leg 0)이며 둘 다 Joomla에 있습니다: `#__extensions.params` 의 실제 읽기 경로와 설치 프로그램 형태이고, 둘 다 실행하려면 데이터베이스나 설치 프로그램이 필요합니다 |
 
 
@@ -547,7 +571,7 @@ src/<Fw>/
 | Symfony의 `kernel.event_subscriber` 자동 구성 | 실제 컨테이너 컴파일이 필요합니다 |
 | 장수명 프로세스에서의 정적 상태 간섭 | Webman 쪽은 미변경 (Hyperf 쪽은 격리됨: 렌더링 시점의 9개 값이 요청별로 코루틴 Context를 거치며, `tests/Unit/Lib/RenderStateCoroutineTest.php` 가 실제로 양보하는 코루틴으로 고정한다) |
 | 실제 Redis I/O, 브라우저 렌더링, 실제 부하에서의 프로파일링 오버헤드 | 실제 Redis I/O는 **이제 검증 루프 안에 있습니다**(`cases/Redis.php`: 실제 phpredis + 실제 Slim 요청을 끝에서 끝까지 — 요청 → 저장 → 목록 페이지 → 보고서 페이지). 브라우저 렌더링과 실제 부하에서의 오버헤드는 여전히 단위 테스트와 루프의 범위 밖입니다 |
-| ThinkPHP / Hyperf 어댑터의 시그니처와 시맨틱스 | 이 두 프레임워크는 검증 루프에 들어 있지 않습니다(루프는 9개 프레임워크를 커버합니다). 스텁은 패키지 안의 `tests/Stubs/framework-stubs.php`에 손으로 작성되어 있고, 실제 패키지와의 대조가 없습니다 |
+| 순수 PHP / ThinkPHP / Hyperf 어댑터의 시그니처와 시맨틱스 | 이 세 프레임워크는 검증 루프에 들어 있지 않습니다(루프는 9개 프레임워크를 커버합니다). 이유는 각각 다릅니다: **순수 PHP는 설치할 서드파티 패키지가 없습니다** — 루프의 대조 대상은 실제 프레임워크 패키지인데 그것이 존재하지 않으므로, 이 어댑터의 시맨틱스는 `tests/Unit/Adapter/NativeTest.php` 가 실제 슈퍼글로벌과 실제 `php -S` 왕복으로 커버합니다(관측면이 루프의 CLI보다 강합니다); **ThinkPHP / Hyperf는 실제 패키지가 있지만 설치되지 않았습니다** — 스텁은 패키지 안의 `tests/Stubs/framework-stubs.php`에 손으로 작성되어 있고, 실제 패키지와의 대조가 없습니다 |
 
 **수동 스모크 체크리스트 (프레임워크당 세 단계)**
 

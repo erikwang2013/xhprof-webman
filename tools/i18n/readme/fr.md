@@ -1,12 +1,12 @@
 # Profileur de performance XHProf
 
-Un plugin de profilage de performance du code, compatible avec webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla et Drupal.
+Un plugin de profilage de performance du code, compatible avec webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal et PHP natif (sans framework).
 
 Il collecte les données de profilage via l'extension xhprof et les stocke dans Redis. Les développeurs accèdent rapidement, depuis un navigateur, aux rapports d'analyse de performance pour identifier les goulots d'étranglement du code.
 
 ![Mascotte du projet : petite flamme](docs/images/pet.svg)
 
-La même petite flamme sert aussi d'icône de site et d'icône de marque en haut à gauche de la page de rapport (`src/html/pet.svg`, servie sous le préfixe `assets_url`).
+La même petite flamme sert aussi d'icône de site, d'icône de marque en haut à gauche et d'icônes de tri dans les tableaux de la page de rapport (`src/html/pet.svg`, `src/html/images/sort_*.svg`, servie sous le préfixe `assets_url`).
 
 **Journal des requêtes**
 
@@ -15,6 +15,8 @@ La même petite flamme sert aussi d'icône de site et d'icône de marque en haut
 **Rapport d’une exécution**
 
 ![Rapport d’une exécution](docs/images/run-report.png)
+
+**Comparer deux exécutions** — dans la liste du journal des requêtes, cochez exactement deux lignes (une case à cocher par ligne, une case « Tout sélectionner » dans l'en-tête) et cliquez sur « Comparer la sélection » pour ouvrir la vue diff. Les deux côtés sont ordonnés par heure (run1 = l'exécution la plus ancienne, run2 = la plus récente, indépendamment du tri courant de la liste) ; les couleurs signifient amélioration / régression « de run1 à run2 », et le lien « Inverser le rapport » de la page échange les deux côtés à tout moment.
 
 ## Prérequis
 
@@ -45,6 +47,12 @@ Les classes d'entrée vivent toutes sous le préfixe de namespace `ErikWang2013\
 Ce paquet déclare `php >= 8.0`, mais les composants `yiisoft/*` dont Yii3 dépend exigent **PHP 8.1+**, donc **Yii3 n'est pas utilisable sur PHP 8.0** ; Symfony 7.x et Drupal 11.x demandent eux aussi une version de PHP plus élevée. La mise en place pas à pas se trouve dans « Configuration par framework » ci-dessous.
 
 ## Installation
+
+Installez l'extension xhprof depuis PECL (2.3.x pour PHP 8) :
+
+```sh
+pecl install xhprof
+```
 
 Ajoutez la configuration xhprof dans php.ini :
 
@@ -255,6 +263,17 @@ cp vendor/aaron-dev/xhprof-webman/wordpress/xhprof-webman.php wp-content/mu-plug
 
 **3. Configuration** — les valeurs par défaut se trouvent dans le paquet, à `src/Wordpress/config/xhprof.php` ; voir « Référence de configuration » pour les champs. Utilisez `ignore_url_arr` pour exclure les chemins à forte fréquence comme `wp-cron.php` et `admin-ajax.php`.
 
+Pour remplacer la configuration (adresse Redis, `auth_token`, …), définissez une constante dans `wp-config.php` (le mu-plugin est chargé suffisamment tard pour que la constante soit déjà disponible) :
+
+```php
+define('XHPROF_WEBMAN_CONFIG', [
+    'auth_token' => 'your-token',
+    'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0],
+]);
+```
+
+Vous pouvez aussi utiliser le filtre `xhprof_webman_config` (depuis un thème ou une extension) : il s'applique par-dessus la constante, avec la même forme de tableau.
+
 **4. Une limite structurelle de la fenêtre de profilage** — la fenêtre va de `plugins_loaded` à `shutdown`, ce qui **n'inclut pas** l'amorçage de `wp-settings.php` ni le chargement des plugins lui-même. C'est une limite structurelle de WordPress : le travail effectué dans cette phase ne peut pas être profilé.
 
 ---
@@ -376,17 +395,22 @@ Tous les frameworks partagent ces options de configuration :
 | Configuration | Type | Défaut | Description |
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Active/désactive le profilage |
+| `sample_rate` | float | `1.0` | Échantillonnage proportionnel : chaque requête est enregistrée avec cette probabilité (p. ex. `0.05` = 5 % des requêtes) ; `1.0` = tout échantillonner, `<=0` ou `false` = ne rien échantillonner |
 | `time_limit` | int | `0` | Ne profiler que les requêtes dépassant n secondes, 0 signifie toutes |
 | `log_num` | int | `1000` | Nombre maximal d'enregistrements |
 | `view_wtred` | int | `3` | Met en rouge les lignes dont le temps de réponse dépasse n secondes |
 | `ignore_url_arr` | array | `["/xhprof"]` | Chemins d'URL à ignorer |
 | `assets_url` | string | `/xhprof-assets` | Préfixe d'URL des ressources statiques |
-| `auth_token` | string\|null | `null` | Si défini, la page de rapport exige `?token=xxx` ; recommandé pour les déploiements publics |
+| `auth_token` | string\|null | `null` | Si défini, la page de rapport exige `?token=xxx`. **Par défaut, `null` signifie aucune authentification** : la classe d'entrée prend en charge la page de rapport et ses ressources statiques **avant** que l'authentification de l'application hôte ne s'exécute (voir le compromis dans « Page de rapport et ressources statiques »), donc sans jeton, quiconque peut atteindre ce chemin peut lire l'URI de requête, l'IP source et les noms de fonctions de toutes les exécutions — les déploiements publics et multi-locataires **doivent** le définir ; s'il n'est pas défini, chaque rendu consigne un avertissement dans les logs |
 | `key_prefix` | string | `xhprof` | Préfixe des clés Redis ; utilisez des valeurs distinctes par projet lorsque vous partagez un Redis |
 | `log_ttl` | int | `604800` | Durée de conservation des données en secondes (7 jours par défaut) |
 | `locale` | string\|null | `null` | Langue de la page de rapport : `zh_CN`/`en`/`ko`/`ru`/`de`/`fr`/`es`/`pt`/`ar`/`hi`/`bn`/`id`/`ja` ; `null` = suivre l'`Accept-Language` du navigateur, sinon le chinois ; `?lang=xx` la remplace pour une requête |
 
 Les limites connues de ces options sur chaque framework sont listées dans [Vérification et limites connues](#vérification-et-limites-connues).
+
+Réduire `sample_rate` est le seul moyen de réduire la surcharge proportionnellement (`0.05` n'enregistre que 5 % des requêtes) ; `ignore_url_arr` exclut toujours des chemins entiers, et les deux se cumulent. La décision est prise une fois par requête, au point d'entrée de l'échantillonnage, et n'affecte pas la lecture ni la conservation des données déjà enregistrées. Les valeurs invalides (p. ex. `'5%'`, `'disabled'`) retombent sur `1.0` : mieux vaut trop échantillonner que ne rien enregistrer en silence, ce qui ferait paraître la page de rapport cassée.
+
+Pour purger les données de profilage : pour ne vider que la page de liste, utilisez `DEL <prefix>:run_id` — les clés de données expirent d'elles-mêmes via `log_ttl`, et les id orphelins laissés dans l'index sont ignorés par la liste ; pour tout purger, listez `<prefix>:request_log:*` et `<prefix>:xhprof_log:*` puis supprimez-les ainsi que la liste d'index (`DEL` n'accepte pas de jokers : listez d'abord les clés avec `redis-cli --scan --pattern '<prefix>:*'`, et n'utilisez pas `KEYS`). La liste d'index n'a volontairement pas de TTL : elle est bornée par `log_num` et n'est qu'une liste de pointeurs vers les clés de données (`<prefix>` est la valeur de `key_prefix` configurée pour ce projet).
 
 **Sélecteur de langue de la page de rapport**
 
@@ -534,7 +558,7 @@ src/<Fw>/
 | Comportement des adaptateurs et du câblage des entrées | `tests/Unit/Adapter/*Test.php` : activé → enregistré / désactivé → non enregistré / exception métier → enregistré tout de même via `finally` |
 | Les douze frameworks partagent un même jeu de clés de configuration | test de parité de configuration (jeux de clés, pas octet par octet ; les commentaires peuvent différer) |
 | Les deux README se correspondent | test de parité des README : compare la séquence de titres `##` / `###` et le nombre de blocs de code |
-| Les méthodes appelées par les adaptateurs existent réellement | boucle de vérification `tools/contracts/` (job CI dédié, **deux jambes** : la jambe principale installe les paquets les plus récents de chaque framework, et le projet séparé `tools/contracts/legacy-symfony64` exécute le même cas Symfony contre 6.4) : elle installe de vrais paquets de framework (un vrai `drupal/core` pour Drupal, deux vrais paquets de version du CMS pour Joomla) et vérifie par réflexion que chaque méthode / constante / fonction globale existe **pour les neuf frameworks de la boucle** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman) ; ThinkPHP / Hyperf ne sont pas dans la boucle — voir ci-dessous |
+| Les méthodes appelées par les adaptateurs existent réellement | boucle de vérification `tools/contracts/` (job CI dédié, **deux jambes** : la jambe principale installe les paquets les plus récents de chaque framework, et le projet séparé `tools/contracts/legacy-symfony64` exécute le même cas Symfony contre 6.4) : elle installe de vrais paquets de framework (un vrai `drupal/core` pour Drupal, deux vrais paquets de version du CMS pour Joomla) et vérifie par réflexion que chaque méthode / constante / fonction globale existe **pour les neuf frameworks de la boucle** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman) ; PHP natif / ThinkPHP / Hyperf ne sont pas dans la boucle, chacun pour une raison différente — voir ci-dessous |
 | Sémantique des adaptateurs | La même boucle instancie de vrais objets de requête et de réponse et exécute les adaptateurs, avec deux invariants : `uri()` ne porte pas de scheme/host, et `withHeaders()` s'applique encore après `file()`. Le nombre de SKIP de la boucle est une constante gelée (2 sur la jambe principale, 0 sur la jambe 6.4) et les deux SKIP sont dans Joomla : le vrai chemin de lecture de `#__extensions.params` et la forme de l'installeur — les deux exigent une base de données ou un installeur pour tourner |
 
 
@@ -547,7 +571,7 @@ src/<Fw>/
 | L'auto-configuration `kernel.event_subscriber` de Symfony | Nécessite une vraie compilation du conteneur |
 | Interférences d'état statique dans les processus longue durée | Côté Webman inchangé (côté Hyperf les 9 valeurs d'état de rendu par requête sont isolées dans le Context de coroutine, épinglées par `tests/Unit/Lib/RenderStateCoroutineTest.php` avec une coroutine qui cède réellement) |
 | E/S Redis réelles, rendu navigateur, surcoût du profilage sous charge réelle | Les E/S Redis réelles sont **désormais dans la boucle** (`cases/Redis.php` : vrai phpredis + une vraie requête Slim de bout en bout — requête → persistance → liste → page de rapport) ; le rendu navigateur et le surcoût sous charge réelle restent hors du périmètre des tests unitaires et de la boucle |
-| Signatures et sémantique des adaptateurs pour ThinkPHP / Hyperf | ces deux-là ne sont pas dans la boucle de vérification (elle couvre neuf frameworks) ; leurs stubs sont écrits à la main dans `tests/Stubs/framework-stubs.php`, sans comparaison avec les vrais paquets |
+| Signatures et sémantique des adaptateurs pour PHP natif / ThinkPHP / Hyperf | ces trois-là ne sont pas dans la boucle de vérification (elle couvre neuf frameworks), chacun pour une raison différente : **PHP natif n'a aucun paquet tiers à installer** — la boucle se compare à de vrais paquets de framework, et il n'en existe aucun pour lui, donc la sémantique de ses adaptateurs est couverte par `tests/Unit/Adapter/NativeTest.php`, via de vraies superglobales et un vrai aller-retour `php -S` (une surface d'observation plus forte que le CLI de la boucle) ; **ThinkPHP / Hyperf ont de vrais paquets qui ne sont simplement pas installés**, donc leurs stubs sont écrits à la main dans `tests/Stubs/framework-stubs.php`, sans comparaison avec un vrai paquet |
 
 **Liste de vérification manuelle (trois étapes par framework)**
 
