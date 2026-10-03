@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Design-Abwägungen: Entscheidung, Grund und Kosten</title>
-  <desc>Eine Gegenüberstellung von fünf Schlüsselentscheidungen, jede mit der Entscheidung selbst, dem eingebrachten Nutzen und den entstandenen Kosten: Core hängt nur von 5 Verträgen ab, Eintragsklassen bedienen die Report-Seite selbst, es wird keine gemeinsame Schicht herausgezogen, Stubs werden von einem unabhängigen Verifikationszyklus geprüft, und die sechs neuen Frameworks nutzen explizite Injektion statt autoDetect. Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original.</desc>
+  <desc>Eine Gegenüberstellung von fünf Schlüsselentscheidungen, jede mit der Entscheidung selbst, dem eingebrachten Nutzen und den entstandenen Kosten: Core hängt nur von 5 Verträgen ab, Eintragsklassen bedienen die Report-Seite selbst, es wird keine gemeinsame Schicht herausgezogen, Stubs werden von einem unabhängigen Verifikationszyklus geprüft, und die 8 später ergänzten Frameworks nutzen explizite Injektion statt autoDetect. Maschinelle Übersetzung. Diese deutsche Fassung wurde maschinell erzeugt und nicht von einem Muttersprachler gegengelesen. Verbindlich ist das englische Original.</desc>
 
-  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="664" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">Design-Abwägungen: Entscheidung → Grund → Kosten</text>
@@ -11,7 +11,7 @@
 
   <!-- 结论条 -->
   <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
-  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">Änderungen an src/Core/ durch die 6 neuen Frameworks = 0</text>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">Änderungen an src/Core/ durch die 8 später ergänzten Frameworks = 0</text>
 
   <!-- ============ 表头 ============ -->
   <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
@@ -34,7 +34,7 @@
 
   <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
   <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">Framework hinzufügen = ein Verzeichnis hinzufügen</text>
-  <text x="428" y="224" font-size="11" fill="#24292f">die 6 neuen Frameworks ändern 0 Zeilen in src/Core/;</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">die 8 später ergänzten Frameworks ändern 0 Zeilen in src/Core/;</text>
   <text x="428" y="240" font-size="11" fill="#24292f">auch das Verhalten von Webman/Laravel bleibt unberührt</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
@@ -85,15 +85,15 @@
   <text x="428" y="494" font-size="10.11" fill="#24292f">sonst kodiert der Stub treu die Vermutung des Autors über die Framework-API:</text>
   <text x="428" y="510" font-size="10.22" fill="#24292f">Unit-Tests alle grün, und auf einer echten Maschine: Call to undefined method</text>
 
-  <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
+  <rect x="800" y="452" width="400" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
   <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">die Verifikationstiefe ist ungleich</text>
-  <text x="816" y="494" font-size="11" fill="#24292f">L2-Semantik deckt 4.5/6 ab; WordPress lässt sich nicht abdecken,</text>
-  <text x="816" y="510" font-size="11" fill="#24292f">nur Quelltext-Prüfung + manueller Smoke-Test</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">der Verifikationszyklus vergleicht gegen echte Framework-Pakete;</text>
+  <text x="816" y="510" font-size="8.25" fill="#24292f">Frameworks außerhalb des Zyklus haben keinen echten Paket-Vergleich (aus verschiedenen Gründen)</text>
 
   <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
   <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
   <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">explizite Injektion statt autoDetect</text>
-  <text x="40" y="584" font-size="11" fill="#24292f">alle 6 neuen Frameworks nutzen explizite Injektion:</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">alle 8 später ergänzten Frameworks nutzen explizite Injektion:</text>
   <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
 
   <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
@@ -105,4 +105,7 @@
   <text x="816" y="564" font-size="11.89" font-weight="600" fill="#bc4c00">Eintragsklassen müssen ihre Adapter selbst zusammenstellen</text>
   <text x="816" y="584" font-size="11" fill="#24292f">Core sondiert nicht mehr; jede Eintragsklasse schreibt selbst</text>
   <text x="816" y="600" font-size="11" fill="#24292f">etwa 30 Zeilen (inklusive 5 Adapter-Konstruktionen)</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="648" font-size="11" fill="#57606a">© erik · https://erik.xyz</text>
 </svg>

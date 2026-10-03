@@ -85,7 +85,7 @@ $noticePlain = is_string($notice) ? i18n_notice_plain($notice) : '';
  * Overlap threshold, px.
  *
  * Measured basis: the untranslated originals in docs/images/ collide nowhere
- * across all 197 runs.  That measurement is exact for the scripts the model was
+ * across all 206 runs.  That measurement is exact for the scripts the model was
  * measured on, and those are the only scripts it proves anything about — the
  * originals are Chinese, so it says the rule holds for CJK, not that two runs
  * on one baseline can never be right.
@@ -114,19 +114,21 @@ const OVERLAP_FAIL_PX = 1.0;   // >= this much horizontal ink overlap fails
  * safe to change.
  *
  * Measured across the twelve locales of this tree, it fires 2-13 times per
- * locale (13 of those in ru; 41 pairs in all), and the fired pairs divide by
+ * locale (13 of those in ru; 42 pairs in all), and the fired pairs divide by
  * axis:
  *
  *   - horizontal: the fragile set, and it moves with every translation change.
- *     fr's lifecycle#37 & #38 sit 1.4px apart on one baseline — one reworded
+ *     fr's lifecycle#37 & #38 sit 1.43px apart on one baseline — one reworded
  *     word from a collision, and nothing else in the pipeline would have said
  *     so.  The two architecture pairs (#30 & #32, #83 & #85 — a framework name
  *     beside the "新增" badge) fire in every locale: the layout leaves ~16px
- *     there in en and a wider word for the badge eats into it.
+ *     there at most (`bn` 16.06/15.33px), and a wider badge word eats into it
+ *     (`en` 11.46/10.73px with `added`).
  *   - diagonal: not a drawn gap.  $sep below combines the model's horizontal
  *     gap with the vertical one, so a pair separated on both axes can land
  *     under the threshold when a long translation closes the horizontal gap —
- *     measured in ru (7), hi (1) and bn (1), and none in the other nine.
+ *     measured in ru (7), hi (1), bn (1) and en (1), and none in the other
+ *     eight.
  *
  * The vertical axis is deliberately *not* part of this threshold.  A band's
  * height does not move when a translation is reworded — it changes only by

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 870" width="1200" height="870" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>{{architecture.meta.title}}</title>
   <desc>{{architecture.meta.desc}}</desc>
 
@@ -12,7 +12,7 @@
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="870" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="894" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">{{architecture.title.1}}</text>
@@ -61,7 +61,7 @@
 
   <text x="44" y="248" font-size="12" font-weight="600" fill="#0969da">{{architecture.entry.20}}</text>
 
-  <!-- 新增 8 个 -->
+  <!-- 后续扩展 8 个 -->
   <rect x="44" y="254" width="136" height="64" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5" stroke-dasharray="5 3"/>
   <text x="56" y="279" font-size="13" font-weight="600" fill="#24292f">{{architecture.entry.21}}</text>
   <text x="56" y="300" font-size="10.5" fill="#57606a">{{architecture.entry.22}}</text>
@@ -198,4 +198,7 @@
   <text x="1050" y="300" font-size="10.5" fill="#57606a">{{architecture.entry.87}}</text>
   <rect x="1122" y="261" width="44" height="17" rx="8.5" fill="#0969da"/>
   <text x="1144" y="273.5" font-size="10" fill="#ffffff" text-anchor="middle">{{architecture.entry.88}}</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="878" font-size="11" fill="#57606a">{{architecture.entry.89}}</text>
 </svg>

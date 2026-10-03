@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>{{design.meta.title}}</title>
   <desc>{{design.meta.desc}}</desc>
 
-  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="664" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">{{design.title.1}}</text>
@@ -105,4 +105,7 @@
   <text x="816" y="564" font-size="12.5" font-weight="600" fill="#bc4c00">{{design.row5.49}}</text>
   <text x="816" y="584" font-size="11" fill="#24292f">{{design.row5.50}}</text>
   <text x="816" y="600" font-size="11" fill="#24292f">{{design.row5.51}}</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="648" font-size="11" fill="#57606a">{{design.row5.52}}</text>
 </svg>

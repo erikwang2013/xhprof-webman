@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 584" width="1200" height="584" role="img"
      font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>一次被采样请求的生命周期</title>
-  <desc>上半部分是采样请求的 8 个阶段：请求进入、入口类先判报告页与资源路径（命中则短路不采样）、Xhprof::bootstrap 注入 5 个适配器、isEnabled 与 extension_loaded 双重判断、xhprofStart、业务处理、finally 中 xhprofStop、save_run 落 Redis。下半部分是 5 条泳道，用色带标出 PSR-15（Yii3 / Slim）、Symfony、WordPress、Joomla、Drupal 各自的采样起止点与 shutdown 兜底。</desc>
+  <desc>上半部分是采样请求的 8 个阶段：请求进入、入口类先判报告页与资源路径（命中则短路不采样，报告页由 Xhprof::index() 鉴权，不过则 deny() 403/401/503）、Xhprof::bootstrap 注入 5 个适配器、采样判定（先判资格 isEnabled() 与 ext-xhprof/ext-redis，再走触发 token → 预算 → 抽样）、xhprofStart、业务处理、finally 中 xhprofStop、save_run 落 Redis。下半部分是 5 条泳道，用色带标出 PSR-15（Yii3 / Slim）、Symfony、WordPress、Joomla、Drupal 各自的采样起止点与 shutdown 兜底。</desc>
 
   <defs>
     <marker id="lc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -10,7 +10,7 @@
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="560" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="584" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">一次被采样请求的生命周期</text>
@@ -45,13 +45,13 @@
   <text x="334" y="184" font-size="10.5" fill="#57606a">5 个适配器</text>
   <line x1="452" y1="148" x2="462" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
 
-  <!-- 4 双重判断 -->
+  <!-- 4 采样判定 -->
   <rect x="464" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
   <circle cx="480" cy="118" r="9" fill="#0969da"/>
   <text x="480" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">4</text>
-  <text x="474" y="142" font-size="10.5" fill="#24292f">isEnabled()</text>
-  <text x="474" y="156" font-size="10.5" fill="#24292f">&amp;&amp; extension_</text>
-  <text x="474" y="170" font-size="10.5" fill="#24292f">loaded('xhprof')</text>
+  <text x="474" y="142" font-size="10.5" fill="#24292f">资格：isEnabled()</text>
+  <text x="474" y="156" font-size="10.5" fill="#24292f">+ ext-xhprof/redis</text>
+  <text x="474" y="170" font-size="10.5" fill="#24292f">→token→预算→抽样</text>
   <line x1="592" y1="148" x2="602" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
 
   <!-- 5 xhprofStart -->
@@ -88,7 +88,7 @@
   <text x="1034" y="170" font-size="10.5" fill="#57606a">失败只记日志</text>
 
   <!-- 短路说明 + 图例 -->
-  <text x="44" y="216" font-size="11.5" fill="#57606a">短路分支：命中报告页路径 → withBody(Xhprof::index())-&gt;send()；命中 assets_url → StaticController::serve()，都不采样</text>
+  <text x="44" y="216" font-size="11.5" fill="#57606a">短路分支：报告页路径 → withBody(Xhprof::index())-&gt;send()（index() 含鉴权，不过则 deny() 403/401/503）；assets_url → StaticController::serve()，都不采样</text>
   <rect x="880" y="204" width="14" height="14" rx="3" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
   <text x="900" y="215.5" font-size="11.5" fill="#57606a">采样中</text>
   <rect x="970" y="204" width="14" height="14" rx="3" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
@@ -152,4 +152,7 @@
   <rect x="440" y="500" width="540" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
   <text x="450" y="517" font-size="9.5" fill="#0550ae">http_middleware priority 1000（最外层）</text>
   <text x="970" y="517" font-size="9.5" fill="#0550ae" text-anchor="end">finally</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="568" font-size="11" fill="#57606a">© erik · https://erik.xyz</text>
 </svg>

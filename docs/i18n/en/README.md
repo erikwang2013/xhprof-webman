@@ -22,6 +22,8 @@ The same little flame is also the report page's site icon, the top-left brand ic
 
 **Comparing two runs** — in the Request Log list tick exactly two rows (one checkbox per row, select-all in the header) and click "Compare selected" to open the diff view. The two sides are ordered by time (run1 = the earlier run, run2 = the later one, independent of how the list is currently sorted); colours mean improvement / regression "from run1 to run2", and the in-page "Invert" link swaps the sides at any time.
 
+**Export for machines** — the report page's action bar offers JSON / CSV export (available for a single run, a comparison and an aggregate view); `?format=json` without a `run` parameter returns the **runs list as JSON** (each entry with its run_id, request metadata and the list-scope header figures), so a monitoring script or dashboard can pick up run ids without parsing HTML. An export request carrying `symbol=` returns 400 — export has no single-function view, and quietly handing back a full flat table would be worse than an error.
+
 ## Requirements
 
 - PHP >= 8.0
@@ -34,11 +36,11 @@ The same little flame is also the report page's site icon, the top-left brand ic
 | Framework | Minimum version | Minimum PHP | Entry class | How to mount |
 |-----------|----------------|-------------|-------------|--------------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | Register global middleware in `config/middleware.php` |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | Register global middleware in `app/Http/Kernel.php` |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0` | 8.0 | `Laravel\Middleware` | On 11+ append via `->withMiddleware()` in `bootstrap/app.php`; on 10 and below register global middleware in `app/Http/Kernel.php` |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | Register global middleware in `app/middleware.php` |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | Auto-registered via ConfigProvider |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | Register in `config/web/di/application.php`, must be first in the middleware list |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1 (6.4) / 8.2 (7.x) | `Symfony\XhprofListener` | Add the `kernel.event_subscriber` tag in `config/services.yaml` |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0` | 8.1 (6.4) / 8.2 (7.x) / 8.4 (8.x) | `Symfony\XhprofListener` | Add the `kernel.event_subscriber` tag in `config/services.yaml` |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | `$app->add(...)`, must be added last |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Copy into `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Copy into `plugins/system/`, install via Discover |
@@ -116,14 +118,15 @@ return [
 
 ### Laravel
 
-**1. Register middleware** — `app/Http/Kernel.php`:
+**1. Register middleware** — on Laravel 11 and later (the slim skeleton no longer has `app/Http/Kernel.php`) in `bootstrap/app.php`:
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+On Laravel 10 and below you still append `\ErikWang2013\Xhprof\Laravel\Middleware::class` to the `protected $middleware` array in `app/Http/Kernel.php`.
 
 **2. Report page and static assets** — **no controller or route registration needed**: before sampling starts the middleware inspects the request path; a hit on the report path `/xhprof` returns the report page, and a hit on the asset path (prefix read from the `assets_url` option, default `/xhprof-assets`) serves the static asset directly.
 
@@ -134,6 +137,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 Config file at `config/xhprof.php`. Laravel supports auto-discovery of ServiceProvider.
+
+**4. CLI and queues** (turn `sample_cli` on first when you need it; off by default) — both entry points without an HTTP request run inside a sampling window:
+
+- **Queue workers**: in `AppServiceProvider::boot()`, wire the four events to the package listener — one window per message, so long-running workers are covered:
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **Artisan commands**: `xhprof:profile` is registered by the package automatically (Laravel auto-discovers the ServiceProvider) — use it as-is:
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **Custom scripts / scheduled tasks**: for non-artisan entry points (your own PHP scripts, closure tasks) wrap the body:
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* your logic */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+Windows open and close per task (a synchronously dispatched child job nests, so only the outermost task is recorded), and a stored run's `request_uri` is recorded as `cli:<script name>`.
 
 ---
 
@@ -425,7 +457,7 @@ All frameworks share these configuration options:
 | `ip_allowlist` | array | `[]` | Report page IP allowlist, matched **byte for byte**: no CIDR ranges, no IPv6 normalisation (`2001:0db8::1` and `2001:db8::1` are two different strings). Empty = off; a value that is not an array rejects everything (fail closed, one error log entry). The value comes from `getRealIp()` and must be read together with `trusted_proxies` |
 | `trusted_proxies` | array | `[]` | **A deployment declaration, not technical enforcement**: only after declaring "there is a trusted proxy in front of me" will `ip_allowlist` accept a client IP taken from `X-Forwarded-For`/`X-Real-IP`. Most adapters take forwarding headers unconditionally — declaring this does **not** stop a forged XFF, so it is only safe behind a proxy you control |
 | `webhook_url` | string\|null | `null` | After a slow run (`wt >= view_wtred`) is stored, POST JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) to this address. Empty = nothing is sent. **Not a queue**: it does not wait for a response, has no retries and no on-disk fallback; a slow or dead endpoint just loses this one notification |
-| `sample_cli` | bool | `false` | Also sample CLI / requests without HTTP: when `true`, a stored run's `request_uri` is recorded as `cli:<script name>`; `false` = always ignored (the default, including queue workers and scheduled tasks) |
+| `sample_cli` | bool | `false` | Also sample CLI / requests without HTTP: when `true`, a stored run's `request_uri` is recorded as `cli:<script name>`; `false` = always ignored (the default, including queue workers and scheduled tasks). Whether it takes effect depends on the entry point: Laravel ships built-in support (queue listener + `XhprofCli`, see the Laravel section), the native PHP entry works in CLI by design (no HTTP dependency); the other frameworks' entries are HTTP-only and need a manual wrap |
 | `symbol_lookup_url` | string\|null | `null` | Source-link template: the report page renders `<template>?symbol=<urlencoded function name>`; `null`/empty = no link |
 | `max_runs_per_minute` | int\|null | `null` | Adaptive budget: at most this many runs are recorded per minute (a per-minute counter; beyond it nothing is sampled); `null`/non-positive = off. When the cache is unavailable or throws it fails open (sampling follows `sample_rate` as usual); **triggered sampling is not subject to it** |
 | `time_limit` | int | `0` | Only profile requests exceeding n seconds, 0 means all |
@@ -530,7 +562,7 @@ The first diagram is the **structure**: each of the twelve frameworks' entry cla
 
 ![Design rationale](./images/design.svg)
 
-The second diagram is the **reasoning**: five trade-offs laid out as decision / reason / cost, headed by "changes to `src/Core/` from the six new frameworks = 0".
+The second diagram is the **reasoning**: five trade-offs laid out as decision / reason / cost, headed by "changes to `src/Core/` from the 8 frameworks added later = 0".
 
 ---
 
@@ -581,7 +613,7 @@ xhprof-webman/
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: checks signatures and semantics against real framework packages (`legacy-symfony64/` is the 6.4 leg)
+├── tools/contracts/              # standalone verification loop: checks signatures and semantics against real framework packages (`legacy-symfony64/` and `legacy-symfony8/` are the two older-version legs)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -611,8 +643,8 @@ src/<Fw>/
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
 | All twelve frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
-| Every method the adapter calls really exists | `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the nine frameworks in the loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); native PHP / ThinkPHP / Hyperf are not in the loop, for different reasons each — see below |
-| Adapter semantics are correct | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run |
+| Every method the adapter calls really exists | `tools/contracts/` verification loop (its own CI job, **three legs**: the main leg installs each framework's latest packages, the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4, and the third one, `tools/contracts/legacy-symfony8`, runs Symfony 8.1 + Laravel 13 on PHP 8.5): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the ten frameworks in the loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP); native PHP / Hyperf are not in the loop, for different reasons each — see below |
+| Adapter semantics are correct | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg, 0 on the 8 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run; each case additionally has a per-leg frozen assertion-count floor (guards editorial shrinkage: an early return or a conditional wrap that runs fewer assertions while status stays PASS goes red) |
 
 
 **Not automatically verified (do not read this as "everything is covered")**
@@ -622,9 +654,11 @@ src/<Fw>/
 | Every framework's **wiring** (is the hook really attached, does the event really fire) | Unit tests use stubs; wiring can currently only be confirmed by manual smoke tests |
 | Joomla's remaining two sub-items | The two things the loop still cannot reach, and both for the same reason (they need a database or an installer): the real read path of `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) and the installer shape (namespace map written, `bootPlugin()` able to find the class) |
 | Symfony's `kernel.event_subscriber` auto-configuration | Requires a real container compile |
-| Static-state crosstalk in long-running processes | Unchanged on the Webman side (on Hyperf the 9 per-request render-state values are isolated in the coroutine Context, pinned by `tests/Unit/Lib/RenderStateCoroutineTest.php` with a genuinely yielding coroutine) |
+| Static-state crosstalk in long-running processes | **Isolated per coroutine**: when the backend is inside a coroutine context, the per-request render state goes into that context's Context (Hyperf / workerman auto-detected, see `Xhprof::coroutineContextClass()`); outside coroutines it stays process-static (FPM is one process per request anyway). Verified: Hyperf by a genuinely yielding coroutine test; workerman coroutines by the loop's Webman card, pinning two interleaved real TCP requests on a real server (B renders a whole page while A is suspended, and A wakes up still holding its own run / locale / metric columns) |
+| **Sampling** crosstalk under concurrent Hyperf coroutines | both the xhprof extension and the sampling switch are process-level: when two coroutines on the same worker interleave at an I/O point, the first one to stop takes the data (the second stop is an idempotent no-op), the later run is dropped and the stored one mixes both coroutines' execution records. Render state is isolated (row above); sampling state cannot be (extension semantics). Tighten `sample_rate` or disable sampling for that scenario when you need clean data |
+| Static-state crosstalk under Laravel Octane (Swoole) | Octane's dependency tree has no workerman/workerman, so `Workerman\Coroutine` structurally cannot exist and the Webman side's backend cannot be reused; the backend Octane needs is a third one, `\Swoole\Coroutine::getContext()` (~10 lines plus one `class_exists` branch), to be built once a Swoole environment is available |
 | Real Redis I/O, browser rendering, profiling overhead under real load | Real Redis I/O is **in the loop** (`cases/Redis.php`: real phpredis + a real Slim request end to end — hit → persist → list page → report page); browser rendering and profiling overhead under real load stay outside the scope of unit tests and the loop |
-| Adapter signatures and semantics for native PHP / ThinkPHP / Hyperf | these three are not in the verification loop (it covers nine frameworks), for different reasons: **native PHP has no third-party package to install** — the loop compares against real framework packages, and none exists for it, so its adapter semantics are covered by `tests/Unit/Adapter/NativeTest.php` through real superglobals and a real `php -S` round trip (a stronger observation surface than the loop's CLI); **ThinkPHP / Hyperf have real packages that simply are not installed**, so their stubs are hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
+| Adapter signatures and semantics for native PHP / Hyperf | these two are not in the verification loop (it covers ten frameworks), for different reasons: **native PHP has no third-party package to install** — the loop compares against real framework packages, and none exists for it, so its adapter semantics are covered by `tests/Unit/Adapter/NativeTest.php` through real superglobals and a real `php -S` round trip (a stronger observation surface than the loop's CLI); **Hyperf installs but cannot run there**: actually calling `Context::set()` throws `Class "Swoole\Coroutine" not found` — the loop's CI installs only xhprof+redis, and the missing ext-swoole coroutine runtime is a *runtime prerequisite* rather than an installability problem, so its stubs stay hand-written in `tests/Stubs/framework-stubs.php`, with no real-package comparison |
 
 **Manual smoke checklist (three steps per framework)**
 
@@ -650,7 +684,7 @@ When Drupal is installed under a subdirectory (e.g. `/sites/app/xhprof`), the pa
 
 **Symfony 6.4 compatibility**
 
-Symfony 6.4 compatibility has been measured (which is how two over-fits invisible on 7.4 were fixed: `Request` properties carry no native type declaration on 6.4, and the charset added by `prepare()` differs in case). **Both legs run in CI**: the main 7.x leg plus the separate `tools/contracts/legacy-symfony64` project, which runs the same case file without copying it — and both legs are in the tag gate as well.
+Symfony 6.4 compatibility has been measured (which is how two over-fits invisible on 7.4 were fixed: `Request` properties carry no native type declaration on 6.4, and the charset added by `prepare()` differs in case). **All legs run in CI**: the main 7.x leg, the separate `tools/contracts/legacy-symfony64` project, which runs the same case file without copying it, and the `tools/contracts/legacy-symfony8` leg (Symfony 8.1 + Laravel 13, PHP 8.5) — and all of them are in the tag gate as well.
 
 ---
 

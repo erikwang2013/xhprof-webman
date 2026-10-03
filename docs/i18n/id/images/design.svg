@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Trade-off desain: keputusan, alasan, dan biaya</title>
-  <desc>Perbandingan lima keputusan kunci, masing-masing mencantumkan keputusannya, manfaat yang dibelinya, dan biaya yang dibayarnya: Core hanya bergantung pada 5 kontrak, kelas entri melayani halaman report sendiri, tidak ada lapisan bersama yang diekstrak, stub diperiksa oleh loop verifikasi independen, dan enam framework baru memakai injeksi eksplisit alih-alih autoDetect. Terjemahan mesin. Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah versi bahasa Inggris.</desc>
+  <desc>Perbandingan lima keputusan kunci, masing-masing mencantumkan keputusannya, manfaat yang dibelinya, dan biaya yang dibayarnya: Core hanya bergantung pada 5 kontrak, kelas entri melayani halaman report sendiri, tidak ada lapisan bersama yang diekstrak, stub diperiksa oleh loop verifikasi independen, dan 8 framework susulan memakai injeksi eksplisit alih-alih autoDetect. Terjemahan mesin. Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah versi bahasa Inggris.</desc>
 
-  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="664" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">Trade-off Desain: keputusan → alasan → biaya</text>
@@ -11,7 +11,7 @@
 
   <!-- 结论条 -->
   <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
-  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">perubahan pada src/Core/ dari 6 framework baru = 0</text>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">perubahan pada src/Core/ dari 8 framework susulan = 0</text>
 
   <!-- ============ 表头 ============ -->
   <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
@@ -34,7 +34,7 @@
 
   <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
   <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">menambah framework = menambah satu direktori</text>
-  <text x="428" y="224" font-size="11" fill="#24292f">6 framework baru mengubah 0 baris src/Core/;</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">8 framework susulan mengubah 0 baris src/Core/;</text>
   <text x="428" y="240" font-size="11" fill="#24292f">perilaku Webman/Laravel juga tidak terpengaruh</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
@@ -87,13 +87,13 @@
 
   <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
   <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">kedalaman verifikasi tidak merata</text>
-  <text x="816" y="494" font-size="11" fill="#24292f">semantik L2 mencakup 4.5/6; WordPress tidak bisa dicakup,</text>
-  <text x="816" y="510" font-size="11" fill="#24292f">hanya cek teks sumber + smoke test manual</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">loop verifikasi memakai paket framework asli sebagai pembanding;</text>
+  <text x="816" y="510" font-size="9.46" fill="#24292f">framework di luar loop tidak punya pembanding paket asli (alasannya berbeda-beda)</text>
 
   <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
   <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
   <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">injeksi eksplisit, bukan autoDetect</text>
-  <text x="40" y="584" font-size="11" fill="#24292f">6 framework baru semua pakai injeksi eksplisit:</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">8 framework susulan semuanya pakai injeksi eksplisit:</text>
   <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
 
   <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
@@ -105,4 +105,7 @@
   <text x="816" y="564" font-size="12.5" font-weight="600" fill="#bc4c00">kelas entri harus merakit adapter sendiri</text>
   <text x="816" y="584" font-size="11" fill="#24292f">Core tak lagi menyelidiki; tiap kelas entri menulis</text>
   <text x="816" y="600" font-size="11" fill="#24292f">sekitar 30 baris (termasuk 5 konstruksi adapter)</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="648" font-size="11" fill="#57606a">© erik · https://erik.xyz</text>
 </svg>

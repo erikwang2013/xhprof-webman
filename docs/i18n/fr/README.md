@@ -24,6 +24,8 @@ La même petite flamme sert aussi d'icône de site, d'icône de marque en haut �
 
 **Comparer deux exécutions** — dans la liste du journal des requêtes, cochez exactement deux lignes (une case à cocher par ligne, une case « Tout sélectionner » dans l'en-tête) et cliquez sur « Comparer la sélection » pour ouvrir la vue diff. Les deux côtés sont ordonnés par heure (run1 = l'exécution la plus ancienne, run2 = la plus récente, indépendamment du tri courant de la liste) ; les couleurs signifient amélioration / régression « de run1 à run2 », et le lien « Inverser le rapport » de la page échange les deux côtés à tout moment.
 
+**Export pour les machines** — la barre d'actions de la page de rapport propose l'export JSON / CSV (disponible pour une exécution seule, pour une comparaison et pour une vue agrégée) ; `?format=json` sans paramètre `run` renvoie la **liste des exécutions en JSON** (chaque entrée porte son run_id, les métadonnées de la requête et les chiffres d'en-tête au périmètre de la liste), pour qu'un script de supervision ou un tableau de bord récupère les run_id sans analyser le HTML. Une requête d'export portant `symbol=` renvoie 400 — l'export n'a pas de vue par fonction, et rendre silencieusement un tableau plat complet serait pire qu'une erreur.
+
 ## Prérequis
 
 - PHP >= 8.0
@@ -36,11 +38,11 @@ La même petite flamme sert aussi d'icône de site, d'icône de marque en haut �
 | Framework | Version minimale | PHP minimal | Classe d'entrée | Comment le monter |
 |-----------|----------------|-------------|-------------|--------------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | Enregistrer le middleware global dans `config/middleware.php` |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | Enregistrer le middleware global dans `app/Http/Kernel.php` |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0` | 8.0 | `Laravel\Middleware` | Sur 11+ ajouter via `->withMiddleware()` dans `bootstrap/app.php` ; sur 10 et moins, enregistrer le middleware global dans `app/Http/Kernel.php` |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | Enregistrer le middleware global dans `app/middleware.php` |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | Enregistrement automatique via ConfigProvider |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | À enregistrer dans `config/web/di/application.php`, en premier dans la liste des middlewares |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1 (6.4) / 8.2 (7.x) | `Symfony\XhprofListener` | Ajouter le tag `kernel.event_subscriber` dans `config/services.yaml` |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0` | 8.1 (6.4) / 8.2 (7.x) / 8.4 (8.x) | `Symfony\XhprofListener` | Ajouter le tag `kernel.event_subscriber` dans `config/services.yaml` |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | `$app->add(...)`, à ajouter en dernier |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Copier dans `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Copier dans `plugins/system/`, installer via Discover |
@@ -118,14 +120,15 @@ return [
 
 ### Laravel
 
-**1. Enregistrer le middleware** — `app/Http/Kernel.php` :
+**1. Enregistrer le middleware** — sur Laravel 11 et au-delà (le squelette slim n'a plus d'`app/Http/Kernel.php`), dans `bootstrap/app.php` :
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+Sur Laravel 10 et en dessous, vous ajoutez toujours `\ErikWang2013\Xhprof\Laravel\Middleware::class` dans le tableau `protected $middleware` de `app/Http/Kernel.php`.
 
 **2. Page de rapport et ressources statiques** — **aucun contrôleur ni route à enregistrer** : avant le début du profilage, le middleware inspecte le chemin de la requête : une correspondance sur le chemin de rapport `/xhprof` renvoie aussitôt la page de rapport, et une correspondance sur le chemin des ressources (préfixe lu depuis l'option `assets_url`, par défaut `/xhprof-assets`) renvoie directement la ressource statique.
 
@@ -136,6 +139,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 Fichier de configuration dans `config/xhprof.php`. Laravel prend en charge l'auto-découverte du ServiceProvider.
+
+**4. CLI et files d'attente** (activez d'abord `sample_cli` si nécessaire ; désactivé par défaut) — les deux types d'entrée sans requête HTTP tournent dans une fenêtre d'échantillonnage :
+
+- **Workers de file d'attente** : dans `AppServiceProvider::boot()`, reliez les quatre événements à l'écouteur du paquet — une fenêtre par message, les workers de longue durée sont donc bien couverts :
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **Commandes artisan** : `xhprof:profile` est enregistrée automatiquement par le paquet (Laravel découvre le ServiceProvider tout seul) — utilisez-la telle quelle :
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **Scripts personnalisés / tâches planifiées** : pour les entrées non artisan (vos propres scripts PHP, tâches en closure), enveloppez le corps :
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* your logic */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+Les fenêtres s'ouvrent et se ferment par tâche (une tâche enfant dispatchée en synchrone s'imbrique, seule la tâche la plus externe est enregistrée), et le `request_uri` d'une exécution stockée est noté `cli:<nom du script>`.
 
 ---
 
@@ -427,7 +459,7 @@ Tous les frameworks partagent ces options de configuration :
 | `ip_allowlist` | array | `[]` | Liste d'autorisation d'IP de la page de rapport, comparée **octet par octet** : pas de plages CIDR, pas de normalisation IPv6 (`2001:0db8::1` et `2001:db8::1` sont deux chaînes différentes). Vide = désactivé ; une valeur qui n'est pas un tableau refuse tout (fail closed, une entrée d'erreur dans les logs). La valeur vient de `getRealIp()` et se lit avec `trusted_proxies` |
 | `trusted_proxies` | array | `[]` | **Une déclaration de déploiement, pas une contrainte technique** : ce n'est qu'après avoir déclaré « il y a un proxy de confiance devant moi » que `ip_allowlist` acceptera une IP client tirée de `X-Forwarded-For`/`X-Real-IP`. La plupart des adaptateurs prennent les en-têtes de transfert sans condition — cette déclaration n'empêche **pas** un XFF falsifié, elle n'est donc sûre que derrière un proxy que vous contrôlez |
 | `webhook_url` | string\|null | `null` | Après l'enregistrement d'une exécution lente (`wt >= view_wtred`), POST d'un JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) vers cette adresse. Vide = rien n'est envoyé. **Ce n'est pas une file d'attente** : il n'attend pas de réponse, sans réessai ni repli sur disque ; un point de terminaison lent ou mort perd simplement cette notification |
-| `sample_cli` | bool | `false` | Échantillonner aussi la CLI / les requêtes sans HTTP : à `true`, le `request_uri` enregistré d'une exécution vaut `cli:<nom du script>` ; `false` = toujours ignoré (le défaut, y compris les workers de file d'attente et les tâches planifiées) |
+| `sample_cli` | bool | `false` | Échantillonner aussi la CLI / les requêtes sans HTTP : à `true`, le `request_uri` enregistré d'une exécution vaut `cli:<nom du script>` ; `false` = toujours ignoré (le défaut, y compris les workers de file d'attente et les tâches planifiées). Que l'option prenne effet dépend de l'entrée : Laravel l'a déjà intégré (écouteur de file d'attente + `XhprofCli`, voir la section Laravel), l'entrée PHP natif fonctionne en CLI par construction (aucune dépendance HTTP) ; les entrées des autres frameworks sont dédiées à HTTP et demandent un enrobage manuel |
 | `symbol_lookup_url` | string\|null | `null` | Modèle de lien vers le code source : la page de rapport rend `<modèle>?symbol=<nom de fonction urlencodé>` ; `null`/vide = aucun lien |
 | `max_runs_per_minute` | int\|null | `null` | Budget adaptatif : nombre maximal d'exécutions enregistrées par minute (compteur par minute ; au-delà, plus rien n'est échantillonné) ; `null`/non positif = désactivé. Quand le cache est indisponible ou lève une exception, échec ouvert (fail-open) : l'échantillonnage suit `sample_rate` comme d'habitude ; **l'échantillonnage déclenché n'y est pas soumis** |
 | `time_limit` | int | `0` | Ne profiler que les requêtes dépassant n secondes, 0 signifie toutes |
@@ -532,7 +564,7 @@ Le premier diagramme est la **structure** : la classe d'entrée de chacun des do
 
 ![Design rationale](./images/design.svg)
 
-Le second diagramme est le **raisonnement** : cinq compromis présentés en décision / raison / coût, coiffés par « changements de `src/Core/` dus aux huit nouveaux frameworks = 0 ».
+Le second diagramme est le **raisonnement** : cinq compromis présentés en décision / raison / coût, coiffés par « changements de `src/Core/` dus aux 8 frameworks ajoutés par la suite = 0 ».
 
 ---
 
@@ -583,7 +615,7 @@ xhprof-webman/
 ├── wordpress/                    # fichier d'amorçage mu-plugin (avec en-tête de plugin)
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifeste)
 ├── drupal/xhprof/                # module Drupal standard (info / routing / services + contrôleur)
-├── tools/contracts/              # boucle de vérification autonome : signatures et sémantique face aux vrais paquets de framework (`legacy-symfony64/` est la jambe 6.4)
+├── tools/contracts/              # boucle de vérification autonome : signatures et sémantique face aux vrais paquets de framework (`legacy-symfony64/` et `legacy-symfony8/` sont les deux jambes des anciennes versions)
 ├── tools/i18n/                   # chaîne d'outils de traduction pour le README et les trois SVG (générer / vérifier / autotest)
 ├── docs/i18n/                    # les 12 livrables traduits (anglais, coréen, russe, allemand, français, espagnol, portugais, arabe, hindi, bengali, indonésien, japonais)
 ├── tests/                        # PHPUnit : tests des adaptateurs, du câblage, du Core, et parité structurelle des 14 README
@@ -613,8 +645,8 @@ src/<Fw>/
 | Comportement des adaptateurs et du câblage des entrées | `tests/Unit/Adapter/*Test.php` : activé → enregistré / désactivé → non enregistré / exception métier → enregistré tout de même via `finally` |
 | Les douze frameworks partagent un même jeu de clés de configuration | test de parité de configuration (jeux de clés, pas octet par octet ; les commentaires peuvent différer) |
 | Les deux README se correspondent | test de parité des README : compare la séquence de titres `##` / `###` et le nombre de blocs de code |
-| Les méthodes appelées par les adaptateurs existent réellement | boucle de vérification `tools/contracts/` (job CI dédié, **deux jambes** : la jambe principale installe les paquets les plus récents de chaque framework, et le projet séparé `tools/contracts/legacy-symfony64` exécute le même cas Symfony contre 6.4) : elle installe de vrais paquets de framework (un vrai `drupal/core` pour Drupal, deux vrais paquets de version du CMS pour Joomla) et vérifie par réflexion que chaque méthode / constante / fonction globale existe **pour les neuf frameworks de la boucle** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman) ; PHP natif / ThinkPHP / Hyperf ne sont pas dans la boucle, chacun pour une raison différente — voir ci-dessous |
-| Sémantique des adaptateurs | La même boucle instancie de vrais objets de requête et de réponse et exécute les adaptateurs, avec deux invariants : `uri()` ne porte pas de scheme/host, et `withHeaders()` s'applique encore après `file()`. Le nombre de SKIP de la boucle est une constante gelée (2 sur la jambe principale, 0 sur la jambe 6.4) et les deux SKIP sont dans Joomla : le vrai chemin de lecture de `#__extensions.params` et la forme de l'installeur — les deux exigent une base de données ou un installeur pour tourner |
+| Les méthodes appelées par les adaptateurs existent réellement | boucle de vérification `tools/contracts/` (job CI dédié, **trois jambes** : la jambe principale installe les paquets les plus récents de chaque framework, le projet séparé `tools/contracts/legacy-symfony64` exécute le même cas Symfony contre 6.4, et la troisième, `tools/contracts/legacy-symfony8`, exécute Symfony 8.1 + Laravel 13 sur PHP 8.5) : elle installe de vrais paquets de framework (un vrai `drupal/core` pour Drupal, deux vrais paquets de version du CMS pour Joomla) et vérifie par réflexion que chaque méthode / constante / fonction globale existe **pour les dix frameworks de la boucle** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP) ; PHP natif / Hyperf ne sont pas dans la boucle, chacun pour une raison différente — voir ci-dessous |
+| Sémantique des adaptateurs | La même boucle instancie de vrais objets de requête et de réponse et exécute les adaptateurs, avec deux invariants : `uri()` ne porte pas de scheme/host, et `withHeaders()` s'applique encore après `file()`. Le nombre de SKIP de la boucle est une constante gelée (2 sur la jambe principale, 0 sur la jambe 6.4, 0 sur la jambe 8) et les deux SKIP sont dans Joomla : le vrai chemin de lecture de `#__extensions.params` et la forme de l'installeur — les deux exigent une base de données ou un installeur pour tourner ; chaque cas a en outre un plancher gelé par jambe sur le nombre d'assertions (garde contre l'amaigrissement rédactionnel : un retour anticipé ou un enrobage conditionnel qui exécute moins d'assertions alors que le statut reste PASS passe au rouge) |
 
 
 **Non vérifié automatiquement (à ne pas lire comme « tout est couvert »)**
@@ -624,9 +656,11 @@ src/<Fw>/
 | Le **câblage** de chaque framework (le hook est-il vraiment attaché, l'événement se déclenche-t-il vraiment) | Les tests unitaires utilisent des stubs ; le câblage ne peut actuellement être confirmé que par des tests de fumée manuels |
 | Les deux sous-points restants de Joomla | Les deux choses que la boucle n'atteint toujours pas, et pour la même raison (il faut une base de données ou un installeur) : le vrai chemin de lecture de `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) et la forme de l'installeur (namespacemap écrit, `bootPlugin()` retrouve la classe) |
 | L'auto-configuration `kernel.event_subscriber` de Symfony | Nécessite une vraie compilation du conteneur |
-| Interférences d'état statique dans les processus longue durée | Côté Webman inchangé (côté Hyperf les 9 valeurs d'état de rendu par requête sont isolées dans le Context de coroutine, épinglées par `tests/Unit/Lib/RenderStateCoroutineTest.php` avec une coroutine qui cède réellement) |
+| Interférences d'état statique dans les processus longue durée | **Isolées par coroutine** : quand le backend se trouve dans un contexte de coroutine, l'état de rendu par requête va dans le Context de ce contexte (Hyperf / workerman détectés automatiquement, voir `Xhprof::coroutineContextClass()`) ; hors coroutine il reste statique au processus (FPM est de toute façon un processus par requête). Vérifié : Hyperf par un test à coroutine qui cède réellement ; les coroutines workerman par la carte Webman de la boucle, avec deux vraies requêtes TCP entrelacées sur un vrai serveur (B rend une page entière pendant que A est suspendue, et A se réveille en gardant ses propres run / langue / colonnes de métriques) |
+| Interférences d'**échantillonnage** sous coroutines Hyperf concurrentes | l'extension xhprof et l'interrupteur d'échantillonnage sont tous deux au niveau du processus : quand deux coroutines du même worker s'entrelacent sur un point d'E/S, la première qui s'arrête prend les données (le second arrêt est un no-op idempotent), l'exécution la plus tardive est perdue et celle qui est conservée mélange les enregistrements d'exécution des deux coroutines. L'état de rendu est isolé (ligne ci-dessus) ; l'état d'échantillonnage ne peut pas l'être (sémantique de l'extension). Resserrez `sample_rate` ou désactivez l'échantillonnage pour ce scénario quand vous avez besoin de données propres |
+| Interférences d'état statique sous Laravel Octane (Swoole) | l'arbre de dépendances d'Octane ne contient pas workerman/workerman, donc `Workerman\Coroutine` ne peut structurellement pas exister et le backend côté webman n'est pas réutilisable ; le backend dont Octane a besoin est un troisième, `\Swoole\Coroutine::getContext()` (environ 10 lignes plus une branche `class_exists`), à construire dès qu'un environnement Swoole sera disponible |
 | E/S Redis réelles, rendu navigateur, surcoût du profilage sous charge réelle | Les E/S Redis réelles sont **désormais dans la boucle** (`cases/Redis.php` : vrai phpredis + une vraie requête Slim de bout en bout — requête → persistance → liste → page de rapport) ; le rendu navigateur et le surcoût sous charge réelle restent hors du périmètre des tests unitaires et de la boucle |
-| Signatures et sémantique des adaptateurs pour PHP natif / ThinkPHP / Hyperf | ces trois-là ne sont pas dans la boucle de vérification (elle couvre neuf frameworks), chacun pour une raison différente : **PHP natif n'a aucun paquet tiers à installer** — la boucle se compare à de vrais paquets de framework, et il n'en existe aucun pour lui, donc la sémantique de ses adaptateurs est couverte par `tests/Unit/Adapter/NativeTest.php`, via de vraies superglobales et un vrai aller-retour `php -S` (une surface d'observation plus forte que le CLI de la boucle) ; **ThinkPHP / Hyperf ont de vrais paquets qui ne sont simplement pas installés**, donc leurs stubs sont écrits à la main dans `tests/Stubs/framework-stubs.php`, sans comparaison avec un vrai paquet |
+| Signatures et sémantique des adaptateurs pour PHP natif / Hyperf | ces deux-là ne sont pas dans la boucle de vérification (elle couvre dix frameworks), chacun pour une raison différente : **PHP natif n'a aucun paquet tiers à installer** — la boucle se compare à de vrais paquets de framework, et il n'en existe aucun pour lui, donc la sémantique de ses adaptateurs est couverte par `tests/Unit/Adapter/NativeTest.php`, via de vraies superglobales et un vrai aller-retour `php -S` (une surface d'observation plus forte que le CLI de la boucle) ; **Hyperf s'installe mais ne s'y exécute pas** : appeler réellement `Context::set()` lève `Class "Swoole\Coroutine" not found` — la CI de la boucle n'installe que xhprof+redis, et le runtime de coroutine ext-swoole manquant est un **prérequis d'exécution** plutôt qu'un problème d'installabilité, donc ses stubs restent écrits à la main dans `tests/Stubs/framework-stubs.php`, sans comparaison avec un vrai paquet |
 
 **Liste de vérification manuelle (trois étapes par framework)**
 
@@ -652,7 +686,7 @@ Quand Drupal est installé dans un sous-répertoire (par ex. `/sites/app/xhprof`
 
 **Compatibilité Symfony 6.4**
 
-La compatibilité avec Symfony 6.4 a été mesurée (c'est ainsi que deux sur-ajustements invisibles en 7.4 ont été corrigés : les propriétés de `Request` ne portent aucune déclaration de type natif en 6.4, et le charset ajouté par `prepare()` diffère en casse). **Les deux jambes tournent en CI** : la jambe principale 7.x plus le projet séparé `tools/contracts/legacy-symfony64`, qui exécute le même fichier de cas sans le copier — et les deux jambes sont aussi dans le gate des tags.
+La compatibilité avec Symfony 6.4 a été mesurée (c'est ainsi que deux sur-ajustements invisibles en 7.4 ont été corrigés : les propriétés de `Request` ne portent aucune déclaration de type natif en 6.4, et le charset ajouté par `prepare()` diffère en casse). **Toutes les jambes tournent en CI** : la jambe principale 7.x, le projet séparé `tools/contracts/legacy-symfony64`, qui exécute le même fichier de cas sans le copier, et la jambe `tools/contracts/legacy-symfony8` (Symfony 8.1 + Laravel 13, PHP 8.5) — et elles sont toutes aussi dans le gate des tags.
 
 ---
 

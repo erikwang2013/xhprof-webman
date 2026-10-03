@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>設計のトレードオフ：判断・理由・コスト</title>
   <desc>5 つの主要な判断の対照表で、各項目は判断そのもの、それが得た利益、そして支払ったコストを並べる：Core は 5 つの契約のみに依存、入口クラスがレポートページを自前で配信、共有層は抽出しない、スタブは独立した検証ループが検証、autoDetect ではなく明示的注入。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は 英語版 を正とします。</desc>
 
-  <rect x="0" y="0" width="1200" height="640" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="664" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">設計のトレードオフ：判断 → 理由 → コスト</text>
@@ -11,7 +11,7 @@
 
   <!-- 结论条 -->
   <rect x="24" y="88" width="1152" height="42" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
-  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">6 つの新フレームワークによる src/Core/ の変更 = 0</text>
+  <text x="600" y="114" font-size="14" font-weight="600" fill="#0550ae" text-anchor="middle">後から拡張した 8 フレームワークによる src/Core/ の変更数 = 0</text>
 
   <!-- ============ 表头 ============ -->
   <rect x="24" y="146" width="376" height="32" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
@@ -34,7 +34,7 @@
 
   <rect x="412" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
   <text x="428" y="204" font-size="12.5" font-weight="600" fill="#1a7f37">フレームワーク追加 = ディレクトリ 1 つを追加</text>
-  <text x="428" y="224" font-size="11" fill="#24292f">6 つの新フレームワークによる src/Core/ の変更は 0 行；</text>
+  <text x="428" y="224" font-size="11" fill="#24292f">後から拡張した 8 フレームワークによる src/Core/ の変更は 0 行；</text>
   <text x="428" y="240" font-size="11" fill="#24292f">Webman/Laravel の挙動も影響を受けない</text>
 
   <rect x="800" y="182" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
@@ -87,13 +87,13 @@
 
   <rect x="800" y="452" width="376" height="80" rx="8" fill="#ffffff" stroke="#bc4c00" stroke-width="1.5"/>
   <text x="816" y="474" font-size="12.5" font-weight="600" fill="#bc4c00">検証の深さが均一でない</text>
-  <text x="816" y="494" font-size="11" fill="#24292f">L2 のセマンティクスは 4.5/6 をカバー；WordPress は覆えず、</text>
-  <text x="816" y="510" font-size="11" fill="#24292f">ソーステキストの照合と手動スモークのみ</text>
+  <text x="816" y="494" font-size="11" fill="#24292f">検証ループは実フレームワークパッケージを対照とする；</text>
+  <text x="816" y="510" font-size="10.75" fill="#24292f">ループ外のものには実パッケージの対照がない（理由はそれぞれ異なる）</text>
 
   <!-- ============ 第 5 行：显式注入而非 autoDetect ============ -->
   <rect x="24" y="542" width="376" height="80" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
   <text x="40" y="564" font-size="12.5" font-weight="600" fill="#0550ae">autoDetect ではなく明示的注入</text>
-  <text x="40" y="584" font-size="11" fill="#24292f">6 つの新フレームワークはすべて明示的注入：</text>
+  <text x="40" y="584" font-size="11" fill="#24292f">後から拡張した 8 フレームワークはすべて明示的注入：</text>
   <text x="40" y="600" font-size="11" fill="#24292f">Xhprof::bootstrap($req, $res, $cfg, $cache, $log)</text>
 
   <rect x="412" y="542" width="376" height="80" rx="8" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
@@ -105,4 +105,7 @@
   <text x="816" y="564" font-size="12.5" font-weight="600" fill="#bc4c00">入口クラスが自分でアダプタを揃える必要がある</text>
   <text x="816" y="584" font-size="11" fill="#24292f">Core は探索をやめ、各入口クラスが自分で書く</text>
   <text x="816" y="600" font-size="11" fill="#24292f">約 30 行（5 つのアダプタ構築を含む）</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="648" font-size="11" fill="#57606a">© erik · https://erik.xyz</text>
 </svg>

@@ -20,6 +20,8 @@ A mesma chama também é o ícone do site, o ícone da marca no canto superior e
 
 **Comparando duas execuções** — na lista de Registro de Requisições marque exatamente duas linhas (uma caixa de seleção por linha, o "selecionar tudo" no cabeçalho) e clique em "Comparar selecionados" para abrir a visualização diff. Os dois lados são ordenados por tempo (run1 = a execução mais antiga, run2 = a mais recente, independentemente de como a lista está ordenada no momento); as cores significam melhoria / regressão "de run1 para run2", e o link "Inverter Relatório de …" na própria página troca os lados a qualquer momento.
 
+**Exportação para máquinas** — a barra de ações da página de relatório oferece exportação em JSON / CSV (disponível para uma execução única, uma comparação e uma visualização agregada); `?format=json` sem o parâmetro `run` devolve a **lista de execuções em JSON** (cada entrada com o run_id, os metadados da requisição e os números de cabeçalho do escopo da lista), para que um script de monitoramento ou um painel colete run_ids sem parsear HTML. Uma requisição de exportação com `symbol=` retorna 400 — a exportação não tem visualização de função única, e devolver em silêncio uma tabela completa seria pior que um erro.
+
 ## Requisitos
 
 - PHP >= 8.0
@@ -32,11 +34,11 @@ A mesma chama também é o ícone do site, o ícone da marca no canto superior e
 | Framework | Versão mínima | PHP mínimo | Classe de entrada | Como montar |
 |-----------|----------------|-------------|-------------|--------------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | Registre o middleware global em `config/middleware.php` |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | Registre o middleware global em `app/Http/Kernel.php` |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0` | 8.0 | `Laravel\Middleware` | No 11+ acrescente via `->withMiddleware()` em `bootstrap/app.php`; no 10 e anteriores registre o middleware global em `app/Http/Kernel.php` |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | Registre o middleware global em `app/middleware.php` |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | Registrado automaticamente via ConfigProvider |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | Registre em `config/web/di/application.php`; precisa ser o primeiro da lista de middlewares |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1 (6.4) / 8.2 (7.x) | `Symfony\XhprofListener` | Adicione a tag `kernel.event_subscriber` em `config/services.yaml` |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0` | 8.1 (6.4) / 8.2 (7.x) / 8.4 (8.x) | `Symfony\XhprofListener` | Adicione a tag `kernel.event_subscriber` em `config/services.yaml` |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | `$app->add(...)`, e precisa ser adicionado por último |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Copie para `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Copie para `plugins/system/` e instale pelo Discover |
@@ -114,14 +116,15 @@ return [
 
 ### Laravel
 
-**1. Registre o middleware** — `app/Http/Kernel.php`:
+**1. Registre o middleware** — no Laravel 11 e posteriores (o esqueleto slim já não tem `app/Http/Kernel.php`) em `bootstrap/app.php`:
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+No Laravel 10 e anteriores você ainda acrescenta `\ErikWang2013\Xhprof\Laravel\Middleware::class` ao array `protected $middleware` em `app/Http/Kernel.php`.
 
 **2. Página de relatório e recursos estáticos** — **não precisa de controller nem de registro de rota**: antes de o profiling começar, o middleware inspeciona o caminho da requisição: um acerto no caminho do relatório `/xhprof` devolve a página de relatório na hora, e um acerto no caminho dos assets (prefixo lido da opção `assets_url`, padrão `/xhprof-assets`) devolve o recurso estático direto.
 
@@ -132,6 +135,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 O arquivo de configuração fica em `config/xhprof.php`. O Laravel descobre o ServiceProvider automaticamente.
+
+**4. CLI e filas** (ative `sample_cli` antes, quando precisar; vem desligado por padrão) — os dois tipos de entrada sem requisição HTTP rodam dentro da janela de amostragem:
+
+- **Workers de fila**: em `AppServiceProvider::boot()`, ligue os quatro eventos ao listener do pacote — uma janela por mensagem (workers residentes não perdem nenhuma):
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **Comandos artisan**: `xhprof:profile` é registrado automaticamente pelo pacote (o Laravel descobre o ServiceProvider) — é só usar:
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **Scripts próprios / tarefas agendadas**: para entradas que não são artisan (scripts PHP próprios, tarefas em closure) envolva o corpo numa camada:
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* your logic */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+A janela abre e fecha por tarefa (uma subtarefa despachada de forma síncrona aninha, então só a tarefa mais externa é registrada), e o `request_uri` de uma execução salva é registrado como `cli:<nome do script>`.
 
 ---
 
@@ -423,7 +455,7 @@ Todos os frameworks compartilham estas opções de configuração:
 | `ip_allowlist` | array | `[]` | Lista de IPs permitidos na página de relatório, comparada **byte a byte**: sem faixas CIDR e sem normalização de IPv6 (`2001:0db8::1` e `2001:db8::1` são duas strings diferentes). Vazio = desligado; um valor que não seja array rejeita tudo (fail closed, uma linha de log de erro). O valor vem de `getRealIp()` e precisa ser lido junto com o `trusted_proxies` |
 | `trusted_proxies` | array | `[]` | **Uma declaração de implantação, não imposição técnica**: só depois de declarar "há um proxy confiável na minha frente" o `ip_allowlist` aceita um IP de cliente vindo de `X-Forwarded-For`/`X-Real-IP`. A maioria dos adaptadores usa os cabeçalhos de encaminhamento incondicionalmente — declarar isto **não** impede um XFF forjado, então só é seguro atrás de um proxy sob seu controle |
 | `webhook_url` | string\|null | `null` | Depois de uma execução lenta (`wt >= view_wtred`) ser salva, faz POST de um JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) para este endereço. Vazio = nada é enviado. **Não é uma fila**: não espera resposta, não tem retentativas nem compensação em disco; um endpoint lento ou fora do ar só perde esta notificação |
-| `sample_cli` | bool | `false` | Amostrar também CLI / requisições sem HTTP: com `true`, o `request_uri` de uma execução salva é registrado como `cli:<nome do script>`; `false` = sempre ignorado (o padrão, incluindo workers de fila e tarefas agendadas) |
+| `sample_cli` | bool | `false` | Amostrar também CLI / requisições sem HTTP: com `true`, o `request_uri` de uma execução salva é registrado como `cli:<nome do script>`; `false` = sempre ignorado (o padrão, incluindo workers de fila e tarefas agendadas). Se ela faz efeito depende da entrada: o Laravel já traz suporte embutido (listener de fila + `XhprofCli`, veja a seção do Laravel), a entrada de PHP puro trabalha em CLI por natureza (sem dependência de HTTP); a entrada dos demais frameworks é só HTTP e precisa de uma camada manual |
 | `symbol_lookup_url` | string\|null | `null` | Modelo de link para o código-fonte: a página de relatório renderiza `<modelo>?symbol=<nome da função codificado para URL>`; `null`/vazio = sem link |
 | `max_runs_per_minute` | int\|null | `null` | Orçamento adaptativo: no máximo quantas execuções são salvas por minuto (contador por minuto; acima disso nada é amostrado); `null`/não positivo = desligado. Quando o cache está indisponível ou lança exceção, ele falha aberto (fail open — a amostragem segue o `sample_rate` normalmente); **a amostragem por gatilho não está sujeita a ele** |
 | `time_limit` | int | `0` | Perfila apenas requisições acima de n segundos; 0 significa todas |
@@ -528,7 +560,7 @@ O primeiro diagrama é a **estrutura**: a classe de entrada de cada um dos doze 
 
 ![Razões do design](docs/images/design.svg)
 
-O segundo diagrama é o **raciocínio**: cinco trade-offs dispostos como decisão / motivo / custo, encabeçados por "mudanças em `src/Core/` pelos seis novos frameworks = 0".
+O segundo diagrama é o **raciocínio**: cinco trade-offs dispostos como decisão / motivo / custo, encabeçados por "mudanças em `src/Core/` pelos 8 frameworks adicionados depois = 0".
 
 ---
 
@@ -579,7 +611,7 @@ xhprof-webman/
 ├── wordpress/                    # arquivo de bootstrap do mu-plugin (com cabeçalho de plugin)
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifesto)
 ├── drupal/xhprof/                # módulo Drupal padrão (info / routing / services + controller)
-├── tools/contracts/              # ciclo de verificação independente: assinaturas e semântica contra os pacotes reais dos frameworks (`legacy-symfony64/` é a perna 6.4)
+├── tools/contracts/              # ciclo de verificação independente: assinaturas e semântica contra os pacotes reais dos frameworks (`legacy-symfony64/` e `legacy-symfony8/` são as duas pernas de versões antigas)
 ├── tools/i18n/                   # cadeia de ferramentas de tradução do README e dos três SVGs (gerar / verificar / autoteste)
 ├── docs/i18n/                    # os 12 resultados traduzidos (inglês, coreano, russo, alemão, francês, espanhol, português, árabe, hindi, bengali, indonésio, japonês)
 ├── tests/                        # PHPUnit: testes dos adaptadores, da fiação, do Core, e paridade estrutural dos 14 READMEs
@@ -609,8 +641,8 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | Comportamento dos adaptadores e do wiring das entradas | `tests/Unit/Adapter/*Test.php`: habilitado → salvo / desabilitado → não salvo / exceção de negócio → ainda assim salvo via `finally` |
 | Os doze frameworks compartilham um mesmo conjunto de chaves de configuração | teste de paridade de config (conjuntos de chaves, não byte a byte; os comentários podem diferir) |
 | Os dois READMEs espelham um ao outro | teste de paridade do README: compara a sequência de títulos `##` / `###` e o número de blocos de código |
-| Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI, **duas pernas**: a perna principal instala os pacotes mais recentes de cada framework, e o projeto separado `tools/contracts/legacy-symfony64` roda o mesmo caso do Symfony contra o 6.4): instala pacotes reais dos frameworks (`drupal/core` real para o Drupal, dois pacotes de versão reais do CMS para o Joomla) e verifica por reflection que cada método / constante / função global existe **para os nove frameworks do ciclo** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); PHP puro / ThinkPHP / Hyperf não estão no ciclo, cada um por um motivo diferente — veja abaixo |
-| Semântica dos adaptadores | O mesmo ciclo instancia objetos reais de request e response e executa os adaptadores, com dois invariantes: `uri()` não carrega scheme/host, e `withHeaders()` continua valendo depois de `file()`. O número de SKIP do ciclo é uma constante congelada (2 na perna principal, 0 na perna 6.4) e os dois SKIP estão no Joomla: o caminho de leitura real de `#__extensions.params` e o formato do instalador — ambos precisam de banco de dados ou instalador para rodar |
+| Os métodos que os adaptadores chamam realmente existem | ciclo de verificação `tools/contracts/` (job próprio de CI, **três pernas**: a perna principal instala os pacotes mais recentes de cada framework, o projeto separado `tools/contracts/legacy-symfony64` roda o mesmo caso do Symfony contra o 6.4, e a terceira, `tools/contracts/legacy-symfony8`, roda Symfony 8.1 + Laravel 13 no PHP 8.5): instala pacotes reais dos frameworks (`drupal/core` real para o Drupal, dois pacotes de versão reais do CMS para o Joomla) e verifica por reflection que cada método / constante / função global existe **para os dez frameworks do ciclo** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP); PHP puro / Hyperf não estão no ciclo, cada um por um motivo diferente — veja abaixo |
+| Semântica dos adaptadores | O mesmo ciclo instancia objetos reais de request e response e executa os adaptadores, com dois invariantes: `uri()` não carrega scheme/host, e `withHeaders()` continua valendo depois de `file()`. O número de SKIP do ciclo é uma constante congelada (2 na perna principal, 0 na perna 6.4, 0 na perna 8) e os dois SKIP estão no Joomla: o caminho de leitura real de `#__extensions.params` e o formato do instalador — ambos precisam de banco de dados ou instalador para rodar; cada caso tem ainda um piso congelado de número de asserções por perna (protege contra encolhimento editorial: um retorno antecipado ou um envelope condicional que roda menos asserções enquanto o status continua PASS fica vermelho) |
 
 
 **Não verificado automaticamente (não leia isto como «tudo está coberto»)**
@@ -620,9 +652,11 @@ O `src/Drupal/` é a única exceção: ele não tem diretório `config/` — a c
 | O **wiring** de cada framework (o hook está mesmo ligado, o evento dispara mesmo) | Os testes unitários usam stubs; hoje o wiring só pode ser confirmado por smoke tests manuais |
 | Os dois subitens restantes do Joomla | As duas coisas que o ciclo ainda não alcança, e ambas pelo mesmo motivo (precisam de banco de dados ou instalador): o caminho de leitura real de `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) e o formato do instalador (namespacemap escrito, `bootPlugin()` achando a classe) |
 | A autoconfiguração de `kernel.event_subscriber` do Symfony | Exige uma compilação real do container |
-| Vazamento de estado estático em processos de longa duração | Lado do Webman inalterado (no Hyperf os 9 valores de estado de render por requisição são isolados no Context da corrotina, fixados por `tests/Unit/Lib/RenderStateCoroutineTest.php` com uma corrotina que cede de verdade) |
+| Vazamento de estado estático em processos de longa duração | **Isolado por corrotina**: quando o backend está dentro de um contexto de corrotina, o estado de render por requisição vai para o Context daquele ambiente (Hyperf / workerman detectados automaticamente, veja `Xhprof::coroutineContextClass()`); fora de corrotinas continua estático por processo (o FPM já é um processo por requisição). Verificado: no Hyperf por um teste de corrotina que cede de verdade; nas corrotinas do workerman pela ficha do Webman do ciclo, fixando duas requisições TCP reais intercaladas num servidor real (B renderiza a página inteira enquanto A está suspensa, e A acorda ainda com a sua própria execução / idioma / colunas de métricas) |
+| Vazamento da **amostragem** sob corrotinas concorrentes no Hyperf | tanto a extensão xhprof quanto o interruptor de amostragem são de nível de processo: quando duas corrotinas no mesmo worker se intercalam num ponto de I/O, a primeira a parar leva os dados (a segunda parada é um no-op idempotente), a execução que termina depois é descartada e a que foi salva mistura os registros de execução das duas corrotinas. O estado de render está isolado (linha acima); o de amostragem não pode estar (semântica da extensão). Aperte o `sample_rate` ou desligue a amostragem nesse cenário quando precisar de dados limpos |
+| Vazamento de estado estático sob o Laravel Octane (Swoole) | a árvore de dependências do Octane não tem workerman/workerman, então `Workerman\Coroutine` estruturalmente não pode existir e o backend do lado do Webman não pode ser reaproveitado; o backend de que o Octane precisa é um terceiro, `\Swoole\Coroutine::getContext()` (~10 linhas mais um ramo `class_exists`), a construir quando houver um ambiente Swoole |
 | I/O real no Redis, renderização no navegador, overhead de profiling sob carga real | O I/O real no Redis **agora está no ciclo** (`cases/Redis.php`: phpredis real + uma requisição Slim real de ponta a ponta — requisição → persistência → lista → página do relatório); a renderização no navegador e o overhead sob carga real continuam fora do escopo dos testes unitários e do ciclo |
-| Assinaturas e semântica dos adaptadores de PHP puro / ThinkPHP / Hyperf | esses três não estão no ciclo de verificação (que cobre nove frameworks), cada um por um motivo diferente: **o PHP puro não tem pacote de terceiros para instalar** — o ciclo compara com pacotes reais dos frameworks, e não existe nenhum para ele, então a semântica dos seus adaptadores é coberta por `tests/Unit/Adapter/NativeTest.php` por meio de superglobais reais e de uma ida e volta real com `php -S` (uma superfície de observação mais forte que a CLI do ciclo); **ThinkPHP / Hyperf têm pacotes reais que simplesmente não estão instalados**, então seus stubs são escritos à mão em `tests/Stubs/framework-stubs.php`, sem comparação com os pacotes reais |
+| Assinaturas e semântica dos adaptadores de PHP puro / Hyperf | esses dois não estão no ciclo de verificação (que cobre dez frameworks), cada um por um motivo diferente: **o PHP puro não tem pacote de terceiros para instalar** — o ciclo compara com pacotes reais dos frameworks, e não existe nenhum para ele, então a semântica dos seus adaptadores é coberta por `tests/Unit/Adapter/NativeTest.php` por meio de superglobais reais e de uma ida e volta real com `php -S` (uma superfície de observação mais forte que a CLI do ciclo); **o Hyperf instala, mas não roda lá**: chamar `Context::set()` de verdade lança `Class "Swoole\Coroutine" not found` — a CI do ciclo instala apenas xhprof+redis, e o runtime de corrotinas ext-swoole ausente é um *pré-requisito de execução*, não um problema de instalabilidade, então seus stubs continuam escritos à mão em `tests/Stubs/framework-stubs.php`, sem comparação com os pacotes reais |
 
 **Checklist manual de smoke (três passos por framework)**
 
@@ -648,7 +682,7 @@ Quando o Drupal é instalado sob um subdiretório (por exemplo `/sites/app/xhpro
 
 **Compatibilidade com o Symfony 6.4**
 
-A compatibilidade com o Symfony 6.4 foi medida (foi assim que dois over-fits invisíveis no 7.4 foram corrigidos: as propriedades de `Request` não têm declaração de tipo nativa no 6.4, e o charset adicionado por `prepare()` difere em maiúsculas e minúsculas). **As duas pernas rodam na CI**: a perna principal 7.x mais o projeto separado `tools/contracts/legacy-symfony64`, que executa o mesmo arquivo de caso sem copiá-lo — e as duas pernas também estão no gate de tags.
+A compatibilidade com o Symfony 6.4 foi medida (foi assim que dois over-fits invisíveis no 7.4 foram corrigidos: as propriedades de `Request` não têm declaração de tipo nativa no 6.4, e o charset adicionado por `prepare()` difere em maiúsculas e minúsculas). **Todas as pernas rodam na CI**: a perna principal 7.x, o projeto separado `tools/contracts/legacy-symfony64`, que executa o mesmo arquivo de caso sem copiá-lo, e a perna `tools/contracts/legacy-symfony8` (Symfony 8.1 + Laravel 13, PHP 8.5) — e todas elas também estão no gate de tags.
 
 ---
 

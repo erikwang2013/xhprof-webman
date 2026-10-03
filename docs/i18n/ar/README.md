@@ -24,6 +24,8 @@
 
 **مقارنة تشغيلين** — في قائمة «سجل الطلبات» حدّد صفّين اثنين بالضبط (مربّع اختيار لكل صف، وفي رأس القائمة تحديد الكل)، ثم انقر «مقارنة المحدد» لفتح عرض الفروق (diff). ويُرتَّب الطرفان حسب الزمن (run1 = التشغيل الأسبق، و run2 = التشغيل الأحدث، بصرف النظر عن الترتيب الحالي للقائمة)؛ وتعني الألوان التحسّن / التراجع «من run1 إلى run2»، ويمكن لرابط «عكس تقرير الفرق» داخل الصفحة تبديل الطرفين في أي وقت.
 
+**التصدير لاستهلاك الآلات** — يوفّر شريط الإجراءات في صفحة التقرير تصديرًا بصيغتَي JSON / CSV (متاح للتشغيل الواحد وللمقارنة وللعرض المُجمَّع)؛ وطلب `?format=json`‎ بلا معامل `run`‎ يعيد **سجل الطلبات بصيغة JSON** (كل عنصر يحوي run_id والبيانات الوصفية للطلب وأرقام الرأس بمنظور القائمة)، فيلتقط سكربت الرصد أو لوحة المتابعة معرّفات التشغيل دون تحليل HTML. أما طلب التصدير الحامل لـ`symbol=`‎ فيعيد 400 — فالتصدير لا عرض فيه لدالة واحدة، وإعادة جدول مسطّح كامل بصمت أسوأ من رسالة خطأ.
+
 ## المتطلبات
 
 - PHP >= 8.0
@@ -36,11 +38,11 @@
 | الإطار | الحد الأدنى للإصدار | الحد الأدنى لـ PHP | فئة المدخل | كيفية التركيب |
 |-----------|----------------|-------------|-------------|--------------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | سجّل وسيطًا عامًّا في `config/middleware.php` |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | سجّل وسيطًا عامًّا في `app/Http/Kernel.php` |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0`‎ | 8.0 | `Laravel\Middleware`‎ | على الإصدار 11 وما بعده أضِفه عبر `->withMiddleware()`‎ في `bootstrap/app.php`‎؛ وعلى 10 وما دونه سجّله وسيطًا عامًّا في `app/Http/Kernel.php`‎ |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | سجّل وسيطًا عامًّا في `app/middleware.php` |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | يُسجَّل تلقائيًا عبر ConfigProvider |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | سجّله في `config/web/di/application.php`، ويجب أن يكون الأول في قائمة الوسطاء |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1 (6.4) / 8.2 (7.x) | `Symfony\XhprofListener` | أضف وسم `kernel.event_subscriber` في `config/services.yaml` |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0`‎ | 8.1 (6.4) / 8.2 (7.x) / 8.4 (8.x) | `Symfony\XhprofListener`‎ | أضف وسم `kernel.event_subscriber`‎ في `config/services.yaml`‎ |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | عبر `$app->add(...)`‎، ويجب أن يُضاف أخيرًا |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | انسخه إلى `wp-content/mu-plugins/`‎ |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | انسخه إلى `plugins/system/`‎، وثبّته عبر Discover |
@@ -118,14 +120,15 @@ return [
 
 ### Laravel
 
-**1. سجّل الوسيط** — `app/Http/Kernel.php`:
+**1. سجّل الوسيط** — على Laravel 11 وما بعده (فـ slim skeleton لم يعد يحوي `app/Http/Kernel.php`‎) في `bootstrap/app.php`‎:
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+وعلى Laravel 10 وما دونه لا تزال تضيف `\ErikWang2013\Xhprof\Laravel\Middleware::class`‎ إلى مصفوفة `protected $middleware`‎ في `app/Http/Kernel.php`‎.
 
 **2. صفحة التقرير والموارد الساكنة** — **لا حاجة إلى تسجيل متحكم أو مسار**: قبل بدء التنميط يفحص الوسيط مسار الطلب: عند مطابقة مسار التقرير `/xhprof` يعيد صفحة التقرير فورًا، وعند مطابقة مسار الموارد (البادئة تُقرأ من الخيار `assets_url`، والافتراضية `/xhprof-assets`) يعيد المورد الساكن مباشرةً.
 
@@ -136,6 +139,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 ملف الإعدادات في `config/xhprof.php`. ويدعم Laravel الاكتشاف التلقائي لـ ServiceProvider.
+
+**4. CLI وقوائم الانتظار** (شغّل `sample_cli`‎ أولًا عند الحاجة؛ وهو معطّل افتراضيًا) — كلا المدخلين بلا طلب HTTP يعملان داخل نافذة معاينة:
+
+- **عمّال الطوابير**: في `AppServiceProvider::boot()`‎ اربط الأحداث الأربعة بمستمع الحزمة — نافذة واحدة لكل رسالة، فبهذا يُغطّى العمّال الدائمون:
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **أوامر artisan**: الأمر `xhprof:profile`‎ يُسجَّل مع الحزمة تلقائيًا (فـ Laravel يكتشف ServiceProvider تلقائيًا) — استخدمه كما هو:
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **السكربتات المخصّصة / المهام المجدولة**: في المداخل غير التابعة لـ artisan (سكربتات PHP التي تكتبها بنفسك، والمهام المعرَّفة كدوال مُغلَقة) غلّف جسم المهمة:
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* your logic */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+تُفتَح النافذة وتُغلَق لكل مهمة على حدة (فالمهمة الابنة المُرسَلة تزامنيًا تتداخل داخل النافذة، فلا تُسجَّل إلا المهمة الخارجية الأبعد)، ويُسجَّل `request_uri`‎ للتشغيل المحفوظ على الشكل `cli:<script name>`‎.
 
 ---
 
@@ -427,7 +459,7 @@ php -S 127.0.0.1:8000 -t public public/index.php
 | `ip_allowlist`‎ | array | `[]`‎ | قائمة سماح بعناوين IP لصفحة التقرير، تُطابَق **بايتًا ببايت**: لا نطاقات CIDR ولا تسوية لعناوين IPv6 (`2001:0db8::1`‎ و`2001:db8::1`‎ سلسلتان مختلفتان). فارغة = إيقاف؛ وقيمة ليست مصفوفة ترفض كل شيء (الرفض عند الفشل، مع سطر خطأ في السجل). وتأتي القيمة من `getRealIp()`‎ ويجب قراءتها مع `trusted_proxies`‎ |
 | `trusted_proxies`‎ | array | `[]`‎ | **إعلان نشر وليس فرضًا تقنيًا**: فقط بعد إعلان «أمامي وكيل موثوق» تقبل `ip_allowlist`‎ عنوان IP للعميل مأخوذًا من `X-Forwarded-For`‎/`X-Real-IP`‎. ومعظم المحوّلات تأخذ ترويسات التمرير دون شرط — فالإعلان **لا** يوقف XFF مُلفَّقًا، ولا يكون آمنًا إلا خلف وكيل تتحكّم به |
 | `webhook_url`‎ | string\|null | `null`‎ | بعد حفظ تشغيل بطيء (`wt >= view_wtred`‎) يُرسَل POST بجسم JSON (`run_id`‎/`uri`‎/`wt`‎/`ct`‎/`ip`‎/`time`‎) إلى هذا العنوان. فارغ = لا يُرسَل شيء. **وليس طابورًا**: لا ينتظر استجابة، ولا إعادات محاولة ولا احتياطي على القرص؛ فإن كان العنوان بطيئًا أو معطّلًا ضاع هذا الإشعار وحده |
-| `sample_cli`‎ | bool | `false`‎ | معاينة CLI والطلبات بلا HTTP أيضًا: مع `true`‎ يُسجَّل `request_uri`‎ للتشغيل المحفوظ على الشكل `cli:<script name>`‎؛ `false`‎ = تُهمَل دائمًا (الافتراضي، بما في ذلك عمّال الطوابير والمهام المجدولة) |
+| `sample_cli`‎ | bool | `false`‎ | معاينة CLI والطلبات بلا HTTP أيضًا: مع `true`‎ يُسجَّل `request_uri`‎ للتشغيل المحفوظ على الشكل `cli:<script name>`‎؛ `false`‎ = تُهمَل دائمًا (الافتراضي، بما في ذلك عمّال الطوابير والمهام المجدولة). وهل يسري ذلك يتوقّف على المدخل: فـ Laravel يوفّره مدمجًا (مستمع الطوابير + `XhprofCli`‎، انظر قسم Laravel)؛ ومدخل PHP الخام يعمل بطبع CLI أصلًا (بلا اعتماد على HTTP)؛ أما مداخل الأطر الأخرى فخاصة بـ HTTP وتحتاج غلافًا يدويًا |
 | `symbol_lookup_url`‎ | string\|null | `null`‎ | قالب رابط المصدر: تعرض صفحة التقرير `<template>?symbol=<urlencoded function name>`‎؛ `null`‎/فارغ = بلا رابط |
 | `max_runs_per_minute`‎ | int\|null | `null`‎ | ميزانية تكيّفية: الحدّ الأقصى لعدد التشغيلات المسجَّلة في الدقيقة (عدّاد لكل دقيقة؛ وما زاد لا يُعايَن)؛ `null`‎ أو قيمة غير موجبة = إيقاف. وعند تعذّر ذاكرة التخزين المؤقت أو رميها استثناءً **تفشل مفتوحة** (تسير المعاينة وفق `sample_rate`‎ كالمعتاد)؛ **والمعاينة بالمُشغِّل لا تخضع لها** |
 | `time_limit` | int | `0` | تُنمَّط فقط الطلبات التي تتجاوز n ثانية؛ و0 تعني الكل |
@@ -583,7 +615,7 @@ xhprof-webman/
 ├── wordpress/                    # mu-plugin bootstrap file (with plugin header)
 ├── joomla/                       # Joomla plugin (CMSPlugin + manifest)
 ├── drupal/xhprof/                # standard Drupal module (info / routing / services + controller)
-├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages (`legacy-symfony64/` هي ساق 6.4)
+├── tools/contracts/              # standalone verification loop: signatures and semantics against real framework packages (`legacy-symfony64/`‎ و`legacy-symfony8/`‎ هما ساقا الإصدارين الأقدمين)
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
@@ -613,8 +645,8 @@ src/<Fw>/
 | سلوك المحوّلات وتوصيل فئات المدخل | `tests/Unit/Adapter/*Test.php`: مفعّل → يُحفظ / معطّل → لا يُحفظ / استثناء في منطق العمل → يُحفظ رغم ذلك عبر `finally` |
 | الأطر الاثنا عشر كلها تتشارك مجموعة مفاتيح إعدادات واحدة | اختبار تكافؤ الإعدادات (مجموعات المفاتيح لا التطابق الحرفي؛ فالتعليقات قد تختلف) |
 | ملفا README يطابق أحدهما الآخر | اختبار تكافؤ README: يقارن تسلسل عناوين `##` / `###` وعدد كتل الشيفرة |
-| الدوال التي تستدعيها المحوّلات موجودة فعلًا | حلقة التحقق في `tools/contracts/`‎ (ولها مهمة CI خاصة، **ساقان**: الساق الرئيسية تثبّت أحدث حزمة لكل إطار، ومشروع `tools/contracts/legacy-symfony64`‎ المنفصل يشغّل حالة Symfony نفسها على 6.4): تثبّت حزم الأطر الحقيقية (Drupal بـ`drupal/core`‎ الحقيقي، وJoomla بحزمتَي إصدار CMS حقيقيتين) وتتحقق عبر الانعكاس من وجود كل دالة وثابت ودالة عامة **للأطر التسعة المشمولة في الحلقة** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman)؛ أما PHP الخام / ThinkPHP / Hyperf فغير مشمولة بالحلقة، ولأسباب مختلفة، انظر أدناه |
-| دلالات المحوّلات | الحلقة نفسها تنشئ كائنات طلب واستجابة حقيقية وتشغّل المحوّلات، مع ثابتين: `uri()` بلا scheme/host، و`withHeaders()` يظل ساريًا بعد `file()`. وعدد SKIP في الحلقة ثابت مُجمّد (2 في الساق الرئيسية، و0 في ساق 6.4)، وكلاهما في Joomla: مسار القراءة الحقيقي لـ`#__extensions.params` وشكل المُثبِّت، وكلاهما يحتاج قاعدة بيانات أو مُثبِّتًا ليُشغَّل |
+| الدوال التي تستدعيها المحوّلات موجودة فعلًا | حلقة التحقق في `tools/contracts/`‎ (ولها مهمة CI خاصة، **ثلاث سيقان**: الساق الرئيسية تثبّت أحدث حزمة لكل إطار، ومشروع `tools/contracts/legacy-symfony64`‎ المنفصل يشغّل حالة Symfony نفسها على 6.4، والساق الثالثة `tools/contracts/legacy-symfony8`‎ تشغّل Symfony 8.1 + Laravel 13 على PHP 8.5): تثبّت حزم الأطر الحقيقية (Drupal بـ`drupal/core`‎ الحقيقي، وJoomla بحزمتَي إصدار CMS حقيقيتين) وتتحقق عبر الانعكاس من وجود كل دالة وثابت ودالة عامة **للأطر العشرة المشمولة في الحلقة** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP)؛ أما PHP الخام / Hyperf فلا تشملهما الحلقة، ولأسباب مختلفة، انظر أدناه |
+| دلالات المحوّلات | الحلقة نفسها تنشئ كائنات طلب واستجابة حقيقية وتشغّل المحوّلات، مع ثابتين: `uri()`‎ بلا scheme/host، و`withHeaders()`‎ يظل ساريًا بعد `file()`‎. وعدد SKIP في الحلقة ثابت مُجمّد (2 في الساق الرئيسية، و0 في ساق 6.4، و0 في ساق 8)، وكلاهما في Joomla: مسار القراءة الحقيقي لـ`#__extensions.params`‎ وشكل المُثبِّت، وكلاهما يحتاج قاعدة بيانات أو مُثبِّتًا ليُشغَّل؛ ولكل حالة حدّ أدنى مُجمّد لعدد التأكيدات في كل ساق (حماية من الانكماش التحريري: عودة مبكرة أو تغليف شرطي يشغّل تأكيدات أقلّ وتبقى الحالة PASS فيتحوّل إلى أحمر) |
 
 
 **غير مُتحقَّق منه آليًا (لا تقرأ هذا على أنه «كل شيء مُغطّى»)**
@@ -624,9 +656,11 @@ src/<Fw>/
 | **توصيل** كل إطار (هل الخُطّاف موصول فعلًا، وهل يقع الحدث فعلًا) | اختبارات الوحدة تستخدم بدائل وهمية؛ والتوصيل لا يمكن تأكيده حاليًا إلا باختبارات دخانية يدوية |
 | البندان المتبقيان في Joomla | البندان اللذان لا تصل إليهما الحلقة بعد، وللسبب نفسه (يحتاجان قاعدة بيانات أو مُثبِّتًا): مسار القراءة الحقيقي لـ`#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) وشكل المُثبِّت (خريطة الأسماء namespacemap مكتوبة، و`bootPlugin()` يجد الصنف) |
 | التهيئة التلقائية لـ `kernel.event_subscriber` في Symfony | يحتاج ترجمة حاوية حقيقية |
-| تشابك الحالة الساكنة في العمليات طويلة العمر | جانب Webman لم يُغيَّر (جانب Hyperf معزول: القيم التسع لحالة العرض لكل طلب تمر عبر Context الكوروتين، و`tests/Unit/Lib/RenderStateCoroutineTest.php` يثبّتها بكوروتين يتنازل فعلاً) |
+| تشابك الحالة الساكنة في العمليات طويلة العمر | **معزولة لكل كوروتين**: فعندما يكون الطرف الخلفي داخل سياق كوروتين، تذهب حالة العرض الخاصة بكل طلب إلى Context ذلك السياق (Hyperf / workerman مع كشف تلقائي، انظر `Xhprof::coroutineContextClass()`‎)؛ وخارج الكوروتينات تبقى ساكنة على مستوى العملية (فـ FPM أصلًا عملية لكل طلب). وقد تحقّقنا: Hyperf باختبار كوروتين يتنازل فعلاً؛ وكوروتينات workerman في بطاقة Webman بحلقة التحقق، بطلبَي TCP حقيقيين متداخلين على خادم حقيقي (يرسم B صفحة كاملة بينما A معلّق، ويستيقظ A ولا يزال يحمل تشغيله ولغته وأعمدة مقاييسه) |
+| تشابك **المعاينة** في ظل كوروتينات Hyperf المتزامنة | إضافة xhprof ومفتاح المعاينة كلاهما على مستوى العملية: فعندما يتداخل كوروتينان على العامل نفسه عند نقطة إدخال/إخراج، يأخذ أول من يتوقّف البيانات (والتوقّف الثاني no-op عديم الأثر ويصحّ تكراره)، ويُهمَل التشغيل اللاحق ويخلط المحفوظ سجلات تنفيذ الكوروتينين. وحالة العرض معزولة (السطر أعلاه)؛ أما حالة المعاينة فلا سبيل إلى عزلها (تفرضه دلالات الإضافة). وعند الحاجة إلى بيانات نظيفة شدّ `sample_rate`‎ أو عطّل المعاينة في هذا السيناريو |
+| تشابك الحالة الساكنة تحت Laravel Octane (Swoole) | لا وجود لـ`workerman/workerman`‎ في شجرة اعتماديات Octane، لذا يستحيل بنيويًا وجود `Workerman\Coroutine`‎ ولا يمكن إعادة استخدام الطرف الخلفي الخاص بجانب webman؛ والطرف الخلفي الذي يحتاجه Octane ثالث: `\Swoole\Coroutine::getContext()`‎ (نحو 10 أسطر زائد فرع `class_exists`‎ واحد)، يُبنى متى توفّرت بيئة Swoole |
 | إدخال/إخراج Redis الحقيقي، وعرض المتصفح، وكلفة التنميط تحت حمل حقيقي | إدخال/إخراج Redis الحقيقي **دخل حلقة التحقق** (`cases/Redis.php`: phpredis حقيقي + طلب Slim حقيقي من الطرفين — طلب → تخزين → صفحة القائمة → صفحة التقرير)؛ أما عرض المتصفح وكلفة التنميط تحت حمل حقيقي فتبقى خارج نطاق اختبارات الوحدة وحلقة التحقق |
-| توقيعات محوّلي PHP الخام / ThinkPHP / Hyperf ودلالاتها | هذه الثلاثة ليست في حلقة التحقق (فالحلقة تغطي تسعة أطر)، ولأسباب مختلفة: **فـ PHP الخام لا توجد له حزمة خارجية تُثبَّت** — فمرجع المقارنة في الحلقة هو حزم الأطر الحقيقية، ولا وجود لها عنده، لذا تُغطّى دلالات محوّلاته عبر `tests/Unit/Adapter/NativeTest.php`‎ بمتغيرات فائقة حقيقية ورحلة ذهاب وإياب حقيقية بـ`php -S`‎ (وهو سطح رصد أقوى من CLI في الحلقة)؛ **أما ThinkPHP / Hyperf فلهما حزمان حقيقيان غير مثبَّتين فحسب**، وستَباتهما (stubs) مكتوبة يدويًا داخل الحزمة في `tests/Stubs/framework-stubs.php`‎، دون مقارنة بحزم حقيقية |
+| توقيعات محوّلي PHP الخام / Hyperf ودلالاتها | هذان ليسا في حلقة التحقق (فالحلقة تغطي عشرة أطر)، ولأسباب مختلفة: **فـ PHP الخام لا توجد له حزمة خارجية تُثبَّت** — فمرجع المقارنة في الحلقة هو حزم الأطر الحقيقية، ولا وجود لها عنده، لذا تُغطّى دلالات محوّلاته عبر `tests/Unit/Adapter/NativeTest.php`‎ بمتغيرات فائقة حقيقية ورحلة ذهاب وإياب حقيقية بـ`php -S`‎ (وهو سطح رصد أقوى من CLI في الحلقة)؛ **أما Hyperf فيُثبَّت لكنه لا يعمل هناك**: فاستدعاء `Context::set()`‎ فعليًا يرفع `Class "Swoole\Coroutine" not found`‎ — وCI الحلقة يثبّت xhprof+redis فقط، وغياب وقت تشغيل الكوروتين ext-swoole هو **شرط تشغيل** لا مشكلة في قابلية التثبيت، لذا تبقى ستَباته (stubs) مكتوبة يدويًا داخل الحزمة في `tests/Stubs/framework-stubs.php`‎، دون مقارنة بحزم حقيقية |
 
 **قائمة تحقق دخانية يدوية (ثلاث خطوات لكل إطار)**
 
@@ -652,7 +686,7 @@ src/<Fw>/
 
 **توافق Symfony 6.4**
 
-قيس توافق Symfony 6.4 (وهكذا أُصلح إفراطان في التخصيص لا يظهران على 7.4: خصائص `Request` لا تحمل تصريح نوع أصليًا على 6.4، ومجموعة المحارف التي يضيفها `prepare()` تختلف في حالة الأحرف). **الساقان كلتاهما داخل CI**: الساق الرئيسية 7.x زائد مشروع `tools/contracts/legacy-symfony64` المنفصل الذي يشغّل الملف نفسه من الحالات (دون نسخه)، والساقان معًا داخل بوابة الوسم أيضًا.
+قيس توافق Symfony 6.4 (وهكذا أُصلح إفراطان في التخصيص لا يظهران على 7.4: خصائص `Request`‎ لا تحمل تصريح نوع أصليًا على 6.4، ومجموعة المحارف التي يضيفها `prepare()`‎ تختلف في حالة الأحرف). **كل السيقان داخل CI**: الساق الرئيسية 7.x، ومشروع `tools/contracts/legacy-symfony64`‎ المنفصل الذي يشغّل ملف الحالات نفسه دون نسخه، وساق `tools/contracts/legacy-symfony8`‎ (Symfony 8.1 + Laravel 13، PHP 8.5) — وكلها داخل بوابة الوسم أيضًا.
 
 ---
 

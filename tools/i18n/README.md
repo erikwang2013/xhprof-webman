@@ -10,11 +10,12 @@ of them claims to.
 | file | what it does |
 |---|---|
 | `extract.php` | derives `templates/*.svg` and `classify.json` from the diagram originals listed in `I18N_DOCS` (`lib.php`). Already run; only re-run it if the Chinese originals change. `--list` prints the derivation and writes nothing — `tests/Unit/Docs/I18nExtractTest.php` holds that promise (hashes **and** mtimes). |
-| `classify.json` | the 203 text nodes, each marked `copy`, `code` or `text`, with the tokens that must survive translation. Reviewable by hand — this is the file to argue with. (203 = every `<text>` in the three diagrams; the six `*.meta.title` / `*.meta.desc` nodes are the SVGs' own title/desc, not on-canvas text.) |
+| `classify.json` | the 206 text nodes, each marked `copy`, `code` or `text`, with the tokens that must survive translation. Reviewable by hand — this is the file to argue with. (206 = every `<text>` in the three diagrams; the six `*.meta.title` / `*.meta.desc` nodes are the SVGs' own title/desc, not on-canvas text.) |
 | `templates/*.svg` | the originals with each translatable string replaced by `{{key}}`. |
 | `glossary/<lang>.json` | one file per language. **This is what you write.** |
 | `generate.php` | glossary → `docs/i18n/<lang>/images/*.svg` + `docs/i18n/<lang>/README.md`. `--verify` runs the whole generation **without writing** and compares the bytes it *would* write against what is on disk (every delivered locale unless `--lang` is given), naming the file and the first differing byte. That is what catches a hand-edited product, or a source edited without re-running the generator; both CI and the tag gate run it. |
 | `check.php` | the gate. Structure, wording, links, overflow, collisions, text direction, and whether the generator would even accept the locale. |
+| `shots.php` | re-shoots the 26 delivered screenshots with headless Chrome and refreshes `tests/Unit/Docs/screenshot-html-manifest.json`, the HTML fingerprint the screenshot gate checks. Run it after any change that alters a rendered page; `--dry-run` renders without shooting, `--regenerate-manifest` refreshes the manifest alone. |
 | `calibrate.php` | re-measures the width model against real Chrome. Oracle, not a gate. |
 | `selftest.php` | proves that `check.php` and `generate.php` actually fail when they should. Reads and writes only under the gitignored `.selftest/` at the repo root — never inside `docs/i18n/`, which is a delivery directory (one read-only case excepted, which asserts the delivered English locale passes its own gate). |
 
@@ -87,19 +88,19 @@ Flat JSON. `_meta` plus one entry per key:
 
 ## The three classes, and what each demands of you
 
-209 keys: **80 copy**, **57 code**, **72 text**. That is the checker's own count
-(`209 keys checked: 80 copy identical, 57 code retain every required token`),
-over the whole manifest: the 203 on-canvas `<text>` runs plus the six
+212 keys: **81 copy**, **57 code**, **74 text**. That is the checker's own count
+(`212 keys checked: 81 copy identical, 57 code retain every required token`),
+over the whole manifest: the 206 on-canvas `<text>` runs plus the six
 `*.meta.title` / `*.meta.desc` SVG metadata entries (four of those six are
-`code`, two `text`, which is where the per-class numbers exceed the 203).
+`code`, two `text`, which is where the per-class numbers exceed the 206).
 
 | class | count | what it means |
 |---|---|---|
-| `copy` | 80 | Do not touch it. `check.php` compares these byte for byte against the source. They are already English, or they are diagram furniture like the pipeline step numbers `1`–`8` (`lifecycle.pipeline.3`, `.6`, `.11`, …) or the stage labels on the sampling axis, `shutdown` and `plugins_loaded` (`lifecycle.axis.43`, `.54`). |
+| `copy` | 81 | Do not touch it. `check.php` compares these byte for byte against the source. They are already English, or they are diagram furniture like the pipeline step numbers `1`–`8` (`lifecycle.pipeline.3`, `.6`, `.11`, …) or the stage labels on the sampling axis, `shutdown` and `plugins_loaded` (`lifecycle.axis.43`, `.54`). |
 | `code` | 57 | Translate the prose, but every token in the node's `keep` list must survive **verbatim**. `Xhprof::autoDetect()` does not become `Xhprof::automatischErkennen()`. |
-| `text` | 72 | Translate freely. |
+| `text` | 74 | Translate freely. |
 
-53 distinct protected tokens across the set — framework and product names
+55 distinct protected tokens across the set — framework and product names
 (`Webman`, `Slim`, `WordPress`, `HttpFoundation`), identifiers
 (`list_runs()`, `bootstrap($req, $res, $cfg, $cache, $log)`), paths
 (`src/Core/Contract/`), and one error string (`Call to undefined method`).
@@ -162,17 +163,18 @@ runs on different rows therefore pass each other freely, however wide they are.
 everywhere else.** The basis is measured, not chosen:
 
 * The untranslated originals in `docs/images/` collide nowhere — **0 pairs
-  across 197 runs**. Read that for what it is: the source deliberately puts
-  *many* runs on a shared baseline (**284 pairs** do it, e.g. the four framework
+  across 206 runs**. Read that for what it is: the source deliberately puts
+  *many* runs on a shared baseline (**323 pairs** do it, e.g. the four framework
   columns of `architecture` at `y=184`), so a shared baseline is not itself a
-  defect and the originals are not a one-run-per-baseline design. All 284 are
+  defect and the originals are not a one-run-per-baseline design. All 323 are
   negative results — the measurement says the rule finds no collision among
   them, never that it would recognise one.
-* With the layout corrected (below), the count is **0** in every locale the
-  generator wrote. The smallest collision anywhere in the tree is 204.6px *as
-  the model scores it*, and nothing lands between 0 and 204px, so the exact
-  placement of the threshold is not doing any work today: it could sit anywhere
-  in that empty band and give the same verdict.
+* With the layout corrected (below), the failure count is **0** in every locale
+  the generator wrote: every overlap the model claims sits on a run scored
+  against a per-script estimate, so it warns rather than fails. The smallest is
+  `es`'s 16.7px (`lifecycle#34` & `#36`), and nothing lands between the
+  threshold and 16.7px, so its exact placement is not doing any work today: it
+  could sit anywhere in that empty band and give the same verdict.
 
 The check earns its keep on the same defect class the fix below addresses — two
 runs whose clearance depends on a *neighbour's* width, which no per-run fit can
@@ -247,28 +249,29 @@ all-clear.
 
 A collision check answers "is this tree broken?". It cannot answer the question
 the person about to reword a sentence actually has — "is this tree one longer
-sentence from broken?" — and `fr`'s `lifecycle#37 & #38`, which have **1.4px**
+sentence from broken?" — and `fr`'s `lifecycle#37 & #38`, which have **1.43px**
 of room in the model, pass today and fail tomorrow on an edit nobody had reason
 to think was risky. So two things below the threshold are reported too.
 
 **Clearance under `NEAR_MISS_PX` (20px) warns, with the number.** Measured
-across the twelve locales it fires 2–13 times each (2 in `en`/`ko`/`es`/`pt`/
-`ja`, 3 in `de`/`fr`/`hi`/`bn`/`id`, 13 in `ru`; 41 pairs in all), and the fired
-pairs divide by axis:
+across the twelve locales it fires 2–13 times each (2 in `es`/`ja`/`ko`/`pt`,
+3 in `ar`/`bn`/`de`/`en`/`fr`/`hi`/`id`, 13 in `ru`; 42 pairs in all), and the
+fired pairs divide by axis:
 
 * the **horizontal** ones are the fragile set, and they move with every
   translation change. `fr`'s `lifecycle#37 & #38` are the tightest in the tree
-  at 1.4px. The two `architecture` pairs — a framework name beside the `新增`
+  at 1.43px. The two `architecture` pairs — a framework name beside the `新增`
   badge that sits to its right (`#30 & #32`, `#83 & #85`) — fire in **all
-  twelve** locales: the layout leaves ~16px there in `en` (where the badge
-  reads `new`), and a wider word for it eats into that (`fr` 7.6px, `ru` 7.7px,
-  `es` 11.0px).
+  twelve** locales: the layout leaves ~16px there at most (`bn` 16.06/15.33px),
+  and a wider badge word eats into that (`en` 11.46/10.73px with `added`,
+  `fr` 11.02/10.29px, `ru` 8.38/7.65px, `es` 6.85/6.12px).
 * the **diagonal** ones are not a drawn gap. `check.php` scores such a pair as
   `sqrt($h² + max(0, -$v)²)`, the model's horizontal gap between the two ink
   boxes *combined* with the vertical one, so a pair separated on both axes at
   once can land under the threshold when a long translation closes the
-  horizontal gap. Measured: `ru` 7 pairs, `hi` 1, `bn` 1, and **none in the
-  other nine locales**. Read them as "one of two axes is nearly spent", not as
+  horizontal gap. Measured: `ru` 7 pairs, `hi` 1, `bn` 1, `en` 1
+  (`architecture#20 & architecture#24`, 19.89px), and **none in the other
+  eight locales**. Read them as "one of two axes is nearly spent", not as
   a property of the layout.
 
 The **vertical** axis is deliberately not part of that threshold. A run's band
@@ -280,7 +283,7 @@ can say is finer, so it is printed instead of warned: the line that already
 reports each diagram now carries its tightest vertical clearance —
 
 ```
-ok    architecture: 82 text runs, no two overlap; tightest vertical clearance 4.0px (architecture#56 & #57, model band)
+ok    architecture: 89 text runs, no two overlap; tightest vertical clearance 4.0px (architecture#56 & architecture#57, model band)
 ```
 
 — so the headroom is visible on every run, including the eleven locales where
@@ -335,7 +338,8 @@ is — a worst case. It drives the row-pitch warning (below) and nothing else; i
 deliberately does not set the near-miss threshold or the overlap verdict. The
 reason is measured. Applied to `ar`'s stacked rows it flags 19 pairs as
 exceeding the clearance available; four of them were rendered and **every one is
-clear, with empty pixel rows between the two runs**:
+clear, with empty pixel rows between the two runs** (empty here = not a single
+non-white pixel in the columns the two runs share; `rsvg-convert`, scale 1):
 
 | pair | model band | ink table | pixels |
 |---|---|---|---|
@@ -355,7 +359,7 @@ do not touch, but a taller glyph in either row would" — rather than as a
 collision.
 
 For `ar` the underlying structural fact is real and worth knowing: the row pitch
-leaves 3.0–4.7px between baselines, and Arabic's measured worst case needs
+leaves 3.0–4.9px between baselines, and Arabic's measured worst case needs
 1.55em (16.3px at `fs=10.5`). A taller glyph in one of those rows would collide
 and the width model would not see it coming. Eleven of the twelve locales have
 no such row; `ar` has nineteen.
@@ -467,8 +471,8 @@ architecture: 42 run(s) with no RTL character are not pinned direction="ltr"
 
 Three things to know before you set `dir`:
 
-* **The compensation is on the effective anchor, not the attribute.** 160 of the
-  197 runs never write `text-anchor` at all and rely on the SVG default, which
+* **The compensation is on the effective anchor, not the attribute.** 167 of the
+  206 runs never write `text-anchor` at all and rely on the SVG default, which
   is `start`. Swapping only written attributes leaves those runs to fall back
   to the rtl default and jump out of their boxes. This was a real bug here; the
   selftest now covers it.
@@ -516,25 +520,35 @@ than the numbers suggest. That is the reason the collisions section above is
 script-dependent.
 
 **The means do not all err in the same direction, and Arabic is the one to
-watch.** `calibrate.php` over all 197 runs of each locale, on this build machine
+watch.** `calibrate.php` over all 206 runs of each locale, on this build machine
 — "wider/narrower" counts runs the model predicted wider or narrower than Chrome
 measured them:
 
 | locale | script | predicted wider / narrower | largest error | worst under-estimate |
 |---|---|---|---|---|
-| `fr` | Latin | 123 / 74 | 11.23px | −0.01px |
-| `de` | Latin | 104 / 93 | 6.33px | −0.02px |
-| `ko` | Hangul | 134 / 63 | 35.87px | −0.01px |
-| `bn` | Bengali | 134 / 63 | 197.78px | −0.01px |
-| `hi` | Devanagari | 134 / 63 | 151.94px | −0.01px |
-| `ru` | Cyrillic | 134 / 63 | 249.07px | −0.01px |
-| `ar` | Arabic | 133 / 64 | 185.75px | **−0.91px** |
+| `de` | Latin | 117 / 89 | 7.24px | −0.34px |
+| `en` | Latin | 77 / 129 | 1.21px | −0.34px |
+| `es` | Latin | 112 / 94 | 9.39px | −0.34px |
+| `fr` | Latin | 131 / 75 | 11.23px | −0.34px |
+| `id` | Latin | 85 / 121 | 1.21px | −0.34px |
+| `pt` | Latin | 108 / 98 | 12.32px | −0.34px |
+| `ja` | CJK / kana | 78 / 128 | 0.47px | −0.34px |
+| `ko` | Hangul | 139 / 67 | 35.87px | −0.34px |
+| `bn` | Bengali | 139 / 67 | 197.78px | −0.34px |
+| `hi` | Devanagari | 139 / 67 | 151.94px | −0.34px |
+| `ru` | Cyrillic | 139 / 67 | 249.07px | −0.34px |
+| `ar` | Arabic | 138 / 68 | 185.75px | **−0.91px** |
+
+Eleven of the twelve worst under-estimates come from one run — the copyright
+line, `architecture.entry.89`, identical text in every locale, hence the
+identical 0.34px error — which is why that column repeats.
 
 Two things follow, and only the first is comfortable. The means are mostly
-*conservative*: the non-Latin locales over-charge about two runs for every one
-they under-charge, and their worst under-estimate is 0.01px — so on those
-scripts the failure mode is a false collision alarm, not a missed overflow. That
-is why a collision on an approximate script warns instead of failing the gate.
+*conservative*: `ko`, `bn`, `hi`, `ru` and `ar` over-charge about two runs for
+every one they under-charge (139 to 67 on the first four, 138 to 68 in `ar`) —
+so on those scripts the failure mode is a false collision alarm, not a missed
+overflow. That is why a collision on an approximate script warns instead of
+failing the gate.
 
 Arabic breaks the pattern in the one place that matters: it is the only locale
 measured here whose worst under-estimate is not negligible, at **−0.91px**. It
@@ -542,7 +556,7 @@ is the only script on this machine where the model can be *optimistic* about a
 run rather than merely wrong — which is also the origin of the "0.91px overflow"
 in an earlier report, an artefact of the mean and not a real one. For `ar`, and
 for any script not in this table, run `calibrate.php --lang=<lang>` and decide
-from the rendered numbers: all seven locales above pass it, meaning no run
+from the rendered numbers: all twelve locales above pass it, meaning no run
 overflows its box as Chrome measures it.
 
 These means were measured against whatever faces fontconfig happened to supply
@@ -705,3 +719,78 @@ cannot read. The table lives in `I18N_LANGUAGES` in `lib.php`; add a locale
 there, not by editing 13 files. Every link is relative and `check.php` resolves
 each one against the filesystem, so a missing sibling README is a failure, not
 a dead link discovered by a reader.
+
+### Adding a language
+
+Eight pieces, each with a gate behind it. One failure in the list is silent
+when missed — step 7 says which.
+
+1. **`src/Core/I18n/lang/<code>.php`** — the report-page catalog: `_meta.lang`
+   matching the filename, `_meta.dir`, `_meta.name` (the endonym), and the
+   `zh_CN` key set in the same order. Missing it, `I18nTest`'s
+   `everyAvailableLocaleHasExactlyOneCatalogFileAndNoStrayFiles` and
+   `I18nParityTest`'s endonym gate redden by name; a drifted key set reddens
+   `everyCatalogHasExactlyTheChineseKeySetInTheSameOrder`.
+2. **`I18n::AVAILABLE`** — what the report page's switcher iterates. Skip it and
+   `theTwoLocaleCodeListsLineUpUnderTheDocumentedMapping` reddens: the README
+   side and the report side must line up under the `zh → zh_CN` mapping.
+3. **`I18N_LANGUAGES`** in `lib.php` — `'<code>' => ['<endonym>', null]`; only
+   `zh` carries a rootFile. Skip it and the two-list test above reddens (the
+   report side has the locale, this side does not); skip it while updating the
+   workflow literal instead, and i18n.yml's *Locale list must match
+   tools/i18n/lib.php* step reddens on the mismatch.
+4. **`tools/i18n/glossary/<code>.json`** — the complete glossary. Missing,
+   `generate.php` and `check.php` refuse with the same guard (exit 2), and the
+   CI and release `--verify` sweeps redden with them.
+5. **`tools/i18n/readme/<code>.md`** — the README translation source. Missing,
+   `generate.php` writes the SVGs, stops before the README, exits 1; `--verify`
+   reddens the same way.
+6. **The root `README.md` switcher** — the tree's only hand-written one.
+   `rootSwitcherListsExactlyTheLocalesThatExist` compares it against the
+   directories on disk and catches both halves: an entry with no deliverable is
+   a 404, a deliverable with no entry has no way in.
+7. **Both workflow lists** — the `HERE=` literal and the `for lang in …` loop
+   in i18n.yml, and the loop in release.yml. `HERE=` is checked by i18n.yml's
+   own step; the loops by
+   `I18nWorkflowTest::workflowLocaleListsMatchTheAvailableLocales` — which
+   exists for the one failure that is otherwise **silent**: a locale missing
+   from the loop skips `check.php` forever while every other gate stays green;
+   adding a 14th language would quietly leave it unmanaged.
+8. **Regenerate and re-shoot, whole.** The new entry changes the switcher line
+   in every README and the language `<select>` on every page, so
+   `generate.php` (no `--lang`) and `shots.php` both run over everything.
+   Products left behind redden
+   `everyLocaleReadmeCarriesTheSwitcherTheLanguageTableDescribes`; shots left
+   behind redden `deliveredScreenshotsAreMadeFromTheCurrentHtml`. Finish with
+   `check.php --lang=<code>` — the locale's own gate, the one step 7 makes sure
+   CI runs.
+
+## Screenshots
+
+`docs/i18n/<lang>/images/{runs-list,run-report}.png` and the two Chinese ones
+at `docs/images/` are not `generate.php` products — they are photographs of the
+report page, taken by headless Chrome against the repository's own render path.
+`tools/i18n/shots.php` takes all 26 in one run (12 locales plus zh_CN, two pages
+each; zh_CN is pinned to `?lang=zh_CN` because Chrome's Accept-Language is en-US
+and negotiation would otherwise hand back the English page):
+
+```sh
+php tools/i18n/shots.php            # shoot 26 → docs/…, then refresh the manifest
+php tools/i18n/shots.php --dry-run  # render the 26 pages (in-process and over HTTP) and compare, shoot nothing
+```
+
+It needs `google-chrome` and `python3` with Pillow. The crop is measured, not
+assumed: 1280x3000 into Chrome, cut at the content's bottom + 23px — the
+calibration that reproduces the published images byte-for-byte while nothing
+has changed. The pages come from `LocaleScreenshotGateTest::page()`, the same
+function the gate renders with, so screenshots and gate cannot drift apart.
+
+`LocaleScreenshotGateTest` pins two things and never the PNG bytes: the sha1 of
+each page's rendered HTML, and of the `/xhprof-assets/*` files that HTML
+references (a JS or CSS edit changes what the browser shows without touching
+the HTML). Both live in `tests/Unit/Docs/screenshot-html-manifest.json`, written
+by every shoot — so a manifest that matches means the shots were taken from the
+HTML on disk. Reword a single translation and every affected hash moves; the
+gate reddens naming the page's PNG and the command to re-shoot. PNG bytes are
+deliberately not pinned: Chrome and fonts drift, and a page can re-encode
+without a pixel of its meaning changing.

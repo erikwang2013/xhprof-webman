@@ -88,5 +88,6 @@ header('Content-Type: text/html; charset=UTF-8');
 <p class="hint">多刷新几次本页（或 curl 打几次），报告列表里就会多几条 run —— 采样在每次请求结束时落进 Redis。
     函数列表里只会看到 <code>fib</code> / <code>buildString</code> 这些你自己写的代码：本包启用采样时带了
     <code>XHPROF_FLAGS_NO_BUILTINS</code>，内建函数（<code>usleep</code> / <code>md5</code> 这类）不采集。</p>
+<p class="hint">© erik · <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz</a></p>
 </body>
 </html>

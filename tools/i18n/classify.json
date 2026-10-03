@@ -7,9 +7,9 @@
                 "x": 0,
                 "y": 0,
                 "w": 1200,
-                "h": 870
+                "h": 894
             },
-            "texts": 88,
+            "texts": 89,
             "nodes": [
                 {
                     "key": "architecture.title.1",
@@ -44,7 +44,7 @@
                     "key": "architecture.legend.4",
                     "index": 4,
                     "class": "text",
-                    "source": "本次新增 8 个",
+                    "source": "后续扩展 8 个",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -176,7 +176,7 @@
                     "key": "architecture.entry.20",
                     "index": 20,
                     "class": "text",
-                    "source": "本次新增 8 个框架",
+                    "source": "后续扩展 8 个框架",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -200,7 +200,7 @@
                     "key": "architecture.entry.23",
                     "index": 23,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -224,7 +224,7 @@
                     "key": "architecture.entry.26",
                     "index": 26,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -248,7 +248,7 @@
                     "key": "architecture.entry.29",
                     "index": 29,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -272,7 +272,7 @@
                     "key": "architecture.entry.32",
                     "index": 32,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -296,7 +296,7 @@
                     "key": "architecture.entry.35",
                     "index": 35,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -320,7 +320,7 @@
                     "key": "architecture.entry.38",
                     "index": 38,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -621,7 +621,7 @@
                     "key": "architecture.coupling.72",
                     "index": 72,
                     "class": "code",
-                    "source": "两者都只在无参 bootstrap() 的老路径上生效，不影响 8 个新框架",
+                    "source": "两者都只在无参 bootstrap() 的老路径上生效，不影响扩展的 8 个框架",
                     "keep": [
                         "bootstrap()"
                     ],
@@ -711,7 +711,7 @@
                     "key": "architecture.coupling.81",
                     "index": 81,
                     "class": "code",
-                    "source": "8 个新框架不经过 autoDetect",
+                    "source": "扩展的 8 个框架不经过 autoDetect",
                     "keep": [
                         "autoDetect"
                     ],
@@ -748,32 +748,9 @@
                     "key": "architecture.entry.85",
                     "index": 85,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
-                },
-                {
-                    "key": "architecture.meta.title",
-                    "index": null,
-                    "class": "code",
-                    "source": "XHProf Webman 分层架构",
-                    "keep": [
-                        "XHProf",
-                        "Webman"
-                    ],
-                    "why": "prose surrounding code tokens that must stay verbatim (SVG metadata: screen-reader/tooltip text)"
-                },
-                {
-                    "key": "architecture.meta.desc",
-                    "index": null,
-                    "class": "code",
-                    "source": "三张分层图：上层是 12 个框架入口类（已适配 4 个 + 本次新增 8 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明 8 个新框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。",
-                    "keep": [
-                        "src/Core/Contract/",
-                        "Xhprof::bootstrap",
-                        "autoDetect"
-                    ],
-                    "why": "prose surrounding code tokens that must stay verbatim (SVG metadata: screen-reader/tooltip text)"
                 },
                 {
                     "key": "architecture.entry.86",
@@ -795,9 +772,40 @@
                     "key": "architecture.entry.88",
                     "index": 88,
                     "class": "text",
-                    "source": "新增",
+                    "source": "扩展",
                     "keep": [],
                     "why": "prose only — translate freely"
+                },
+                {
+                    "key": "architecture.entry.89",
+                    "index": 89,
+                    "class": "copy",
+                    "source": "© erik · https://erik.xyz",
+                    "keep": [],
+                    "why": "no prose characters — identifier, signature, number or keyword"
+                },
+                {
+                    "key": "architecture.meta.title",
+                    "index": null,
+                    "class": "code",
+                    "source": "XHProf Webman 分层架构",
+                    "keep": [
+                        "XHProf",
+                        "Webman"
+                    ],
+                    "why": "prose surrounding code tokens that must stay verbatim (SVG metadata: screen-reader/tooltip text)"
+                },
+                {
+                    "key": "architecture.meta.desc",
+                    "index": null,
+                    "class": "code",
+                    "source": "三张分层图：上层是 12 个框架入口类（已适配 4 个 + 后续扩展 8 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明扩展的 8 个框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。",
+                    "keep": [
+                        "src/Core/Contract/",
+                        "Xhprof::bootstrap",
+                        "autoDetect"
+                    ],
+                    "why": "prose surrounding code tokens that must stay verbatim (SVG metadata: screen-reader/tooltip text)"
                 }
             ]
         },
@@ -807,9 +815,9 @@
                 "x": 0,
                 "y": 0,
                 "w": 1200,
-                "h": 560
+                "h": 584
             },
-            "texts": 64,
+            "texts": 65,
             "nodes": [
                 {
                     "key": "lifecycle.title.1",
@@ -945,26 +953,28 @@
                 {
                     "key": "lifecycle.pipeline.17",
                     "index": 17,
-                    "class": "copy",
-                    "source": "isEnabled()",
-                    "keep": [],
-                    "why": "no prose characters — identifier, signature, number or keyword"
+                    "class": "code",
+                    "source": "资格：isEnabled()",
+                    "keep": [
+                        "isEnabled()"
+                    ],
+                    "why": "prose surrounding code tokens that must stay verbatim"
                 },
                 {
                     "key": "lifecycle.pipeline.18",
                     "index": 18,
                     "class": "copy",
-                    "source": "&& extension_",
+                    "source": "+ ext-xhprof/redis",
                     "keep": [],
                     "why": "no prose characters — identifier, signature, number or keyword"
                 },
                 {
                     "key": "lifecycle.pipeline.19",
                     "index": 19,
-                    "class": "copy",
-                    "source": "loaded('xhprof')",
+                    "class": "text",
+                    "source": "→token→预算→抽样",
                     "keep": [],
-                    "why": "no prose characters — identifier, signature, number or keyword"
+                    "why": "prose only — translate freely"
                 },
                 {
                     "key": "lifecycle.pipeline.20",
@@ -1084,12 +1094,14 @@
                     "key": "lifecycle.legend.34",
                     "index": 34,
                     "class": "code",
-                    "source": "短路分支：命中报告页路径 → withBody(Xhprof::index())->send()；命中 assets_url → StaticController::serve()，都不采样",
+                    "source": "短路分支：报告页路径 → withBody(Xhprof::index())->send()（index() 含鉴权，不过则 deny() 403/401/503）；assets_url → StaticController::serve()，都不采样",
                     "keep": [
                         "withBody(Xhprof::index())",
                         "StaticController::serve",
+                        "403/401/503",
                         "assets_url",
-                        "send()"
+                        "send()",
+                        "deny()"
                     ],
                     "why": "prose surrounding code tokens that must stay verbatim"
                 },
@@ -1351,6 +1363,14 @@
                     "why": "no prose characters — identifier, signature, number or keyword"
                 },
                 {
+                    "key": "lifecycle.axis.65",
+                    "index": 65,
+                    "class": "copy",
+                    "source": "© erik · https://erik.xyz",
+                    "keep": [],
+                    "why": "no prose characters — identifier, signature, number or keyword"
+                },
+                {
                     "key": "lifecycle.meta.title",
                     "index": null,
                     "class": "text",
@@ -1362,15 +1382,19 @@
                     "key": "lifecycle.meta.desc",
                     "index": null,
                     "class": "code",
-                    "source": "上半部分是采样请求的 8 个阶段：请求进入、入口类先判报告页与资源路径（命中则短路不采样）、Xhprof::bootstrap 注入 5 个适配器、isEnabled 与 extension_loaded 双重判断、xhprofStart、业务处理、finally 中 xhprofStop、save_run 落 Redis。下半部分是 5 条泳道，用色带标出 PSR-15（Yii3 / Slim）、Symfony、WordPress、Joomla、Drupal 各自的采样起止点与 shutdown 兜底。",
+                    "source": "上半部分是采样请求的 8 个阶段：请求进入、入口类先判报告页与资源路径（命中则短路不采样，报告页由 Xhprof::index() 鉴权，不过则 deny() 403/401/503）、Xhprof::bootstrap 注入 5 个适配器、采样判定（先判资格 isEnabled() 与 ext-xhprof/ext-redis，再走触发 token → 预算 → 抽样）、xhprofStart、业务处理、finally 中 xhprofStop、save_run 落 Redis。下半部分是 5 条泳道，用色带标出 PSR-15（Yii3 / Slim）、Symfony、WordPress、Joomla、Drupal 各自的采样起止点与 shutdown 兜底。",
                     "keep": [
+                        "ext-xhprof/ext-redis",
                         "Xhprof::bootstrap",
-                        "extension_loaded",
+                        "Xhprof::index",
+                        "isEnabled()",
+                        "403/401/503",
                         "WordPress",
                         "save_run",
                         "shutdown",
                         "Symfony",
                         "finally",
+                        "deny()",
                         "Joomla",
                         "Drupal",
                         "PSR-15",
@@ -1388,9 +1412,9 @@
                 "x": 0,
                 "y": 0,
                 "w": 1200,
-                "h": 640
+                "h": 664
             },
-            "texts": 51,
+            "texts": 52,
             "nodes": [
                 {
                     "key": "design.title.1",
@@ -1412,7 +1436,7 @@
                     "key": "design.conclusion.3",
                     "index": 3,
                     "class": "code",
-                    "source": "本次 6 个新框架对 src/Core/ 的改动数 = 0",
+                    "source": "扩展的 8 个框架对 src/Core/ 的改动数 = 0",
                     "keep": [
                         "src/Core/"
                     ],
@@ -1485,7 +1509,7 @@
                     "key": "design.row1.11",
                     "index": 11,
                     "class": "code",
-                    "source": "6 个新框架对 src/Core/ 改动 0 行；",
+                    "source": "扩展的 8 个框架对 src/Core/ 改动 0 行；",
                     "keep": [
                         "src/Core/"
                     ],
@@ -1751,20 +1775,16 @@
                 {
                     "key": "design.row4.41",
                     "index": 41,
-                    "class": "code",
-                    "source": "L2 语义覆盖 4.5/6；WordPress 覆盖不到，",
-                    "keep": [
-                        "WordPress",
-                        "4.5/6",
-                        "L2"
-                    ],
-                    "why": "prose surrounding code tokens that must stay verbatim"
+                    "class": "text",
+                    "source": "验证环以真实框架包为对照；",
+                    "keep": [],
+                    "why": "prose only — translate freely"
                 },
                 {
                     "key": "design.row4.42",
                     "index": 42,
                     "class": "text",
-                    "source": "只能源码文本核对 + 手工冒烟",
+                    "source": "未入环者没有真包对照（原因各异）",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -1782,7 +1802,7 @@
                     "key": "design.row5.44",
                     "index": 44,
                     "class": "text",
-                    "source": "6 个新框架全部显式注入：",
+                    "source": "扩展的 8 个框架全部显式注入：",
                     "keep": [],
                     "why": "prose only — translate freely"
                 },
@@ -1845,6 +1865,14 @@
                     "source": "约 30 行（含 5 个适配器构造）",
                     "keep": [],
                     "why": "prose only — translate freely"
+                },
+                {
+                    "key": "design.row5.52",
+                    "index": 52,
+                    "class": "copy",
+                    "source": "© erik · https://erik.xyz",
+                    "keep": [],
+                    "why": "no prose characters — identifier, signature, number or keyword"
                 },
                 {
                     "key": "design.meta.title",

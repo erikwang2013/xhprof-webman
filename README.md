@@ -22,6 +22,8 @@
 
 **对比两次运行** — 在「请求记录」列表里勾选恰好两条（每行一个复选框，表头可全选），点「对比选中」进入 diff 视图。两侧按时间取先后（run1 = 较早、run2 = 较晚，与列表当前排序无关），着色语义是「从 run1 到 run2」的改善 / 回归，页内「反转」链接可随时交换两侧。
 
+**导出于机器消费** — 报告页动作栏提供 JSON / CSV 导出（单次运行、对比、聚合三种视图都可导）；`?format=json` 不带 `run` 参数时返回**运行列表 JSON**（每条含 run_id、请求元数据与列表口径的头部信息），巡检脚本 / 看板取 run_id 不必再解析 HTML。带 `symbol=` 的导出请求会返回 400——导出没有单函数视图，静默给一份全量表比报错更坏。
+
 ## 环境要求
 
 - PHP >= 8.0
@@ -34,11 +36,11 @@
 | 框架 | 最低版本 | 最低 PHP | 入口类 | 挂载方式 |
 |------|---------|---------|--------|---------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | `config/middleware.php` 注册全局中间件 |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | `app/Http/Kernel.php` 注册全局中间件 |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0` | 8.0 | `Laravel\Middleware` | 11+ 用 `bootstrap/app.php` 的 `->withMiddleware()` 追加；10 及以下在 `app/Http/Kernel.php` 注册全局中间件 |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | `app/middleware.php` 注册全局中间件 |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | ConfigProvider 自动注册 |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | `config/web/di/application.php` 注册，须放中间件队列第一位 |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1（6.4）/ 8.2（7.x） | `Symfony\XhprofListener` | `config/services.yaml` 加 `kernel.event_subscriber` tag |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0` | 8.1（6.4）/ 8.2（7.x）/ 8.4（8.x） | `Symfony\XhprofListener` | `config/services.yaml` 加 `kernel.event_subscriber` tag |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | `$app->add(...)`，须最后 add |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | 复制到 `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | 复制到 `plugins/system/`，后台「发现」安装 |
@@ -116,14 +118,15 @@ return [
 
 ### Laravel
 
-**1. 注册中间件** — `app/Http/Kernel.php`：
+**1. 注册中间件** — Laravel 11 及以上（slim skeleton 起就没有 `app/Http/Kernel.php`）在 `bootstrap/app.php`：
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+Laravel 10 及以下仍在 `app/Http/Kernel.php` 的 `protected $middleware` 数组里追加 `\ErikWang2013\Xhprof\Laravel\Middleware::class`。
 
 **2. 报告页与静态资源** — **无需注册控制器与路由**：中间件在采样开始前判断请求路径，命中报告路径 `/xhprof` 直接输出报告页并返回，命中资源路径（前缀从配置项 `assets_url` 读，默认 `/xhprof-assets`）直接输出静态资源。
 
@@ -134,6 +137,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 配置文件在 `config/xhprof.php`。Laravel 支持自动发现 ServiceProvider。
+
+**4. CLI 与队列**（需要时先打开 `sample_cli`，默认关闭）— 两类没有 HTTP 请求的入口都在采样窗口内跑：
+
+- **队列 worker**：在 `AppServiceProvider::boot()` 里把四个事件接到包内监听器，按消息开停（常驻 worker 不漏）：
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **artisan 命令**：`xhprof:profile` 随包自动注册（Laravel 自动发现 ServiceProvider），直接用：
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **自定义脚本 / 定时任务**：非 artisan 入口（自写 PHP 脚本、闭包任务）在任务体外面包一层：
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* 原逻辑 */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+窗口按任务开停（同步派发的子任务嵌套时只记最外层一条），落库的 `request_uri` 记为 `cli:<脚本名>`。
 
 ---
 
@@ -425,7 +457,7 @@ php -S 127.0.0.1:8000 -t public public/index.php
 | `ip_allowlist` | array | `[]` | 报告页 IP 白名单，**逐字比对**：不支持 CIDR 网段、不做 IPv6 规范化（`2001:0db8::1` 与 `2001:db8::1` 是两个字符串）。空 = 关闭；写得不是数组 = 一律拒绝（fail closed，记一条 error 日志）。取值来自 `getRealIp()`，需与 `trusted_proxies` 一起理解 |
 | `trusted_proxies` | array | `[]` | **部署声明，不是技术强制**：声明「我前面有可信代理」后，`ip_allowlist` 才接受来自 `X-Forwarded-For`/`X-Real-IP` 的客户端 IP。多数适配器无条件取转发头——声明了也**挡不住伪造 XFF**，仅当部署在可信代理之后才安全 |
 | `webhook_url` | string\|null | `null` | 慢请求（`wt >= view_wtred`）落库后 POST JSON（`run_id`/`uri`/`wt`/`ct`/`ip`/`time`）到该地址。留空 = 不发送。**不是队列**：不等响应、无重试、无落盘补偿，端点慢或挂掉只丢这一条通知 |
-| `sample_cli` | bool | `false` | CLI/无 HTTP 请求也采样：`true` 时落库的 `request_uri` 记为 `cli:<脚本名>`；`false` = 一律忽略（默认，含队列 worker 与定时任务） |
+| `sample_cli` | bool | `false` | CLI/无 HTTP 请求也采样：`true` 时落库的 `request_uri` 记为 `cli:<脚本名>`；`false` = 一律忽略（默认，含队列 worker 与定时任务）。能否生效取决于入口：Laravel 已内置（队列监听器 + `XhprofCli`，见 Laravel 一节），原生 PHP 入口天然按 CLI 形态工作（无 HTTP 依赖）；其余框架的入口是 HTTP 专用，需自行包一层 |
 | `symbol_lookup_url` | string\|null | `null` | 源码链接模板：报告页渲染 `<模板>?symbol=<urlencoded 函数名>`；`null`/空 = 不显示链接 |
 | `max_runs_per_minute` | int\|null | `null` | 自适应预算：每分钟最多记录多少条（分钟桶计数，超出不采）；`null`/非正数 = 关闭。缓存不可用/抛异常时 fail-open（照常按 `sample_rate`）；**触发采样不受它限制** |
 | `time_limit` | int | `0` | 仅记录响应超过 n 秒的请求，0 表示全部 |
@@ -530,7 +562,7 @@ Core 只通过 5 个契约访问框架，5 个契约都在 `src/Core/Contract/`�
 
 ![设计思路](docs/images/design.svg)
 
-上图讲**为什么这么设计**：5 条取舍的「决策 / 理由 / 代价」对照，顶栏是「六个新框架对 `src/Core/` 的改动数 = 0」。
+上图讲**为什么这么设计**：5 条取舍的「决策 / 理由 / 代价」对照，顶栏是「扩展的 8 个框架对 `src/Core/` 的改动数 = 0」。
 
 ---
 
@@ -581,7 +613,7 @@ xhprof-webman/
 ├── wordpress/                    # mu-plugin 引导文件（带 plugin header）
 ├── joomla/                       # Joomla 插件（CMSPlugin + 清单）
 ├── drupal/xhprof/                # Drupal 标准模块（info / routing / services + Controller）
-├── tools/contracts/              # 独立验证环：对真实框架包校验签名与语义（`legacy-symfony64/` 是 6.4 腿）
+├── tools/contracts/              # 独立验证环：对真实框架包校验签名与语义（`legacy-symfony64/`、`legacy-symfony8/` 是两条旧版腿）
 ├── tools/i18n/                   # README 与三张 SVG 的翻译工具链（生成 / 校验 / 自检）
 ├── docs/i18n/                    # 12 份译文产物（英文、韩语、俄语、德语、法语、西班牙语、葡萄牙语、阿拉伯语、印地语、孟加拉语、印尼语、日语）
 ├── tests/                        # PHPUnit：适配器单测、接线测试、Core 单测、14 份 README 的结构一致性
@@ -611,8 +643,8 @@ src/<Fw>/
 | 适配器与入口接线的行为 | `tests/Unit/Adapter/*Test.php`：enable 落库 / disable 不落库 / 业务抛异常时 `finally` 仍落库 |
 | 十二个框架的配置 key 集一致 | 配置一致性测试（不逐字节比对，注释可不同） |
 | 两份 README 逐段镜像 | README 一致性测试：比对 `##` / `###` 标题序列与代码块数量 |
-| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job，**两条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4）：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 9 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）用反射断言每个方法 / 常量 / 全局函数存在；原生 PHP / ThinkPHP / Hyperf 未入环，原因各不相同，见下 |
-| 适配器语义正确 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑 |
+| 适配器调用的方法真实存在 | `tools/contracts/` 验证环（独立 CI job，**三条腿**：主腿装各框架最新包，独立的 `tools/contracts/legacy-symfony64` 项目用同一份 Symfony case 跑 6.4，第三条 `tools/contracts/legacy-symfony8` 跑 Symfony 8.1 + Laravel 13（PHP 8.5））：装真实框架包（Drupal 用真 `drupal/core`，Joomla 用两个真实 CMS 发布包），对**已入环的 10 个框架**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP）用反射断言每个方法 / 常量 / 全局函数存在；原生 PHP / Hyperf 未入环，原因各不相同，见下 |
+| 适配器语义正确 | 同一验证环用真实类实例化请求与响应后跑适配器，含两条不变量：`uri()` 不含 scheme/host、`file()` 之后 `withHeaders()` 仍生效。环的 SKIP 总数是冻结常量（主腿 2、6.4 腿 0、8 腿 0），两条都在 Joomla：`#__extensions.params` 的真实读取路径、安装器形态，都需要数据库/安装器才能跑；每个 case 的断言数另有逐腿冻结下限（防编辑型缩水：早退/条件包裹把断言跑少而 status 仍 PASS 时红） |
 
 
 **未自动化验证的（不要当成已验过）**
@@ -622,9 +654,11 @@ src/<Fw>/
 | 所有框架的接线（钩子是否真挂上、事件是否真触发） | 单测用的是桩，接线正确性目前只有手工冒烟能确认 |
 | Joomla 剩下的两条子项 | 环里仍够不到、且原因都是需要数据库/安装器的那两件事：`#__extensions.params` 的真实读取路径（`PluginHelper::getPlugin()` → `bootPlugin()`）、安装器形态（namespacemap 被写过、`bootPlugin()` 找得到类） |
 | Symfony 的 `kernel.event_subscriber` 自动配置 | 需要真实容器编译 |
-| 长驻进程下的静态状态串扰 | Webman 侧未改（Hyperf 侧已隔离：渲染期 9 个按请求量走协程 Context，`tests/Unit/Lib/RenderStateCoroutineTest.php` 用真让出的协程钉住） |
+| 长驻进程下的静态状态串扰 | **已按协程隔离**：按请求的渲染态在后端处于协程上下文时存进该环境的 Context（Hyperf / workerman 自动侦测，见 `Xhprof::coroutineContextClass()`）；非协程形态用进程级静态（FPM 本就每请求一进程）。验证：Hyperf 用真让出协程测试；workerman 协程在验证环的 Webman 卡里用真服务器 + 真 TCP 两请求交错钉住（A 挂起期间 B 整页渲染，A 醒来仍是自己的 run / 语言 / 指标列） |
+| Hyperf 并发协程下的**采样**串扰 | xhprof 扩展与采样开关都是进程级：同一 worker 上两个协程在 IO 点交错时，先 stop 的取走数据（第二个 stop 幂等 no-op），后完成的 run 被丢、保存的那条混入两个协程的执行记录。渲染态已隔离（上行），采样态无法隔离（扩展语义）。需要干净数据时收紧 `sample_rate` 或对该场景关闭采样 |
+| Laravel Octane（Swoole）下的静态状态串扰 | Octane 的依赖树里没有 workerman/workerman，`Workerman\Coroutine` 结构上不存在，webman 侧那个后端无法复用；Octane 要的是第三个后端 `\Swoole\Coroutine::getContext()`（约 10 行 + 一个 `class_exists` 分支），待有 Swoole 环境再开工 |
 | 真实 Redis 读写、浏览器渲染、真实负载下的采样开销 | 真实 Redis 读写**已进验证环**（`cases/Redis.php`：真 phpredis + 真 Slim 端到端——业务请求 → 落库 → 列表页 → 报告页）；浏览器渲染与真实负载下的采样开销仍超出单测与验证环的范围 |
-| 原生 PHP / ThinkPHP / Hyperf 的适配器签名与语义 | 三家未装入验证环（环覆盖 9 个框架），原因不同：**原生 PHP 没有第三方包可装**——环的对照物是真实框架包，对它不存在，其适配器语义由 `tests/Unit/Adapter/NativeTest.php` 用真超全局量 + 真 `php -S` 往返覆盖（观测面比环的 CLI 更强）；**ThinkPHP / Hyperf 有真包但未装**，桩是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
+| 原生 PHP / Hyperf 的适配器签名与语义 | 两家未装入验证环（环覆盖 10 个框架），原因不同：**原生 PHP 没有第三方包可装**——环的对照物是真实框架包，对它不存在，其适配器语义由 `tests/Unit/Adapter/NativeTest.php` 用真超全局量 + 真 `php -S` 往返覆盖（观测面比环的 CLI 更强）；**Hyperf 能装但跑不起来**：真跑 `Context::set()` 抛 `Class "Swoole\Coroutine" not found`，环的 CI 只装 xhprof+redis，缺的 ext-swoole 协程运行时是**运行前提**而非可安装性，故桩仍是包内手写的 `tests/Stubs/framework-stubs.php`，没有真实包对照 |
 
 **手工冒烟清单（每个框架三步）**
 
@@ -650,7 +684,7 @@ Drupal 装在子目录（如 `/sites/app/xhprof`）时，路径守卫匹配不�
 
 **Symfony 6.4 兼容性**
 
-Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看不出的过度拟合：`Request` 属性在 6.4 无原生类型声明、`prepare()` 补的 charset 大小写不同）。**两条腿都进 CI**：主腿 7.x + 独立的 `tools/contracts/legacy-symfony64` 项目跑同一份 case（不复制），两条腿也都在 tag 门禁里。
+Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看不出的过度拟合：`Request` 属性在 6.4 无原生类型声明、`prepare()` 补的 charset 大小写不同）。**所有腿都进 CI**：主腿 7.x、独立的 `tools/contracts/legacy-symfony64` 项目（跑同一份 case，不复制）以及第三条 `tools/contracts/legacy-symfony8` 腿（Symfony 8.1 + Laravel 13，PHP 8.5）——全部都进 tag 门禁。
 
 ---
 

@@ -22,7 +22,9 @@ Api kecil yang sama juga menjadi ikon situs, ikon merek di kiri atas, dan ikon p
 
 ![Laporan satu eksekusi](images/run-report.png)
 
-**Membandingkan dua eksekusi** — di daftar Riwayat Request centang tepat dua baris (satu kotak centang per baris, pilih-semua ada di header) lalu klik "Bandingkan yang dipilih" untuk membuka tampilan diff. Kedua sisi diurutkan menurut waktu (run1 = eksekusi yang lebih awal, run2 = yang lebih akhir, tidak bergantung pada urutan daftar saat ini); warnanya bermakna perbaikan / regresi "dari run1 ke run2", dan tautan "Balikkan Laporan" di dalam halaman dapat menukar kedua sisi kapan saja.
+**Membandingkan dua eksekusi** — di daftar Riwayat Request centang tepat dua baris (satu kotak centang per baris, pilih-semua ada di header) lalu klik "Bandingkan yang dipilih" untuk membuka tampilan diff. Kedua sisi diurutkan menurut waktu (run1 = eksekusi yang lebih awal, run2 = eksekusi yang lebih akhir, tidak bergantung pada urutan daftar saat ini); warnanya bermakna perbaikan / regresi "dari run1 ke run2", dan tautan "Balikkan Laporan" di dalam halaman dapat menukar kedua sisi kapan saja.
+
+**Ekspor untuk konsumsi mesin** — bilah aksi halaman report menyediakan ekspor JSON / CSV (tersedia untuk eksekusi tunggal, perbandingan, dan tampilan agregat); `?format=json` tanpa parameter `run` mengembalikan **JSON daftar eksekusi** (tiap entri memuat run_id, metadata request, dan informasi kepala sesuai cakupan daftar), sehingga skrip pemantauan / dasbor bisa mengambil run_id tanpa perlu mengurai HTML lagi. Permintaan ekspor yang membawa `symbol=` mengembalikan 400 — ekspor tidak punya tampilan satu fungsi, dan diam-diam memberi tabel datar penuh lebih buruk daripada error.
 
 ## Persyaratan
 
@@ -36,11 +38,11 @@ Api kecil yang sama juga menjadi ikon situs, ikon merek di kiri atas, dan ikon p
 | Framework | Versi minimum | PHP minimum | Kelas entri | Cara memasang |
 |-----------|----------------|-------------|-------------|--------------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | Daftarkan middleware global di `config/middleware.php` |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | Daftarkan middleware global di `app/Http/Kernel.php` |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0` | 8.0 | `Laravel\Middleware` | Di 11+ tambahkan lewat `->withMiddleware()` di `bootstrap/app.php`; di 10 dan ke bawah daftarkan middleware global di `app/Http/Kernel.php` |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | Daftarkan middleware global di `app/middleware.php` |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | Terdaftar otomatis lewat ConfigProvider |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | Daftarkan di `config/web/di/application.php`, harus paling depan di daftar middleware |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1 (6.4) / 8.2 (7.x) | `Symfony\XhprofListener` | Tambahkan tag `kernel.event_subscriber` di `config/services.yaml` |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0` | 8.1 (6.4) / 8.2 (7.x) / 8.4 (8.x) | `Symfony\XhprofListener` | Tambahkan tag `kernel.event_subscriber` di `config/services.yaml` |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | `$app->add(...)`, harus ditambahkan paling akhir |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | Salin ke `wp-content/mu-plugins/` |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | Salin ke `plugins/system/`, pasang lewat Discover |
@@ -118,14 +120,15 @@ return [
 
 ### Laravel
 
-**1. Daftarkan middleware** — `app/Http/Kernel.php`:
+**1. Daftarkan middleware** — di Laravel 11 ke atas (skeleton ramping-nya tidak lagi punya `app/Http/Kernel.php`) di `bootstrap/app.php`:
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+Di Laravel 10 dan ke bawah Anda tetap menambahkan `\ErikWang2013\Xhprof\Laravel\Middleware::class` ke array `protected $middleware` di `app/Http/Kernel.php`.
 
 **2. Halaman report dan aset statis** — **tidak perlu controller atau pendaftaran route**: sebelum profiling dimulai middleware memeriksa path request: kecocokan pada path report `/xhprof` langsung mengembalikan halaman report, dan kecocokan pada path aset (prefiks dibaca dari opsi `assets_url`, default `/xhprof-assets`) langsung mengembalikan aset statisnya.
 
@@ -136,6 +139,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 Berkas konfigurasi ada di `config/xhprof.php`. Laravel mendukung penemuan otomatis ServiceProvider.
+
+**4. CLI dan antrean** (nyalakan `sample_cli` dulu bila perlu; default mati) — kedua jenis entry point tanpa request HTTP berjalan di dalam jendela sampling:
+
+- **Worker antrean**: di `AppServiceProvider::boot()`, sambungkan keempat event ke listener bawaan paket — satu jendela per pesan, jadi worker yang berjalan terus-menerus tetap tercakup:
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **Perintah artisan**: `xhprof:profile` didaftarkan otomatis oleh paket (Laravel menemukan ServiceProvider secara otomatis) — langsung pakai:
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **Skrip kustom / tugas terjadwal**: untuk entry point non-artisan (skrip PHP Anda sendiri, tugas berupa closure), bungkus badan tugasnya:
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* your logic */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+Jendela dibuka dan ditutup per tugas (tugas anak yang dikirim secara sinkron akan bersarang, jadi hanya tugas terluar yang dicatat), dan `request_uri` run yang tersimpan dicatat sebagai `cli:<nama skrip>`.
 
 ---
 
@@ -427,7 +459,7 @@ Semua framework berbagi opsi konfigurasi berikut:
 | `ip_allowlist` | array | `[]` | Allowlist IP halaman report, dicocokkan **persis byte per byte**: tidak mendukung rentang CIDR dan tidak menormalkan IPv6 (`2001:0db8::1` dan `2001:db8::1` adalah dua string yang berbeda). Kosong = mati; nilai yang bukan array = tolak semua (fail closed, satu entri log error). Nilainya berasal dari `getRealIp()`, pahami bersama `trusted_proxies` |
 | `trusted_proxies` | array | `[]` | **Deklarasi deployment, bukan penegakan teknis**: hanya setelah menyatakan "ada proxy tepercaya di depan saya", `ip_allowlist` menerima IP klien yang diambil dari `X-Forwarded-For`/`X-Real-IP`. Sebagian besar adapter mengambil header penerusan tanpa syarat — deklarasi ini **tidak** menahan XFF palsu, jadi aman hanya bila berada di belakang proxy yang Anda kendalikan |
 | `webhook_url` | string\|null | `null` | Setelah run lambat (`wt >= view_wtred`) tersimpan, POST JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) ke alamat ini. Kosong = tidak dikirim. **Bukan antrean**: tidak menunggu respons, tanpa percobaan ulang dan tanpa kompensasi di disk; endpoint yang lambat atau mati hanya kehilangan satu notifikasi ini |
-| `sample_cli` | bool | `false` | Sampling juga berlaku untuk CLI/tanpa request HTTP: bila `true`, `request_uri` run yang tersimpan dicatat sebagai `cli:<nama skrip>`; `false` = selalu diabaikan (default, termasuk worker antrean dan tugas terjadwal) |
+| `sample_cli` | bool | `false` | Sampling juga berlaku untuk CLI/tanpa request HTTP: bila `true`, `request_uri` run yang tersimpan dicatat sebagai `cli:<nama skrip>`; `false` = selalu diabaikan (default, termasuk worker antrean dan tugas terjadwal). Apakah ia berlaku bergantung pada entry point-nya: Laravel sudah mendukungnya secara bawaan (listener antrean + `XhprofCli`, lihat bagian Laravel), entry point PHP murni memang bekerja dalam bentuk CLI (tanpa ketergantungan HTTP); entry point framework lain khusus HTTP, perlu dibungkus sendiri |
 | `symbol_lookup_url` | string\|null | `null` | Templat tautan kode sumber: halaman report merender `<templat>?symbol=<nama fungsi urlencoded>`; `null`/kosong = tanpa tautan |
 | `max_runs_per_minute` | int\|null | `null` | Anggaran adaptif: maksimum berapa catatan yang direkam per menit (dihitung per menit; kelebihannya tidak disampling); `null`/non-positif = mati. Bila cache tidak tersedia/melempar exception, fail-open (tetap mengikuti `sample_rate`); **sampling terpicu tidak dibatasi olehnya** |
 | `time_limit` | int | `0` | Hanya profilkan request yang melebihi n detik, 0 berarti semua |
@@ -532,7 +564,7 @@ Diagram pertama adalah **strukturnya**: kelas entri dari kedua belas framework, 
 
 ![Alasan desain](./images/design.svg)
 
-Diagram kedua adalah **penalarannya**: lima trade-off yang disusun sebagai keputusan / alasan / biaya, dengan judul "perubahan pada `src/Core/` dari keenam framework baru = 0".
+Diagram kedua adalah **penalarannya**: lima trade-off yang disusun sebagai keputusan / alasan / biaya, dengan judul "perubahan pada `src/Core/` dari 8 framework susulan = 0".
 
 ---
 
@@ -583,7 +615,7 @@ xhprof-webman/
 ├── wordpress/                    # berkas bootstrap mu-plugin (dengan header plugin)
 ├── joomla/                       # plugin Joomla (CMSPlugin + manifes)
 ├── drupal/xhprof/                # modul Drupal standar (info / routing / services + controller)
-├── tools/contracts/              # loop verifikasi mandiri: signature dan semantik terhadap paket framework asli (`legacy-symfony64/` adalah leg 6.4)
+├── tools/contracts/              # loop verifikasi mandiri: signature dan semantik terhadap paket framework asli (`legacy-symfony64/` dan `legacy-symfony8/` adalah dua leg versi lama)
 ├── tools/i18n/                   # rantai alat terjemahan untuk README dan ketiga SVG (generate / check / selftest)
 ├── docs/i18n/                    # 12 hasil terjemahan (Inggris, Korea, Rusia, Jerman, Prancis, Spanyol, Portugis, Arab, Hindi, Bengali, Indonesia, Jepang)
 ├── tests/                        # PHPUnit: test adapter, test wiring, test Core, paritas struktural di 14 README
@@ -613,8 +645,8 @@ src/<Fw>/
 | Perilaku adapter dan wiring kelas entri | `tests/Unit/Adapter/*Test.php`: aktif → tersimpan / nonaktif → tidak tersimpan / exception bisnis → tetap tersimpan lewat `finally` |
 | Kedua belas framework berbagi satu set key konfigurasi | tes paritas konfigurasi (set key, bukan byte per byte; komentar boleh berbeda) |
 | Kedua README saling mencerminkan | tes paritas README: membandingkan urutan judul `##` / `###` dan jumlah blok kode |
-| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **dua leg**: leg utama memasang paket terbaru tiap framework, dan proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk sembilan framework yang masuk loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); PHP murni / ThinkPHP / Hyperf tidak masuk loop, masing-masing dengan alasan berbeda — lihat di bawah |
-| Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, dengan dua invarian: `uri()` tidak membawa scheme/host, dan `withHeaders()` tetap berlaku setelah `file()`. Jumlah SKIP loop adalah konstanta beku (2 di leg utama, 0 di leg 6.4) dan keduanya ada di Joomla: jalur baca asli `#__extensions.params` dan bentuk installer, keduanya butuh database atau installer untuk dijalankan |
+| Metode yang dipanggil adapter benar-benar ada | loop verifikasi `tools/contracts/` (job CI tersendiri, **tiga leg**: leg utama memasang paket terbaru tiap framework, proyek terpisah `tools/contracts/legacy-symfony64` menjalankan case Symfony yang sama terhadap 6.4, dan leg ketiga, `tools/contracts/legacy-symfony8`, menjalankan Symfony 8.1 + Laravel 13 (PHP 8.5)): memasang paket framework asli (`drupal/core` asli untuk Drupal, dua paket rilis CMS asli untuk Joomla) dan memastikan lewat reflection bahwa setiap metode / konstanta / fungsi global ada **untuk sepuluh framework yang masuk loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP); PHP murni / Hyperf tidak masuk loop, masing-masing dengan alasan berbeda — lihat di bawah |
+| Semantik adapter | Loop yang sama menginstansiasi objek request dan response asli lalu menjalankan adapter-nya, dengan dua invarian: `uri()` tidak membawa scheme/host, dan `withHeaders()` tetap berlaku setelah `file()`. Jumlah SKIP loop adalah konstanta beku (2 di leg utama, 0 di leg 6.4, 0 di leg 8) dan keduanya ada di Joomla: jalur baca asli `#__extensions.params` dan bentuk installer, keduanya butuh database atau installer untuk dijalankan; selain itu setiap case punya batas bawah jumlah asersi yang dibekukan per leg (mencegah penyusutan lewat penyuntingan: early return atau pembungkusan kondisional yang menjalankan lebih sedikit asersi padahal statusnya tetap PASS akan merah) |
 
 
 **Tidak diverifikasi otomatis (jangan baca ini sebagai «semuanya sudah tercakup»)**
@@ -624,9 +656,11 @@ src/<Fw>/
 | **Wiring** setiap framework (apakah hook-nya benar-benar terpasang, apakah event-nya benar-benar menyala) | Unit test memakai stub; wiring saat ini hanya bisa dipastikan lewat smoke test manual |
 | Dua sub-item Joomla yang tersisa | Dua hal yang masih belum terjangkau loop, dan keduanya karena alasan yang sama (butuh database atau installer): jalur baca asli `#__extensions.params` (`PluginHelper::getPlugin()` → `bootPlugin()`) dan bentuk installer (namespacemap tertulis, `bootPlugin()` menemukan kelasnya) |
 | Konfigurasi otomatis `kernel.event_subscriber` Symfony | Membutuhkan kompilasi container asli |
-| Cakap-silang state statis di proses berjalan lama | Sisi Webman tidak diubah (di Hyperf sudah diisolasi: 9 nilai state render per permintaan melewati Context coroutine, dipatok oleh `tests/Unit/Lib/RenderStateCoroutineTest.php` dengan coroutine yang benar-benar menyerahkan kendali) |
+| Cakap-silang state statis di proses berjalan lama | **Sudah diisolasi per coroutine**: state render per request, saat backend berada dalam konteks coroutine, disimpan ke dalam Context milik lingkungan itu (Hyperf / workerman terdeteksi otomatis, lihat `Xhprof::coroutineContextClass()`); di luar bentuk coroutine ia tetap memakai statis tingkat proses (FPM memang satu proses per request). Verifikasi: Hyperf lewat tes coroutine yang benar-benar menyerahkan kendali; coroutine workerman dipatok di kartu Webman pada loop verifikasi memakai server asli + dua request TCP asli yang saling berselang-seling (selagi A ditangguhkan, B merender satu halaman penuh, dan saat A bangun ia tetap memegang run / bahasa / kolom metrik miliknya sendiri) |
+| Cakap-silang **sampling** di bawah coroutine Hyperf yang bersamaan | ekstensi xhprof dan sakelar sampling keduanya tingkat proses: ketika dua coroutine di worker yang sama berselang-seling di titik I/O, yang lebih dulu `stop` mengambil datanya (`stop` kedua adalah no-op idempoten), run yang selesai belakangan dibuang dan run yang tersimpan mencampur rekaman eksekusi kedua coroutine. State render sudah diisolasi (baris di atas); state sampling tidak bisa (semantik ekstensi). Bila butuh data yang bersih, ketatkan `sample_rate` atau matikan sampling untuk skenario itu |
+| Cakap-silang state statis di bawah Laravel Octane (Swoole) | Pohon dependensi Octane tidak memuat workerman/workerman, jadi `Workerman\Coroutine` secara struktural tidak ada dan backend sisi Webman tidak bisa dipakai ulang; yang dibutuhkan Octane adalah backend ketiga, `\Swoole\Coroutine::getContext()` (sekitar 10 baris plus satu cabang `class_exists`), dan baru akan dikerjakan setelah ada lingkungan Swoole |
 | I/O Redis asli, rendering browser, overhead profiling di bawah beban nyata | I/O Redis asli **kini ada di dalam loop** (`cases/Redis.php`: phpredis asli + permintaan Slim asli dari awal sampai akhir — permintaan → penyimpanan → halaman daftar → halaman laporan); rendering browser dan overhead di bawah beban nyata tetap di luar cakupan unit test dan loop |
-| Signature dan semantik adapter untuk PHP murni / ThinkPHP / Hyperf | ketiganya tidak masuk loop verifikasi (loop mencakup sembilan framework), dengan alasan yang berbeda: **PHP murni tidak punya paket pihak ketiga untuk dipasang** — loop membandingkan terhadap paket framework asli, dan untuk PHP murni paket itu tidak ada, jadi semantik adapter-nya dicakup oleh `tests/Unit/Adapter/NativeTest.php` lewat superglobal asli dan uji bolak-balik `php -S` sungguhan (permukaan observasi yang lebih kuat daripada CLI milik loop); **ThinkPHP / Hyperf punya paket asli yang memang tidak dipasang**, jadi stub-nya ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
+| Signature dan semantik adapter untuk PHP murni / Hyperf | keduanya tidak masuk loop verifikasi (loop mencakup sepuluh framework), dengan alasan yang berbeda: **PHP murni tidak punya paket pihak ketiga untuk dipasang** — loop membandingkan terhadap paket framework asli, dan untuk PHP murni paket itu tidak ada, jadi semantik adapter-nya dicakup oleh `tests/Unit/Adapter/NativeTest.php` lewat superglobal asli dan uji bolak-balik `php -S` sungguhan (permukaan observasi yang lebih kuat daripada CLI milik loop); **Hyperf bisa dipasang tetapi tidak bisa berjalan di sana**: benar-benar memanggil `Context::set()` melempar `Class "Swoole\Coroutine" not found` — CI loop hanya memasang xhprof+redis, dan runtime coroutine ext-swoole yang hilang adalah **prasyarat berjalan**, bukan masalah kemampuan dipasang, jadi stub-nya tetap ditulis tangan di dalam paket, di `tests/Stubs/framework-stubs.php`, tanpa pembandingan dengan paket asli |
 
 **Daftar periksa smoke manual (tiga langkah per framework)**
 
@@ -652,7 +686,7 @@ Kalau Drupal dipasang di bawah subdirektori (misalnya `/sites/app/xhprof`), penj
 
 **Kompatibilitas Symfony 6.4**
 
-Kompatibilitas Symfony 6.4 sudah diukur (dari situlah dua over-fit yang tak terlihat di 7.4 diperbaiki: properti `Request` tidak membawa deklarasi tipe native di 6.4, dan charset yang ditambahkan `prepare()` berbeda huruf besar-kecilnya). **Kedua leg berjalan di CI**: leg utama 7.x plus proyek terpisah `tools/contracts/legacy-symfony64`, yang menjalankan file case yang sama tanpa menyalinnya — dan kedua leg juga ada di gate tag.
+Kompatibilitas Symfony 6.4 sudah diukur (dari situlah dua over-fit yang tak terlihat di 7.4 diperbaiki: properti `Request` tidak membawa deklarasi tipe native di 6.4, dan charset yang ditambahkan `prepare()` berbeda huruf besar-kecilnya). **Ketiga leg berjalan di CI**: leg utama 7.x, proyek terpisah `tools/contracts/legacy-symfony64`, yang menjalankan file case yang sama tanpa menyalinnya, dan leg `tools/contracts/legacy-symfony8` (Symfony 8.1 + Laravel 13, PHP 8.5) — dan ketiganya juga ada di gate tag.
 
 ---
 

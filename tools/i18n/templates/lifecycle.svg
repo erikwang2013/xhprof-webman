@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 584" width="1200" height="584" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>{{lifecycle.meta.title}}</title>
   <desc>{{lifecycle.meta.desc}}</desc>
 
@@ -9,7 +9,7 @@
     </marker>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="560" fill="#f6f8fa"/>
+  <rect x="0" y="0" width="1200" height="584" fill="#f6f8fa"/>
 
   <!-- ============ 标题 ============ -->
   <text x="32" y="44" font-size="22" font-weight="700" fill="#24292f">{{lifecycle.title.1}}</text>
@@ -44,7 +44,7 @@
   <text x="334" y="184" font-size="10.5" fill="#57606a">{{lifecycle.pipeline.15}}</text>
   <line x1="452" y1="148" x2="462" y2="148" stroke="#57606a" stroke-width="1.5" marker-end="url(#lc-arrow)"/>
 
-  <!-- 4 双重判断 -->
+  <!-- 4 采样判定 -->
   <rect x="464" y="100" width="128" height="96" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
   <circle cx="480" cy="118" r="9" fill="#0969da"/>
   <text x="480" y="121.5" font-size="10" fill="#ffffff" text-anchor="middle">{{lifecycle.pipeline.16}}</text>
@@ -151,4 +151,7 @@
   <rect x="440" y="500" width="540" height="24" rx="6" fill="#ddf4ff" stroke="#0969da" stroke-width="1.5"/>
   <text x="450" y="517" font-size="9.5" fill="#0550ae">{{lifecycle.axis.63}}</text>
   <text x="970" y="517" font-size="9.5" fill="#0550ae" text-anchor="end">{{lifecycle.axis.64}}</text>
+
+  <!-- 版权（语言无关，copy 键） -->
+  <text x="32" y="568" font-size="11" fill="#57606a">{{lifecycle.axis.65}}</text>
 </svg>

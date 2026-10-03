@@ -24,6 +24,8 @@ xhprof 拡張で計測データを収集し、Redis に保存します。開発�
 
 **2 つの実行の比較** — 「リクエスト記録」の一覧でちょうど 2 行にチェックを入れ（チェックボックスは各行に 1 つ、表ヘッダーで全選択）、「選択項目を比較」をクリックすると diff ビューが開きます。左右は時刻で決まり（run1 = 早いほう、run2 = 遅いほう。一覧の現在の並び順とは関係ありません）、色は「run1 から run2 へ」の改善 / 回帰を意味します。ページ内の「差分レポートを反転」リンクで、いつでも左右を入れ替えられます。
 
+**機械消費向けのエクスポート** — レポートページの操作バーが JSON / CSV エクスポートを提供します（単一実行・比較・集約の 3 ビューすべてで可）；`?format=json` に `run` パラメータを付けなければ**実行一覧の JSON** を返します（各項目に run_id・リクエストメタデータ・一覧口径のヘッダー情報を含みます）。監視スクリプトやダッシュボードは、run_id を取るのに HTML を解析する必要がもうありません。`symbol=` 付きのエクスポート要求は 400 を返します — エクスポートに単一関数ビューはなく、黙って全量のフラットテーブルを返すのはエラーより悪いためです。
+
 ## 動作要件
 
 - PHP >= 8.0
@@ -36,11 +38,11 @@ xhprof 拡張で計測データを収集し、Redis に保存します。開発�
 | フレームワーク | 最低バージョン | 最低 PHP | 入口クラス | 組み込み方 |
 |-----------|----------------|-------------|-------------|--------------|
 | webman | `workerman/webman ^2.1` | 8.0 | `Webman\XhprofMiddleware` | `config/middleware.php` にグローバルミドルウェアを登録 |
-| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0` | 8.0 | `Laravel\Middleware` | `app/Http/Kernel.php` にグローバルミドルウェアを登録 |
+| Laravel | `laravel/framework ^9.0\|^10.0\|^11.0\|^12.0\|^13.0` | 8.0 | `Laravel\Middleware` | 11 以降は `bootstrap/app.php` の `->withMiddleware()` で追加；10 以下は `app/Http/Kernel.php` にグローバルミドルウェアを登録 |
 | ThinkPHP | `topthink/framework ^6.0\|^8.0` | 8.0 | `Thinkphp\Middleware` | `app/middleware.php` にグローバルミドルウェアを登録 |
 | Hyperf | `hyperf/framework ^3.0` | 8.0 | `Hyperf\Middleware` | ConfigProvider 経由で自動登録 |
 | Yii3 | `yiisoft/middleware-dispatcher ^5.0` | 8.1 | `Yii3\XhprofMiddleware` | `config/web/di/application.php` に登録。ミドルウェア一覧の先頭に置く必要がある |
-| Symfony | `symfony/http-kernel ^6.4\|^7.0` | 8.1 (6.4) / 8.2 (7.x) | `Symfony\XhprofListener` | `config/services.yaml` に `kernel.event_subscriber` タグを追加 |
+| Symfony | `symfony/http-kernel ^6.4\|^7.0\|^8.0` | 8.1 (6.4) / 8.2 (7.x) / 8.4 (8.x) | `Symfony\XhprofListener` | `config/services.yaml` に `kernel.event_subscriber` タグを追加 |
 | Slim 4 | `slim/slim ^4.12` | 8.0 | `Slim\XhprofMiddleware` | `$app->add(...)`。最後に追加する必要がある |
 | WordPress | 6.4+ | 8.0 | `Wordpress\XhprofPlugin` | `wp-content/mu-plugins/` にコピー |
 | Joomla | 4.4 / 5.x | 8.1 | `Joomla\Extension\Xhprof` | `plugins/system/` にコピーし、Discover でインストール |
@@ -118,14 +120,15 @@ return [
 
 ### Laravel
 
-**1. ミドルウェアを登録** — `app/Http/Kernel.php`：
+**1. ミドルウェアを登録** — Laravel 11 以降（slim skeleton にはもう `app/Http/Kernel.php` がありません）は `bootstrap/app.php` に：
 
 ```php
-protected $middleware = [
-    // ...
-    \ErikWang2013\Xhprof\Laravel\Middleware::class,
-];
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->append(\ErikWang2013\Xhprof\Laravel\Middleware::class);
+})
 ```
+
+Laravel 10 以下では従来どおり `app/Http/Kernel.php` の `protected $middleware` 配列に `\ErikWang2013\Xhprof\Laravel\Middleware::class` を追加します。
 
 **2. レポートページと静的アセット** — **コントローラもルート登録も不要です**。計測が始まる前にミドルウェアがリクエストパスを判定し、レポートパス `/xhprof` に一致すればレポートページをそのまま返し、アセットパス（プレフィックスは `assets_url` 設定から読み取り、既定は `/xhprof-assets`）に一致すれば静的アセットを直接返します。
 
@@ -136,6 +139,35 @@ php artisan vendor:publish --tag=xhprof-config
 ```
 
 設定ファイルは `config/xhprof.php` に出力されます。Laravel は ServiceProvider の自動検出に対応しています。
+
+**4. CLI とキュー**（必要なときは先に `sample_cli` をオンに。既定はオフ）— HTTP リクエストを持たない 2 種類の入口はどちらもサンプリングウィンドウ内で走ります：
+
+- **キューの worker**：`AppServiceProvider::boot()` で 4 つのイベントをパッケージ内のリスナーに接続し、メッセージごとに開閉します（常駐 worker でも漏れません）：
+
+```php
+use ErikWang2013\Xhprof\Laravel\XhprofQueueListener;
+use Illuminate\Queue\Events\{JobProcessing, JobProcessed, JobFailed, JobExceptionOccurred};
+
+Event::listen(JobProcessing::class, [XhprofQueueListener::class, 'onJobProcessing']);
+Event::listen(JobProcessed::class, [XhprofQueueListener::class, 'onJobProcessed']);
+Event::listen(JobFailed::class, [XhprofQueueListener::class, 'onJobFailed']);
+Event::listen(JobExceptionOccurred::class, [XhprofQueueListener::class, 'onJobExceptionOccurred']);
+```
+
+- **artisan コマンド**：`xhprof:profile` はパッケージが自動登録します（Laravel の ServiceProvider 自動検出）。そのまま使えます：
+
+```sh
+php artisan xhprof:profile "migrate --force"
+```
+
+- **自前のスクリプト / 定期タスク**：artisan 以外の入口（自作 PHP スクリプト、クロージャタスク）はタスク本体を外側から包みます：
+
+```php
+\ErikWang2013\Xhprof\Laravel\XhprofCli::start();
+try { /* your logic */ } finally { \ErikWang2013\Xhprof\Laravel\XhprofCli::stop(); }
+```
+
+ウィンドウはタスクごとに開閉し（同期ディスパッチされた子タスクはネストするため、最外殻の 1 件だけが記録されます）、保存される実行の `request_uri` は `cli:<スクリプト名>` として記録されます。
 
 ---
 
@@ -427,7 +459,7 @@ Yii2（`yiisoft/yii2 ^2.0`、PHP >= 8.0）向けです。**Yii3 とは別のフ�
 | `ip_allowlist` | array | `[]` | レポートページの IP 許可リスト。**バイト単位の完全一致**です：CIDR 表記は非対応で、IPv6 の正規化も行いません（`2001:0db8::1` と `2001:db8::1` は別の文字列です）。空 = 無効。配列でない値 = すべて拒否（fail closed、error ログを 1 件記録）。判定に使う値は `getRealIp()` から取得され、`trusted_proxies` と合わせて理解する必要があります |
 | `trusted_proxies` | array | `[]` | **デプロイの宣言であり、技術的な強制ではありません**：「自分の前に信頼できるプロキシがいる」と宣言して初めて、`ip_allowlist` は `X-Forwarded-For`/`X-Real-IP` から取得したクライアント IP を受け入れます。ほとんどのアダプタは転送ヘッダーを無条件に採用します — 宣言しても**偽造された XFF は防げません**。安全なのは、自分で管理するプロキシの背後に置く場合だけです |
 | `webhook_url` | string\|null | `null` | 遅い実行（`wt >= view_wtred`）が保存された後、このアドレスに JSON（`run_id`/`uri`/`wt`/`ct`/`ip`/`time`）を POST します。空 = 何も送信しません。**キューではありません**：レスポンスを待たず、リトライもディスクへのフォールバックもありません。エンドポイントが遅い / 落ちている場合は、この通知 1 件が失われるだけです |
-| `sample_cli` | bool | `false` | CLI / HTTP 以外のリクエストもサンプリング：`true` の場合、保存される実行の `request_uri` は `cli:<スクリプト名>` として記録されます。`false` = 常に無視（既定。キュー worker や定期実行タスクを含みます） |
+| `sample_cli` | bool | `false` | CLI / HTTP 以外のリクエストもサンプリング：`true` の場合、保存される実行の `request_uri` は `cli:<スクリプト名>` として記録されます。`false` = 常に無視（既定。キュー worker や定期実行タスクを含みます）。有効になるかは入口によります：Laravel は組み込み対応（キューのリスナー + `XhprofCli`。Laravel の節を参照）、素の PHP の入口は元々 CLI 形態で動きます（HTTP 依存なし）；その他のフレームワークの入口は HTTP 専用のため、自前で 1 層包む必要があります |
 | `symbol_lookup_url` | string\|null | `null` | ソースリンクのテンプレート：レポートページは `<テンプレート>?symbol=<urlencode された関数名>` を描画します。`null` / 空 = リンクを表示しません |
 | `max_runs_per_minute` | int\|null | `null` | 適応型の予算：1 分あたりに記録する実行数の上限（分単位のカウンター。超えるとサンプリングされません）。`null` / 非正数 = 無効。キャッシュが利用できない / 例外を投げる場合は fail-open（通常どおり `sample_rate` に従ってサンプリング）。**トリガーサンプリングはこの制限を受けません** |
 | `time_limit` | int | `0` | n 秒を超えたリクエストのみ計測。0 はすべて |
@@ -532,7 +564,7 @@ Core はフレームワークに、`src/Core/Contract/` にあるちょうど 5 
 
 ![設計のトレードオフ](./images/design.svg)
 
-2 枚目は**根拠**の図です。5 つのトレードオフを判断 / 理由 / コストとして並べ、「新規 8 フレームワークによる `src/Core/` の変更 = 0」を掲げています。
+2 枚目は**根拠**の図です。5 つのトレードオフを判断 / 理由 / コストとして並べ、「後から拡張した 8 フレームワークによる `src/Core/` の変更数 = 0」を掲げています。
 
 ---
 
@@ -583,7 +615,7 @@ xhprof-webman/
 ├── wordpress/                    # mu-plugin ブートストラップファイル（プラグインヘッダ付き）
 ├── joomla/                       # Joomla プラグイン（CMSPlugin + マニフェスト）
 ├── drupal/xhprof/                # 標準 Drupal モジュール（info / routing / services + Controller）
-├── tools/contracts/              # 独立検証ループ：実フレームワークパッケージに対するシグネチャとセマンティクスの検証（`legacy-symfony64/` は 6.4 レグ）
+├── tools/contracts/              # 独立検証ループ：実フレームワークパッケージに対するシグネチャとセマンティクスの検証（`legacy-symfony64/`、`legacy-symfony8/` は 2 本の旧版レグ）
 ├── tools/i18n/                   # README と 3 枚の SVG の翻訳ツールチェーン（生成 / 検証 / 自己テスト）
 ├── docs/i18n/                    # 12 言語の訳文成果物（英語、韓国語、ロシア語、ドイツ語、フランス語、スペイン語、ポルトガル語、アラビア語、ヒンディー語、ベンガル語、インドネシア語、日本語）
 ├── tests/                        # PHPUnit：アダプタ・配線・Core のテスト、14 の README の構造一致
@@ -613,8 +645,8 @@ src/<Fw>/
 | アダプタと入口の配線の挙動 | `tests/Unit/Adapter/*Test.php`：有効 → 保存 / 無効 → 保存しない / 業務例外 → `finally` 経由で保存される |
 | 12 フレームワークが 1 つの設定キー集合を共有 | 設定パリティテスト（キー集合のみで、バイト単位の一致は見ない。コメントは差異を許容） |
 | 2 つの README が対応している | README パリティテスト：`##` / `###` の見出し列とコードブロック数を比較 |
-| アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ、**2 本のレグ**: 主レグは各フレームワークの最新パッケージを入れ、別プロジェクト `tools/contracts/legacy-symfony64` が同じ Symfony ケースを 6.4 に対して実行します）: 実フレームワークパッケージを導入し（Drupal は実物の `drupal/core`、Joomla は実物の CMS リリースパッケージ 2 本）、すべてのメソッド / 定数 / グローバル関数の存在をリフレクションで検証します — **ループに入っている 9 つのフレームワーク**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman）について。素の PHP / ThinkPHP / Hyperf はループ外です（それぞれ理由が異なります — 下記参照） |
-| アダプタのセマンティクス | 同じループが実際の request / response オブジェクトを生成してアダプタを走らせ、2 つの不変条件（`uri()` が scheme/host を含まないこと、`file()` の後でも `withHeaders()` が適用されること）を確認します。ループの SKIP 数は凍結された定数（主レグ 2、6.4 レグ 0）で、どちらも Joomla にあります: `#__extensions.params` の実際の読み取り経路とインストーラの形態で、どちらも実行にデータベースかインストーラが要ります |
+| アダプタが呼ぶメソッドが実在する | `tools/contracts/` の検証ループ（専用の CI ジョブ、**3 本のレグ**: 主レグは各フレームワークの最新パッケージを入れ、別プロジェクト `tools/contracts/legacy-symfony64` が同じ Symfony ケースを 6.4 に対して実行し、3 本目の `tools/contracts/legacy-symfony8` が Symfony 8.1 + Laravel 13（PHP 8.5）を実行します）: 実フレームワークパッケージを導入し（Drupal は実物の `drupal/core`、Joomla は実物の CMS リリースパッケージ 2 本）、すべてのメソッド / 定数 / グローバル関数の存在をリフレクションで検証します — **ループに入っている 10 のフレームワーク**（Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman / ThinkPHP）について。素の PHP / Hyperf はループ外です（それぞれ理由が異なります — 下記参照） |
+| アダプタのセマンティクス | 同じループが実際の request / response オブジェクトを生成してアダプタを走らせ、2 つの不変条件（`uri()` が scheme/host を含まないこと、`file()` の後でも `withHeaders()` が適用されること）を確認します。ループの SKIP 数は凍結された定数（主レグ 2、6.4 レグ 0、8 レグ 0）で、どちらも Joomla にあります: `#__extensions.params` の実際の読み取り経路とインストーラの形態で、どちらも実行にデータベースかインストーラが要ります；各 case のアサーション数にはさらにレグごとの凍結下限があります（編集による縮小への防御: 早期 return や条件包裹でアサーションの実行数が減っても status が PASS のままだと red になります） |
 
 
 **自動検証されていないもの（「すべて網羅した」と読まないでください）**
@@ -624,9 +656,11 @@ src/<Fw>/
 | 各フレームワークの**配線**（フックが本当に付いているか、イベントが本当に発火するか） | 単体テストはスタブを使う。配線は現状、手動スモークテストでしか確認できない |
 | Joomla の残り 2 つのサブ項目 | ループがまだ届かない 2 点で、どちらも理由は同じです（データベースかインストーラが必要）: `#__extensions.params` の実際の読み取り経路（`PluginHelper::getPlugin()` → `bootPlugin()`）とインストーラの形態（namespacemap が書かれ、`bootPlugin()` がクラスを見つけられること） |
 | Symfony の `kernel.event_subscriber` 自動設定 | 実際のコンテナコンパイルが必要 |
-| 長時間稼働プロセスでの静的状態の混線 | Webman 側は未変更（Hyperf 側は隔離済み：描画期の 9 つの値はリクエストごとにコルーチン Context を通り、`tests/Unit/Lib/RenderStateCoroutineTest.php` が実際に yield するコルーチンで固定している） |
+| 長時間稼働プロセスでの静的状態の混線 | **コルーチン単位で隔離済み**: バックエンドがコルーチンコンテキスト内にある場合、リクエストごとの描画状態はその環境の Context に退避されます（Hyperf / workerman を自動検出。`Xhprof::coroutineContextClass()` を参照）；コルーチン外では従来どおりプロセスレベルの静的（FPM は元々 1 リクエスト 1 プロセスです）。検証: Hyperf は実際に yield するコルーチンのテスト。workerman のコルーチンは検証ループの Webman カードが、実サーバー + 実 TCP の 2 リクエストを交互に走らせて固定しています（A が中断している間に B がページ全体を描画し、A が再開しても自分の run / 言語 / 指標列のままです） |
+| Hyperf の並行コルーチンにおける**サンプリング**の混線 | xhprof 拡張とサンプリングスイッチはどちらもプロセスレベルです: 同一 worker 上の 2 つのコルーチンが IO 地点で交錯すると、先に stop したほうがデータを持ち去り（2 回目の stop は冪等な no-op）、後に完了した run は捨てられ、保存された 1 件には両方のコルーチンの実行記録が混ざります。描画状態は隔離済み（上の行）ですが、サンプリング状態は隔離できません（拡張のセマンティクス）。きれいなデータが必要なときは `sample_rate` を絞るか、そのシナリオではサンプリングをオフにしてください |
+| Laravel Octane（Swoole）での静的状態の混線 | Octane の依存ツリーに workerman/workerman はなく、`Workerman\Coroutine` は構造上存在しないため、webman 側のバックエンドは再利用できません；Octane に必要なのは 3 つ目のバックエンド `\Swoole\Coroutine::getContext()`（約 10 行 + `class_exists` 分岐 1 つ）で、Swoole 環境が利用できるようになってから着手予定です |
 | 実際の Redis I/O、ブラウザ描画、実負荷での計測オーバーヘッド | 実際の Redis I/O は**検証ループに入りました**（`cases/Redis.php`: 実 phpredis + 実 Slim リクエストを端から端まで —— リクエスト → 保存 → 一覧ページ → レポートページ）。ブラウザ描画と実負荷でのオーバーヘッドは従来どおり単体テストと検証ループの範囲外です |
-| 素の PHP / ThinkPHP / Hyperf のアダプタのシグネチャとセマンティクス | この 3 つは検証ループに入っていません（ループが覆うのは 9 つのフレームワーク）。理由はそれぞれ異なります：**素の PHP にはインストールすべきサードパーティパッケージがありません** — ループは実フレームワークパッケージと突き合わせる仕組みで、素の PHP にはその実パッケージが存在しないため、アダプタのセマンティクスは `tests/Unit/Adapter/NativeTest.php` が実際のスーパーグローバルと実 `php -S` のラウンドトリップで覆っています（ループの CLI より強い観測面です）。**ThinkPHP / Hyperf は実パッケージがあるのにインストールされていない**だけなので、スタブはパッケージ内の `tests/Stubs/framework-stubs.php` に手書きで、実パッケージとの突き合わせはありません |
+| 素の PHP / Hyperf のアダプタのシグネチャとセマンティクス | この 2 つは検証ループに入っていません（ループが覆うのは 10 のフレームワーク）。理由はそれぞれ異なります：**素の PHP にはインストールすべきサードパーティパッケージがありません** — ループは実フレームワークパッケージと突き合わせる仕組みで、素の PHP にはその実パッケージが存在しないため、アダプタのセマンティクスは `tests/Unit/Adapter/NativeTest.php` が実際のスーパーグローバルと実 `php -S` のラウンドトリップで覆っています（ループの CLI より強い観測面です）。**Hyperf はインストールはできるのにそこで動きません**: 実際に `Context::set()` を呼ぶと `Class "Swoole\Coroutine" not found` が投げられます — ループの CI が入れるのは xhprof+redis だけで、欠けている ext-swoole コルーチンランタイムはインストール可否ではなく*実行前提*です。そのためスタブは引き続きパッケージ内の `tests/Stubs/framework-stubs.php` に手書きで、実パッケージとの突き合わせはありません |
 
 **手動スモークチェックリスト（フレームワークごとに 3 ステップ）**
 
@@ -652,7 +686,7 @@ Drupal がサブディレクトリ（例：`/sites/app/xhprof`）にインスト
 
 **Symfony 6.4 互換性**
 
-Symfony 6.4 互換性は実測済みです（7.4 では見えない 2 つの過剰適合がこれで修正されました: 6.4 では `Request` のプロパティにネイティブの型宣言がなく、`prepare()` が付ける charset は大文字小文字が異なります）。**両方のレグが CI で走ります**: 主レグの 7.x に加えて、別プロジェクト `tools/contracts/legacy-symfony64` が同じ case ファイルを複製せずに実行し、両レグとも tag ゲートに入っています。
+Symfony 6.4 互換性は実測済みです（7.4 では見えない 2 つの過剰適合がこれで修正されました: 6.4 では `Request` のプロパティにネイティブの型宣言がなく、`prepare()` が付ける charset は大文字小文字が異なります）。**すべてのレグが CI で走ります**: 主レグの 7.x、別プロジェクト `tools/contracts/legacy-symfony64`（同じ case ファイルを複製せずに実行）、そして `tools/contracts/legacy-symfony8` レグ（Symfony 8.1 + Laravel 13、PHP 8.5）—— そのすべてが tag ゲートにも入っています。
 
 ---
 
