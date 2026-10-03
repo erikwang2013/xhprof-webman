@@ -106,7 +106,6 @@ class AnalyzerTest extends TestCase
         }
         try {
             $m = new \ReflectionMethod(Analyzer::class, 'safe');
-            $m->setAccessible(true);
 
             $result = $m->invoke(null, static function (): array {
                 throw new \RuntimeException('rule blew up');
@@ -137,7 +136,6 @@ class AnalyzerTest extends TestCase
     public function safePassesThroughNormalResult(): void
     {
         $m = new \ReflectionMethod(Analyzer::class, 'safe');
-        $m->setAccessible(true);
 
         $f = new Finding('R1', Finding::SEVERITY_MAIN, 'foo()', 't', 'd', 1.0);
         $this->assertSame([$f], $m->invoke(null, static fn(): array => [$f]));
@@ -596,7 +594,6 @@ class AnalyzerTest extends TestCase
     public function bytesFormatsUnits(float $bytes, string $expected): void
     {
         $m = new \ReflectionMethod(Analyzer::class, 'bytes');
-        $m->setAccessible(true);
         $this->assertSame($expected, $m->invoke(null, $bytes));
     }
 

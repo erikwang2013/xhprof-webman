@@ -137,7 +137,6 @@ class JoomlaTest extends TestCase
     {
         foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
             $prop = new \ReflectionProperty(Xhprof::class, $name);
-            $prop->setAccessible(true);
             $prop->setValue(null, $value);
         }
     }

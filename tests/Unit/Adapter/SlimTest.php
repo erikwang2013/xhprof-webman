@@ -360,7 +360,7 @@ class SlimTest extends TestCase
         $block = (new ConfigAdapter())->get('xhprof');
 
         $this->assertSame(
-            ['enable', 'sample_rate', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
+            ['enable', 'sample_rate', 'trigger_token', 'auth_basic', 'ip_allowlist', 'trusted_proxies', 'webhook_url', 'sample_cli', 'symbol_lookup_url', 'max_runs_per_minute', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
             array_keys($block)
         );
         $this->assertTrue($block['enable']);

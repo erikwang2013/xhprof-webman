@@ -183,4 +183,10 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>Selisih%',
     'diffcol.excl_samples' => 'Sendiri Sampel<br>Selisih',
     'diffcol.ESamples%' => 'ESamples<br>Selisih%',
+    'runs.aggregate' => 'Gabungkan yang dipilih',
+    'path.title' => 'Jalur Kritis',
+    'path.empty' => 'Tidak ada rantai panggilan yang dapat ditampilkan (data tidak memiliki sisi panggilan yang berawal dari main()).',
+    'search.matches' => 'Fungsi yang mengandung "%s" (maksimal 30 ditampilkan):',
+    'flame.title' => 'Grafik Api',
+    'flame.note' => 'Menampilkan %s frame; agar ukuran halaman tetap kecil, %s%% dari total waktu tidak digambar',
 ];

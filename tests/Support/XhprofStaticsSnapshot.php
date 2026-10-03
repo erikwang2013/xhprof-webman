@@ -29,8 +29,7 @@ use ErikWang2013\Xhprof\Core\XhprofProfiler;
  * 类，如今也用本 trait）跑在 `WiringTest` 前面时，后者 setUp 时读到的 `key_prefix` 是 `'myxp'`、
  * `time_limit` 是 `5` → 12 条接线用例在 `--order-by=random` 下变红。
  *
- * 反射写法：静态属性的单参 `setValue($v)` 在 PHP 8.3 起已废弃，用双参 `setValue(null, $v)`；
- * `setAccessible(true)` 是给 PHP 8.0 的（8.1+ 是 no-op）。
+ * 反射写法：静态属性的单参 `setValue($v)` 在 PHP 8.3 起已废弃，用双参 `setValue(null, $v)`。
  */
 trait XhprofStaticsSnapshot
 {
@@ -38,7 +37,6 @@ trait XhprofStaticsSnapshot
     protected function snapshotXhprofStatics(): array
     {
         $hyperf = new \ReflectionProperty(Xhprof::class, '_hyperf');
-        $hyperf->setAccessible(true);
 
         return [
             '_hyperf' => $hyperf->getValue(),
@@ -65,7 +63,6 @@ trait XhprofStaticsSnapshot
     protected function restoreXhprofStatics(array $s): void
     {
         $hyperf = new \ReflectionProperty(Xhprof::class, '_hyperf');
-        $hyperf->setAccessible(true);
         $hyperf->setValue(null, $s['_hyperf']);
 
         self::profilerConfigRestore($s['profilerConfig'] ?? null);
@@ -93,7 +90,6 @@ trait XhprofStaticsSnapshot
     private static function profilerConfigSnapshot(): ?array
     {
         $prop = new \ReflectionProperty(XhprofProfiler::class, 'config');
-        $prop->setAccessible(true);
         $value = $prop->getValue();
 
         return is_array($value) ? $value : null;
@@ -102,7 +98,6 @@ trait XhprofStaticsSnapshot
     private static function profilerConfigRestore(?array $config): void
     {
         $prop = new \ReflectionProperty(XhprofProfiler::class, 'config');
-        $prop->setAccessible(true);
         $prop->setValue(null, $config);
     }
 }

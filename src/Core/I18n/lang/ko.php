@@ -192,4 +192,17 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>차이%',
     'diffcol.excl_samples' => 'Excl. Samples<br>차이',
     'diffcol.ESamples%' => 'ESamples<br>차이%',
+    // ——— 2026-10 추가: 다중 run 집계 진입 / 핵심 경로 카드 / 검색 부분 문자열 ———
+    // 키 순서는 계약입니다. 이 여섯 개는 diffcol.ESamples% 뒤에 붙으며 13개 어휘가 같은 순서입니다.
+    // runs.aggregate: 실행을 2개 초과로 선택했을 때 "선택 항목 비교" 버튼이 바꿔 다는 문구
+    // (정적 HTML은 Utils 계층에 있고 JS가 선택 개수로 교체하며, window.xpI18n 으로 주입됩니다).
+    'runs.aggregate' => '선택 항목 집계',
+    'path.title' => '핵심 경로',
+    'path.empty' => '표시할 호출 체인이 없습니다(데이터에 main()에서 출발하는 호출 에지가 없습니다).',
+    // %s = 검색어. "30" 은 XhprofDisplay 의 절단 상한과 같은 수이므로 한쪽을 고치면 다른 쪽도 고쳐야 합니다.
+    'search.matches' => '“%s”를 포함하는 함수(최대 30개 표시):',
+    // 플레임 그래프(FlameGraph 모듈에는 문구가 없고 카드 제목과 설명은 Display 쪽에서 렌더링합니다).
+    // flame.note 의 두 %s = 실제로 그린 프레임 수와 그리지 않은 시간 비율이며, 리터럴 퍼센트 기호는 %% 로 씁니다.
+    'flame.title' => '플레임 그래프',
+    'flame.note' => '%s개 프레임을 표시합니다. 페이지 크기를 줄이기 위해 전체 소요 시간의 %s%%는 그리지 않았습니다',
 ];

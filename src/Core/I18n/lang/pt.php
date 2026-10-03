@@ -188,4 +188,17 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>Diferença%',
     'diffcol.excl_samples' => 'Excl. Amostras<br>Diferença',
     'diffcol.ESamples%' => 'ESamples<br>Diferença%',
+    // ——— 2026-10: entrada de agregação multi-execução / cartão de caminho crítico / busca por substring ———
+    // A ordem das chaves é o contrato: estas seis vêm depois de diffcol.ESamples%, e as 13 tabelas seguem a mesma ordem.
+    // runs.aggregate: rótulo que o botão "Comparar selecionados" assume quando há mais de 2 execuções marcadas
+    // (o HTML estático fica na camada Utils; o JS troca o texto conforme a contagem, via window.xpI18n).
+    'runs.aggregate' => 'Agregar selecionados',
+    'path.title' => 'Caminho Crítico',
+    'path.empty' => 'Nenhuma cadeia de chamadas para mostrar (os dados não têm arestas de chamada a partir de main()).',
+    // %s = termo buscado; o "30" é o mesmo limite de truncamento de XhprofDisplay — mude um, mude o outro
+    'search.matches' => 'Funções que contêm “%s” (no máximo 30 exibidas):',
+    // Gráfico de chamas (o módulo FlameGraph não tem texto próprio; título e nota são renderizados no lado do Display).
+    // Os dois %s de flame.note = quadros realmente desenhados e a fração de tempo não desenhada; por cento literal escreve-se %%
+    'flame.title' => 'Gráfico de chamas',
+    'flame.note' => 'Exibindo %s quadros; %s%% do tempo total não é desenhado para manter a página leve',
 ];

@@ -95,6 +95,16 @@ class XhprofLibTest extends TestCase
         }
     }
 
+    /** 替换配置适配器时同步刷新 Hyperf Context（sample_cli 是从配置里现读的） */
+    private function useXhprofConfig(array $xhprofConfig): void
+    {
+        $cfg = new FakeConfig(['xhprof' => $xhprofConfig]);
+        Xhprof::$config = $cfg;
+        if (class_exists(\Hyperf\Context\Context::class)) {
+            \Hyperf\Context\Context::set('xhprof.config', $cfg);
+        }
+    }
+
     private function silence(): void
     {
         set_error_handler(static function (int $errno, string $errstr): bool {
@@ -627,6 +637,34 @@ class XhprofLibTest extends TestCase
         $this->request = new FakeRequest([], ['uri' => '']);
         $this->useRequest($this->request);
         self::assertFalse(XhprofLib::isIgnore());
+    }
+
+    #[Test]
+    public function isIgnoreEmptyUriFollowsSampleCliFlag(): void
+    {
+        Xhprof::$ignore_url_arr = ['/test'];
+        $this->useRequest(new FakeRequest([], ['uri' => '']));
+
+        // 「键不存在」（默认）与显式 false 都必须逐字保持旧行为：空 URI 一律忽略
+        foreach ([[], ['sample_cli' => false]] as $xhprofConfig) {
+            $this->useXhprofConfig($xhprofConfig);
+            self::assertFalse(XhprofLib::isIgnore(), 'sample_cli 关闭时空 URI 必须忽略');
+        }
+
+        $this->useXhprofConfig(['sample_cli' => true]);
+        self::assertTrue(XhprofLib::isIgnore(), 'sample_cli 打开时空 URI 不再判忽略');
+    }
+
+    #[Test]
+    public function isIgnoreWithSampleCliStillMatchesIgnoreListForNonEmptyUri(): void
+    {
+        $this->useXhprofConfig(['sample_cli' => true]);
+        Xhprof::$ignore_url_arr = ['/test'];
+
+        $this->useRequest(new FakeRequest([], ['uri' => '/test/foo']));
+        self::assertFalse(XhprofLib::isIgnore(), '有 URI 时忽略名单照旧生效');
+        $this->useRequest(new FakeRequest([], ['uri' => '/order']));
+        self::assertTrue(XhprofLib::isIgnore());
     }
 
     #[Test]

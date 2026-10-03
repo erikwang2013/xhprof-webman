@@ -109,9 +109,102 @@ class XHProfRunsDefault implements XHProfRuns
         //根据忽略配置判断是否忽略当前请求
         if (!XhprofLib::isIgnore()) return false;
         // 先写列表，再用 lPush 返回的真实长度决定是否裁剪
-        [$run_id, $len] = XHProfRunsDefault::_saveToRedis($xhprof_data);
+        [$run_id, $len, $row] = XHProfRunsDefault::_saveToRedis($xhprof_data);
         XHProfRunsDefault::_checkLogNum($len);
+        // 慢请求告警/通知放在**落库成功之后**：执行到这里就意味着这条 run 已经在列表里
+        // （有告警必有 run 可看），且裁剪已经跑完。time_limit（本方法第一行）与
+        // sample_rate（XhprofProfiler::start()，更早）的过滤都发生在它之前——被它们
+        // 过滤掉的请求既没有 run，也不会发告警。落库抛异常时（redis 连不上等）由
+        // XhprofProfiler::stop() 兜底，这里同样到不了。
+        XHProfRunsDefault::_notifySlowRun($run_id, $row, $xhprof_data);
         return $run_id;
+    }
+
+    /**
+     * 慢请求（wt >= Xhprof::$view_wtred）的告警与 webhook 通知。
+     *
+     * 只由 save_run() 在落库之后调用。wt 取列表行里那个已四舍五入到 4 位的值，
+     * 与列表页标红用的是同一个数（列表页是严格 `>`，这里按需求用 `>=`，边界差一档）。
+     */
+    protected static function _notifySlowRun($run_id, array $row, $xhprof_data)
+    {
+        $wt = (float) $row['wt'];
+        // wt > 0：没采到 wt 的 run（空数据）不该告警。view_wtred 可以被配成 0，
+        // 那时「>= 0」对空 run 也成立，靠这道守卫把两者分开。
+        if ($wt <= 0 || $wt < Xhprof::$view_wtred) {
+            return;
+        }
+        Xhprof::getLogger()?->error(sprintf(
+            'xhprof: slow request wt=%.4fs uri=%s run_id=%s',
+            $wt,
+            $row['request_uri'],
+            $run_id
+        ));
+        // webhook 是可选旁路：没配（null/空串）就什么都不做。键从配置适配器现读、
+        // 代码内默认 null——配置里没有 webhook_url 时行为与加它之前完全一致。
+        $webhook = Xhprof::getConfig()?->get('xhprof.webhook_url', null);
+        if (is_string($webhook) && $webhook !== '') {
+            XHProfRunsDefault::_fireWebhook($webhook, array(
+                'run_id' => $run_id,
+                'uri'    => (string) $row['request_uri'],
+                'wt'     => $wt,
+                'ct'     => (int) ($xhprof_data['main()']['ct'] ?? 0),
+                'ip'     => (string) ($row['ip'] ?? ''),
+                'time'   => (int) $row['create_time'],
+            ));
+        }
+    }
+
+    /**
+     * 慢请求 webhook：fire-and-forget 的 POST JSON。
+     *
+     * 取舍：在请求周期内同步发 HTTP 是自伤——webhook 端点每次抖动都会变成一次业务
+     * 请求的尾延迟。所以只做「连上、把请求头/体写进 socket、立刻 fclose」，不等响应、
+     * 不读状态码，连接超时压到 200ms。**这不是队列**：进程退出/网络中断就是没发出去，
+     * 没有重试、没有落盘补偿，端点慢或挂掉只会让这条通知丢失。任何失败（连不上、写
+     * 失败、抛异常）只记一条 error 日志，绝不向调用方抛——照 XhprofProfiler::stop()
+     * 的 catch 形态。已知边界：DNS 解析不受这 200ms 约束（webhook 配本机/IP 直连时无关）。
+     */
+    protected static function _fireWebhook(string $url, array $payload): void
+    {
+        try {
+            $parts = parse_url($url);
+            if (!is_array($parts) || empty($parts['host'])) {
+                Xhprof::getLogger()?->error('xhprof: webhook_url is not a usable URL: ' . $url);
+                return;
+            }
+            $scheme = strtolower((string) ($parts['scheme'] ?? 'http'));
+            if ($scheme === 'https') {
+                $remote = 'ssl://' . $parts['host'];
+                $port = (int) ($parts['port'] ?? 443);
+            } elseif ($scheme === 'http') {
+                $remote = (string) $parts['host'];
+                $port = (int) ($parts['port'] ?? 80);
+            } else {
+                Xhprof::getLogger()?->error('xhprof: webhook_url scheme must be http or https: ' . $url);
+                return;
+            }
+            $path = (string) ($parts['path'] ?? '/');
+            if (isset($parts['query'])) {
+                $path .= '?' . $parts['query'];
+            }
+            $body = (string) json_encode($payload);
+            $request = 'POST ' . $path . " HTTP/1.1\r\n"
+                . 'Host: ' . $parts['host'] . "\r\n"
+                . "Content-Type: application/json\r\n"
+                . 'Content-Length: ' . strlen($body) . "\r\n"
+                . "Connection: close\r\n\r\n"
+                . $body;
+            $fp = @fsockopen($remote, $port, $errno, $errstr, 0.2);
+            if ($fp === false) {
+                Xhprof::getLogger()?->error('xhprof: webhook connect failed: ' . $errstr);
+                return;
+            }
+            @fwrite($fp, $request);
+            @fclose($fp);   // 不等响应：写完即断，响应随 socket 一起丢弃
+        } catch (\Throwable $e) {
+            Xhprof::getLogger()?->error('xhprof: webhook delivery failed: ' . $e->getMessage());
+        }
     }
 
 
@@ -159,7 +252,7 @@ class XHProfRunsDefault implements XHProfRuns
 
     /**
      * 数据存储至redis
-     * @return string
+     * @return array{0:string,1:int,2:array} run_id、列表真实长度、写入的列表行
      */
     protected static function _saveToRedis($xhprof_data)
     {
@@ -175,10 +268,23 @@ class XHProfRunsDefault implements XHProfRuns
         }
 
         $method = Xhprof::getRequest()->method();
-        $http = Xhprof::getRequest()->header('x-forwarded-proto');
-        $http = !empty($http) ? $http . "://" : "";
+        $uri = Xhprof::getRequest()->uri();
+        if ($uri === '' && XhprofLib::sampleCliEnabled()) {
+            // CLI（队列 worker / 定时任务 / artisan 等）没有 URI。合成 `cli:<脚本名>`
+            // 作为 request_uri：列表页一眼看出这条 run 来自命令行，findPreviousRunForUri()
+            // 也能按「同一脚本的上次运行」找回来。合成放在**落库这一层**——列表页与
+            // 「上次运行」读的都是这里写下的值，在别处再拼一份必然对不上。
+            // $argv 只在 CLI SAPI 存在（register_argc_argv 关掉时连 $_SERVER['argv'] 也没有），
+            // 拿不到就退化成 'unknown'。sample_cli 关闭时走 else 分支，行为与加它之前逐字一致。
+            $script = (string) ($_SERVER['argv'][0] ?? '');
+            $request_uri = 'cli:' . ($script === '' ? 'unknown' : basename($script));
+        } else {
+            $http = Xhprof::getRequest()->header('x-forwarded-proto');
+            $http = !empty($http) ? $http . "://" : "";
+            $request_uri = $http . Xhprof::getRequest()->host() . $uri;
+        }
         $row = array(
-            'request_uri' => $http . Xhprof::getRequest()->host() . Xhprof::getRequest()->uri(),
+            'request_uri' => $request_uri,
             'method'      => $method,
             'wt'          => $wt,
             'mu'          => $mu,
@@ -190,7 +296,7 @@ class XHProfRunsDefault implements XHProfRuns
         $key = Xhprof::$key_prefix . ':xhprof_log:' . $run_id;   //列表存储log
         $xhprof_data_str = serialize($xhprof_data);
         if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str, Xhprof::$log_ttl);
-        return array($run_id, $len);
+        return array($run_id, $len, $row);
     }
 
 
@@ -266,5 +372,74 @@ class XHProfRunsDefault implements XHProfRuns
             . '<th>' . I18n::plain('runs.col.ip') . '</th>'
             . '</tr></thead><tbody>' . $table_html . '</tbody></table></div></div></div>';
         return $str_html;
+    }
+
+    /**
+     * 列表概览（供列表页状态条用）：一趟 lRange + 一趟 mget，与 list_runs() 同一条
+     * 数据路径，不额外扫 Redis。
+     *
+     * count 取**索引列表长度**——它就是状态条要表达的「占用 / 上限」，包含数据已过期、
+     * 只剩指针的悬空项（索引刻意不带 TTL，见类头注释）；oldest/newest 只统计能 mget 到
+     * create_time 的行，一条都没有时是 null。返回结构是 Display 批的调用契约，别改形状：
+     *   ['count' => int, 'limit' => int, 'oldest' => int|null, 'newest' => int|null, 'ttl' => int]
+     */
+    public static function runsOverview(): array
+    {
+        $run_id_lists = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
+        $count = count($run_id_lists);
+        $keys = array_map(function ($run_id) {
+            return Xhprof::$key_prefix . ":request_log:" . $run_id;
+        }, $run_id_lists);
+        $values = array_values(Xhprof::getCache()->mget($keys));
+        $oldest = null;
+        $newest = null;
+        foreach ($run_id_lists as $i => $run_id) {
+            if (!self::xhprof_valid_run_id($run_id)) continue;
+            $res = $values[$i] ?? null;
+            if (!$res) continue;
+            $request_arr = json_decode($res, true);
+            if (!is_array($request_arr)) continue;
+            $t = (int) ($request_arr['create_time'] ?? 0);
+            if ($oldest === null || $t < $oldest) $oldest = $t;
+            if ($newest === null || $t > $newest) $newest = $t;
+        }
+        return array(
+            'count'  => $count,
+            'limit'  => (int) Xhprof::$log_num,
+            'oldest' => $oldest,
+            'newest' => $newest,
+            'ttl'    => (int) Xhprof::$log_ttl,
+        );
+    }
+
+    /**
+     * 「同 URL 的上次运行」：返回 create_time < $beforeTime 且 request_uri 与 $uri
+     * **逐字相同**的最近一条 run_id；找不到返回 null。供报告页做「与上次运行对比」用。
+     *
+     * 索引列表头新尾旧（lPush 头插），所以从头部扫、第一条命中的就是最近的一条。
+     * $uri 必须与落库时写进 request_uri 的字符串同形——它是
+     * `[x-forwarded-proto://]host + uri`（见 _saveToRedis()），不是裸的请求路径；
+     * CLI 采样（sample_cli）下则是合成的 `cli:<脚本名>`。
+     * 扫描范围与 list_runs() 一致（一趟 lRange + 一趟 mget）。
+     */
+    public static function findPreviousRunForUri(string $uri, int $beforeTime): ?string
+    {
+        $run_id_lists = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
+        $keys = array_map(function ($run_id) {
+            return Xhprof::$key_prefix . ":request_log:" . $run_id;
+        }, $run_id_lists);
+        $values = array_values(Xhprof::getCache()->mget($keys));
+        foreach ($run_id_lists as $i => $run_id) {
+            if (!self::xhprof_valid_run_id($run_id)) continue;
+            $res = $values[$i] ?? null;
+            if (!$res) continue;
+            $request_arr = json_decode($res, true);
+            if (!is_array($request_arr)) continue;
+            if (!array_key_exists('request_uri', $request_arr)) continue;
+            if ((string) $request_arr['request_uri'] !== $uri) continue;
+            if ((int) ($request_arr['create_time'] ?? 0) >= $beforeTime) continue;
+            return $run_id;
+        }
+        return null;
     }
 }

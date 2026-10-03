@@ -190,4 +190,17 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>Diff%',
     'diffcol.excl_samples' => 'Excl. Samples<br>Diff',
     'diffcol.ESamples%' => 'ESamples<br>Diff%',
+    // ——— 2026-10: neue Einträge — Multi-Run-Aggregation / Karte „Kritischer Pfad" / Substring-Suche / Flammengrafik ———
+    // Die Schlüsselreihenfolge ist Vertrag: Diese Einträge stehen nach diffcol.ESamples%, in allen 13 Katalogen gleich.
+    // runs.aggregate: Beschriftung, auf die der Vergleichs-Button bei mehr als zwei ausgewählten Läufen umschaltet
+    // (statisches HTML in der Utils-Schicht, JS tauscht anhand der Auswahl; injiziert über window.xpI18n).
+    'runs.aggregate' => 'Ausgewählte aggregieren',
+    'path.title' => 'Kritischer Pfad',
+    'path.empty' => 'Keine Aufrufkette zum Anzeigen (die Daten enthalten keine von main() ausgehenden Aufrufkanten).',
+    // %s = Suchbegriff; die „30" ist dieselbe Zahl wie die Kürzungsgrenze in XhprofDisplay (eine Änderung, zwei Stellen)
+    'search.matches' => 'Funktionen, die „%s" enthalten (maximal 30 angezeigt):',
+    // Flammengrafik (das FlameGraph-Modul liefert keinen Text; Kartentitel und Hinweis werden in der Display-Schicht gerendert).
+    // Die zwei %s in flame.note = gezeichnete Frame-Anzahl und nicht gezeichneter Zeitanteil; ein literales Prozentzeichen wird als %% geschrieben
+    'flame.title' => 'Flammengrafik',
+    'flame.note' => '%s Frames werden gezeichnet; %s%% der Gesamtzeit bleiben ungezeichnet, um die Seite klein zu halten',
 ];

@@ -19,45 +19,6 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
-/**
- * FakeCache::lPush 存在 by-ref 传参 bug（array_unshift($this->lists[$key] ??= [], ...)），
- * 测试进程内无法修改 Fixtures，此处用修复版子类覆盖列表方法。
- */
-class RunsFixedListCache extends FakeCache
-{
-    private array $myLists = [];
-
-    public function lPush(string $key, mixed $value): int
-    {
-        $this->calls[] = "lPush:$key";
-        $this->myLists[$key] ??= [];
-        array_unshift($this->myLists[$key], $value);
-        return count($this->myLists[$key]);
-    }
-
-    public function rPop(string $key): mixed
-    {
-        $this->calls[] = "rPop:$key";
-        if (empty($this->myLists[$key])) {
-            return null;
-        }
-        return array_pop($this->myLists[$key]);
-    }
-
-    public function lRange(string $key, int $start, int $end): array
-    {
-        $this->calls[] = "lRange:$key";
-        $list = $this->myLists[$key] ?? [];
-        $count = count($list);
-        if ($start < 0) {
-            $start = max(0, $count + $start);
-        }
-        if ($end < 0) {
-            $end = $count + $end;
-        }
-        return array_slice($list, $start, max(0, $end - $start + 1));
-    }
-}
 
 class XHProfRunsDefaultTest extends TestCase
 {
@@ -81,7 +42,7 @@ class XHProfRunsDefaultTest extends TestCase
         // 不还原就会漏给后面的用例（实测：Core+Lib+Adapter 顺序下 Adapter 侧 3 条假红）。
         $this->saved = $this->snapshotXhprofStatics();
 
-        $this->cache = new RunsFixedListCache();
+        $this->cache = new FakeCache();
         $this->request = new FakeRequest([], ['uri' => '/order', 'url' => 'http://xhprof.local/xhprof']);
         $this->response = new FakeResponse();
         $this->config = new FakeConfig([]);
@@ -122,12 +83,92 @@ class XHProfRunsDefaultTest extends TestCase
         }
     }
 
+    /** 替换配置适配器时同步刷新 Hyperf Context（load-bearing：webhook_url / sample_cli 从这里读） */
+    private function useXhprofConfig(array $xhprofConfig): void
+    {
+        $cfg = new FakeConfig(['xhprof' => $xhprofConfig]);
+        Xhprof::$config = $cfg;
+        if (class_exists(\Hyperf\Context\Context::class)) {
+            \Hyperf\Context\Context::set('xhprof.config', $cfg);
+        }
+    }
+
     private function sampleData(): array
     {
         return [
             'main()' => ['wt' => 1234567, 'mu' => 2048],
             'main()==>foo()' => ['ct' => 1, 'wt' => 100, 'mu' => 512],
         ];
+    }
+
+    /** 把 main() 的总耗时设成 $seconds 秒（其余字段不变），用于跨过 view_wtred 阈值 */
+    private function sampleDataWithWt(float $seconds): array
+    {
+        $data = $this->sampleData();
+        $data['main()']['wt'] = (int) round($seconds * 1000000);
+        return $data;
+    }
+
+    /** 起一个回环监听，返回 [server, port]（只收一次连接；调用方负责 fclose） */
+    private function listenOnce(): array
+    {
+        $server = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertNotFalse($server, "起监听失败：$errstr");
+        $name = (string) stream_socket_get_name($server, false);
+        return [$server, (int) substr($name, (int) strrpos($name, ':') + 1)];
+    }
+
+    /** 从监听上收一条连接并读全「请求头 + 按 Content-Length 算的请求体」，超时即停 */
+    private function readRequest($server, float $timeout = 3.0): string
+    {
+        $conn = stream_socket_accept($server, $timeout);
+        self::assertNotFalse($conn, 'webhook 没有连上监听端口（fire-and-forget 也要先把请求发出去）');
+        stream_set_timeout($conn, (int) $timeout);
+        $data = '';
+        while (true) {
+            $chunk = fread($conn, 8192);
+            if ($chunk === false || $chunk === '') {
+                break;   // EOF 或超时
+            }
+            $data .= $chunk;
+            if (str_contains($data, "\r\n\r\n")) {
+                [$head, $body] = explode("\r\n\r\n", $data, 2);
+                if (preg_match('/Content-Length:\s*(\d+)/i', $head, $m) === 1 && strlen($body) >= (int) $m[1]) {
+                    break;   // 体已收全，不必等 FIN
+                }
+            }
+        }
+        fclose($conn);
+        return $data;
+    }
+
+    /** 一个刚被释放、确定无人监听的回环端口（连它必得 ECONNREFUSED，且是立刻的） */
+    private function closedLoopbackPort(): int
+    {
+        [$server, $port] = $this->listenOnce();
+        fclose($server);
+        return $port;
+    }
+
+    /** 保存并恢复 $_SERVER['argv']（CLI 合成 uri 要读它，测试进程的 argv[0] 是 phpunit 路径） */
+    private function withArgv(?array $argv, callable $fn): void
+    {
+        $had = array_key_exists('argv', $_SERVER);
+        $prev = $_SERVER['argv'] ?? null;
+        if ($argv === null) {
+            unset($_SERVER['argv']);
+        } else {
+            $_SERVER['argv'] = $argv;
+        }
+        try {
+            $fn();
+        } finally {
+            if ($had) {
+                $_SERVER['argv'] = $prev;
+            } else {
+                unset($_SERVER['argv']);
+            }
+        }
     }
 
     #[Test]
@@ -599,6 +640,9 @@ class XHProfRunsDefaultTest extends TestCase
     /**
      * 「对比选中」的接线：JS 侧锚点 + HTML/JS 两侧的选择器必须成对。
      *
+     * 按钮的三分支契约（与 src/html/js/xhprof_report.js 同批）：0/1 条禁用、
+     * 恰好 2 条走 run1/run2 diff、>2 条按 create_time 升序把 id 拼进 run= 走聚合。
+     *
      * PHPUnit 跑不了浏览器的行为，这里钉的是**锚点**：删掉接线、改掉选择器、
      * 或把「按 create_time 定先后」换回按行位置/点击顺序，都会在这里红
      * （与 XhprofDisplayTest 里钉搜索框 keydown 接线是同一手法）。
@@ -644,11 +688,43 @@ class XHProfRunsDefaultTest extends TestCase
             $js,
             'JS 里没有对比按钮的接线点'
         );
-        // 「恰好两条才放行」：禁用条件必须与 2 比较，而不是 >=2 或 >0
+        // 上游把「恰好两条才放行」改成了三分支：0/1 条禁用、2 条 diff、>2 条聚合。
+        // 禁用条件必须与 2 比较（1 条也禁用），而不是与 0 比。
         self::assertMatchesRegularExpression(
-            '/prop\(\s*[\'"]disabled[\'"]\s*,\s*n\s*!==\s*2\s*\)/',
+            '/prop\(\s*[\'"]disabled[\'"]\s*,\s*n\s*<\s*2\s*\)/',
             $js,
-            '按钮的启用条件不是「恰好两条」'
+            '按钮的启用条件不是「少于两条才禁用」'
+        );
+        // >2 条走聚合。分支边界必须是与 2 比较：改成 >3 时 3 条会掉进 diff 分支，
+        // 第三条被静默丢掉（diff 只用 picks[0]/picks[1]）。
+        self::assertMatchesRegularExpression(
+            '/if\s*\(\s*picks\.length\s*>\s*2\s*\)/',
+            $js,
+            '聚合分支的条数边界不是 >2'
+        );
+        // 聚合把 id 按 create_time **升序**拼进 run=（a.t - b.t；方向反了链接不稳定，
+        // 同一秒入库的靠 Array.sort 的稳定性保持列表顺序）。
+        self::assertMatchesRegularExpression(
+            '/\.sort\(\s*function\s*\(\s*a\s*,\s*b\s*\)\s*\{\s*return\s+a\.t\s*-\s*b\.t;\s*\}\s*\)/',
+            $js,
+            '聚合的 id 没有按 create_time 升序排序（a.t - b.t）'
+        );
+        self::assertMatchesRegularExpression(
+            '/\[[\'"]run[\'"]\]\s*=\s*ids\.join\(\s*[\'"],[\'"]\s*\)/',
+            $js,
+            '聚合没有把 id 用逗号拼进 run='
+        );
+        // 聚合分支必须清掉 run1/run2：从对比页带着旧参数点过来时，
+        // 留着它们会盖过 run=，落到错误的报告页。
+        self::assertMatchesRegularExpression(
+            '/delete\s+cur_params\[[\'"]run1[\'"]\]/',
+            $js,
+            '聚合分支没有清掉 run1（会盖过 run=）'
+        );
+        self::assertMatchesRegularExpression(
+            '/delete\s+cur_params\[[\'"]run2[\'"]\]/',
+            $js,
+            '聚合分支没有清掉 run2（会盖过 run=）'
         );
         // 收集取**列表顺序**（rows({order:'index'}) = 原始数据顺序），不是当前排序/点击顺序；
         // 它同时是同一秒入库两条的分先后依据（见下面相等也反转的断言）。
@@ -675,6 +751,14 @@ class XHProfRunsDefaultTest extends TestCase
             $js,
             'run2 不是取时间更晚的那条'
         );
+        // 「恰好两条」分支必须清掉可能残留的 run=（与聚合分支清 run1/run2 对称）：
+        // 从聚合页带着 run=a,b,c 过来再选两条时，run 分支在派发时排在 run1/run2 前面，
+        // 不清就会把「恰好两条」当成聚合页。
+        self::assertMatchesRegularExpression(
+            '/delete\s+cur_params\[[\'"]run[\'"]\]/',
+            $js,
+            'diff 分支没有清掉残留的 run=（会把两条误派发成聚合）'
+        );
     }
 
     #[Test]
@@ -693,5 +777,300 @@ class XHProfRunsDefaultTest extends TestCase
         if (empty($ini)) {
             self::assertStringContainsString('Warning: Must specify directory', $this->logger->errors[0]);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 慢请求告警 + webhook
+    // ------------------------------------------------------------------
+
+    #[Test]
+    public function saveRunAlertsOnSlowRequestAfterPersisting(): void
+    {
+        Xhprof::$view_wtred = 3;
+        $runId = XHProfRunsDefault::save_run($this->sampleDataWithWt(5.0), 'xhprof_foo');
+
+        self::assertMatchesRegularExpression('/^[a-f0-9]{16}$/', $runId);
+        // 告警带 run_id 与 uri：凭它就能翻到具体那条 run
+        self::assertStringContainsString('xhprof: slow request', $this->logger->errors[0] ?? '');
+        self::assertStringContainsString('wt=5.0000s', $this->logger->errors[0] ?? '');
+        self::assertStringContainsString('uri=localhost/order', $this->logger->errors[0] ?? '');
+        self::assertStringContainsString('run_id=' . $runId, $this->logger->errors[0] ?? '');
+        // 「有告警必有 run 可看」：告警对应的那条数据真的在
+        self::assertNotNull($this->cache->get('xhprof:xhprof_log:' . $runId));
+        self::assertNotNull($this->cache->get('xhprof:request_log:' . $runId));
+    }
+
+    #[Test]
+    public function saveRunDoesNotAlertBelowThreshold(): void
+    {
+        Xhprof::$view_wtred = 3;
+        $runId = XHProfRunsDefault::save_run($this->sampleDataWithWt(2.9999), 'xhprof_foo');
+
+        self::assertNotNull($this->cache->get('xhprof:xhprof_log:' . $runId), 'run 照常落库');
+        self::assertSame([], $this->logger->errors, '低于阈值一条告警都不该有');
+    }
+
+    #[Test]
+    public function saveRunAlertsExactlyAtThreshold(): void
+    {
+        // 阈值判定是 >=（需求原文），恰好等于 view_wtred 也要告警
+        Xhprof::$view_wtred = 3;
+        XHProfRunsDefault::save_run($this->sampleDataWithWt(3.0), 'xhprof_foo');
+        self::assertStringContainsString('xhprof: slow request', $this->logger->errors[0] ?? '');
+    }
+
+    #[Test]
+    public function saveRunDoesNotAlertWhenNoWallTimeCollected(): void
+    {
+        // view_wtred=0 时「>= 0」对空 run 也成立，必须靠 wt > 0 守卫区分
+        Xhprof::$view_wtred = 0;
+        $data = ['main()' => ['wt' => 0, 'mu' => 0]];
+        $runId = XHProfRunsDefault::save_run($data, 'xhprof_foo');
+
+        self::assertNotNull($this->cache->get('xhprof:xhprof_log:' . $runId), '空 run 照常落库');
+        self::assertSame([], $this->logger->errors, '没采到 wt 不该告警');
+    }
+
+    #[Test]
+    public function saveRunDoesNotAlertWhenRequestIsNotPersisted(): void
+    {
+        // time_limit / ignore_url_arr 的过滤都发生在告警之前：没有 run，就没有告警
+        Xhprof::$view_wtred = 3;
+        Xhprof::$ignore_url_arr = ['/xhprof'];
+        $this->useRequest(new FakeRequest([], ['uri' => '/xhprof']));
+
+        self::assertFalse(XHProfRunsDefault::save_run($this->sampleDataWithWt(9.0), 'xhprof_foo'));
+        self::assertSame([], $this->cache->calls);
+        self::assertSame([], $this->logger->errors, '被过滤的请求不该发告警');
+    }
+
+    #[Test]
+    public function webhookPostsJsonPayloadForSlowRun(): void
+    {
+        [$server, $port] = $this->listenOnce();
+        try {
+            $this->useXhprofConfig(['webhook_url' => "http://127.0.0.1:$port/hook?x=1"]);
+            $this->useRequest(new FakeRequest([], [
+                'method' => 'POST',
+                'uri' => '/order',
+                'host' => 'example.com',
+                'ip' => '1.2.3.4',
+                'headers' => ['x-forwarded-proto' => 'https'],
+            ]));
+            $data = $this->sampleDataWithWt(5.0);
+            $data['main()']['ct'] = 3;   // payload 里的 ct 取自 main()['ct']
+
+            $runId = XHProfRunsDefault::save_run($data, 'xhprof_foo');
+            $wire = $this->readRequest($server);
+        } finally {
+            fclose($server);
+        }
+
+        self::assertStringStartsWith('POST /hook?x=1 HTTP/1.1', $wire);
+        self::assertStringContainsString('Content-Type: application/json', $wire);
+        self::assertStringContainsString('Host: 127.0.0.1', $wire);
+
+        [$head, $body] = explode("\r\n\r\n", $wire, 2);
+        self::assertMatchesRegularExpression('/Content-Length: ' . strlen($body) . '\r\n/', $head, 'Content-Length 必须等于实际体长');
+        $payload = json_decode($body, true);
+        self::assertSame($runId, $payload['run_id']);
+        self::assertSame('https://example.com/order', $payload['uri']);
+        // json_encode(5.0) 是 "5"（整数形态），解码回来是 int；断言数值本身
+        self::assertEqualsWithDelta(5.0, $payload['wt'], 1e-9);
+        self::assertSame(3, $payload['ct']);
+        self::assertSame('1.2.3.4', $payload['ip']);
+        $row = json_decode($this->cache->get('xhprof:request_log:' . $runId), true);
+        self::assertSame($row['create_time'], $payload['time']);
+    }
+
+    #[Test]
+    public function webhookIsOffByDefault(): void
+    {
+        // 不配 / 配 null / 配空串三种「关」的形态：只发告警，不发 webhook
+        foreach ([[], ['webhook_url' => null], ['webhook_url' => '']] as $xhprofConfig) {
+            $this->useXhprofConfig($xhprofConfig);
+            $this->logger->errors = [];
+            XHProfRunsDefault::save_run($this->sampleDataWithWt(5.0), 'xhprof_foo');
+            self::assertStringContainsString('xhprof: slow request', $this->logger->errors[0] ?? '');
+            foreach ($this->logger->errors as $line) {
+                self::assertStringNotContainsString('webhook', $line, '没配 webhook_url 时不该有任何 webhook 记录');
+            }
+        }
+    }
+
+    #[Test]
+    public function webhookFiresOnlyForSlowRuns(): void
+    {
+        // 指向一个确定无人监听的端口：一旦发射就会连接失败并留日志（connect 失败在
+        // 同文件的 webhookDeliveryFailureIsSwallowed 里被证明会记日志），所以
+        // 「日志里没有 webhook」= 真的没有发射。
+        $port = $this->closedLoopbackPort();
+        $this->useXhprofConfig(['webhook_url' => "http://127.0.0.1:$port/hook"]);
+        Xhprof::$view_wtred = 3;
+
+        $runId = XHProfRunsDefault::save_run($this->sampleDataWithWt(1.2), 'xhprof_foo');
+
+        self::assertNotNull($this->cache->get('xhprof:xhprof_log:' . $runId));
+        self::assertSame([], $this->logger->errors, '快请求不该发 webhook（也不该有告警）');
+    }
+
+    #[Test]
+    public function webhookDeliveryFailureIsSwallowed(): void
+    {
+        // fire-and-forget 的边界：连不上只留一条日志，落库与返回值不受影响、不抛异常
+        $port = $this->closedLoopbackPort();
+        $this->useXhprofConfig(['webhook_url' => "http://127.0.0.1:$port/hook"]);
+        Xhprof::$view_wtred = 3;
+
+        $runId = XHProfRunsDefault::save_run($this->sampleDataWithWt(5.0), 'xhprof_foo');
+
+        self::assertMatchesRegularExpression('/^[a-f0-9]{16}$/', $runId, 'webhook 发不出去不能影响落库');
+        self::assertNotNull($this->cache->get('xhprof:xhprof_log:' . $runId));
+        self::assertStringContainsString('xhprof: slow request', $this->logger->errors[0] ?? '');
+        self::assertStringContainsString('webhook', $this->logger->errors[1] ?? '', '投递失败要留一条可归因的日志');
+    }
+
+    // ------------------------------------------------------------------
+    // 列表概览 / 同 URL 的上次运行
+    // ------------------------------------------------------------------
+
+    /** 往索引列表塞一条 run（lPush 是头插：按**反向**调用才能得到想要的列表顺序） */
+    private function seedRunRow(string $runId, string $uri, int $createTime): void
+    {
+        $this->cache->lPush('xhprof:run_id', $runId);
+        $this->cache->set('xhprof:request_log:' . $runId, json_encode([
+            'request_uri' => $uri,
+            'method' => 'GET',
+            'wt' => 1.0,
+            'mu' => 1.0,
+            'ip' => '1.1.1.1',
+            'create_time' => $createTime,
+        ]));
+    }
+
+    #[Test]
+    public function runsOverviewReturnsFixedShapeOnEmptyIndex(): void
+    {
+        Xhprof::$log_num = 7;
+        Xhprof::$log_ttl = 1234;
+
+        self::assertSame(
+            ['count' => 0, 'limit' => 7, 'oldest' => null, 'newest' => null, 'ttl' => 1234],
+            XHProfRunsDefault::runsOverview()
+        );
+    }
+
+    #[Test]
+    public function runsOverviewCountsIndexLengthAndTakesTimesFromRows(): void
+    {
+        Xhprof::$log_num = 7;
+        Xhprof::$log_ttl = 1234;
+        // 想要的列表顺序（头新尾旧）：A(300)、B(100)、C(200)、D(悬空)。反向种入。
+        $this->seedRunRow('d4d4d4d4d4d4d4d4', 'http://x/dangling', 250);  // 只推指针，不写 request_log
+        $this->cache->del('xhprof:request_log:d4d4d4d4d4d4d4d4');
+        $this->seedRunRow('c3c3c3c3c3c3c3c3', 'http://x/c', 200);
+        $this->seedRunRow('b2b2b2b2b2b2b2b2', 'http://x/b', 100);
+        $this->seedRunRow('a1a1a1a1a1a1a1a1', 'http://x/a', 300);
+
+        self::assertSame(
+            // count 是索引列表长度（含悬空指针）；oldest/newest 只来自 mget 到的 create_time，
+            // 且与列表头/尾无关（头 A=300 最大、尾 D 悬空）
+            ['count' => 4, 'limit' => 7, 'oldest' => 100, 'newest' => 300, 'ttl' => 1234],
+            XHProfRunsDefault::runsOverview()
+        );
+    }
+
+    #[Test]
+    public function findPreviousRunForUriReturnsMostRecentEarlierRunWithSameUri(): void
+    {
+        // 列表顺序（头新尾旧）：P(X,500)、Q(X,300)、R(Y,400)、S(X,100)。反向种入。
+        $this->seedRunRow('ddd0000000000004', 'http://x/target', 100);   // S
+        $this->seedRunRow('ccc0000000000003', 'http://x/other', 400);    // R
+        $this->seedRunRow('bbb0000000000002', 'http://x/target', 300);   // Q
+        $this->seedRunRow('aaa0000000000001', 'http://x/target', 500);   // P
+
+        // 最近的一条：P 不早于 500 被跳过，Q 命中
+        self::assertSame('bbb0000000000002', XHProfRunsDefault::findPreviousRunForUri('http://x/target', 500));
+        // 严格小于：Q 恰好等于边界不算「之前」
+        self::assertSame('ddd0000000000004', XHProfRunsDefault::findPreviousRunForUri('http://x/target', 300));
+        // 换 uri 只认逐字相同的那条
+        self::assertSame('ccc0000000000003', XHProfRunsDefault::findPreviousRunForUri('http://x/other', 500));
+        // 没有更早的 / 没有同 uri 的
+        self::assertNull(XHProfRunsDefault::findPreviousRunForUri('http://x/target', 50));
+        self::assertNull(XHProfRunsDefault::findPreviousRunForUri('http://x/target ', 500), 'uri 比较是逐字，尾巴多一个空格都不算');
+        self::assertNull(XHProfRunsDefault::findPreviousRunForUri('http://x/none', 500));
+    }
+
+    #[Test]
+    public function findPreviousRunForUriSkipsDanglingAndInvalidEntries(): void
+    {
+        self::assertNull(XHProfRunsDefault::findPreviousRunForUri('http://x/target', 1000), '空列表返回 null');
+
+        // 列表：非法 id、悬空指针、命中项。坏条目一律跳过，不挡后面那条
+        $this->seedRunRow('aaa0000000000001', 'http://x/target', 300);   // 命中项（尾）
+        $this->cache->lPush('xhprof:run_id', 'd4d4d4d4d4d4d4d4');        // 悬空（无 request_log）
+        $this->cache->lPush('xhprof:run_id', 'NOTHEXRUNID');             // 非法 id
+
+        self::assertSame('aaa0000000000001', XHProfRunsDefault::findPreviousRunForUri('http://x/target', 1000));
+    }
+
+    // ------------------------------------------------------------------
+    // CLI 采样（sample_cli）
+    // ------------------------------------------------------------------
+
+    #[Test]
+    public function saveRunStoresSyntheticCliUriWhenSampleCliEnabled(): void
+    {
+        $this->useXhprofConfig(['sample_cli' => true]);
+        $this->useRequest(new FakeRequest([], ['uri' => '']));
+
+        $this->withArgv(['/srv/app/queue-worker.php'], function (): void {
+            $runId = XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo');
+            $row = json_decode($this->cache->get('xhprof:request_log:' . $runId), true);
+            self::assertSame('cli:queue-worker.php', $row['request_uri'], '落库的 request_uri 要让列表页看得出是 CLI');
+            // 同一脚本的下次运行能按这条合成 uri 找回上次（集成口径，与 Display 的调用同形）
+            self::assertSame(
+                $runId,
+                XHProfRunsDefault::findPreviousRunForUri('cli:queue-worker.php', (int) $row['create_time'] + 1)
+            );
+        });
+
+        // 拿不到 argv（register_argc_argv 关闭等）时退化成 'cli:unknown'，不能是 'cli:'
+        $this->withArgv(null, function (): void {
+            $runId = XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo');
+            $row = json_decode($this->cache->get('xhprof:request_log:' . $runId), true);
+            self::assertSame('cli:unknown', $row['request_uri']);
+        });
+    }
+
+    #[Test]
+    public function saveRunWithoutSampleCliKeepsIgnoringEmptyUriRequests(): void
+    {
+        // 默认（键不存在）与显式 false 都必须逐字保持旧行为：空 URI → 不落库
+        foreach ([[], ['sample_cli' => false]] as $xhprofConfig) {
+            $this->useXhprofConfig($xhprofConfig);
+            $this->useRequest(new FakeRequest([], ['uri' => '']));
+            $this->cache->reset();
+            self::assertFalse(
+                XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo'),
+                'sample_cli 关闭时空 URI 请求一律不采样'
+            );
+            self::assertSame([], $this->cache->calls);
+        }
+    }
+
+    #[Test]
+    public function saveRunWithSampleCliStillUsesHttpUriAndIgnoreList(): void
+    {
+        // 非空 URI 走原路：ignore_url_arr 依旧生效，request_uri 仍是 host+uri
+        $this->useXhprofConfig(['sample_cli' => true]);
+        Xhprof::$ignore_url_arr = ['/xhprof'];
+        $this->useRequest(new FakeRequest([], ['uri' => '/xhprof/ignored']));
+        self::assertFalse(XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo'));
+
+        $this->useRequest(new FakeRequest([], ['uri' => '/order', 'host' => 'example.com']));
+        $runId = XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo');
+        $row = json_decode($this->cache->get('xhprof:request_log:' . $runId), true);
+        self::assertSame('example.com/order', $row['request_uri'], '有 URI 时不做任何合成');
     }
 }

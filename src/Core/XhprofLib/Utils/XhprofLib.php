@@ -213,7 +213,11 @@ class XhprofLib
     $new_raw_data = array();
     foreach ($raw_data as $parent_child => $info) {
       list($parent, $child) = XhprofLib::xhprof_parse_parent_child($parent_child);
-      if (isset($function_map[$parent]) || isset($function_map[$child])) {
+      // `?? ''`：无父键的节点行（"main()"）让 $parent 是 null，直接拿它当下标在 PHP 8.5
+      // 上是 "Using null as an array offset" 弃用；null 键与空串键在 PHP 里本就等价，
+      // 故这是等价改写。解析器本身仍返回 null —— 那是被 parseParentChild 用例与
+      // FlameGraph 的「无父键」判别共同钉住的契约，不能改在源头。
+      if (isset($function_map[$parent ?? '']) || isset($function_map[$child])) {
         $new_raw_data[$parent_child] = $info;
       }
     }
@@ -543,7 +547,13 @@ class XhprofLib
     if (!is_array($ignoreArr)) return true;
     //当前请求url
     $request_uri = Xhprof::getRequest()->uri();
-    if (empty($request_uri)) return false;
+    if (empty($request_uri)) {
+      // 空 URI = 没有 HTTP 请求（CLI：队列 worker / 定时任务 / artisan 等）。
+      // 默认（sample_cli=false，配置里也可以没有这个键）保持旧行为：一律忽略；
+      // 打开后放行，由 XHProfRunsDefault::_saveToRedis() 合成 `cli:<脚本名>`
+      // 作为落库的 request_uri，列表页里能一眼认出是 CLI。
+      return self::sampleCliEnabled();
+    }
     $request_uri = strtolower($request_uri);
     //是否需要忽略当前url
     foreach ($ignoreArr as $value) {
@@ -551,6 +561,19 @@ class XhprofLib
     }
 
     return true;
+  }
+
+  /**
+   * `xhprof.sample_cli` 开关（bool，代码内默认 false）。
+   *
+   * false = 维持旧行为：URI 为空的请求（CLI）一律不采样——配置里没有这个键时行为
+   * 与加它之前逐字一致。true 时空 URI 不再判「忽略」（见 isIgnore()），并给落库的
+   * request_uri 合成 `cli:<脚本名>` 前缀（见 XHProfRunsDefault::_saveToRedis()）。
+   * 从配置适配器现读（Hyperf 下走协程 Context），不设静态量、不进 bootstrap。
+   */
+  public static function sampleCliEnabled(): bool
+  {
+    return (bool) (Xhprof::getConfig()?->get('xhprof.sample_cli', false));
   }
 
   /**

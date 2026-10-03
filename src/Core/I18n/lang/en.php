@@ -178,4 +178,17 @@ return [
     'diffcol.ISamples%' => 'ISamples Diff%',
     'diffcol.excl_samples' => 'Excl. Samples Diff',
     'diffcol.ESamples%' => 'ESamples Diff%',
+    // ——— added 2026-10: multi-run aggregate entry / critical path card / substring search ———
+    // Key ORDER is part of the contract: these four go after diffcol.ESamples%, same as zh_CN.
+    // runs.aggregate: label the compare button switches to when more than two runs are picked.
+    'runs.aggregate' => 'Aggregate selected',
+    'path.title' => 'Critical Path',
+    'path.empty' => 'No call chain to show (the data has no call edges from main()).',
+    // %s = the search string; "30" must match the cap applied in XhprofDisplay.
+    'search.matches' => 'Functions containing “%s” (first 30 shown):',
+    // Flame graph (the FlameGraph module ships no copy; the card title and note are
+    // rendered here). The two %s in flame.note are drawn-frame count and the share
+    // of time not drawn; a literal percent sign is written %%.
+    'flame.title' => 'Flame graph',
+    'flame.note' => 'Showing %s frames; %s%% of the time is not drawn to keep the page small',
 ];

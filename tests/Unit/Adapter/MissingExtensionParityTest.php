@@ -330,7 +330,6 @@ $resetWarnOnce = static function (): void {
         return;
     }
     $warned = new ReflectionProperty(\ErikWang2013\Xhprof\Core\SamplingGuard::class, 'warned');
-    $warned->setAccessible(true);
     $warned->setValue(null, false);
 };
 

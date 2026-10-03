@@ -435,9 +435,9 @@ class DrupalTest extends TestCase
         preg_match_all('/^    ([a-z_]+):$/m', $schema, $b);
 
         $this->assertSame(
-            ['enable', 'sample_rate', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
+            ['enable', 'sample_rate', 'trigger_token', 'auth_basic', 'ip_allowlist', 'trusted_proxies', 'webhook_url', 'sample_cli', 'symbol_lookup_url', 'max_runs_per_minute', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
             array_values(array_unique($a[1])),
-            '安装文件应恰好声明这 11 个键'
+            '安装文件应恰好声明这 19 个键'
         );
         $this->assertSame($a[1], $b[1], 'install 与 schema 的键集/顺序必须一致');
     }
@@ -470,9 +470,7 @@ class DrupalTest extends TestCase
         $this->assertContains(RedisAdapterTrait::class, class_uses($adapter));
 
         // 懒连接：中间件每个请求都会 new 一个（$this->cache ?? new RedisAdapter()），
-        // 构造时建连就是每个请求一次握手——即使采样是关的。用 Closure::bind 读私有
-        // 属性而不是 ReflectionProperty::getValue()：CI 矩阵含 PHP 8.0，
-        // 那里 setAccessible 之外的写法读私有属性会抛。
+        // 构造时建连就是每个请求一次握手——即使采样是关的。读私有属性用 Closure::bind。
         $read = \Closure::bind(static function (RedisAdapter $a): mixed {
             return $a->client;
         }, null, RedisAdapter::class);

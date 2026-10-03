@@ -19,37 +19,6 @@ use Hyperf\Context\Context;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
-/**
- * FakeCache::lPush 存在 by-ref 传参 bug（array_unshift($this->lists[$key] ??= [], ...)），
- * 测试进程内无法修改 Fixtures，此处用修复版子类覆盖列表方法。
- */
-class ProfilerFixedListCache extends FakeCache
-{
-    private array $myLists = [];
-
-    public function lPush(string $key, mixed $value): int
-    {
-        $this->calls[] = "lPush:$key";
-        $this->myLists[$key] ??= [];
-        array_unshift($this->myLists[$key], $value);
-        return count($this->myLists[$key]);
-    }
-
-    public function rPop(string $key): mixed
-    {
-        $this->calls[] = "rPop:$key";
-        if (empty($this->myLists[$key])) {
-            return null;
-        }
-        return array_pop($this->myLists[$key]);
-    }
-
-    public function lRange(string $key, int $start, int $end): array
-    {
-        $this->calls[] = "lRange:$key";
-        return array_slice($this->myLists[$key] ?? [], $start, $end - $start + 1);
-    }
-}
 
 class XhprofProfilerTest extends TestCase
 {
@@ -158,7 +127,7 @@ class XhprofProfilerTest extends TestCase
         return (bool) (new \ReflectionProperty(XhprofProfiler::class, 'running'))->getValue();
     }
 
-    /** 写幂等标记。static 属性传 null 作 object（PHP 8.1 起无需 setAccessible）。 */
+    /** 写幂等标记。静态属性是单参 setValue() 的废弃形态，这里显式传 null 作 object。 */
     private static function setProfilerRunning(bool $running): void
     {
         (new \ReflectionProperty(XhprofProfiler::class, 'running'))->setValue(null, $running);
@@ -172,7 +141,7 @@ class XhprofProfilerTest extends TestCase
         }
 
         // FakeCache::lPush 有 by-ref bug，此处用修复版子类重新 bootstrap
-        $cache = new ProfilerFixedListCache();
+        $cache = new FakeCache();
         Xhprof::bootstrap($this->request, $this->response, $this->config, $cache, $this->logger);
 
         XhprofProfiler::start();
@@ -215,7 +184,7 @@ class XhprofProfilerTest extends TestCase
     #[Test]
     public function sampleRateOneAlwaysSamples(): void
     {
-        $cache = new ProfilerFixedListCache();
+        $cache = new FakeCache();
         $this->bootstrapWith(['enable' => true, 'sample_rate' => 1.0], $cache);
 
         XhprofProfiler::start();
@@ -232,7 +201,7 @@ class XhprofProfilerTest extends TestCase
     #[Test]
     public function sampleRateZeroNeverSamplesAndStopWritesNothing(): void
     {
-        $cache = new ProfilerFixedListCache();
+        $cache = new FakeCache();
         $this->bootstrapWith(['enable' => true, 'sample_rate' => 0.0], $cache);
 
         for ($i = 1; $i <= 3; $i++) {
@@ -325,7 +294,7 @@ class XhprofProfilerTest extends TestCase
     {
         // 用数字字符串 '0.5' 而非 float 0.5：顺带钉住「数字字符串按数值解析」——
         // 若实现只认 is_float/is_int，'0.5' 会退化成默认 1.0（恒采），下面必红。
-        $cache = new ProfilerFixedListCache();
+        $cache = new FakeCache();
         $this->bootstrapWith(['enable' => true, 'sample_rate' => '0.5'], $cache);
 
         $taken = 0;
@@ -343,6 +312,385 @@ class XhprofProfilerTest extends TestCase
         $this->assertCount($taken, $runs, '落库条数必须等于实际抽中的次数');
     }
 
+    // ---------- trigger_token：按需触发采样（请求头 X-Xhprof-Token） ----------
+
+    /**
+     * 配 token 的 bootstrap 助手：$header 为 null 表示不带该头。
+     * rate 默认给 0.0——它是判别性输入：没有触发分支时必然不采，触发分支写对了才采。
+     */
+    private function bootstrapWithTrigger(mixed $configured, ?string $header, mixed $rate = 0.0, ?FakeCache $cache = null): void
+    {
+        $request = new FakeRequest([], $header === null ? [] : ['headers' => ['X-Xhprof-Token' => $header]]);
+        Xhprof::bootstrap($request, $this->response, new FakeConfig(['xhprof' => [
+            'enable' => true,
+            'sample_rate' => $rate,
+            'trigger_token' => $configured,
+        ]]), $cache ?? $this->cache, $this->logger);
+    }
+
+    /** 配了 token 且请求头逐字节相等 → 强制采样，rate=0 也采，并照常落库。 */
+    #[Test]
+    public function triggerTokenMatchForcesSamplingEvenAtRateZero(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $cache = new FakeCache();
+        $this->bootstrapWithTrigger('s3cret-token', 's3cret-token', 0.0, $cache);
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '触发头逐字匹配必须无视 rate=0 强制采样');
+        XhprofProfiler::stop();
+
+        $this->assertContains('lPush:xhprof:run_id', $cache->calls, '触发采样照常落库');
+    }
+
+    /**
+     * 配了 token 但头不匹配 / 没带 → 照常走 sample_rate（rate=0 不采）。
+     * 大小写不同是判别性输入：strcasecmp/strtolower 式的比较会把它误判成匹配。
+     */
+    #[Test]
+    public function triggerTokenMismatchOrMissingHeaderFallsBackToSampleRate(): void
+    {
+        $cases = [
+            '大小写不同' => 'S3CRET-TOKEN',
+            '长度不同' => 's3cret-token-and-then-some',
+            '没带头' => null,
+        ];
+        foreach ($cases as $case => $header) {
+            $this->bootstrapWithTrigger('s3cret-token', $header, 0.0);
+
+            XhprofProfiler::start();
+            $this->assertFalse(self::profilerRunning(), "{$case}：不该触发采样，rate=0 就该不采");
+        }
+
+        $this->assertSame([], $this->cache->calls, '三条都是「不采」，一个字节都不该写');
+    }
+
+    /**
+     * 没配 trigger_token（null 或空串，auth_token 先例的「配置空 = 关闭」）时，
+     * 该头**完全被无视**：带了任意值也是照常走 rate。默认零攻击面。
+     *
+     * `空串配置 + 空头值` 是判别性输入：只查 `!== null` 的实现会让它们逐字相等、
+     * 触发全采（任何人发一个空头即可绕过抽签）——这正是「配置空 = 关闭」要堵的。
+     */
+    #[Test]
+    public function unsetTriggerTokenIgnoresTheHeaderEntirely(): void
+    {
+        $cases = [
+            'null + 任意值' => [null, 'anything-at-all'],
+            'null + 空头值' => [null, ''],
+            '空串 + 任意值' => ['', 'anything-at-all'],
+            '空串 + 空头值' => ['', ''],
+        ];
+        foreach ($cases as $case => [$configured, $header]) {
+            $this->bootstrapWithTrigger($configured, $header, 0.0);
+
+            XhprofProfiler::start();
+            $this->assertFalse(self::profilerRunning(), "trigger_token={$case}：该头必须被无视，rate=0 照常不采");
+        }
+    }
+
+    /**
+     * hash_equals 形状：长度不同 / 空值不炸（返回 false，不抛不警告——failOnWarning 下
+     * 任何 warning 都会让本用例红）。
+     */
+    #[Test]
+    public function triggerTokenComparisonHandlesDifferingLengthsAndEmptyValues(): void
+    {
+        $cases = [
+            '前缀相同的更长值' => 'abc1234',
+            '空头值' => '',
+        ];
+        foreach ($cases as $case => $header) {
+            $this->bootstrapWithTrigger('abc', $header, 0.0);
+
+            XhprofProfiler::start();
+            $this->assertFalse(self::profilerRunning(), "{$case}：不算匹配，rate=0 不采");
+        }
+    }
+
+    /**
+     * 正向对照：不匹配不是「恒不采」，而是照常走 rate——rate=1.0 时同一个不匹配的头照样采。
+     * 没有这条，`if (配了 token) return false;` 这种错实现能骗过上面三条负例。
+     */
+    #[Test]
+    public function unmatchedTriggerTokenStillSamplesAtFullRate(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $this->bootstrapWithTrigger('s3cret-token', 'wrong-token', 1.0, new FakeCache());
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '不匹配 → 走 rate=1.0 → 全采');
+        XhprofProfiler::stop();
+    }
+
+    // ---------- A#4：被排除路径在 start() 就短路（原先跑完整趟采样、到 save_run() 才丢弃） ----------
+
+    /** 用给定 uri + 整块 xhprof 配置 bootstrap（ignore 用例的判别性输入就是 uri 本身）。 */
+    private function bootstrapWithUri(string $uri, array $xhprofConfig, ?FakeCache $cache = null): void
+    {
+        $request = new FakeRequest([], ['uri' => $uri]);
+        Xhprof::bootstrap($request, $this->response, new FakeConfig(['xhprof' => $xhprofConfig]), $cache ?? $this->cache, $this->logger);
+    }
+
+    /**
+     * ignore_url_arr 命中的路径：start() 直接不采，一个字节都不写。
+     *
+     * 判别性：旧实现里 ignore 只在 save_run() 拦（采样照跑）——那时 profilerRunning()
+     * 为 true，本用例的第一条断言必红。
+     */
+    #[Test]
+    public function ignoredPathIsRejectedBeforeSamplingStarts(): void
+    {
+        $cache = new FakeCache();
+        $this->bootstrapWithUri('/test/action', [
+            'enable' => true,
+            'sample_rate' => 1.0,
+            'ignore_url_arr' => ['/test'],
+        ], $cache);
+
+        XhprofProfiler::start();
+        $this->assertFalse(self::profilerRunning(), 'ignore 命中的路径不该开采样（旧实现到这里已经开了）');
+        XhprofProfiler::stop();
+
+        $this->assertSame([], $cache->calls, 'ignore 命中的路径一个字节都不该写（save_run 都没走到）');
+    }
+
+    /** 正向对照：同一条配置下，非排除路径照常采样+落库——防止「检查恒 false 短路」骗过上面一条。 */
+    #[Test]
+    public function nonIgnoredPathStillSamplesWithTheSameConfig(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $cache = new FakeCache();
+        $this->bootstrapWithUri('/ok', [
+            'enable' => true,
+            'sample_rate' => 1.0,
+            'ignore_url_arr' => ['/test'],
+        ], $cache);
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '非排除路径必须照常采样');
+        XhprofProfiler::stop();
+
+        $this->assertContains('lPush:xhprof:run_id', $cache->calls, '非排除路径照常落库');
+    }
+
+    /**
+     * 触发采样（X-Xhprof-Token 命中）**不**绕过 ignore：ignore 管「哪些路径永不记录」，
+     * 触发管「这次要不要记录」，两条独立轴。判别性：把 ignore 判定放到触发分支之后
+     * 的实现会在这里红（触发先 return true 就走到采样了）。
+     */
+    #[Test]
+    public function triggerTokenDoesNotBypassIgnoreList(): void
+    {
+        $request = new FakeRequest([], ['uri' => '/test/action', 'headers' => ['X-Xhprof-Token' => 's3cret']]);
+        Xhprof::bootstrap($request, $this->response, new FakeConfig(['xhprof' => [
+            'enable' => true,
+            'sample_rate' => 0.0,
+            'trigger_token' => 's3cret',
+            'ignore_url_arr' => ['/test'],
+        ]]), $this->cache, $this->logger);
+
+        XhprofProfiler::start();
+        $this->assertFalse(self::profilerRunning(), 'ignore 命中的路径带着触发密钥也不采');
+    }
+
+    /**
+     * 判定完全交给 XhprofLib::isIgnore()（含它管的两条轴），不在 start() 里另写一套：
+     * 空 URI（CLI）在 sample_cli=false 时判忽略、true 时放行。
+     */
+    #[Test]
+    public function emptyUriFollowsSampleCliThroughThePreCheck(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $this->bootstrapWithUri('', ['enable' => true, 'sample_rate' => 1.0]);
+        XhprofProfiler::start();
+        $this->assertFalse(self::profilerRunning(), 'sample_cli 关闭（默认）时空 URI 不采');
+
+        $this->bootstrapWithUri('', ['enable' => true, 'sample_rate' => 1.0, 'sample_cli' => true]);
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), 'sample_cli 打开时空 URI 照常按 rate 采');
+        XhprofProfiler::stop();
+    }
+
+    // ---------- max_runs_per_minute：自适应预算（int|null，默认 null = 关闭） ----------
+
+    /** 未配（默认 null）= 关闭：不碰预算键、行为与加本键之前逐字一致。 */
+    #[Test]
+    public function budgetIsOffWhenTheKeyIsMissingAndTouchesNoBudgetKey(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $cache = new FakeCache();
+        $this->bootstrapWith(['enable' => true, 'sample_rate' => 1.0], $cache);
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '未配预算 = 旧行为（照常按 rate 采）');
+        XhprofProfiler::stop();
+
+        foreach ($cache->calls as $call) {
+            $this->assertStringNotContainsString(':budget:', $call, '预算关闭时不该读写预算键');
+        }
+    }
+
+    /** 写坏的形态（0/负数/非数值/布尔/数组）按关闭处理：回到旧行为，不是静默拒采。 */
+    #[Test]
+    public function nonPositiveOrNonNumericBudgetMeansOff(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        foreach ([0, -3, 'sixty', true, []] as $value) {
+            $cache = new FakeCache();
+            $this->bootstrapWith(['enable' => true, 'sample_rate' => 1.0, 'max_runs_per_minute' => $value], $cache);
+
+            XhprofProfiler::start();
+            $this->assertTrue(
+                self::profilerRunning(),
+                '预算写坏（' . json_encode($value) . '）应回到旧行为，而不是拒采'
+            );
+            XhprofProfiler::stop();
+
+            foreach ($cache->calls as $call) {
+                $this->assertStringNotContainsString(':budget:', $call, '预算写坏时同样不该碰预算键');
+            }
+        }
+    }
+
+    /**
+     * 预算内照常采、超了不采、首次 incr 补 TTL——一条链钉三件事。
+     *
+     * 桶键 = <key_prefix>:budget:<YmdHi>（分钟桶）。第二条断言（超预算不采）先把
+     * **当前与下一分钟**的桶都预置成「已用满」：不管落进哪个桶都会被拦，不受分钟
+     * 边界影响（本用例其余断言只在单个桶内取值，跨分钟时靠 $bucket 回退到下一桶）。
+     */
+    #[Test]
+    public function budgetAllowsUntilTheMinuteBucketIsExhausted(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $cache = new FakeCache();
+        $this->bootstrapWith([
+            'enable' => true,
+            'sample_rate' => 1.0,
+            'max_runs_per_minute' => 1,
+            'key_prefix' => 'pfx',
+        ], $cache);
+
+        $now = 'pfx:budget:' . date('YmdHi');
+        $next = 'pfx:budget:' . date('YmdHi', time() + 60);
+
+        XhprofProfiler::start();   // 空桶 → incr 得 1 ≤ 预算 1 → 采
+        $this->assertTrue(self::profilerRunning(), '预算之内必须照常采（配了预算 ≠ 拒采）');
+        XhprofProfiler::stop();
+
+        $bucket = in_array("incr:$now", $cache->calls, true) ? $now : $next;
+        $this->assertContains("set:$bucket", $cache->calls, '首次 incr 后必须补一次 set（Redis 的 incr 不设 TTL，桶键会永久留下）');
+        $this->assertSame(120, $cache->ttls[$bucket] ?? null, 'TTL 应为 ~120s（覆盖分钟边界即够）');
+
+        // 当前与下一分钟的桶都预置为已用满：第二次 start 无论落哪个桶都超预算
+        $cache->set($now, 1);
+        $cache->set($next, 1);
+
+        XhprofProfiler::start();
+        $this->assertFalse(self::profilerRunning(), '桶计数超过预算 1：不采');
+    }
+
+    /**
+     * fail-open：预算判定抛异常（phpredis 连接中断/认证失败等）时照常按 sample_rate
+     * 采，绝不向调用方抛。判别性：去掉 try/catch 的实现会把 RedisException 抛穿 start()。
+     */
+    #[Test]
+    public function budgetFailureFallsBackToSampleRate(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $throwing = new class extends FakeCache {
+            public function incr(string $key): int
+            {
+                throw new \RedisException('read error on connection');
+            }
+        };
+        $this->bootstrapWith(['enable' => true, 'sample_rate' => 1.0, 'max_runs_per_minute' => 1], $throwing);
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '预算机制失败必须 fail-open（照常采样），而不是崩或停摆');
+        XhprofProfiler::stop();
+    }
+
+    /** 缓存没绑（getCache() 为 null）同样 fail-open：预算闸门整个跳过，采样照常。 */
+    #[Test]
+    public function budgetIsSkippedWhenNoCacheIsBound(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        // bootstrap 只覆盖非 null 的适配器：先清掉 cache，再传 null 让绑定保持为空
+        Xhprof::$cache = null;
+        Xhprof::bootstrap($this->request, null, new FakeConfig(['xhprof' => [
+            'enable' => true,
+            'sample_rate' => 1.0,
+            'max_runs_per_minute' => 1,
+        ]]), null, $this->logger);
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '缓存未绑定时预算不生效，但采样照常');
+        XhprofProfiler::stop();   // 落库会因无缓存失败，由 stop() 的 catch 兜住（不向外抛）
+    }
+
+    /**
+     * 触发采样不被预算拦：预算给**自动流量**设上限，不给拿着密钥来排查的人关门。
+     * 两个桶都填满 + rate=0：只有「触发先于预算」的实现能采到。
+     */
+    #[Test]
+    public function budgetDoesNotBlockTriggeredSampling(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        $cache = new FakeCache();
+        $request = new FakeRequest([], ['headers' => ['X-Xhprof-Token' => 's3cret']]);
+        Xhprof::bootstrap($request, $this->response, new FakeConfig(['xhprof' => [
+            'enable' => true,
+            'sample_rate' => 0.0,
+            'trigger_token' => 's3cret',
+            'max_runs_per_minute' => 1,
+        ]]), $cache, $this->logger);
+
+        // 当前与下一分钟的桶都按「已用满」预置，无论落哪个桶预算都是超的
+        $cache->set('xhprof:budget:' . date('YmdHi'), 99);
+        $cache->set('xhprof:budget:' . date('YmdHi', time() + 60), 99);
+        $cache->calls = [];   // 丢掉预置动作的记录，只留 start() 自己产生的调用
+
+        XhprofProfiler::start();
+        $this->assertTrue(self::profilerRunning(), '触发采样不受预算限制（rate=0，只有触发分支能救）');
+        XhprofProfiler::stop();
+
+        foreach ($cache->calls as $call) {
+            $this->assertStringNotContainsString(':budget:', $call, '触发路径根本不进预算闸门');
+        }
+    }
+
     #[Test]
     public function twoConsecutiveStopsSaveOnlyOneRun(): void
     {
@@ -350,7 +698,7 @@ class XhprofProfilerTest extends TestCase
             $this->markTestSkipped('ext-xhprof 未加载');
         }
 
-        $cache = new ProfilerFixedListCache();
+        $cache = new FakeCache();
         Xhprof::bootstrap($this->request, $this->response, $this->config, $cache, $this->logger);
 
         XhprofProfiler::start();
@@ -370,7 +718,7 @@ class XhprofProfilerTest extends TestCase
             $this->markTestSkipped('ext-xhprof 未加载');
         }
 
-        $cache = new ProfilerFixedListCache();
+        $cache = new FakeCache();
         Xhprof::bootstrap($this->request, $this->response, $this->config, $cache, $this->logger);
 
         XhprofProfiler::start();

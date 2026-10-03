@@ -537,7 +537,6 @@ class Yii3Test extends TestCase
     private function cacheOf(XhprofMiddleware $middleware): RedisAdapter
     {
         $prop = new \ReflectionProperty(XhprofMiddleware::class, 'cache');
-        $prop->setAccessible(true);   // PHP 8.0 上私有属性必须显式放开
         $cache = $prop->getValue($middleware);
         $this->assertInstanceOf(RedisAdapter::class, $cache);
 
@@ -548,7 +547,6 @@ class Yii3Test extends TestCase
     private function optionsOf(RedisAdapter $adapter): array
     {
         $prop = new \ReflectionProperty(RedisAdapter::class, 'options');
-        $prop->setAccessible(true);
 
         return (array) $prop->getValue($adapter);
     }

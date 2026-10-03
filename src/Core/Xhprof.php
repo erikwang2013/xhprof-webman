@@ -9,9 +9,11 @@ use ErikWang2013\Xhprof\Core\Contract\ResponseInterface;
 use ErikWang2013\Xhprof\Core\Contract\ConfigInterface;
 use ErikWang2013\Xhprof\Core\Contract\CacheInterface;
 use ErikWang2013\Xhprof\Core\Contract\LoggerInterface;
+use ErikWang2013\Xhprof\Core\Analysis\Analyzer;
 use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XHProfRunsDefault;
+use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
 
 class Xhprof
 {
@@ -132,27 +134,53 @@ class Xhprof
             return self::deny('500 xhprof: no request adapter in this coroutine\'s Hyperf Context — bootstrap() did not run here, so the request and its auth token cannot be verified. Refusing to render the report page.', 500);
         }
         $cfg = self::getConfig();
-        // 鉴权：配置了 auth_token 后，报告页必须带 ?token=xxx 才能访问
+        // IP 白名单（默认关闭）。放在凭据校验之前：这是网络层闸门，凭据对不对都要先过它。
+        if (!self::ipIsAllowed($req, $cfg)) {
+            return self::deny('403 Forbidden', 403);
+        }
+        // 鉴权：`?token=xxx`（auth_token）与 HTTP Basic（auth_basic）**任一配置即生效**，
+        // 两者是「或」——任一凭据校验通过即放行；配置了的凭据全不通过才拒绝。
         $authToken = $cfg !== null ? $cfg->get('xhprof.auth_token', null) : null;
+        $authBasic = $cfg !== null ? $cfg->get('xhprof.auth_basic', null) : null;
+        // 未配（null / 空串）与形态不对（非字符串，写了数组）都按「没配」处理，**不做**
+        // `(string)` 强转：强转数组会立 "Array to string conversion" warning（升异常的
+        // 宿主上 403 变 500）。形态校验（下面 is_string($token)）与是否配了凭据无关。
+        $tokenConfigured = is_string($authToken) && $authToken !== '';
+        $basicConfigured = is_string($authBasic) && $authBasic !== '';
         // token 与 run/source 同形的类型守卫：`?token[]=x` 以数组到达，`(string) $array`
-        // 会在 hash_equals 之前立 "Array to string conversion" warning —— warning 升异常的
-        // 宿主上 403 变成 500，不升的宿主上也是每次请求一条日志噪音。
-        // 必须在鉴权**之前**：鉴权拿它做比较，放后面等于没防。与 auth_token 是否配置无关
-        // （形态校验是形态校验；不配鉴权时也不该让数组形态走到后面的渲染路径）。
+        // 会在 hash_equals 之前立 "Array to string conversion" warning。必须在鉴权**之前**：
+        // 鉴权拿它做比较，放后面等于没防。
         $token = $req->get('token', '');
         if (!is_string($token)) {
             return self::deny('400 Bad Request', 400);
         }
-        if ($authToken !== null && $authToken !== '' && !hash_equals((string) $authToken, $token)) {
-            return self::deny('403 Forbidden', 403);
-        }
-        if ($authToken === null || $authToken === '') {
-            // 未配 auth_token 时报告页对任何人可读。默认不鉴权是拍板的既定行为，**不改**，
+        $authorized = ($tokenConfigured && hash_equals($authToken, $token))
+            || ($basicConfigured && self::basicCredentialsMatch($req, $authBasic));
+        if (!$authorized) {
+            if ($basicConfigured) {
+                // 配了 Basic 就用 401 + WWW-Authenticate（RFC 7617）：这也是浏览器弹出
+                // 凭据框的唯一触发方式——返回 403 的话浏览器永远不会提示输入。
+                // 配置本身没有冒号时永远匹配不上，留一条可归因的日志，否则运维只看到
+                // 一个 401、不知道是密码错还是配置写错了。
+                if (!str_contains($authBasic, ':')) {
+                    self::getLogger()?->error(
+                        'xhprof: xhprof.auth_basic must look like "user:password" (the first colon separates; '
+                        . 'the password may contain colons). The configured value has no colon, so no credentials '
+                        . 'can ever match and the report page stays locked.'
+                    );
+                }
+                return self::deny('401 Unauthorized', 401, array('WWW-Authenticate' => 'Basic realm="xhprof"'));
+            }
+            if ($tokenConfigured) {
+                return self::deny('403 Forbidden', 403);
+            }
+            // 两个凭据都没配：报告页对任何人可读。默认不鉴权是拍板的既定行为，**不改**，
             // 但「裸奔」这件事必须留痕：每请求一条，不刷屏（一次 index() 只走到这里一次）。
             // 文案向 deny() 的英文串看齐。
             self::getLogger()?->error(
-                'xhprof: xhprof.auth_token is not configured, so the report page renders without authentication. '
-                . 'Set xhprof.auth_token to require ?token=xxx on every report URL.'
+                'xhprof: neither xhprof.auth_token nor xhprof.auth_basic is configured, so the report page '
+                . 'renders without authentication. Set xhprof.auth_token to require ?token=xxx, or '
+                . 'xhprof.auth_basic ("user:password") to require HTTP Basic credentials.'
             );
         }
         // run_id / source 白名单校验，防止任意 key 读取
@@ -186,6 +214,16 @@ class Xhprof
                 return self::deny('400 Bad Request', 400);
             }
         }
+        // 只读导出（`?format=json|csv`）在**鉴权与参数白名单之后**分支：导出必须与报告页
+        // 受同一套闸门（token/basic、IP 白名单、run/source 白名单）约束，不能因为换个
+        // format 就绕过。非法值（含数组形态 `?format[]=json`）与未知值一样是坏请求。
+        $format = $req->get('format');
+        if ($format !== null) {
+            if (!is_string($format) || !in_array($format, ['json', 'csv'], true)) {
+                return self::deny('400 Bad Request', 400);
+            }
+            return self::exportReport($format, $run, $run1, $run2, $source, $wts, $sort);
+        }
         $params = $req->all();
         // 报告页语言：?lang= > 配置 xhprof.locale > Accept-Language > 兜底中文。
         // 四级都拿不到认识的语言码时 resolve() 返回 zh_CN，绝不抛异常。
@@ -218,14 +256,348 @@ class Xhprof
         return $echo_page;
     }
 
-    private static function deny(string $body, int $status): mixed
+    /**
+     * @param array<string, string> $headers 额外响应头（如 401 的 WWW-Authenticate）。
+     *   12 家 ResponseAdapter 的 withHeaders() 都接受 `array<string,string>` 并逐条 set。
+     *   无 Response 绑定的兜底分支保持既有形态（只设状态码、返回 body）：那条路径下
+     *   连 deny() 的既有调用者也拿不到响应头，不为它单独发明一套。
+     */
+    private static function deny(string $body, int $status, array $headers = []): mixed
     {
         $res = self::getResponse();
         if ($res !== null) {
-            return $res->withStatus($status)->withBody($body)->send();
+            $res = $res->withStatus($status);
+            if ($headers !== []) {
+                $res = $res->withHeaders($headers);
+            }
+            return $res->withBody($body)->send();
         }
         http_response_code($status);
         return $body;
+    }
+
+    /**
+     * Authorization: Basic 凭据校验（RFC 7617）。
+     *
+     * `$configured` 形如 `user:password`，按**第一个**冒号切两段（`explode(…, 2)`：
+     * 用户名里出现冒号时，密码侧保留全部剩余字符）。客户端凭据同理解析。
+     *
+     * 12 家 RequestAdapter 的 header() 逐个核实过（2026-10）：签名都是 `?string`
+     * （strict_types=1，返回别的类型会 TypeError），返回裸头值或 null。is_string 守卫是
+     * 防未来适配器换签名的廉价保险，顺带把「拿不到头」与「头值非字符串」都归为
+     * 「没有凭据」。
+     *
+     * 部署注意：CGI/FastCGI 下 Apache **默认剥离 Authorization 头**（PHP 在
+     * php-fpm/CGI 收不到它，除非 `CGIPassAuth On`——2.4.13+；或前端用 SetEnvIf 把
+     * 它转成 REDIRECT_ 变量）。Native 适配器走 getallheaders() /
+     * `$_SERVER['HTTP_AUTHORIZATION']` 还原，WordPress 适配器直接读
+     * `$_SERVER['HTTP_AUTHORIZATION']`——头被剥离时这两条路径都拿到 null，结果是
+     * 401（拒绝），不是放行。nginx + php-fpm 默认会把头传进来，不受此限。
+     */
+    private static function basicCredentialsMatch(RequestInterface $req, string $configured): bool
+    {
+        $header = $req->header('Authorization');
+        if (!is_string($header)) {
+            return false;
+        }
+        // scheme 大小写不敏感（RFC 7617）；base64 凭据不含空白字符。
+        if (preg_match('/^\s*Basic\s+(\S+)\s*$/i', $header, $m) !== 1) {
+            return false;
+        }
+        // 严格模式：非法字符 / 坏填充直接 false，不静默丢弃字符后再解出一个「凭据」。
+        $plain = base64_decode($m[1], true);
+        if ($plain === false || !str_contains($plain, ':')) {
+            return false;
+        }
+        $given  = explode(':', $plain, 2);
+        $expect = explode(':', $configured, 2);
+        if (count($expect) !== 2) {
+            return false;   // 配置本身没有冒号：任何输入都不匹配（调用点会记一条日志）
+        }
+        // 两段都比较完再合并结果：`&&` 短路会让「用户名错」提前返回，用时间差可以把
+        // 用户名试出来（密码那半则始终比过 hash_equals）。
+        $userOk = hash_equals($expect[0], $given[0]);
+        $passOk = hash_equals($expect[1], $given[1]);
+        return $userOk && $passOk;
+    }
+
+    /**
+     * IP 白名单闸门（`xhprof.ip_allowlist`，代码内默认 `[]` = 整个特性关闭）。
+     *
+     * 判定来源是 `RequestInterface::getRealIp()`——契约里**没有** REMOTE_ADDR 访问器，
+     * 12 家的实现逐个读过（2026-10）。其中 Laravel / Thinkphp / Yii2 / Symfony / Drupal
+     * 是**委托给框架方法**（ip() / getUserIP() / getClientIp()），本机没装这几家框架，
+     * 框架内部取法未逐行复核——下面把它们记在「随框架配置而定」那一档。真正兜底的是
+     * 下面的转发头判别（不看适配器名单，只看值是否等于客户端自报的转发头）：
+     *   - Webman 是唯一取真实 socket 对端地址的（workerman `getRealIp(true)` = 安全模式，
+     *     不看转发头）；
+     *   - Symfony / Laravel / Drupal / Yii2 走框架自身的可信代理逻辑，默认（未配可信
+     *     代理时）同样给出 REMOTE_ADDR；Thinkphp 的 `Request::ip()` 按框架语义优先取
+     *     HTTP_X_FORWARDED_FOR（本机未复核其源码，见上）。信任链成立与否由框架配置负责；
+     *   - 其余（Native / WordPress / Joomla / Hyperf / Slim / Yii3）在本仓适配器源码里
+     *     就能看到：收到 `X-Forwarded-For` / `X-Real-IP` 时**无条件**取转发头（XFF 取首段）。
+     *
+     * 也就是说：对多数适配器，客户端自己发一个 X-Forwarded-For 就能塑造 getRealIp()。
+     * 直接拿它比对白名单会让白名单形同虚设（任何地址都能自报）。所以这里加一道
+     * 「这个值是不是来自转发头」的判别：`getRealIp()` 恰好等于请求自带的 XFF 首段或
+     * X-Real-IP 时视为**不可验证**，要求 `xhprof.trusted_proxies` 非空（部署声明
+     * 「我前面有可信代理」，见该键注释）；判别不成立（适配器忽略了转发头、或框架
+     * 自己算过信任链）时按真实来源判定。
+     *
+     * 已知边界（要在契约层根治得给 RequestInterface 加一个 `remoteAddr()`，不在本次
+     * 围栏内，已交接）：
+     *   - 声明 trusted_proxies 之后仍无法逐个核对**中间跳数**里哪一跳可信——判别只是
+     *     把「不可验证」变成「部署声明了可接受」，文档必须写明：仅当部署在可信代理
+     *     之后才安全；
+     *   - 仅做逐字字符串比对：不支持 CIDR 网段，也不做 IPv6 规范化（`2001:0db8::1`
+     *     与 `2001:db8::1` 是两个不同的字符串）。
+     */
+    private static function ipIsAllowed(RequestInterface $req, ?ConfigInterface $cfg): bool
+    {
+        $allow = $cfg !== null ? $cfg->get('xhprof.ip_allowlist', []) : [];
+        if ($allow === null || $allow === []) {
+            return true;   // 未配 = 关闭（代码内默认值，不进 12 份配置文件）
+        }
+        if (!is_array($allow)) {
+            // 形态写错（写成字符串）时静默关闭会**丢掉一层安全控制**，与 fail closed 相反，
+            // 所以这里选择拒绝并留日志。
+            self::getLogger()?->error(
+                'xhprof: xhprof.ip_allowlist must be an array of IP strings; got ' . gettype($allow)
+                . '. Refusing the request (fail closed) until the configuration is fixed.'
+            );
+            return false;
+        }
+        $trusted = $cfg->get('xhprof.trusted_proxies', []);
+        if (!is_array($trusted)) {
+            $trusted = [];
+        }
+        $ip = $req->getRealIp();
+        if ($trusted === [] && self::ipLookedForwarded($req, $ip)) {
+            self::getLogger()?->error(
+                'xhprof: xhprof.ip_allowlist is enabled, but the client IP was taken from a forwarded header '
+                . '(X-Forwarded-For / X-Real-IP) and xhprof.trusted_proxies is empty, so the value cannot be '
+                . 'verified. Refusing the request. Set xhprof.trusted_proxies when (and only when) the app runs '
+                . 'behind a proxy you control, or turn xhprof.ip_allowlist off.'
+            );
+            return false;
+        }
+        if (!in_array($ip, $allow, true)) {
+            self::getLogger()?->error('xhprof: request rejected by xhprof.ip_allowlist (client IP: ' . $ip . ').');
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * `$ip` 是不是可能来自**客户端可伪造**的转发头。
+     *
+     * 判别手法：与请求自带的 X-Forwarded-For 首段 / X-Real-IP 逐字比较。相等 ⇒ 某个
+     * 适配器无条件取了转发头（或框架信任链算出了同一个值），这个值就可能是客户端
+     * 自己写的。适配器忽略了转发头（Webman 安全模式、框架未配可信代理）时两者的值
+     * 通常不同，照常按真实来源判定——两头的误判方向都是拒绝，不是放行。
+     */
+    private static function ipLookedForwarded(RequestInterface $req, string $ip): bool
+    {
+        foreach (['X-Forwarded-For', 'X-Real-IP'] as $name) {
+            $value = $req->header($name);
+            if (is_string($value) && $value !== '' && trim(explode(',', $value)[0]) === $ip) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * `?format=json|csv` 只读导出。
+     *
+     * 位置由 index() 保证在**鉴权与参数白名单之后**：导出与报告页看的是同一份校验过的
+     * 入参，token/basic 与 IP 白名单对导出同样有效——不能因为换个 format 就绕过闸门。
+     *
+     * 输出只含**稳定字段**（数字 / run_id / 规则名 / 函数名）：Analyzer 的 title/detail
+     * 是 13 种语言的句子，进了契约等于把本地化文案固化成 API。
+     *
+     * 数据读取全部复用报告页的现成路径（get_run / xhprof_aggregate_runs /
+     * xhprof_compute_flat_info / xhprof_compute_diff），列与排序语义 = 平铺报告：
+     * json 的 functions[] 每行 = 平铺表一行（fn + ct + 各指标 + excl_*）；csv 的列 =
+     * 平铺表的列，diff 模式下值列统一带 `delta_` 前缀（delta = run2 − run1，与页面同）。
+     */
+    private static function exportReport(
+        string $format,
+        ?string $run,
+        ?string $run1,
+        ?string $run2,
+        ?string $source,
+        ?string $wts,
+        ?string $sort
+    ): mixed {
+        $run  = ($run === null || $run === '') ? null : $run;
+        $run1 = ($run1 === null || $run1 === '') ? null : $run1;
+        $run2 = ($run2 === null || $run2 === '') ? null : $run2;
+        $source = $source ?? '';
+
+        $diffMode = false;
+        $runs = [];
+        if ($run !== null) {
+            $runs = explode(',', $run);
+        } elseif ($run1 !== null && $run2 !== null) {
+            $diffMode = true;
+        } else {
+            // 没指定任何 run：导出没有可导的对象。与非法 format 值同属坏请求。
+            return self::deny('400 Bad Request', 400);
+        }
+
+        $findings = [];
+        $badRuns = [];
+        $description = '';
+        if ($diffMode) {
+            $data1 = XHProfRunsDefault::get_run($run1, $source, $description);
+            $data2 = XHProfRunsDefault::get_run($run2, $source, $description);
+            if ($data1 === false || $data2 === false) {
+                return self::deny('404 Not Found', 404);
+            }
+            // 与 profiler_diff_report() 同序：init_metrics() 决定 display_calls/metrics，
+            // 必须先于 compute_flat_info()（后者经 XhprofDisplay 读这份渲染状态）。
+            XhprofLib::init_metrics($data2, '', $sort, true);
+            $delta = XhprofLib::xhprof_compute_diff($data1, $data2);
+            $symbolTab = XhprofLib::xhprof_compute_flat_info($delta, $totals);
+            // 诊断只在非 diff 视图产出（与报告页同一条守卫，理由见 profiler_report()：
+            // diff 的增量做分母配原始边表做分子会得出负耗时）。
+        } else {
+            if (count($runs) === 1) {
+                $data = XHProfRunsDefault::get_run($runs[0], $source, $description);
+            } else {
+                $wtsArray = ($wts === null || $wts === '') ? null : explode(',', $wts);
+                $agg = XhprofLib::xhprof_aggregate_runs($runs, $wtsArray, $source, false);
+                $data = $agg['raw'];
+                $badRuns = isset($agg['bad_runs']) && is_array($agg['bad_runs']) ? $agg['bad_runs'] : [];
+            }
+            if ($data === false || $data === null) {
+                return self::deny('404 Not Found', 404);
+            }
+            XhprofLib::init_metrics($data, '', $sort, false);
+            $symbolTab = XhprofLib::xhprof_compute_flat_info($data, $totals);
+            $findings = Analyzer::analyze($symbolTab, $data, $totals);
+        }
+
+        // 平铺行 + 与报告页同一套排序（sort 已在 index() 过形态校验；非法字符串由
+        // init_metrics() 记日志后回落到 wt——与页面行为一致）。
+        $flat = [];
+        foreach ($symbolTab as $symbol => $info) {
+            $flat[] = ['fn' => (string) $symbol] + (is_array($info) ? $info : []);
+        }
+        usort($flat, [XhprofDisplay::class, 'sort_cbk']);
+
+        if ($format === 'json') {
+            $payload = [
+                'mode' => $diffMode ? 'diff' : (count($runs) > 1 ? 'aggregate' : 'single'),
+                'source' => $source,
+            ];
+            if ($diffMode) {
+                $payload['run1'] = $run1;
+                $payload['run2'] = $run2;
+            } elseif (count($runs) > 1) {
+                // 聚合时被丢弃的坏 run（过期/损坏）单独列出：不然「少聚合了一条」是无声的。
+                $payload['runs'] = $runs;
+                $payload['bad_runs'] = $badRuns;
+            } else {
+                $payload['run'] = $runs[0];
+            }
+            $payload['totals'] = $totals;
+            $payload['findings'] = [];
+            foreach ($findings as $f) {
+                // 只留稳定字段：title/detail 是 13 语言的文案，不得进契约。
+                $payload['findings'][] = [
+                    'rule' => $f->rule,
+                    'severity' => $f->severity,
+                    'symbol' => $f->symbol,
+                    'score' => $f->score,
+                ];
+            }
+            $payload['functions'] = $flat;
+            // INVALID_UTF8_SUBSTITUTE：坏符号名（非 UTF-8）替换成 U+FFFD，不让整份导出失败；
+            // PARTIAL_OUTPUT_ON_ERROR：INF/NAN 这类 JSON 无法表达的值不会让 encode 返回 false。
+            $json = json_encode(
+                $payload,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_PRESERVE_ZERO_FRACTION | JSON_PARTIAL_OUTPUT_ON_ERROR
+            );
+            if ($json === false) {
+                // 上面几个 flag 兜底后基本不可能发生；真发生宁可 500 让调用方看见，
+                // 也不能回一个空 body 当成功。
+                return self::deny('500 xhprof: the report data could not be encoded as JSON.', 500);
+            }
+            return self::respond($json, ['Content-Type' => 'application/json; charset=UTF-8']);
+        }
+
+        // CSV：列 = 平铺报告的列语义（fn + 调用次数 + 各指标 + 各自耗时），diff 时值列
+        // 统一带 `delta_` 前缀（页面里这一列就是 run2 − run1，列名自述其义）。
+        $metrics = (array) XhprofDisplay::metrics();
+        $columns = ['fn'];
+        if (XhprofDisplay::display_calls()) {
+            $columns[] = 'ct';
+        }
+        foreach ($metrics as $metric) {
+            $columns[] = (string) $metric;
+        }
+        foreach ($metrics as $metric) {
+            $columns[] = 'excl_' . $metric;
+        }
+        $header = $columns;
+        if ($diffMode) {
+            foreach ($header as $i => $name) {
+                if ($name !== 'fn') {
+                    $header[$i] = 'delta_' . $name;
+                }
+            }
+        }
+        $lines = [self::csvRow($header)];
+        foreach ($flat as $row) {
+            $cells = [];
+            foreach ($columns as $name) {
+                $cells[] = array_key_exists($name, $row) ? $row[$name] : '';
+            }
+            $lines[] = self::csvRow($cells);
+        }
+        $filename = $diffMode
+            ? 'xhprof-' . $run1 . '-vs-' . $run2 . '.csv'
+            : 'xhprof-' . str_replace(',', '_', (string) $run) . '.csv';
+        return self::respond(implode("\n", $lines) . "\n", [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /** 200 + 给定响应头 + body 的直出（与 deny() 同一条链，状态固定 200）。 */
+    private static function respond(string $body, array $headers): mixed
+    {
+        $res = self::getResponse();
+        if ($res !== null) {
+            return $res->withStatus(200)->withHeaders($headers)->withBody($body)->send();
+        }
+        http_response_code(200);
+        foreach ($headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+        return $body;
+    }
+
+    /**
+     * RFC 4180 的一行 CSV：含 `,` `"` CR/LF 的单元格加引号并翻倍引号。
+     *
+     * 不用 fputcsv()：它的浮点格式化在小数点上是 **locale 相关**的（de_DE 下 1.5 →
+     * "1,5"，整列错位），而 PHP 的 float→string 强转与 locale 无关（恒为 `.`）。
+     */
+    private static function csvRow(array $cells): string
+    {
+        $out = [];
+        foreach ($cells as $cell) {
+            $s = is_string($cell) ? $cell : (string) $cell;
+            if (strpbrk($s, ",\"\r\n") !== false) {
+                $s = '"' . str_replace('"', '""', $s) . '"';
+            }
+            $out[] = $s;
+        }
+        return implode(',', $out);
     }
 
     public static function xhprofStart(): void

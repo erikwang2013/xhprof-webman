@@ -182,4 +182,17 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>差异%',
     'diffcol.excl_samples' => 'Excl. Samples<br>差异',
     'diffcol.ESamples%' => 'ESamples<br>差异%',
+    // ——— 2026-10 新增：多 run 聚合入口 / 关键路径卡 / 搜索子串匹配 ———
+    // 键序仍是契约：这四条排在 diffcol.ESamples% 之后，13 份词表同序。
+    // runs.aggregate：「对比选中」按钮在选中 >2 条时换上的文案（静态 HTML 在 Utils 层，
+    // JS 按选中数替换；经 window.xpI18n 注入）。
+    'runs.aggregate' => '聚合选中',
+    'path.title' => '关键路径',
+    'path.empty' => '没有可展示的调用链（数据里没有从 main() 出发的调用边）。',
+    // %s = 搜索串；「30」与 XhprofDisplay 里的截断上限是同一个数，改一处要改两处
+    'search.matches' => '包含 “%s” 的函数（最多显示 30 条）：',
+    // 火焰图（FlameGraph 模块零文案，卡片标题与说明在 Display 侧渲染）。
+    // flame.note 的两个 %s = 实际画出帧数、未绘制占比；字面百分号写 %%
+    'flame.title' => '火焰图',
+    'flame.note' => '显示 %s 帧；为控制页面体积，另有 %s%% 的总耗时未绘制',
 ];

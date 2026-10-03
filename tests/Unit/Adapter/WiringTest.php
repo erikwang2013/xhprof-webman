@@ -1066,7 +1066,6 @@ PHP
     {
         foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
             $prop = new \ReflectionProperty(JoomlaXhprof::class, $name);
-            $prop->setAccessible(true);
             $prop->setValue(null, $value);
         }
     }
@@ -1076,7 +1075,6 @@ PHP
     {
         foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
             $prop = new \ReflectionProperty(XhprofBootstrap::class, $name);
-            $prop->setAccessible(true);
             $prop->setValue(null, $value);
         }
     }

@@ -187,4 +187,18 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>差分%',
     'diffcol.excl_samples' => '自身<br>サンプル<br>差分',
     'diffcol.ESamples%' => 'ESamples<br>差分%',
+    // ——— 2026-10 追加：複数 run の集約入口 / クリティカルパスカード / 検索の部分一致 ———
+    // キー順も契約：この 6 件は diffcol.ESamples% の後に置き、13 語彙で同順とする。
+    // runs.aggregate：3 件以上を選択したとき「選択項目を比較」ボタンの文言に差し替わるもの
+    // （静的 HTML は Utils 層にあり、JS が選択数に応じて書き換える。window.xpI18n 経由で注入）。
+    'runs.aggregate' => '選択項目を集約',
+    'path.title' => 'クリティカルパス',
+    'path.empty' => '表示できる呼び出し経路がありません（データに main() を起点とする呼び出しエッジがありません）。',
+    // %s = 検索文字列。「30」は XhprofDisplay 側の打ち切り上限と同じ数なので、片方を変えたら両方変えること。
+    'search.matches' => '「%s」を含む関数（最大 30 件を表示）：',
+    // フレームグラフ（FlameGraph モジュールは文言を持たず、カードのタイトルと注記は
+    // Display 側で描画する）。flame.note の 2 つの %s = 実際に描画したフレーム数と
+    // 未描画の割合で、リテラルのパーセント記号は %% と書く。
+    'flame.title' => 'フレームグラフ',
+    'flame.note' => '表示 %s フレーム；ページサイズを抑えるため、総時間の %s%% は描画されません',
 ];

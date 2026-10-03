@@ -10,6 +10,41 @@ xhprof.settings:
     sample_rate:
       type: float
       label: 'Fraction of requests to profile (0.05 = 5%, 1 = all, <=0 = none)'
+    trigger_token:
+      type: string
+      label: 'Token that forces sampling when sent in the X-Xhprof-Token header (empty = disabled)'
+      nullable: true
+    auth_basic:
+      type: string
+      label: 'HTTP Basic credentials "user:password" (empty = disabled; OR-ed with auth_token, either one admitted)'
+      nullable: true
+    ip_allowlist:
+      type: sequence
+      label: 'Client IPs allowed to view the report (exact string match, no CIDR, no IPv6 normalisation; empty = disabled, non-array = fail closed)'
+      sequence:
+        type: string
+        label: 'IP address'
+    trusted_proxies:
+      type: sequence
+      label: 'Deployment declaration that the app runs behind a trusted proxy (lets ip_allowlist trust X-Forwarded-For / X-Real-IP; it cannot stop forged headers)'
+      sequence:
+        type: string
+        label: 'Proxy IP address'
+    webhook_url:
+      type: string
+      label: 'Slow-request webhook URL, POST JSON after a run is stored (empty = disabled; fire-and-forget, no queue, no retry)'
+      nullable: true
+    sample_cli:
+      type: boolean
+      label: 'Profile CLI runs that have no HTTP request; stored as cli:<script name>'
+    symbol_lookup_url:
+      type: string
+      label: 'Source code lookup template; ?symbol=<urlencoded name> is appended (empty = no links)'
+      nullable: true
+    max_runs_per_minute:
+      type: integer
+      label: 'Maximum runs recorded per minute (empty = unlimited; falls back to sample_rate when the cache is unavailable)'
+      nullable: true
     time_limit:
       type: integer
       label: 'Only record requests slower than this many seconds (0 = every request)'

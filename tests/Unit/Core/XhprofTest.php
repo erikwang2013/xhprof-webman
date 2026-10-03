@@ -105,6 +105,41 @@ class XhprofTest extends TestCase
         $this->assertSame($this->config, Xhprof::getConfig());
     }
 
+    /**
+     * `xhprof.symbol_lookup_url` 由 XhprofProfiler::bootstrap() 写进
+     * Xhprof::$symbol_lookup_url（模板由 XhprofDisplay::print_source_link() 消费）。
+     *
+     * 两个方向都钉：配了非空字符串 → 原样写入（不做 URL 校验，拼 `?symbol=` 是消费方
+     * 的事）；没配 → 覆盖成空串，而不是保留上一次的值 / 塞进 null；形态写错（数组）
+     * 同样落空串——`(string)` 强转数组会立 "Array to string conversion" warning，
+     * failOnWarning 下这条就红了。
+     */
+    #[Test]
+    public function bootstrapMapsSymbolLookupUrlIntoTheStatic(): void
+    {
+        $config = new FakeConfig(['xhprof' => ['symbol_lookup_url' => 'https://git.example.com/blob/main/{fn}']]);
+        Xhprof::bootstrap($this->request, $this->response, $config, $this->cache, $this->logger);
+        $this->assertSame(
+            'https://git.example.com/blob/main/{fn}',
+            Xhprof::$symbol_lookup_url,
+            '配了值必须原样写入静态量'
+        );
+
+        // 先污染再 bootstrap：未配时必须是「覆盖成空串」，而不是保留旧值
+        Xhprof::$symbol_lookup_url = 'https://stale.example.com';
+        Xhprof::bootstrap($this->request, $this->response, new FakeConfig(['xhprof' => []]), $this->cache, $this->logger);
+        $this->assertSame('', Xhprof::$symbol_lookup_url, '未配 = 空串（print_source_link 对空串不加链接）');
+
+        Xhprof::bootstrap(
+            $this->request,
+            $this->response,
+            new FakeConfig(['xhprof' => ['symbol_lookup_url' => ['not', 'a', 'string']]]),
+            $this->cache,
+            $this->logger
+        );
+        $this->assertSame('', Xhprof::$symbol_lookup_url, '形态写错（数组）也落空串，且不得立 warning');
+    }
+
     #[Test]
     public function gettersReturnNullWhenNotBootstrapped(): void
     {
@@ -918,5 +953,581 @@ class XhprofTest extends TestCase
         // 样式表里不许再出现后代形态（那是修掉的那条死规则）
         $css = (string) file_get_contents(dirname(__DIR__, 3) . '/src/html/css/xhprof.css');
         $this->assertStringNotContainsString('.xp-runs-table .xp-table', $css);
+    }
+
+    // ---------------- HTTP Basic 鉴权（与 ?token= 并行） ----------------
+
+    private static function basicCredentials(string $user, string $pass): string
+    {
+        return 'Basic ' . base64_encode($user . ':' . $pass);
+    }
+
+    /** 重建 request/config 适配器并 bootstrap（每个用例一份全新的适配器，免得互相串味）。 */
+    private function bootWith(array $xhprofConfig, array $params = [], array $options = []): void
+    {
+        $this->config = new FakeConfig(['xhprof' => $xhprofConfig]);
+        $this->request = new FakeRequest($params, $options);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+    }
+
+    #[Test]
+    public function basicAuthAllowsCorrectCredentialsWithoutToken(): void
+    {
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => self::basicCredentials('alice', 's3cret')]]
+        );
+
+        $result = Xhprof::index();
+
+        $this->assertIsString($result);
+        $this->assertStringContainsString('<html', $result);
+        $this->assertSame(200, $this->response->status);
+        $this->assertSame([], $this->logger->errors, '配了凭据就不该有「裸奔」告警');
+    }
+
+    #[Test]
+    public function basicAuthRejectsMissingCredentialsWith401AndChallenge(): void
+    {
+        $this->bootWith(['auth_basic' => 'alice:s3cret']);
+
+        $result = Xhprof::index();
+
+        $this->assertSame(401, $this->response->status, '配了 Basic 且没凭据时必须 401（不是 403）');
+        $this->assertSame('401 Unauthorized', $this->response->body);
+        $this->assertSame(
+            'Basic realm="xhprof"',
+            $this->response->headers['WWW-Authenticate'] ?? null,
+            '没有 WWW-Authenticate 浏览器永远不会弹凭据框'
+        );
+        $this->assertSame($this->response, $result);
+    }
+
+    #[Test]
+    public function basicAuthRejectsWrongPasswordWith401(): void
+    {
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => self::basicCredentials('alice', 'wrong')]]
+        );
+
+        Xhprof::index();
+
+        $this->assertSame(401, $this->response->status);
+        $this->assertArrayHasKey('WWW-Authenticate', $this->response->headers);
+    }
+
+    /**
+     * 凭据按**第一个**冒号切两段（`explode(':', $s, 2)`），密码里的冒号保留。
+     *
+     * 判别性输入：凭据里有 3 个冒号。若实现按全部冒号切开再断言段数，这条会 401。
+     */
+    #[Test]
+    public function basicAuthKeepsColonsInsideThePassword(): void
+    {
+        $this->bootWith(
+            ['auth_basic' => 'alice:a:b:c'],
+            [],
+            ['headers' => ['Authorization' => self::basicCredentials('alice', 'a:b:c')]]
+        );
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+
+        // 密码比配置少一段：必须拒绝（比较的是完整剩余串，不做前缀匹配）
+        $this->response = new FakeResponse();
+        $this->bootWith(
+            ['auth_basic' => 'alice:a:b:c'],
+            [],
+            ['headers' => ['Authorization' => self::basicCredentials('alice', 'a:b')]]
+        );
+        Xhprof::index();
+        $this->assertSame(401, $this->response->status, '密码少一段必须拒绝');
+    }
+
+    #[Test]
+    public function basicAuthSchemeIsCaseInsensitiveAndBase64IsStrict(): void
+    {
+        // scheme 大小写不敏感（RFC 7617）
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => 'basic ' . base64_encode('alice:s3cret')]]
+        );
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+
+        // 非法 base64：严格模式直接拒绝，不静默丢字符后再解出一个「凭据」
+        $this->response = new FakeResponse();
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => 'Basic !!!not-base64!!!']]
+        );
+        Xhprof::index();
+        $this->assertSame(401, $this->response->status);
+
+        // base64 合法但没有冒号（无 user:pass 结构）
+        $this->response = new FakeResponse();
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => 'Basic ' . base64_encode('alices3cret')]]
+        );
+        Xhprof::index();
+        $this->assertSame(401, $this->response->status);
+    }
+
+    #[Test]
+    public function basicAuthRejectsNonBasicScheme(): void
+    {
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => 'Bearer alice:s3cret']]
+        );
+
+        Xhprof::index();
+
+        $this->assertSame(401, $this->response->status, 'Bearer 不是 Basic 凭据');
+
+        // 判别性输入：Bearer 后面挂的**是合法 base64** 的 user:pass。只验 base64 不验
+        // scheme 的实现会把它当凭据放行，这条断言才会红（上面那条被严格解码兜住了，
+        // 单独锁不住 scheme 检查）。
+        $this->response = new FakeResponse();
+        $this->bootWith(
+            ['auth_basic' => 'alice:s3cret'],
+            [],
+            ['headers' => ['Authorization' => 'Bearer ' . base64_encode('alice:s3cret')]]
+        );
+        Xhprof::index();
+        $this->assertSame(401, $this->response->status, 'scheme 不是 Basic 就不该解析凭据');
+    }
+
+    #[Test]
+    public function malformedBasicConfigNeverMatchesAndIsLogged(): void
+    {
+        $this->bootWith(['auth_basic' => 'alice']);   // 没有冒号，永远配不出凭据
+
+        Xhprof::index();
+
+        $this->assertSame(401, $this->response->status);
+        $this->assertStringContainsString(
+            'auth_basic',
+            implode("\n", $this->logger->errors),
+            '配置写错必须留一条可归因的日志，否则运维只看到一个没有成因的 401'
+        );
+    }
+
+    #[Test]
+    public function tokenAndBasicAreAlternativesEitherOnePasses(): void
+    {
+        $cfg = ['auth_token' => 'tok', 'auth_basic' => 'alice:s3cret'];
+
+        // token 对、没带 Basic
+        $this->bootWith($cfg, ['token' => 'tok']);
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+
+        // Basic 对、token 错
+        $this->response = new FakeResponse();
+        $this->bootWith(
+            $cfg,
+            ['token' => 'wrong'],
+            ['headers' => ['Authorization' => self::basicCredentials('alice', 's3cret')]]
+        );
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+        $this->assertSame(200, $this->response->status);
+    }
+
+    #[Test]
+    public function bothConfiguredAndNeitherValidGives401WithChallenge(): void
+    {
+        $this->bootWith(['auth_token' => 'tok', 'auth_basic' => 'alice:s3cret'], ['token' => 'wrong']);
+
+        Xhprof::index();
+
+        $this->assertSame(401, $this->response->status, '配了 Basic 就应当用 401 提示凭据');
+        $this->assertSame('Basic realm="xhprof"', $this->response->headers['WWW-Authenticate'] ?? null);
+    }
+
+    #[Test]
+    public function tokenOnlyDeploymentStillGets403WithoutChallenge(): void
+    {
+        // 回归：只配 auth_token 时保持既有 403，且不能冒出凭据框
+        $this->bootWith(['auth_token' => 'secret']);
+
+        Xhprof::index();
+
+        $this->assertSame(403, $this->response->status);
+        $this->assertArrayNotHasKey('WWW-Authenticate', $this->response->headers);
+    }
+
+    // ---------------- ?format=json|csv 只读导出 ----------------
+
+    #[Test]
+    public function formatJsonReturnsTheStableContract(): void
+    {
+        // 判别性：本地化文案若进了契约，下面那条「不得出现」的断言立刻红
+        I18n::setLocale('zh_CN');
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'json']);
+
+        $result = Xhprof::index();
+
+        $this->assertSame(200, $this->response->status);
+        $this->assertSame('application/json; charset=UTF-8', $this->response->headers['Content-Type'] ?? null);
+        $body = $this->response->body;
+        $data = json_decode($body, true);
+        $this->assertIsArray($data);
+        $this->assertSame('single', $data['mode']);
+        $this->assertSame($runId, $data['run']);
+        $this->assertSame('xhprof_foo', $data['source']);
+        $this->assertSame(1000000, $data['totals']['wt']);
+        $this->assertNotEmpty($data['findings'], '夹具应当触发至少一条诊断');
+        foreach ($data['findings'] as $f) {
+            $this->assertSame(['rule', 'severity', 'symbol', 'score'], array_keys($f), 'findings 只含稳定字段');
+        }
+        $this->assertStringNotContainsString('自身耗时', $body, '13 语言的诊断文案不得进 JSON 契约');
+        $this->assertStringNotContainsString('<html', $body);
+
+        // 平铺行 = 平铺报告一行的列语义（fn + ct + 各指标 + excl_*）
+        $byFn = [];
+        foreach ($data['functions'] as $row) {
+            $byFn[$row['fn']] = $row;
+        }
+        $this->assertSame([
+            'fn' => 'foo()', 'ct' => 2, 'wt' => 500000, 'cpu' => 250, 'mu' => 524288,
+            'excl_wt' => 500000, 'excl_cpu' => 250, 'excl_mu' => 524288,
+        ], $byFn['foo()']);
+    }
+
+    #[Test]
+    public function formatCsvReturnsTheFlatTableAsAnAttachment(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'csv']);
+
+        $result = Xhprof::index();
+
+        $this->assertSame(200, $this->response->status);
+        $this->assertSame('text/csv; charset=UTF-8', $this->response->headers['Content-Type'] ?? null);
+        $disposition = (string) ($this->response->headers['Content-Disposition'] ?? '');
+        $this->assertStringContainsString('attachment', $disposition);
+        $this->assertStringContainsString('filename="xhprof-' . $runId . '.csv"', $disposition);
+
+        $lines = explode("\n", trim($this->response->body));
+        // 列为稳定名（非本地化列头），序 = 平铺报告：fn + ct + 各指标 + excl_*
+        $this->assertSame('fn,ct,wt,cpu,mu,excl_wt,excl_cpu,excl_mu', $lines[0]);
+        $this->assertSame('main(),1,1000000,500,1048576,1000000,500,1048576', $lines[1]);
+        $this->assertSame('foo(),2,500000,250,524288,500000,250,524288', $lines[2]);
+        $this->assertCount(3, $lines);
+    }
+
+    #[Test]
+    public function formatCsvQuotesCommasAndQuotesInFunctionNames(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId, [
+            'main()' => ['wt' => 1000000, 'mu' => 1, 'ct' => 1, 'cpu' => 1],
+            'main()==>weird,"name()' => ['wt' => 100, 'mu' => 1, 'ct' => 1, 'cpu' => 1],
+        ]);
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'csv']);
+
+        Xhprof::index();
+        $csv = $this->response->body;
+
+        // 判别性输入：函数名里同时有逗号和引号 → 整格加引号、内部引号翻倍（RFC 4180）
+        $this->assertStringContainsString('"weird,""name()"', $csv);
+    }
+
+    #[Test]
+    public function formatCsvDiffModePrefixesDeltaColumns(): void
+    {
+        $run1 = 'abc123def456789';
+        $run2 = 'abc123def45678a';
+        $this->seedRun($run1);
+        $this->cache->set(Xhprof::$key_prefix . ':xhprof_log:' . $run2, serialize([
+            'main()' => ['wt' => 2000000, 'mu' => 2097152, 'ct' => 1, 'cpu' => 1000],
+            'foo()' => ['wt' => 1000000, 'mu' => 1048576, 'ct' => 4, 'cpu' => 500],
+        ]));
+        $this->bootWith([], ['run1' => $run1, 'run2' => $run2, 'source' => 'xhprof_foo', 'format' => 'csv']);
+
+        Xhprof::index();
+        $lines = explode("\n", trim($this->response->body));
+
+        $this->assertSame('fn,delta_ct,delta_wt,delta_cpu,delta_mu,delta_excl_wt,delta_excl_cpu,delta_excl_mu', $lines[0]);
+        $this->assertSame('main(),0,1000000,500,1048576,1000000,500,1048576', $lines[1]);
+        $this->assertSame('foo(),2,500000,250,524288,500000,250,524288', $lines[2]);
+        $this->assertStringContainsString('filename="xhprof-' . $run1 . '-vs-' . $run2 . '.csv"', (string) ($this->response->headers['Content-Disposition'] ?? ''));
+    }
+
+    #[Test]
+    public function formatJsonDiffModeReturnsDeltasAndNoFindings(): void
+    {
+        $run1 = 'abc123def456789';
+        $run2 = 'abc123def45678a';
+        $this->seedRun($run1);
+        $this->cache->set(Xhprof::$key_prefix . ':xhprof_log:' . $run2, serialize([
+            'main()' => ['wt' => 2000000, 'mu' => 2097152, 'ct' => 1, 'cpu' => 1000],
+            'foo()' => ['wt' => 1000000, 'mu' => 1048576, 'ct' => 4, 'cpu' => 500],
+        ]));
+        $this->bootWith([], ['run1' => $run1, 'run2' => $run2, 'source' => 'xhprof_foo', 'format' => 'json']);
+
+        Xhprof::index();
+        $data = json_decode($this->response->body, true);
+
+        $this->assertSame('diff', $data['mode']);
+        $this->assertSame($run1, $data['run1']);
+        $this->assertSame($run2, $data['run2']);
+        $this->assertSame(1000000, $data['totals']['wt'], 'diff 的 totals 是 run2 − run1');
+        $this->assertSame([], $data['findings'], '诊断只在非 diff 视图产出（与报告页同一条守卫）');
+        $byFn = [];
+        foreach ($data['functions'] as $row) {
+            $byFn[$row['fn']] = $row;
+        }
+        $this->assertSame(500000, $byFn['foo()']['wt'], 'foo 的 delta = 1000000 − 500000');
+        $this->assertSame(2, $byFn['foo()']['ct'], 'ct 的 delta = 4 − 2');
+    }
+
+    /** @return iterable<string, array{0: mixed}> */
+    public static function invalidFormatProvider(): iterable
+    {
+        yield 'unknown value' => ['xml'];
+        yield 'empty string' => [''];
+        yield 'array' => [['json']];
+    }
+
+    #[Test]
+    #[DataProvider('invalidFormatProvider')]
+    public function formatRejectsInvalidValuesWith400(mixed $format): void
+    {
+        $this->bootWith([], ['run' => 'abc123def456789', 'format' => $format]);
+
+        Xhprof::index();
+
+        $this->assertSame(400, $this->response->status);
+        $this->assertSame('400 Bad Request', $this->response->body);
+    }
+
+    #[Test]
+    public function formatWithoutARunIsABadRequest(): void
+    {
+        $this->bootWith([], ['format' => 'json']);
+
+        Xhprof::index();
+
+        $this->assertSame(400, $this->response->status);
+    }
+
+    #[Test]
+    public function formatReturns404WhenTheRunDataIsGone(): void
+    {
+        // run_id 合法但缓存里没有（过期）：与报告页的空态等价，导出侧给 404
+        $this->bootWith([], ['run' => 'abc123def456789', 'source' => 'xhprof_foo', 'format' => 'json']);
+
+        Xhprof::index();
+
+        $this->assertSame(404, $this->response->status);
+        $this->assertSame('404 Not Found', $this->response->body);
+    }
+
+    #[Test]
+    public function formatDoesNotBypassAuthOrTheRunIdWhitelist(): void
+    {
+        // 鉴权在前：没带 token 的导出同样 403
+        $this->bootWith(['auth_token' => 'secret'], ['run' => 'abc123def456789', 'format' => 'json']);
+        Xhprof::index();
+        $this->assertSame(403, $this->response->status);
+
+        // 白名单在前：非法 run_id 不会被导出路径绕成 404/200
+        $this->response = new FakeResponse();
+        $this->bootWith([], ['run' => '../../etc/passwd', 'format' => 'json']);
+        Xhprof::index();
+        $this->assertSame(400, $this->response->status);
+    }
+
+    #[Test]
+    public function formatJsonAggregatesRunsAndReportsBadOnes(): void
+    {
+        $run1 = 'abc123def456789';
+        $run2 = 'abc123def45678a';   // 缓存里没有：聚合时被跳过
+        $this->seedRun($run1);
+        $this->bootWith([], ['run' => $run1 . ',' . $run2, 'source' => 'xhprof_foo', 'format' => 'json']);
+
+        Xhprof::index();
+        $data = json_decode($this->response->body, true);
+
+        $this->assertSame('aggregate', $data['mode']);
+        $this->assertSame([$run1, $run2], $data['runs']);
+        $this->assertSame([$run2], $data['bad_runs'], '过期的一条必须显式列出，不能静默少聚合');
+        $this->assertNotEmpty($data['functions']);
+    }
+
+    // ---------------- IP 白名单（含可信代理） ----------------
+
+    #[Test]
+    public function ipAllowlistIsOffByDefault(): void
+    {
+        $this->bootWith([], [], ['ip' => '198.51.100.7']);
+
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+        $this->assertSame(200, $this->response->status);
+    }
+
+    #[Test]
+    public function ipAllowlistAllowsListedIpAndEmptyArrayIsStillOff(): void
+    {
+        $this->bootWith(['ip_allowlist' => ['203.0.113.9', '10.0.0.1']], [], ['ip' => '203.0.113.9']);
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+        $this->assertSame(200, $this->response->status);
+
+        // 空数组 = 没配 = 关闭（代码内默认值）
+        $this->response = new FakeResponse();
+        $this->bootWith(['ip_allowlist' => []], [], ['ip' => '198.51.100.7']);
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+    }
+
+    #[Test]
+    public function ipAllowlistRejectsUnlistedIp(): void
+    {
+        $this->bootWith(['ip_allowlist' => ['203.0.113.9']], [], ['ip' => '198.51.100.7']);
+
+        Xhprof::index();
+
+        $this->assertSame(403, $this->response->status);
+        $this->assertSame('403 Forbidden', $this->response->body);
+        $this->assertStringContainsString('ip_allowlist', implode("\n", $this->logger->errors));
+    }
+
+    /**
+     * 判别性输入：XFF 首段恰好等于 getRealIp() —— 值可能是客户端自报的，
+     * 而 trusted_proxies 为空 ⇒ 拒绝（哪怕这个 IP 就在白名单里）。
+     */
+    #[Test]
+    public function ipAllowlistRefusesAnUnverifiableForwardedIp(): void
+    {
+        $this->bootWith(
+            ['ip_allowlist' => ['203.0.113.9']],
+            [],
+            ['ip' => '203.0.113.9', 'headers' => ['X-Forwarded-For' => '203.0.113.9, 172.16.0.1']]
+        );
+
+        Xhprof::index();
+
+        $this->assertSame(403, $this->response->status, '转发头塑造的 IP 在没声明可信代理前不可验证');
+        $this->assertStringContainsString('trusted_proxies', implode("\n", $this->logger->errors));
+    }
+
+    #[Test]
+    public function ipAllowlistJudgesForwardedIpOnceTrustedProxiesAreDeclared(): void
+    {
+        $this->bootWith(
+            ['ip_allowlist' => ['203.0.113.9'], 'trusted_proxies' => ['172.16.0.1']],
+            [],
+            ['ip' => '203.0.113.9', 'headers' => ['X-Forwarded-For' => '203.0.113.9, 172.16.0.1']]
+        );
+
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+        $this->assertSame(200, $this->response->status);
+    }
+
+    #[Test]
+    public function ipAllowlistIgnoresAForwardedHeaderTheAdapterDidNotUse(): void
+    {
+        // XFF 与 getRealIp() 不同 ⇒ 适配器没采纳这个头，按真实来源判定，照常比对白名单
+        $this->bootWith(
+            ['ip_allowlist' => ['203.0.113.9']],
+            [],
+            ['ip' => '203.0.113.9', 'headers' => ['X-Forwarded-For' => '198.51.100.7']]
+        );
+
+        $result = Xhprof::index();
+        // 报告页 HTML 是**返回**的字符串（适配器负责 echo），只有 deny()/respond() 才写
+        // response。断言先钉类型：鉴权失败时返回的是 response 对象，这条会干净地红，
+        // 而不是 (string) 强转抛 TypeError 把断言淹掉。
+        $this->assertIsString($result, '应当渲染报告页，而不是被闸门拒绝');
+        $this->assertStringContainsString('<html', $result);
+    }
+
+    #[Test]
+    public function ipAllowlistAlsoChecksXRealIp(): void
+    {
+        $this->bootWith(
+            ['ip_allowlist' => ['203.0.113.9']],
+            [],
+            ['ip' => '203.0.113.9', 'headers' => ['X-Real-IP' => '203.0.113.9']]
+        );
+
+        Xhprof::index();
+
+        $this->assertSame(403, $this->response->status);
+    }
+
+    #[Test]
+    public function ipAllowlistWithANonArrayConfigFailsClosed(): void
+    {
+        $this->bootWith(['ip_allowlist' => '203.0.113.9'], [], ['ip' => '203.0.113.9']);
+
+        Xhprof::index();
+
+        $this->assertSame(403, $this->response->status, '配置形态写错必须 fail closed，不能静默关掉一层安全控制');
+        $this->assertStringContainsString('ip_allowlist', implode("\n", $this->logger->errors));
+    }
+
+    #[Test]
+    public function ipAllowlistAlsoGuardsTheExport(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->bootWith(
+            ['ip_allowlist' => ['203.0.113.9']],
+            ['run' => $runId, 'format' => 'json'],
+            ['ip' => '198.51.100.7']
+        );
+
+        Xhprof::index();
+
+        $this->assertSame(403, $this->response->status, '导出与报告页受同一套闸门');
     }
 }

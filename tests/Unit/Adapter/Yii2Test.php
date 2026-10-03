@@ -78,7 +78,6 @@ class Yii2Test extends TestCase
     {
         foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
             $prop = new \ReflectionProperty(XhprofBootstrap::class, $name);
-            $prop->setAccessible(true);
             $prop->setValue(null, $value);
         }
     }
@@ -521,13 +520,15 @@ class Yii2Test extends TestCase
     #[Test]
     public function shippedConfigFileHasNoRedisKey(): void
     {
-        // redis 是运行时注入的连接参数，不属于那十一个共用键（与 Yii3 同一条口径）
+        // redis 是运行时注入的连接参数，不属于那十九个共用键（与 Yii3 同一条口径）
         $defaults = (array) require dirname(__DIR__, 3) . '/src/Yii2/config/xhprof.php';
 
         $this->assertArrayNotHasKey('redis', $defaults);
         $this->assertSame([
-            'enable', 'sample_rate', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr',
-            'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale',
+            'enable', 'sample_rate', 'trigger_token', 'auth_basic', 'ip_allowlist', 'trusted_proxies',
+            'webhook_url', 'sample_cli', 'symbol_lookup_url', 'max_runs_per_minute',
+            'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token',
+            'key_prefix', 'log_ttl', 'locale',
         ], array_keys($defaults));
     }
 
@@ -586,7 +587,6 @@ class Yii2Test extends TestCase
 
         // 构造不建连：入口类在**每个**被采样请求上都会构造它，连不上不该拖垮业务
         $prop = new \ReflectionProperty(RedisAdapter::class, 'redis');
-        $prop->setAccessible(true);
         $this->assertNull($prop->getValue($adapter));
     }
 
@@ -600,7 +600,6 @@ class Yii2Test extends TestCase
         $cache = CoreXhprof::getCache();
         $this->assertInstanceOf(RedisAdapter::class, $cache);
         $prop = new \ReflectionProperty(RedisAdapter::class, 'options');
-        $prop->setAccessible(true);
         $options = $prop->getValue($cache);
         $this->assertSame('10.0.0.5', $options['host']);
         $this->assertSame(3, $options['database']);

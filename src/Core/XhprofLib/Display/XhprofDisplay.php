@@ -344,8 +344,9 @@ class XhprofDisplay
    *
    */
   /**
-   * 把 JS 要用的文案编成一行注入脚本。**取数组而不是自己去读词表**，这样单测能把
-   * 敌意值直接喂进来（词表本身要塞进 `</script>` 得改仓库文件，测不了）。
+   * 把 JS 要用的文案编成一行注入脚本。**DataTable 那批取数组而不是自己去读词表**，
+   * 这样单测能把敌意值直接喂进来（词表本身要塞进 `</script>` 得改仓库文件，测不了）；
+   * 其余单条文案（目前只有 runsAggregate）由本函数自己按当前语言取。
    *
    * 两道防护，缺一不可：
    *  - `JSON_HEX_TAG/AMP/APOS/QUOT` 把 `<`/`>`/`&`/引号写成 `\uXXXX`，值里带
@@ -360,7 +361,12 @@ class XhprofDisplay
   {
     return '<script>window.xpI18n = '
       . json_encode(
-          array('dataTable' => $data_table_i18n),
+          array(
+            'dataTable' => $data_table_i18n,
+            // 「对比选中」按钮在选中 >2 条时换上的聚合文案。按钮的静态 HTML 在
+            // Utils 层的 list_runs() 里渲染（Display 不能反向依赖它），JS 只能自己换字。
+            'runsAggregate' => I18n::t('runs.aggregate'),
+          ),
           JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
               | JSON_INVALID_UTF8_SUBSTITUTE
       )
@@ -531,9 +537,9 @@ class XhprofDisplay
   /**
    * 表格列头文案：按 `col.<统计项>` 从当前语言词表取，已转义、保留 `<br>` 折行。
    *
-   * `$descriptions` 那张字面量表仍是中文源（词表的 zh_CN 与它逐字相同，改一边
-   * 不改另一边测试会红），这里只是换了个取用方式。取不到时 I18n::t() 逐级回落到
-   * 中文源，不会因为某份词表漏了一条就白掉一列。
+   * `$descriptions` 那张字面量表**运行时已不读它**（这里全走词表）；它留给
+   * `I18nTest` 当 zh 源钉着（与该表的 zh_CN 逐字相同，改一边不改另一边测试会红）。
+   * 取不到时 I18n::t() 逐级回落到中文源，不会因为某份词表漏了一条就白掉一列。
    */
   public static function col_text($stat)
   {
@@ -566,6 +572,10 @@ class XhprofDisplay
 
     $diff_mode = XhprofDisplay::diff_mode();
 
+    // 搜索未命中的候选池要在 xhprof_trim_run() **之前**留一份：裁剪保留的只有精确符号
+    // 与 main() 的直系子边，拿裁剪后的符号表当候选池，搜 "STR" 连 strlen() 都列不出来
+    // （它是 foo() 的子边，裁剪后整条边被丢掉）。PHP 数组赋值是写时复制，这里不产生拷贝。
+    $search_pool_data = $run1_data;
     if (!empty($rep_symbol)) {
       $run1_data = XhprofLib::xhprof_trim_run($run1_data, array($rep_symbol));
       if ($diff_mode) $run2_data = XhprofLib::xhprof_trim_run($run2_data, array($rep_symbol));
@@ -678,6 +688,35 @@ class XhprofDisplay
     if (!$diff_mode && empty($rep_symbol)) {
       $findings = Analyzer::analyze($symbol_tab, $run1_data, $totals);
       $echo_page .= XhprofDisplay::render_diagnosis($findings, $base_url_params);
+      // 关键路径与诊断同一个守卫、同一份「四个入参同时正确」的条件：$run1_data 在这里
+      // 才是这一份报告的原始单 run 边表。diff 模式里它仍是单 run 边表，而 totals 是增量
+      // ——链上的占比会变成「增量的占比」，故不显示（与诊断同样的数据完整性理由）。
+      $echo_page .= XhprofDisplay::render_critical_path($run1_data);
+      // 火焰图：与诊断/关键路径同一个守卫、同一份数据完整性理由（这里的 $run1_data 才是
+      // 原始单 run 边表）。模块零文案、零 JS、零依赖，空 run / 无 main() / 该指标全 0 时
+      // 返回空串，整卡不输出。帧链接与其它内部链接同源（report_url 已做属性安全，
+      // FlameGraph 原样写 href，不二次转义）。占比用 number_format 定点输出——不吃
+      // precision ini（`*100 . '%'` 在那个 ini 前有前科）。
+      $flame = FlameGraph::renderWithStats(
+          $run1_data,
+          'wt',
+          FlameGraph::DEFAULT_MAX_FRAMES,
+          static function (string $fn) use ($base_url_params): string {
+              return XhprofLib::report_url(array('symbol' => $fn), array(), $base_url_params);
+          }
+      );
+      if ($flame['svg'] !== '') {
+        $echo_page .= '<div class="xp-main"><div class="xp-card">'
+          . '<div class="xp-card-title">' . I18n::plain('flame.title') . '</div>'
+          . '<div style="padding:12px 20px">' . $flame['svg']
+          . '<p style="margin:8px 0 0;color:#666;font-size:12px">'
+          . sprintf(
+              I18n::plain('flame.note'),
+              $flame['frames'],
+              number_format($flame['pruned_pct'] * 100, 1, '.', '')
+          )
+          . '</p></div></div></div>';
+      }
     }
 
     // data tables
@@ -689,7 +728,42 @@ class XhprofDisplay
               '<b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b>',
               I18n::plain('symbol.notFound')
           )
-          . '</p></div></div>';
+          . '</p>';
+
+        // 精确未命中时补一张「包含该串」的候选列表（子串、忽略大小写），每条链到详情页。
+        // 只在符号表适用的视图里给（单 run/聚合）：diff 的 $symbol_tab 是增量表，
+        // 拿它当「有哪些函数」的索引语义不对，保持原卡片。
+        // 候选池 = 裁剪前的整份 run（$search_pool_data），顺序沿用那张符号表自身。
+        // 截断到 30 条，防止把整张表铺进一张卡片（文案里写明这个上限）。
+        if (!$diff_mode) {
+          $pool_totals = 0;
+          $pool = XhprofLib::xhprof_compute_flat_info($search_pool_data, $pool_totals);
+          $matches = array();
+          foreach (array_keys($pool) as $fn) {
+            if (stripos((string) $fn, (string) $rep_symbol) !== false) {
+              $matches[] = (string) $fn;
+              if (count($matches) >= 30) break;
+            }
+          }
+          if ($matches) {
+            $echo_page .= '<div class="xp-card-title">'
+              . str_replace(
+                  '%s',
+                  '<b>' . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . '</b>',
+                  I18n::plain('search.matches')
+              )
+              . '</div><ul class="xp-search-matches">';
+            foreach ($matches as $fn) {
+              $echo_page .= '<li>' . XhprofDisplay::xhprof_render_link(
+                htmlspecialchars($fn, ENT_QUOTES, 'UTF-8'),
+                XhprofLib::report_url(array('symbol' => $fn), array(), $url_params)
+              ) . '</li>';
+            }
+            $echo_page .= '</ul>';
+          }
+        }
+
+        $echo_page .= '</div></div>';
         // 符号不存在时必须就此返回：继续往下会把 null 传进 symbol_report()，
         // 在 round()/算术处抛 TypeError，整页 500。
         return $echo_page;
@@ -925,6 +999,68 @@ class XhprofDisplay
     }
 
     return $echo_page . '</div></div>';
+  }
+
+  /**
+   * 关键路径卡：从 main() 起，每步走 wt 绝对值最大的子边（visited 防环），
+   * 渲染成 `main() → a() → b()`，每步带该边占总耗时（main() 的 wt）的比例。
+   *
+   * 算法照搬被删除的 CallGraph 里那段 critical-path 走法
+   * （`git show 1cdf7b2^:src/Core/XhprofLib/Utils/CallGraph.php`）：
+   * 同款「第一个候选先占位」+ 严格大于比较 —— 并列时保留边表里的先者，与旧行为一致。
+   * 纯列表：无 SVG、无 JS。
+   *
+   * $run1_data 的口径与 render_diagnosis 相同：只在 !$diff_mode && empty($rep_symbol)
+   * 的单 run/聚合视图里调用（那里它才是这份报告的原始边表）。
+   */
+  public static function render_critical_path(array $run1_data): string
+  {
+    $total = (float) ($run1_data['main()']['wt'] ?? 0);
+
+    $children = array();
+    foreach ($run1_data as $edge => $info) {
+      list($parent, $child) = XhprofLib::xhprof_parse_parent_child($edge);
+      if ($parent === null) continue;   // 节点行（"main()"），不是调用边
+      $children[$parent][] = $child;
+    }
+
+    $steps = array();
+    if ($total > 0) {
+      $visited = array('main()' => true);
+      $node = 'main()';
+      while (true) {
+        $best = null;
+        $best_wt = 0.0;
+        foreach ($children[$node] ?? array() as $child) {
+          if (isset($visited[$child])) continue;
+          $wt = abs((float) ($run1_data[XhprofLib::xhprof_build_parent_child_key($node, $child)]['wt'] ?? 0));
+          if ($best === null || $wt > $best_wt) {
+            $best = $child;
+            $best_wt = $wt;
+          }
+        }
+        if ($best === null) break;
+        $visited[$best] = true;
+        $steps[] = array('fn' => $best, 'ratio' => $best_wt / $total);
+        $node = $best;
+      }
+    }
+
+    $echo_page = '<div class="xp-main"><div class="xp-card">'
+      . '<div class="xp-card-title">' . I18n::plain('path.title') . '</div>';
+    if (!$steps) {
+      $echo_page .= '<p class="xp-card-note">' . I18n::plain('path.empty') . '</p></div></div>';
+      return $echo_page;
+    }
+
+    // 函数名来自 profile 数据（动态调用可影响它），逐个转义；链上只有 main() 是字面量。
+    $echo_page .= '<div class="xp-path"><b>main()</b>';
+    foreach ($steps as $step) {
+      $echo_page .= '<span class="xp-path-step"><span class="xp-path-arrow">→</span> '
+        . htmlspecialchars($step['fn'], ENT_QUOTES, 'UTF-8')
+        . '<span class="xp-path-ratio">' . XhprofDisplay::xhprof_percent_format($step['ratio']) . '</span></span>';
+    }
+    return $echo_page . '</div></div></div>';
   }
 
   private static function diagnosis_item(Finding $f, array $url_params): string
@@ -1664,13 +1800,7 @@ class XhprofDisplay
       }
 
       if ($xhprof_data === false || $xhprof_data === null) {
-        // 无数据时优雅降级（run_id 格式合法但缓存里没有 / 聚合后一个有效 run 都没有），
-        // 不进入渲染管线。但**不能只留一条导航条**：用户看到的是一个几乎空白的页面，
-        // 读起来像「报告坏了」，而事实只是这条记录过期了（默认 TTL 7 天）。
-        return $data . '<div class="xp-main"><div class="xp-card">'
-          . '<div class="xp-card-title">' . I18n::plain('report.title') . '</div>'
-          . '<div class="xp-card-note">' . I18n::plain('report.noData') . '</div>'
-          . '</div></div>';
+        return XhprofDisplay::no_data_page($data);
       }
 
       $data .= XhprofDisplay::profiler_single_run_report(
@@ -1683,10 +1813,15 @@ class XhprofDisplay
       );
     } else if ($run1 && $run2) {                  // diff report for two runs
 
-      $xhprof_data1 = XHProfRunsDefault::get_run($run1, $source, $description1);
-      $xhprof_data2 = XHProfRunsDefault::get_run($run2, $source, $description2);
-      if ($xhprof_data1 === false || $xhprof_data2 === false) {
-        return $data;
+      // run1/run2 也允许是逗号串（Xhprof 的入口白名单逐 id 校验、放行逗号）：语义是
+      // 「各自先聚合成一份边表，再对比」。整串直接交给 get_run() 会被它的 run_id 正则
+      // 拒掉 → false → 只剩导航条的空白页（此前这条路径正是如此）。
+      $xhprof_data1 = XhprofDisplay::run_data_for_diff($run1, $source, $description1);
+      $xhprof_data2 = XhprofDisplay::run_data_for_diff($run2, $source, $description2);
+      // falsy 而不是 === false：聚合一个都读不到时 xhprof_aggregate_runs() 的 raw 是 null
+      // （get_run 单条读不到才是 false），两种「数据不在了」都要走同一张空态卡。
+      if (!$xhprof_data1 || !$xhprof_data2) {
+        return XhprofDisplay::no_data_page($data);
       }
       $data .= XhprofDisplay::profiler_diff_report(
         $url_params,
@@ -1703,6 +1838,38 @@ class XhprofDisplay
       $data .= XHProfRunsDefault::list_runs();
     }
     return $data;
+  }
+
+  /**
+   * diff 一侧的边表：run 可以是单个 id，也可以是逗号串（各自聚合再对比）。
+   *
+   * 聚合权重一律 1：`wts` 是 `run=` 那一路的参数（一张权重表对应 `run=` 的 id 列表），
+   * 描述不了 run1/run2 两张表。描述文案沿用聚合引擎的 `agg.*` 词条（聚合结果里自带）。
+   * 读不到数据返回 false/null，兜底由调用方做（见 no_data_page）。
+   */
+  private static function run_data_for_diff($run_id, $source, &$description)
+  {
+    if (strpos((string) $run_id, ',') === false) {
+      return XHProfRunsDefault::get_run($run_id, $source, $description);
+    }
+    $datas = XhprofLib::xhprof_aggregate_runs(explode(',', (string) $run_id), null, $source, false);
+    $description = $datas['description'];
+    return $datas['raw'];
+  }
+
+  /**
+   * 「数据已不存在」空态卡。
+   *
+   * 无数据时优雅降级（run_id 格式合法但缓存里没有 / 聚合后一个有效 run 都没有 /
+   * diff 的任一侧读不到），不进入渲染管线。但**不能只留一条导航条**：用户看到的是
+   * 一个几乎空白的页面，读起来像「报告坏了」，而事实只是这条记录过期了（默认 TTL 7 天）。
+   */
+  private static function no_data_page(string $nav_html): string
+  {
+    return $nav_html . '<div class="xp-main"><div class="xp-card">'
+      . '<div class="xp-card-title">' . I18n::plain('report.title') . '</div>'
+      . '<div class="xp-card-note">' . I18n::plain('report.noData') . '</div>'
+      . '</div></div>';
   }
 
   public static function show_nav($url_params)

@@ -187,4 +187,20 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>Δ %',
     'diffcol.excl_samples' => 'Échantillons excl.<br>Δ',
     'diffcol.ESamples%' => 'ESamples<br>Δ %',
+    // ——— 2026-10 : entrée d'agrégation multi-exécutions / carte du chemin critique /
+    // recherche par sous-chaîne. L'ordre des clés reste le contrat : ces clés viennent
+    // après diffcol.ESamples%, dans le même ordre que les 13 autres catalogues.
+    // runs.aggregate : libellé que le bouton de comparaison adopte au-delà de deux
+    // exécutions sélectionnées (HTML statique côté Utils, remplacé en JS selon le
+    // nombre coché ; injecté via window.xpI18n).
+    'runs.aggregate' => 'Agréger la sélection',
+    'path.title' => 'Chemin critique',
+    'path.empty' => 'Aucune chaîne d\'appels à afficher (les données ne contiennent aucune arête d\'appel depuis main()).',
+    // %s = la chaîne recherchée ; « 30 » doit rester le même nombre que le plafond appliqué dans XhprofDisplay
+    'search.matches' => 'Fonctions contenant « %s » (30 premières affichées) :',
+    // Graphe de flammes (le module FlameGraph ne porte aucun texte ; le titre et la
+    // note de la carte sont rendus côté Display).
+    // Les deux %s de flame.note = trames réellement dessinées, part non dessinée ; un pourcent littéral s'écrit %%
+    'flame.title' => 'Graphe de flammes',
+    'flame.note' => '%s trames affichées ; pour limiter la taille de la page, %s%% du temps total n\'est pas dessiné',
 ];

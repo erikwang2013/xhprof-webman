@@ -20,45 +20,6 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
-/**
- * FakeCache::lPush 存在 by-ref 传参 bug（array_unshift($this->lists[$key] ??= [], ...)），
- * 测试进程内无法修改 Fixtures，此处用修复版子类覆盖列表方法。
- */
-class DisplayFixedListCache extends FakeCache
-{
-    private array $myLists = [];
-
-    public function lPush(string $key, mixed $value): int
-    {
-        $this->calls[] = "lPush:$key";
-        $this->myLists[$key] ??= [];
-        array_unshift($this->myLists[$key], $value);
-        return count($this->myLists[$key]);
-    }
-
-    public function rPop(string $key): mixed
-    {
-        $this->calls[] = "rPop:$key";
-        if (empty($this->myLists[$key])) {
-            return null;
-        }
-        return array_pop($this->myLists[$key]);
-    }
-
-    public function lRange(string $key, int $start, int $end): array
-    {
-        $this->calls[] = "lRange:$key";
-        $list = $this->myLists[$key] ?? [];
-        $count = count($list);
-        if ($start < 0) {
-            $start = max(0, $count + $start);
-        }
-        if ($end < 0) {
-            $end = $count + $end;
-        }
-        return array_slice($list, $start, max(0, $end - $start + 1));
-    }
-}
 
 class XhprofDisplayTest extends TestCase
 {
@@ -79,7 +40,7 @@ class XhprofDisplayTest extends TestCase
         // 不还原就会漏给后面的用例（实测：Core+Lib+Adapter 顺序下 Adapter 侧 3 条假红）。
         $this->saved = $this->snapshotXhprofStatics();
 
-        $this->cache = new DisplayFixedListCache();
+        $this->cache = new FakeCache();
         $this->request = new FakeRequest([], ['uri' => '/xhprof', 'url' => 'http://xhprof.local/xhprof']);
         $this->response = new FakeResponse();
         $this->config = new FakeConfig([]);
@@ -1382,5 +1343,379 @@ class XhprofDisplayTest extends TestCase
         );
 
         self::assertStringNotContainsString('诊断结论', $html);
+    }
+
+    // ============ 2026-10 新增：聚合入口 / 关键路径卡 / 搜索子串匹配 ============
+
+    /** 关键路径：每步取 wt 最大的子边，链 + 每步占比（该边 wt / main() 的 wt） */
+    #[Test]
+    public function criticalPathWalksTheHeaviestChildWithRatios(): void
+    {
+        I18n::setLocale('zh_CN');
+
+        $html = XhprofDisplay::render_critical_path($this->sampleRunData());
+
+        self::assertStringContainsString('关键路径', $html);
+        // 夹具：main()→foo() 40k、main()→bar() 30k、foo()→strlen() 5k（总 100k）
+        self::assertBefore($html, 'main()', 'foo()');
+        self::assertBefore($html, 'foo()', 'strlen()');
+        self::assertStringNotContainsString(
+            'bar()',
+            $html,
+            'bar() 比 foo() 轻，不该出现在最重链上（出现即选子边的比较反了）'
+        );
+        self::assertStringContainsString('40.0%', $html, '第一跳应带 40000/100000 的占比');
+        self::assertStringContainsString('5.0%', $html, '第二跳应带 5000/100000 的占比');
+    }
+
+    /** 没有从 main() 出发的边（或 main() 耗时为 0）→ 空态：卡片在、说明在、链不在 */
+    #[Test]
+    public function criticalPathShowsEmptyStateWithoutEdges(): void
+    {
+        I18n::setLocale('zh_CN');
+
+        $html = XhprofDisplay::render_critical_path(['main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100]]);
+
+        self::assertStringContainsString('关键路径', $html, '空态也要有卡片标题（否则读起来像功能没接）');
+        self::assertStringContainsString('没有可展示的调用链', $html);
+        self::assertStringNotContainsString('→', $html);
+    }
+
+    /**
+     * 环：a()→main() 是回边，必须被 visited 挡掉。
+     *
+     * 两个变异体都量过（不是推的）：
+     *  - 只去掉初始种子（`$visited = array()`）→ 链变成 main()→a()→main()，本用例因
+     *    "b() 不在链上"变红（Failures: 1）；
+     *  - 把 isset 检查与 `$visited[$best] = true` 一起删掉 → 在 main()/a() 之间无限
+     *    累积，内存耗尽（实测 "Allowed memory size … exhausted" 后段错误，退出码 139）。
+     * 正确链是 main() → a() → b()：回边跳过，a() 的另一条子边 b() 被选中。
+     */
+    #[Test]
+    public function criticalPathSkipsVisitedNodesOnCycles(): void
+    {
+        $html = XhprofDisplay::render_critical_path([
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100],
+            'main()==>a()' => ['ct' => 1, 'wt' => 40000, 'mu' => 50],
+            'a()==>main()' => ['ct' => 1, 'wt' => 30000, 'mu' => 50],
+            'a()==>b()' => ['ct' => 1, 'wt' => 10000, 'mu' => 50],
+        ]);
+
+        self::assertSame(2, substr_count($html, 'xp-path-step'), '链只该有两跳：main()→a()→b()');
+        self::assertStringContainsString('b()', $html);
+    }
+
+    /** 位置契约：诊断卡之后、函数表之前（拼接顺序即 DOM 顺序） */
+    #[Test]
+    public function singleRunReportPlacesTheCriticalPathCardBetweenDiagnosisAndTheTable(): void
+    {
+        I18n::setLocale('zh_CN');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $this->useRequest(new FakeRequest(['run' => $runId, 'all' => 1], ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            ['run' => $runId, 'all' => 1],
+            $this->sampleRunDataWithHotEdge(),
+            'desc',
+            null,
+            'wt',
+            $runId
+        );
+
+        self::assertStringContainsString('关键路径', $html);
+        self::assertBefore($html, '诊断结论', '关键路径');
+        self::assertBefore($html, '关键路径', '函数/方法调用总次数');
+    }
+
+    /** diff 模式没有关键路径卡：$run1_data 是单 run 边表、totals 是增量（与诊断同因） */
+    #[Test]
+    public function diffReportHasNoCriticalPathCard(): void
+    {
+        I18n::setLocale('zh_CN');
+        $data = ['main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100]];
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'all' => 1],
+            $data,
+            'd1',
+            $data,
+            'd2',
+            null,
+            'wt',
+            'r1',
+            'r2'
+        );
+
+        self::assertStringNotContainsString('关键路径', $html);
+    }
+
+    /** 精确未命中 → 列出「包含该串」的候选并逐条链到详情页（带 run） */
+    #[Test]
+    public function searchMissListsSubstringMatchesWithLinks(): void
+    {
+        I18n::setLocale('zh_CN');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $params = ['run' => $runId, 'all' => 1, 'symbol' => 'oo'];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            $params,
+            $this->sampleRunData(),
+            'desc',
+            'oo',
+            'wt',
+            $runId
+        );
+
+        // 原卡片保留：先说明精确未命中，再给候选
+        self::assertStringContainsString('运行数据里没有函数', $html);
+        self::assertStringContainsString('<b>oo</b>', $html);
+
+        preg_match('#<ul class="xp-search-matches">(.*?)</ul>#s', $html, $m);
+        self::assertNotEmpty($m, '没有子串候选列表');
+        // 夹具里只有 foo() 含 "oo"
+        self::assertSame(1, substr_count($m[1], '<li>'), '候选只该有 foo() 一条');
+        self::assertStringContainsString('>foo()</a>', $m[1]);
+        self::assertStringContainsString('symbol=foo%28%29', $m[1], '候选必须链到详情页');
+        self::assertStringContainsString('run=' . $runId, $m[1], '候选链接必须带上 run，否则点进去是首页');
+    }
+
+    /** 候选匹配忽略大小写：PHP 函数名大小写不敏感，别用大小写把用户挡在门外 */
+    #[Test]
+    public function searchSubstringMatchesIgnoreCase(): void
+    {
+        I18n::setLocale('zh_CN');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $params = ['run' => $runId, 'all' => 1, 'symbol' => 'STR'];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            $params,
+            $this->sampleRunData(),
+            'desc',
+            'STR',
+            'wt',
+            $runId
+        );
+
+        self::assertStringContainsString('>strlen()</a>', $html);
+    }
+
+    /** 候选上限 30 条：35 个含 "x" 的符号只能列出 30 个（整表铺开会把卡片撑爆） */
+    #[Test]
+    public function searchMissListsAtMostThirtyCandidates(): void
+    {
+        I18n::setLocale('zh_CN');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $data = ['main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 10]];
+        for ($i = 0; $i < 35; $i++) {
+            $data['main()==>sym' . $i . 'x()'] = ['ct' => 1, 'wt' => 1000, 'mu' => 1];
+        }
+        $params = ['run' => $runId, 'all' => 1, 'symbol' => 'x'];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report($params, $data, 'desc', 'x', 'wt', $runId);
+
+        preg_match('#<ul class="xp-search-matches">(.*?)</ul>#s', $html, $m);
+        self::assertNotEmpty($m, '没有子串候选列表');
+        self::assertSame(30, substr_count($m[1], '<li>'), '候选上限 30 条没生效');
+        self::assertStringContainsString('<b>x</b>', $html, '标题里的搜索串必须原样出现');
+    }
+
+    /** 符号名来自 profile 数据（动态调用可影响它），候选列表必须转义 */
+    #[Test]
+    public function searchMatchListEscapesSymbolNames(): void
+    {
+        I18n::setLocale('zh_CN');
+        $runId = 'a1a1a1a1a1a1a1a1';
+        $hostile = 'foo<img src=x onerror=alert(1)>()';
+        $data = [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 10],
+            'main()==>' . $hostile => ['ct' => 1, 'wt' => 5000, 'mu' => 1],
+        ];
+        $params = ['run' => $runId, 'all' => 1, 'symbol' => 'img'];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report($params, $data, 'desc', 'img', 'wt', $runId);
+
+        self::assertStringContainsString('&lt;img', $html);
+        self::assertStringNotContainsString('<img', $html, '候选里的符号名没转义就是反射型 XSS');
+    }
+
+    /** diff 的符号表是增量表，不适用「有哪些函数」的索引语义——保持原卡片 */
+    #[Test]
+    public function searchMissKeepsThePlainCardInDiffMode(): void
+    {
+        // 夹具自检：run1 边表里含 foo()，去掉 !$diff_mode 守卫时 "oo" 会列出它。
+        // 换成一个没有候选的搜索串（如 'nope'）这条断言就成了永远通过的摆设——
+        // 实测那个变异体是全绿的，就是被这个空转的探针放过去的。
+        self::assertArrayHasKey('main()==>foo()', $this->sampleRunData());
+
+        I18n::setLocale('zh_CN');
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'all' => 1],
+            $this->sampleRunData(),
+            'd1',
+            $this->sampleRunData(),
+            'd2',
+            'oo',
+            'wt',
+            'r1',
+            'r2'
+        );
+
+        self::assertStringContainsString('运行数据里没有函数', $html);
+        self::assertStringNotContainsString('xp-search-matches', $html);
+    }
+
+    /**
+     * 运行列表 JS 的对比/聚合规则（无浏览器可跑，静态锚点）：
+     * 恰好 2 条 → 原样 run1/run2（diff）；>2 条 → run= 按 create_time 升序（聚合）；
+     * 按钮文案随选中数在「对比/聚合」之间切换。
+     */
+    #[Test]
+    public function runsListJsAggregatesMoreThanTwoSelectedRuns(): void
+    {
+        $js = (string) file_get_contents(dirname(__DIR__, 3) . '/src/html/js/xhprof_report.js');
+
+        // 基准：旧的「只有恰好两条才可点」必须已被替换
+        self::assertStringNotContainsString('n !== 2', $js, '按钮仍在用「恰好两条」的禁用规则');
+        self::assertMatchesRegularExpression(
+            '/\$compareBtn\.prop\(["\']disabled["\'],\s*n\s*<\s*2\)/',
+            $js,
+            '不足两条才禁用（n < 2）'
+        );
+
+        // >2 条走聚合：run= 升序 id 列表
+        self::assertMatchesRegularExpression('/picks\.length\s*>\s*2/', $js, '缺少 >2 条走聚合的分支');
+        self::assertMatchesRegularExpression(
+            '/\.sort\(function \(a, b\) \{ return a\.t - b\.t; \}\)/',
+            $js,
+            'run= 的 id 必须按 data-create-time 升序'
+        );
+        self::assertMatchesRegularExpression(
+            '/cur_params\[["\']run["\']\]\s*=\s*ids\.join\(["\'],["\']\)/',
+            $js,
+            '聚合路径必须把 id 用逗号拼进 run='
+        );
+
+        // 恰好两条的 run1/run2 路径必须还在（现有 diff 行为不变）
+        self::assertStringContainsString("cur_params['run1'] = picks[0].id;", $js);
+        self::assertStringContainsString("cur_params['run2'] = picks[1].id;", $js);
+        // 且必须先清掉可能残留的 run=：派发时 run 分支优先于 run1/run2，
+        // 不清就会把「恰好两条」送进聚合页。位置钉在 run1 赋值之前（= 两条那条分支里）。
+        self::assertSame(1, substr_count($js, "delete cur_params['run'];"), 'run= 的清理应恰好出现一次');
+        self::assertBefore($js, "delete cur_params['run'];", "cur_params['run1'] = picks[0].id;");
+
+        // 按钮文案来自注入的 xpI18n（按钮静态 HTML 在 Utils 层，Display 换不了）
+        self::assertStringContainsString('runsAggregate', $js);
+        self::assertStringContainsString('$compareBtn.text(', $js);
+    }
+
+    /** 聚合按钮文案经 window.xpI18n 注入，随语言变化 */
+    #[Test]
+    public function injectedJsCarriesTheAggregateButtonLabel(): void
+    {
+        I18n::setLocale('zh_CN');
+        $zh = XhprofDisplay::xhprof_include_js_css('/xhprof-assets');
+        self::assertStringContainsString('"runsAggregate":"聚合选中"', $zh);
+
+        I18n::setLocale('en');
+        $en = XhprofDisplay::xhprof_include_js_css('/xhprof-assets');
+        self::assertStringContainsString('"runsAggregate":"Aggregate selected"', $en);
+
+        I18n::setLocale(I18n::FALLBACK);
+    }
+
+    /**
+     * diff 的两侧可以是逗号串：各自聚合后再对比。
+     * 缺陷形态：整串进 get_run()（它的 run_id 正则拒逗号）→ false → 只剩导航条的空白页。
+     */
+    #[Test]
+    public function diffWithCommaSeparatedRunListsAggregatesEachSide(): void
+    {
+        I18n::setLocale('zh_CN');
+        $a1 = 'a1a1a1a1a1a1a1a1';
+        $a2 = 'a1a1a1a1a1a1a1a2';
+        $b1 = 'b2b2b2b2b2b2b2b2';
+        $b2 = 'b2b2b2b2b2b2b2b3';
+        foreach ([$a1, $a2, $b1, $b2] as $rid) {
+            $this->cache->set('xhprof:xhprof_log:' . $rid, serialize($this->sampleRunData()));
+        }
+        $params = ['run1' => "$a1,$a2", 'run2' => "$b1,$b2", 'all' => 1];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::displayXHProfReport(
+            $params,
+            'xhprof_foo',
+            null,
+            null,
+            null,
+            null,
+            "$a1,$a2",
+            "$b1,$b2"
+        );
+
+        self::assertStringContainsString('差异总览', $html, '聚合后的 diff 必须真的渲染出报告');
+        self::assertStringContainsString('2 次运行的聚合报告', $html, '描述应带聚合口径（agg.title）');
+        self::assertStringContainsString('运行 #' . $a1 . ',' . $a2, $html, '聚合串要原样出现在描述里');
+    }
+
+    /** diff 任一侧读不到（过期/被清理）→ 空态卡，而不是只剩导航条 */
+    #[Test]
+    public function diffWithUnreadableRunsShowsTheNoDataCard(): void
+    {
+        I18n::setLocale('zh_CN');
+        $r1 = 'a1a1a1a1a1a1a1a1';
+        $r2 = 'b2b2b2b2b2b2b2b2';   // 缓存里都没有
+        $html = XhprofDisplay::displayXHProfReport(
+            ['run1' => $r1, 'run2' => $r2, 'all' => 1],
+            'xhprof_foo',
+            null,
+            null,
+            null,
+            null,
+            $r1,
+            $r2
+        );
+
+        self::assertStringContainsString('已不存在', $html, '数据不在了要给空态卡解释，不能只留导航条');
+        self::assertStringNotContainsString('差异总览', $html);
+
+        // 逗号串（聚合路径）全部读不到时 raw 是 null 而不是 false：判定必须是 falsy，
+        // 只判 === false 会让 null 漏进渲染管线（init_metrics(null) 那一步直接炸）。
+        // **两侧都得是聚合串**——任一侧是单 id 时那条路径回的是 false，
+        // === false 也能拦住，这个变异就观察不到。
+        $html = XhprofDisplay::displayXHProfReport(
+            ['run1' => "$r1,$r2", 'run2' => "$r1,$r2", 'all' => 1],
+            'xhprof_foo',
+            null,
+            null,
+            null,
+            null,
+            "$r1,$r2",
+            "$r1,$r2"
+        );
+
+        self::assertStringContainsString('已不存在', $html, '聚合到 0 个可用 run 也要走同一张空态卡');
+    }
+
+    /** 单 run 分支的空态卡（提取成 no_data_page() 后行为不变） */
+    #[Test]
+    public function runWithUnreadableIdShowsTheNoDataCard(): void
+    {
+        I18n::setLocale('zh_CN');
+        $r1 = 'a1a1a1a1a1a1a1a1';
+        $html = XhprofDisplay::displayXHProfReport(
+            ['run' => $r1, 'all' => 1],
+            'xhprof_foo',
+            $r1,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        self::assertStringContainsString('已不存在', $html);
     }
 }

@@ -177,6 +177,21 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* 关键路径卡（XhprofDisplay::render_critical_path）：纯文本链，断行规则与诊断条目同因
+   —— 全限定名/生成式命名在窄视口里会溢出 .xp-card 的 overflow:hidden 被静默裁掉。 */
+.xp-path {
+  padding: 12px 20px;
+  overflow-wrap: anywhere;
+}
+.xp-path-step {
+  margin-left: 6px;
+}
+.xp-path-ratio {
+  margin-left: 6px;
+  color: var(--xp-text-muted);
+  font-size: 12px;
+}
+
 /* ========== 表格 ========== */
 .xp-table-wrap {
   overflow-x: auto;
@@ -355,6 +370,18 @@ ul.xhprof_actions a:hover {
 
 .xp-search button:hover {
   background: var(--xp-accent-hover);
+}
+
+/* 搜索未命中时的子串候选列表（XhprofDisplay::profiler_report 渲染）：
+   与卡片里其他列表同款留白；断行规则同 .xp-diag-item（函数名没有断点）。 */
+.xp-search-matches {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px 16px;
+}
+.xp-search-matches li {
+  padding: 4px 0;
+  overflow-wrap: anywhere;
 }
 
 .bubble {

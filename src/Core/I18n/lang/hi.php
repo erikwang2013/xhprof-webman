@@ -189,4 +189,18 @@ return [
     'diffcol.ISamples%' => 'ISamples<br>अंतर%',
     'diffcol.excl_samples' => 'Excl. Samples<br>अंतर',
     'diffcol.ESamples%' => 'ESamples<br>अंतर%',
+    // ——— 2026-10 新增：多 run 聚合入口 / 关键路径卡 / 搜索子串匹配 / 火焰图 ———
+    // 键序仍是契约：这几条排在 diffcol.ESamples% 之后，13 份词表同序。
+    // （hi.php 此前连 search.matches 一起缺着，本轮 6 条一并补齐，别只补 5 条。）
+    // runs.aggregate：「对比选中」按钮在选中 >2 条时换上的文案（静态 HTML 在 Utils 层，
+    // JS 按选中数替换；经 window.xpI18n 注入──与 'runs.compare' 的句式保持平行）。
+    'runs.aggregate' => 'चयनित का समेकन करें',
+    'path.title' => 'क्रिटिकल पाथ',
+    'path.empty' => 'दिखाने के लिए कोई कॉल श्रृंखला नहीं (डेटा में main() से शुरू होने वाली कोई कॉल एज नहीं है)।',
+    // %s = 搜索串；「30」与 XhprofDisplay 里的截断上限是同一个数，改一处要改两处
+    'search.matches' => '“%s” वाले फ़ंक्शन (पहले 30 दिखाए गए):',
+    // 火焰图（FlameGraph 模块零文案，卡片标题与说明在 Display 侧渲染）。
+    // flame.note 的两个 %s = 实际画出帧数、未绘制占比；字面百分号写 %%
+    'flame.title' => 'फ़्लेम ग्राफ़',
+    'flame.note' => '%s फ़्रेम दिखाए जा रहे हैं; पेज का आकार छोटा रखने के लिए कुल समय का %s%% नहीं खींचा गया',
 ];

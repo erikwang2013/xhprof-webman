@@ -25,10 +25,18 @@ use ErikWang2013\Xhprof\Yii3\XhprofMiddleware as Yii3XhprofMiddleware;
  */
 class ConfigParityTest extends TestCase
 {
-    /** @var list<string> 十一个键，顺序即配置文件的书写顺序 */
+    /** @var list<string> 十九个键，顺序即配置文件的书写顺序 */
     private const EXPECTED_KEYS = [
         'enable',
         'sample_rate',
+        'trigger_token',
+        'auth_basic',
+        'ip_allowlist',
+        'trusted_proxies',
+        'webhook_url',
+        'sample_cli',
+        'symbol_lookup_url',
+        'max_runs_per_minute',
         'time_limit',
         'log_num',
         'view_wtred',
@@ -149,6 +157,12 @@ class ConfigParityTest extends TestCase
         if ($raw === '' || $raw === 'null' || $raw === '~') {
             return null;
         }
+        // 空序列的 YAML 流式写法（`ip_allowlist: []` / `trusted_proxies: []`）。
+        // 空的块序列没法用 `key:` 加缩进项表达（那会解析成 null），Drupal 的 typed
+        // config 也就这一种写法；漏掉它这两键会以字符串 '[]' 参与比对而假红。
+        if ($raw === '[]') {
+            return [];
+        }
         if ($raw === 'true' || $raw === 'false') {
             return $raw === 'true';
         }
@@ -195,9 +209,9 @@ class ConfigParityTest extends TestCase
     }
 
     #[Test]
-    public function theSharedKeySetIsExactlyTheElevenDocumentedKeys(): void
+    public function theSharedKeySetIsExactlyTheNineteenDocumentedKeys(): void
     {
-        // 与上一条互补：上一条管「十二份彼此一致」，这条管「一致的确实是这十一个」——
+        // 与上一条互补：上一条管「十二份彼此一致」，这条管「一致的确实是这十九个」——
         // 十二个配置文件被同一次改动一起加键时，只有这条会红。
         $this->assertSame(self::EXPECTED_KEYS, array_keys($this->loadPhp('src/Slim/config/xhprof.php')));
     }
@@ -231,7 +245,7 @@ class ConfigParityTest extends TestCase
     public function yii3RedisIsRuntimeInjectedNotAKeyOfTheShippedConfigFile(): void
     {
         // README「Yii3」一节的 DI 片段把 redis 写在**用户传入**的 config 里；
-        // 包内默认配置文件里没有它（键集仍是那十个）。两者并不矛盾，这里钉住这个区别。
+        // 包内默认配置文件里没有它（键集仍是那十九个）。两者并不矛盾，这里钉住这个区别。
         $shipped = $this->loadPhp('src/Yii3/config/xhprof.php');
         $this->assertArrayNotHasKey('redis', $shipped, 'Yii3 的默认配置文件不该出现 redis（README 说的是运行时注入）');
         $this->assertSame(self::EXPECTED_KEYS, array_keys($shipped));
