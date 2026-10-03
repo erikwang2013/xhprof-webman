@@ -330,21 +330,32 @@ final class LocaleScreenshotGateTest extends TestCase
      */
     public static function page(string $lang, array $params): string
     {
-        Xhprof::$time_limit = 0;
-        Xhprof::$ignore_url_arr = ['/xhprof'];
-        Xhprof::$key_prefix = 'xhprof';
-        Xhprof::$view_wtred = 3;
-        Xhprof::$ui_html = '';
+        // HTML 指纹必须与环境无关：页面把夹具时间戳经 date() 渲染，而 date() 取
+        // date.timezone（本机 +0800、CI runner UTC）——同一份清单在两种时区下算出
+        // 两个 sha1（实测 65462fe0 vs 01b8c961，四条 PHP 矩阵格同证）。钉 UTC 后
+        // 渲染确定，清单与截图在任意环境一致；用完还原本进程原值。
+        $tzBefore = date_default_timezone_get();
+        date_default_timezone_set('UTC');
 
-        Xhprof::bootstrap(
-            new FakeRequest($params + ['lang' => $lang], ['uri' => '/xhprof', 'url' => 'http://127.0.0.1/xhprof']),
-            new FakeResponse(),
-            new FakeConfig([]),
-            self::fixtureCache(),
-            new FakeLogger()
-        );
+        try {
+            Xhprof::$time_limit = 0;
+            Xhprof::$ignore_url_arr = ['/xhprof'];
+            Xhprof::$key_prefix = 'xhprof';
+            Xhprof::$view_wtred = 3;
+            Xhprof::$ui_html = '';
 
-        $html = Xhprof::index();
+            Xhprof::bootstrap(
+                new FakeRequest($params + ['lang' => $lang], ['uri' => '/xhprof', 'url' => 'http://127.0.0.1/xhprof']),
+                new FakeResponse(),
+                new FakeConfig([]),
+                self::fixtureCache(),
+                new FakeLogger()
+            );
+
+            $html = Xhprof::index();
+        } finally {
+            date_default_timezone_set($tzBefore);
+        }
         self::assertIsString($html, "{$lang} 的页面没渲染出 HTML（403/400 会返回 response 对象）");
 
         return $html;
