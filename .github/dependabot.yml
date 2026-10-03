@@ -1,0 +1,71 @@
+# 依赖跟版。这个文件只声明"谁去发现新版本"，不声明"用哪个版本"——版本钉在各自的
+# composer.lock 里。没有它，README 声明的支持面会静默等于"锁定那一刻的旧版本"：上游
+# 发新版、旧版停更都不会有任何信号，而契约环验的是锁住的那一份，绿得没有信息。
+#
+# 分组（groups）：每个生态 + 目录只开一个 PR。四个入口若按包各开 PR，一周就是十几封；
+# 分组后一次更新一个 PR，同一份 lock 的改动在一个 diff 里一起过环——粒度正好与契约环
+# "锁即契约"一致。
+#
+# 与契约环的关系（本文件最重要的约定，动闸门前先读这里）：
+#   * 锁一变，环就按设计去核新版本。legacy-symfony64 腿的身份闸门（tools/contracts/
+#     lib/gates.php 的 contracts_leg_identity_error，期望表在 run.php 的 LEGS）直接读
+#     腿自己的 composer.lock，要求 symfony/{event-dispatcher,http-foundation,http-kernel}
+#     前缀是 "6.4."。dependabot 的 PR 若把这条腿漂到 7.x/8.x，这条腿会红——这正是要的：
+#     该腿的全部价值就是"它确实是 6.4 线"这句话（^6.4|^7.0 声明的另一半）。把它漂走
+#     是**支持面决策**（改 README、改卡），要有人做，不能让锁悄悄漂。
+#   * 主腿没有前缀核对（它按定义是"当前最新线"）：核对它的是 cases/——用真实包逐条
+#     核对 tests/Stubs 的桩。major 升级改了真实 API 时，对应 case 应当红。
+#   * 两组冻结的 SKIP 常量（run.php 的 EXPECTED_SKIPS*）是签字，不随依赖版本漂。
+#   * 因此：环因新版本而红时，正确动作是去证实或修改兼容声明（README、桩、卡），
+#     **不是**放宽身份闸门、调冻结常量，也不是给 dependabot 的 PR 顺手加上 ignore。
+#     dependabot 对 composer 会提出 major 升级（必要时连同 composer.json 的约束一起
+#     改；也可能只是提醒）——无论哪种形态，环都按新锁重跑，红绿就是那句话的判决。
+#   * dependabot 的 PR 与其他 PR 一样触发 ci / contracts / i18n 三个 workflow，无需
+#     额外接线；merge 前环必须绿。
+#
+# 覆盖边界（诚实声明）：能跟的是 packagist 上的包（laravel/framework、symfony/*、
+# slim/slim、yiisoft/*、drupal/core……）。tools/contracts/composer.json 里自定义
+# repositories 的条目——asset-packagist 的 bower 包、以及 sha1 钉死的 Joomla 5.2.2 /
+# 4.4.14 与 WordPress sqlite 插件发布包——不在 packagist，dependabot 大概率不跟；
+# 那几条是有意的夹具（版本即用例输入），升级要走人工 + 全环重跑，别为了让它"有更新"
+# 去改 repositories。
+
+version: 2
+updates:
+  # 根：第三方包只有 require-dev 的 phpunit（require 只有 php + ext-xhprof/ext-redis）。
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      composer-root:
+        patterns: ["*"]
+
+  # 契约环主腿：这份 lock 就是 README 支持面（Laravel ^11、Symfony ^7、Slim ^4……）的证据清单。
+  - package-ecosystem: composer
+    directory: "/tools/contracts"
+    schedule:
+      interval: weekly
+    groups:
+      composer-contracts:
+        patterns: ["*"]
+
+  # 契约环第二腿（Symfony 6.4 线）。6.4 不是"随手钉的旧版本"，见头部：漂走它 = 放弃对
+  # ^6.4 那一半声明的验证，身份闸门会（按设计）拒绝。
+  - package-ecosystem: composer
+    directory: "/tools/contracts/legacy-symfony64"
+    schedule:
+      interval: weekly
+    groups:
+      composer-contracts-symfony64:
+        patterns: ["*"]
+
+  # 三个 workflow 里的 actions/checkout、actions/cache、shivammathur/setup-php 等。
+  # github-actions 生态的目录恒为 "/"（扫的就是 .github/workflows）。
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

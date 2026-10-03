@@ -68,6 +68,22 @@ jobs:
           # 这道签字闸门就失去意义。
           extensions: xhprof, redis
           coverage: none
+      # 与 release.yml 的契约腿缓存**同名同键**（同一份 composer.lock、同一个 vendor 路径）：
+      # 两份 workflow 并行触发，先跑完的那个暖缓存，另一个直接命中 —— 键若各自起名，
+      # 同一份依赖会在同一次 push 里被下载两遍。两条腿的路径不同，故拆成两条带 if 的
+      # 步骤，键与 release.yml 那两条逐字一致（改一处就得两处一起改）。
+      - name: Cache main-leg contract vendor
+        if: matrix.leg == 'main'
+        uses: actions/cache@v4
+        with:
+          path: tools/contracts/vendor
+          key: composer-contracts-main-${{ hashFiles('tools/contracts/composer.lock') }}
+      - name: Cache Symfony 6.4-leg contract vendor
+        if: matrix.leg == 'symfony64'
+        uses: actions/cache@v4
+        with:
+          path: tools/contracts/legacy-symfony64/vendor
+          key: composer-contracts-symfony64-${{ hashFiles('tools/contracts/legacy-symfony64/composer.lock') }}
       # 故意**不加** --ignore-platform-reqs：PHP 或扩展不满足时这里就该炸，
       # 而不是装出一套残缺依赖让环在下面假装通过。
       # 两腿各自 install 自己那份 composer.lock（都在仓库里），所以"这条腿装了什么"

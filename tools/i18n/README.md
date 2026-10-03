@@ -9,11 +9,11 @@ of them claims to.
 
 | file | what it does |
 |---|---|
-| `extract.php` | derives `templates/*.svg` and `classify.json` from the diagram originals listed in `I18N_DOCS` (`lib.php`). Already run; only re-run it if the Chinese originals change. |
+| `extract.php` | derives `templates/*.svg` and `classify.json` from the diagram originals listed in `I18N_DOCS` (`lib.php`). Already run; only re-run it if the Chinese originals change. `--list` prints the derivation and writes nothing — `tests/Unit/Docs/I18nExtractTest.php` holds that promise (hashes **and** mtimes). |
 | `classify.json` | the 203 text nodes, each marked `copy`, `code` or `text`, with the tokens that must survive translation. Reviewable by hand — this is the file to argue with. (203 = every `<text>` in the three diagrams; the six `*.meta.title` / `*.meta.desc` nodes are the SVGs' own title/desc, not on-canvas text.) |
 | `templates/*.svg` | the originals with each translatable string replaced by `{{key}}`. |
 | `glossary/<lang>.json` | one file per language. **This is what you write.** |
-| `generate.php` | glossary → `docs/i18n/<lang>/images/*.svg` + `docs/i18n/<lang>/README.md`. |
+| `generate.php` | glossary → `docs/i18n/<lang>/images/*.svg` + `docs/i18n/<lang>/README.md`. `--verify` runs the whole generation **without writing** and compares the bytes it *would* write against what is on disk (every delivered locale unless `--lang` is given), naming the file and the first differing byte. That is what catches a hand-edited product, or a source edited without re-running the generator; both CI and the tag gate run it. |
 | `check.php` | the gate. Structure, wording, links, overflow, collisions, text direction, and whether the generator would even accept the locale. |
 | `calibrate.php` | re-measures the width model against real Chrome. Oracle, not a gate. |
 | `selftest.php` | proves that `check.php` and `generate.php` actually fail when they should. Reads and writes only under the gitignored `.selftest/` at the repo root — never inside `docs/i18n/`, which is a delivery directory (one read-only case excepted, which asserts the delivered English locale passes its own gate). |
@@ -39,6 +39,9 @@ php tools/i18n/generate.php --lang=de
 
 # 4. check — exit 0 is the delivery criterion
 php tools/i18n/check.php --lang=de
+
+# 5. prove every product on disk is byte-identical to what step 3 would write
+php tools/i18n/generate.php --verify
 ```
 
 `generate.php` refuses to write a diagram it cannot fit, and exits 1. `check.php`
@@ -84,13 +87,17 @@ Flat JSON. `_meta` plus one entry per key:
 
 ## The three classes, and what each demands of you
 
-203 keys: **80 copy**, **53 code**, **70 text**.
+209 keys: **80 copy**, **57 code**, **72 text**. That is the checker's own count
+(`209 keys checked: 80 copy identical, 57 code retain every required token`),
+over the whole manifest: the 203 on-canvas `<text>` runs plus the six
+`*.meta.title` / `*.meta.desc` SVG metadata entries (four of those six are
+`code`, two `text`, which is where the per-class numbers exceed the 203).
 
 | class | count | what it means |
 |---|---|---|
-| `copy` | 76 | Do not touch it. `check.php` compares these byte for byte against the source. They are already English, or they are diagram furniture like `new`, `supported`, `①`. |
+| `copy` | 80 | Do not touch it. `check.php` compares these byte for byte against the source. They are already English, or they are diagram furniture like the pipeline step numbers `1`–`8` (`lifecycle.pipeline.3`, `.6`, `.11`, …) or the stage labels on the sampling axis, `shutdown` and `plugins_loaded` (`lifecycle.axis.43`, `.54`). |
 | `code` | 57 | Translate the prose, but every token in the node's `keep` list must survive **verbatim**. `Xhprof::autoDetect()` does not become `Xhprof::automatischErkennen()`. |
-| `text` | 70 | Translate freely. |
+| `text` | 72 | Translate freely. |
 
 53 distinct protected tokens across the set — framework and product names
 (`Webman`, `Slim`, `WordPress`, `HttpFoundation`), identifiers
@@ -244,16 +251,25 @@ sentence from broken?" — and `fr`'s `lifecycle#37 & #38`, which have **1.4px**
 of room in the model, pass today and fail tomorrow on an edit nobody had reason
 to think was risky. So two things below the threshold are reported too.
 
-**Horizontal clearance under `NEAR_MISS_PX` (20px) warns, with the number.**
-Measured across the twelve locales it fires 4–15 times each, and the fired pairs
-divide by axis:
+**Clearance under `NEAR_MISS_PX` (20px) warns, with the number.** Measured
+across the twelve locales it fires 2–13 times each (2 in `en`/`ko`/`es`/`pt`/
+`ja`, 3 in `de`/`fr`/`hi`/`bn`/`id`, 13 in `ru`; 41 pairs in all), and the fired
+pairs divide by axis:
 
-* the **diagonal** ones (15–20px) are the gap the layout leaves between adjacent
-  boxes. Identical in every locale, because it is drawn rather than translated;
-  they are listed so the number is not a surprise when a box is resized.
 * the **horizontal** ones are the fragile set, and they move with every
   translation change. `fr`'s `lifecycle#37 & #38` are the tightest in the tree
-  at 1.4px, with `ru`'s `lifecycle` column next at 15.1px.
+  at 1.4px. The two `architecture` pairs — a framework name beside the `新增`
+  badge that sits to its right (`#30 & #32`, `#83 & #85`) — fire in **all
+  twelve** locales: the layout leaves ~16px there in `en` (where the badge
+  reads `new`), and a wider word for it eats into that (`fr` 7.6px, `ru` 7.7px,
+  `es` 11.0px).
+* the **diagonal** ones are not a drawn gap. `check.php` scores such a pair as
+  `sqrt($h² + max(0, -$v)²)`, the model's horizontal gap between the two ink
+  boxes *combined* with the vertical one, so a pair separated on both axes at
+  once can land under the threshold when a long translation closes the
+  horizontal gap. Measured: `ru` 7 pairs, `hi` 1, `bn` 1, and **none in the
+  other nine locales**. Read them as "one of two axes is nearly spent", not as
+  a property of the layout.
 
 The **vertical** axis is deliberately not part of that threshold. A run's band
 does not grow when a sentence is reworded — only when it wraps to another line,

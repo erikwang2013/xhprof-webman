@@ -18,7 +18,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ci.yml 的 8.0 腿与 release.yml 并行触发、互相没有 needs: 依赖 —— 8.0 腿红，
+  # tag 与 Release 照常产生。把它复制成 release 的前置 job：`needs: php80` 让
+  # release job（以及其中打 tag 的那一步）在 8.0 没跑绿时根本不会启动。
+  # 只取 8.0 这一格：语法检查单调（8.0 解析器接受的，8.2/8.4 全部接受），更高
+  # 版本不带来新信息；单测下限由 release job 自己的 PHP 8.3 phpunit 覆盖。
+  # 两条步骤与 ci.yml:17-29（lint 8.0）和 ci.yml:59-64（post-8.0 函数扫描）逐字一致。
+  php80:
+    name: PHP 8.0 gate before tagging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          extensions: redis, xhprof
+          coverage: none
+      - name: Lint all PHP files
+        run: find src tests joomla wordpress -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: No post-8.0 functions in shipped PHP
+        run: |
+          if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ joomla/ wordpress/ --include='*.php'; then
+            echo "::error::src/ joomla/ wordpress/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
+            exit 1
+          fi
+
   release:
+    needs: php80
     runs-on: ubuntu-latest
     # 与 contracts.yml 同一个 service：cases/Redis.php 是真 Redis 端到端（连不上就 FAIL）。
     # 两份 workflow 各自触发、各自跑环，缺一份就等于那条路必然红。
@@ -49,6 +75,15 @@ jobs:
           # 已装载的扩展再列一次是空操作，少列一个是"本地能跑、runner 上必红"。
           extensions: redis, xhprof, dom, mbstring
           coverage: none
+      # 与 ci.yml 的 test job 共享同一键（`composer-root` + 根 composer.lock 的 hash）：
+      # 两边装的是同一份根依赖（phpunit 及其依赖树），同一键 = 谁先跑谁暖、另一个直接命中。
+      # 改键时两处一起改，不然同一次 push 里这份依赖会被下载两遍。
+      # 键不含 PHP 版本的理由与 ci.yml 相同：纯 PHP 依赖，8.3 与 8.2/8.4 装的字节级相同。
+      - name: Cache composer vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-root-${{ hashFiles('composer.lock') }}
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
       - name: Unit tests must pass before tagging
@@ -65,6 +100,13 @@ jobs:
       # cases/Symfony.php（`--leg=symfony64` 只换 vendor 根，不复制 case）。
       # **两条腿都必须在 tag 之前过**：只留 7.x 那条，这道门禁就漏掉半个矩阵 —— 而上一轮
       # 正是靠 6.4 才抓出两条只在 7.4 上成立的过拟合断言。
+      # 两条契约腿各装一次 vendor（main 腿的 lock 375KB，6.4 腿 35KB）。缓存键就是
+      # 对应锁文件的 hash：lock 没动就不重装，lock 一动键就变、必然重装。
+      - name: Cache main-leg contract vendor
+        uses: actions/cache@v4
+        with:
+          path: tools/contracts/vendor
+          key: composer-contracts-main-${{ hashFiles('tools/contracts/composer.lock') }}
       - name: Contract checks must pass before tagging（main 腿）
         # 故意不加 --ignore-platform-reqs（与 contracts.yml 一致）：PHP 或扩展不满足时
         # 这里就该炸，而不是装出一套残缺依赖让环在下面假装通过。本 job 的 PHP 8.3 与
@@ -79,15 +121,37 @@ jobs:
       # 一条腿的红会把另一条腿的结论盖掉（掩盖结论等于少跑一条腿）。
       # 两条腿的红都会让 job 失败，而下面打 tag / 发 Release 是默认的 if: success()，
       # 于是 tag 门禁就是「两条腿都过」——这正是要的。
+      - name: Cache Symfony 6.4-leg contract vendor
+        uses: actions/cache@v4
+        with:
+          path: tools/contracts/legacy-symfony64/vendor
+          key: composer-contracts-symfony64-${{ hashFiles('tools/contracts/legacy-symfony64/composer.lock') }}
       - name: Contract checks must pass before tagging（Symfony 6.4 腿）
         if: always()
         run: |
           composer install -d tools/contracts/legacy-symfony64 --no-interaction --prefer-dist
           php tools/contracts/run.php --leg=symfony64
+      # 与 i18n.yml:42-43 同一条自测：先证明 check.php / generate.php 在该红的时候
+      # 真的会红，这道发布门禁才值得信任（从未见过失败的检查等于没有检查）。
+      # 自测只写 .selftest/ 下的临时文件，不碰交付物。
+      - name: i18n self-test must pass before the locale gates are trusted
+        run: php tools/i18n/selftest.php
+      # 补的是审计发现的另一个洞——**源与产物之间没有任何逐字比对**：
+      # check.php 只看单份产物自身的结构/链接，I18nParityTest 比的是形状
+      # （标题/围栏/表格行数/标识符存活），两者都看不见「有人手改了
+      # docs/i18n/<lang>/README.md」或「改了 tools/i18n/readme/<lang>.md
+      # 却忘了重跑 generate.php」——这类静默漂移会一路绿到发布。
+      # --verify 跑完整生成逻辑（含 autofit）但不写盘，把「将要写出的字节」
+      # 与磁盘逐字节比较；不一致就点名文件与首个差异的字节/行号并非零退出。
+      # 不带 --lang = 全部交付语言（清单从 lib.php 派生，不在此另写一份）。
+      - name: Artefacts must be byte-identical to what generate.php would write
+        run: php tools/i18n/generate.php --verify
       - name: Every locale must pass its own gate before tagging
-        # 语言清单与 i18n.yml 的 for 列表逐字一致；两条清单都由
-        # tests/Unit/Docs/I18nWorkflowTest.php 与 I18n::AVAILABLE 机械对齐，
-        # 所以这里不引入第二份"无人看守的手写清单"。
+        # 语言清单与 i18n.yml 的 for 列表逐字一致，两条链把它钉死，这里因此不复制
+        # 守卫、也不引入第三份手写清单：
+        #   * I18nWorkflowTest 把两个 workflow 的列表都对齐到报告页的 I18n::AVAILABLE；
+        #   * i18n.yml 的 "Locale list must match tools/i18n/lib.php" 步把同一份列表
+        #     对齐到 docs 侧的 I18N_LANGUAGES。两个维度都动不到这份清单。
         run: |
           for lang in en ko ru de fr es pt ar hi bn id ja; do
             echo "::group::$lang"
@@ -131,6 +195,33 @@ jobs:
             exit 1
           fi
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      # 两个清单文件里的版本号必须等于**本次将发的新版本**，等于上一版也不放行：
+      # 审计发现它们曾长期滞后（停在 3.0.6 而 tag 已到 v3.6.0，其间 6 个版本照常发布，
+      # 装了插件的站点读到的版本号一直是错的），而「发布 v3.7.0 时两处还写着 3.6.0」
+      # 正是原 bug 的形态 —— 容忍「等于上一版」会把闸门做成「只要不是完全没改就放行」。
+      # 发版流程：把你这次推送**将会算出的版本**写进两处（自最新 tag 起算：
+      # feat → minor，其余含 chore/fix → patch）；写错了就在下一次推送里加一个
+      # chore: 提交把两处改对 —— chore 属 patch 类，不会把将算出的版本再抬走，
+      # 所以纠错是收敛的（push1 红、push2 绿，tag 仍是同一个 vX.Y.Z）。
+      # 位置在 Compute next version 之后、Create tag 之前：红了就不打 tag。
+      - name: Version manifests match the release (before tagging)
+        run: |
+          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || true)   # 形如 v3.6.0，仅用于报错上下文
+          NEW="${{ steps.version.outputs.version }}"                     # 本次将发的 tag
+          ok_new="${NEW#v}"
+          fail=0
+          check() {   # $1=文件 $2=文件里读到的版本
+            if [ "$2" = "$ok_new" ]; then
+              echo "ok: $1 = $2 == 本次将发 NEW=$NEW"
+            else
+              echo "::error::$1 的版本是 '$2'；本次将发 NEW=$NEW，必须等于 NEW 才放行（上一版 ${LATEST:-（无 tag）} 仅供参考，等于它也不放行）—— 把这次推送将会算出的版本写进两处：feat 提交 → minor，其余（含 chore/fix）→ patch；改错了就在下一次推送里加一个 chore: 提交把两处改对（chore 属 patch 类，不会把将算出的版本再抬走）"
+              fail=1
+            fi
+          }
+          check joomla/xhprof.xml "$(grep -oP '(?<=<version>)[^<]*' joomla/xhprof.xml | head -1)"
+          check wordpress/xhprof-webman.php "$(grep -m1 -oP '(?<=Version: )[0-9.]+' wordpress/xhprof-webman.php)"
+          [ "$fail" = 0 ]
 
       - name: Create tag
         run: |

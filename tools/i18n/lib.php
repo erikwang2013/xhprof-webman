@@ -509,12 +509,28 @@ function i18n_flat_text(DOMElement $el): string
     return trim(implode(' ', array_filter(array_map('trim', $parts), fn($p) => $p !== '')));
 }
 
+/**
+ * The exact bytes i18n_write_svg() puts on disk.  Serialization and writing are
+ * split so a caller can compare a document against the file it is supposed to
+ * be (generate.php --verify) without a second rendering: `$doc->save($path)` and
+ * "write saveXML() to $path" are the same bytes — measured over all 39 SVGs in
+ * this tree — and going through one function keeps them from ever diverging.
+ */
+function i18n_svg_bytes(DOMDocument $doc): string
+{
+    $xml = $doc->saveXML();
+    if ($xml === false) {
+        throw new RuntimeException('cannot serialize SVG');
+    }
+    return $xml;
+}
+
 function i18n_write_svg(DOMDocument $doc, string $path): void
 {
     if (!is_dir(dirname($path)) && !mkdir(dirname($path), 0755, true) && !is_dir(dirname($path))) {
         throw new RuntimeException('cannot create ' . dirname($path));
     }
-    $doc->save($path);
+    file_put_contents($path, i18n_svg_bytes($doc));
 }
 
 // ---------------------------------------------------------------------------

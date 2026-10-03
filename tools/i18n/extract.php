@@ -41,6 +41,14 @@ const SECTION_SLUGS = [
     '标题' => 'title',
     '图例' => 'legend',
     '① 框架入口层' => 'entry',
+    // The same heading, annotated in the source with a layout note ("Native PHP
+    // and Yii2, same box as above").  It must map to entry as well: the walker
+    // matches comment bodies verbatim, so without this line the six boxes below
+    // it keep the previous section and derive as coupling.83-88, while the
+    // shipped templates and all twelve glossaries call them entry.83-88.  A
+    // plain re-run of this script (no --force needed — the node count matches)
+    // would then rewrite all three templates against every glossary at once.
+    '① 框架入口层（Native PHP 与 Yii2 两组盒与上面同规格：宽 136、间距 6）' => 'entry',
     '① → ②' => 'flow-entry-contract',
     '② 契约层' => 'contract',
     '② → ③' => 'flow-contract-core',
@@ -202,7 +210,12 @@ function classify(string $s): array
 
 // ---------------------------------------------------------------------------
 
-function build_doc(string $doc): array
+/**
+ * Derive the nodes of one document.  $write=false (--list) derives the same
+ * nodes without touching templates/ — the promise --list makes at the top of
+ * this file, and one that used to be an empty `if` that wrote anyway.
+ */
+function build_doc(string $doc, bool $write = true): array
 {
     $src = I18N_REPO . "/docs/images/$doc.svg";
     $xml = i18n_load_svg($src);
@@ -292,7 +305,9 @@ function build_doc(string $doc): array
     }
 
     $canvas = i18n_canvas($xml);
-    i18n_write_svg($tpl, i18n_template_path($doc));
+    if ($write) {
+        i18n_write_svg($tpl, i18n_template_path($doc));
+    }
 
     return [
         'source'   => "docs/images/$doc.svg",
@@ -309,10 +324,7 @@ $listOnly = in_array('--list', $argv, true);
 
 $docs = [];
 foreach (I18N_DOCS as $doc) {
-    $docs[$doc] = build_doc($doc);
-    if ($listOnly) {
-        // restore nothing — templates are cheap to regenerate
-    }
+    $docs[$doc] = build_doc($doc, !$listOnly);
 }
 
 $manifest = [

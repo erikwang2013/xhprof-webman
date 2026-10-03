@@ -3,7 +3,7 @@
  * Plugin Name: xhprof-webman
  * Plugin URI: https://github.com/erikwang2013/xhprof-webman
  * Description: 基于 xhprof 扩展 + Redis 的 PHP 性能采样，提供浏览器报告页。作为 mu-plugin 使用：不需要激活、不进数据库、升级不丢。
- * Version: 3.0.6
+* Version: 3.7.0
  * Requires at least: 6.4
  * Requires PHP: 8.0
  * Author: erik
@@ -42,5 +42,17 @@ if (!class_exists(\ErikWang2013\Xhprof\Wordpress\XhprofPlugin::class)) {
 }
 
 // 变量名带前缀：所有 mu-plugin 共享同一份全局作用域，$plugin 这种名字会被别的 mu-plugin 覆盖。
-$xhprofWebmanPlugin = new \ErikWang2013\Xhprof\Wordpress\XhprofPlugin();
+//
+// 站点配置从 wp-config.php 的 `XHPROF_WEBMAN_CONFIG` 常量来（WP 惯例：mu-plugin 加载很早，
+// 此刻还没有可用的选项表生态；常量在 wp-config.php 里定义、一定可见）：
+//
+//     define('XHPROF_WEBMAN_CONFIG', [
+//         'enable' => true,
+//         'redis' => ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0, 'timeout' => 1.0],
+//     ]);
+//
+// 键与包内 src/Wordpress/config/xhprof.php 相同（`redis` 是可选扩展键，见 XhprofPlugin 构造注释）。
+// 覆盖优先级：包内默认值 < 本常量 < 过滤器 `xhprof_webman_config`。
+$xhprofWebmanConfig = defined('XHPROF_WEBMAN_CONFIG') ? (array) XHPROF_WEBMAN_CONFIG : [];
+$xhprofWebmanPlugin = new \ErikWang2013\Xhprof\Wordpress\XhprofPlugin($xhprofWebmanConfig);
 $xhprofWebmanPlugin->register();

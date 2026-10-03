@@ -23,10 +23,21 @@ jobs:
       # joomla/ wordpress/ 是随包交付的 PHP：仓库没有 .gitattributes（无 export-ignore）、
       # composer.json 也没有 archive.exclude，`git archive HEAD` 实测带出这两个目录。
       # 它们与 src/ 一样声明要跑在 composer.json 的 php >= 8.0 上，此前的**唯一**解析点
-      # 却是契约环，而契约环钉在单一 PHP 8.3（contracts.yml:23）—— 也就是说这两个目录
-      # 在 8.0–8.4 矩阵里一次 php -l 都没跑过。并进扫描面，让下限真正被覆盖。
+      # 却是契约环，而契约环钉在单一 PHP 8.3（contracts.yml 的 setup-php 步）—— 也就是说
+      # 这两个目录在 8.0–8.4 矩阵里一次 php -l 都没跑过。并进扫描面，让下限真正被覆盖。
+      #
+      # tools/i18n/ 并入同一矩阵：它声明"全部合 PHP 8.0 语法"（i18n.yml 头部；generate.php
+      # 的 Sink 构造器里就留着一处 "Not readonly" 注释 —— readonly 属性是 8.1+），而它此前
+      # 唯一被 php -l 的地方是 i18n.yml 那步、跑在单一 PHP 8.3 上，只能证明"是合法 8.3"。
+      # 并进来后 8.0 那一格才是那句声明的机器证据。并入前已按 8.0 逐文件核过：php-parser
+      # createForVersion('8.0') 解析六份全过，并补扫了它按实测抓不到的形态（never / 首类
+      # 可调用 / new in initializer / 交叉类型 / 0o777 / final const / 独立 true·false·null
+      # 类型 / DNF / 类型化类常量）—— 零命中；照 smoke job 的 8.1+ 函数黑名单 grep 也是零。
+      #
+      # tools/contracts 不在此列：它声明 php >= 8.2（两份 composer.json），放进 8.0/8.1
+      # 的矩阵格是假红。
       - name: Lint all PHP files
-        run: find src tests joomla wordpress -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find src tests joomla wordpress tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
 
   # composer.json 声明 php >= 8.0，但 PHPUnit 11 要求 >= 8.2，
   # 单测无法在 8.0/8.1 上运行。此 job 用 --no-dev 只装运行时依赖，
@@ -107,6 +118,15 @@ jobs:
       - name: Required extensions are really loaded
         run: |
           php -r 'foreach (["xhprof", "redis"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing extension: $e\n"); exit(1); } } echo "extensions ok\n";'
+      # 根 vendor 不随仓库分发（.gitignore 第 1 行），runner 上这步必然真去下载
+      # phpunit 及其依赖树，值得缓存。键不含 PHP 版本：依赖全是纯 PHP 包，三个矩阵格
+      # （8.2/8.3/8.4）装的字节级相同，共用一个缓存是对的 —— 只有当依赖里出现
+      # 按 PHP 版本编译的扩展二进制时，才需要把 ${{ matrix.php }} 编进键里。
+      - name: Cache composer vendor
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-root-${{ hashFiles('composer.lock') }}
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
       - name: Run unit tests

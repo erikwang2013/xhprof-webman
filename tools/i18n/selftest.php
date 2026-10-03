@@ -527,7 +527,7 @@ ok('a pair 8px apart is reported as a near miss',
     str_contains($out, 'near-miss threshold')
     && str_contains($out, 'lifecycle#54 & lifecycle#55'), $out);
 ok('...and the warning carries the number, not just a verdict',
-    str_contains($out, 'clearance 8.0px, under the 20px near-miss threshold'), $out);
+    str_contains($out, 'clearance 8.00px, under the 20px near-miss threshold'), $out);
 ok('...and it does not fail the gate', $rc === 0, "exit=$rc\n$out");
 
 [$rc, $out] = run_check('--lang=' . TMP_LANG . ' --quiet', true);
@@ -625,6 +625,61 @@ run('--lang=' . SRC_LANG . ' --dry-run');
 
 ok('a dry run changes no file under docs/i18n, mtimes included',
     array_map($fingerprint, $watched) === $before);
+
+// ---------------------------------------------------------------------------
+echo "\n== --verify compares the artefacts against their sources ==\n";
+
+// --dry-run says "this is what I would write"; --verify says "and here is the
+// file that disagrees".  It exists for the one class of drift neither check.php
+// (one artefact's structure) nor the parity tests (shape, not bytes) can see:
+// a hand-edited deliverable, or a source edited without re-running the
+// generator.  Every mismatch is manufactured in the scratch root — the
+// delivered tree is not this script's fixture and never will be.
+$makeGlossary(NOTICE);
+run('--lang=' . TMP_LANG, true);
+[$rc, $out] = run('--lang=' . TMP_LANG . ' --verify', true);
+ok('--verify passes on artefacts the generator just wrote',
+    $rc === 0 && str_contains($out, 'RESULT: PASS'), "exit=$rc\n$out");
+
+// The hand edit itself — what a translator does to "quickly fix" a file.
+$rm = tmp('README.md');
+$clean = (string) file_get_contents($rm);
+file_put_contents($rm, $clean . "\nhand-edited\n");
+[$rc, $out] = run('--lang=' . TMP_LANG . ' --verify', true);
+ok('--verify names a hand-edited artefact', $rc !== 0 && str_contains($out, 'zz/README.md'), "exit=$rc\n$out");
+ok('...and where it first differs, byte and line',
+    preg_match('#zz/README\.md: first difference at byte \d+ \(line \d+\)#', $out) === 1, $out);
+file_put_contents($rm, $clean);
+
+// A file the generator does not write has no source to drift from, so the
+// other side of the same hole needs its own case.
+file_put_contents(tmp('images/leftover.svg'), "<svg/>\n");
+[$rc, $out] = run('--lang=' . TMP_LANG . ' --verify', true);
+ok('--verify names an artefact the generator does not write',
+    $rc !== 0 && str_contains($out, 'leftover.svg: present on disk but generate.php does not write it'),
+    "exit=$rc\n$out");
+unlink(tmp('images/leftover.svg'));
+
+// Gone entirely: something a locale is supposed to ship is not there.
+$missing = tmp('images/design.svg');
+$stashed = (string) file_get_contents($missing);
+unlink($missing);
+[$rc, $out] = run('--lang=' . TMP_LANG . ' --verify', true);
+ok('--verify names a missing artefact',
+    $rc !== 0 && str_contains($out, 'design.svg: missing on disk'), "exit=$rc\n$out");
+file_put_contents($missing, $stashed);
+
+// Reading is all it may do.  A verifier that writes while reporting drift
+// replaces the evidence with its own output; this is the same fingerprint the
+// dry-run case above needs, mtimes included.
+$before = $fingerprint(SCRATCH_OUT . '/' . TMP_LANG);
+run('--lang=' . TMP_LANG . ' --verify', true);
+ok('--verify writes nothing, mtimes included',
+    $fingerprint(SCRATCH_OUT . '/' . TMP_LANG) === $before);
+
+[$rc, $out] = run('--lang=' . TMP_LANG . ' --verify', true);
+ok('...and passes again once every artefact is back',
+    $rc === 0 && str_contains($out, 'RESULT: PASS'), $out);
 
 // ---------------------------------------------------------------------------
 echo "\n== an output root outside the repository is refused ==\n";

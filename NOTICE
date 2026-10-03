@@ -31,8 +31,13 @@ src/html/ also ships libraries authored elsewhere, which the report page loads
   js/dataTables.bootstrap.js, css/dataTables.bootstrap.css
                                                 DataTables/Bootstrap integration; these two
                                                 are the 1.x-era files, **not** 1.10.15
-  images/sort_both.png, images/sort_desc.png    DataTables sort icons
-                                                (referenced by css/dataTables.bootstrap.css)
+  images/sort_both.png, images/sort_desc.png    the 1.x-era DataTables sort icons; no CSS
+                                                references them any more — kept only as the
+                                                PNG fixtures of the MIME-type tests. What the
+                                                report actually renders are images/sort_both.svg,
+                                                images/sort_asc.svg and images/sort_desc.svg,
+                                                drawn for this project from src/html/pet.svg
+                                                (own artwork, no upstream terms)
   jquery/indicator.gif                          the loading spinner; kept because it is the
                                                 only GIF used as a MIME fixture in the tests
 

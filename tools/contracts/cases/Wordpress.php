@@ -45,6 +45,7 @@ declare(strict_types=1);
  */
 const WORDPRESS_EXPECTED_FUNCTIONS = [
     'add_action',      // XhprofPlugin::register()/onPluginsLoaded() 挂 plugins_loaded 与 shutdown
+    'apply_filters',   // XhprofPlugin::filteredConfig() 过 xhprof_webman_config 过滤器
     'is_ssl',          // RequestAdapter::scheme() 判 https
     'status_header',   // ResponseAdapter::send() 发状态行
     'wp_unslash',      // RequestAdapter 还原 wp_magic_quotes() 加的反斜杠

@@ -30,6 +30,9 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/lib/proc.php';
+// 三道硬闸门的判定逻辑住在 lib/gates.php，那里能被 tests/Unit/Contracts/GatesTest.php 直接
+// require —— 闸门本身必须被负路径测过（见该文件头部）。这里的调用点只做 IO 与输出。
+require_once __DIR__ . '/lib/gates.php';
 
 /**
  * 冻结常量：SKIP 总数必须**恰好**等于它。
@@ -126,40 +129,8 @@ const LEGS = [
     ],
 ];
 
-/**
- * 核对腿的版本身份。返回错误说明，或 null 表示没问题。
- *
- * 读腿自己的 composer.lock（不加载真实包、不起子进程）：lock 是 CI 与本地共用的那一份，
- * 所以这是"这条腿装的是什么"最直接的证据。
- */
-function contracts_leg_identity_error(string $legName, string $legDir, array $expect): ?string
-{
-    $lock = $legDir . '/composer.lock';
-    if (!is_file($lock)) {
-        return "腿 {$legName} 没有 composer.lock（{$lock}）—— 没有 lock 的腿每次跑到的是"
-            . '"当前最新"，一道会无故变红的闸门等于一道会被忽略的闸门';
-    }
-    $decoded = json_decode((string) file_get_contents($lock), true);
-    if (!is_array($decoded) || !is_array($decoded['packages'] ?? null)) {
-        return "腿 {$legName} 的 composer.lock 不是合法 JSON 或没有 packages";
-    }
-    $installed = [];
-    foreach ($decoded['packages'] as $package) {
-        $installed[(string) ($package['name'] ?? '')] = (string) ($package['version'] ?? '');
-    }
-
-    $problems = [];
-    foreach ($expect as $package => $prefix) {
-        $version = $installed[$package] ?? null;
-        if ($version === null) {
-            $problems[] = "{$package} 不在 lock 里";
-        } elseif (!str_starts_with(ltrim($version, 'v'), $prefix)) {
-            $problems[] = "{$package} 是 {$version}，期望 {$prefix}x";
-        }
-    }
-
-    return $problems === [] ? null : "腿 {$legName} 的版本身份不对：" . implode('；', $problems);
-}
+// contracts_leg_identity_error() 已搬去 lib/gates.php（判定要能被单测，见那里的头部注释），
+// 下面的调用点不变。
 
 // ---- 选腿：参数 → 腿表 → vendor 根 → case 清单 ----
 $legName = 'main';
@@ -239,14 +210,8 @@ foreach ($cases as $case) {
     }
 
     $status = $decoded['status'];
-    $caseSkips = max(0, (int) ($decoded['skips'] ?? 0));
-
-    if ($status === 'SKIP') {
-        // 整个 case 标 SKIP 时至少记 1 次——否则"把整个 case 标成 SKIP 且 skips=0"
-        // 就能绕过下面那条断言。
-        $caseSkips = max(1, $caseSkips);
-    }
-    $skipped += $caseSkips;
+    // 计数规则（含「整个 case 标 SKIP 时至少记 1 次」的堵口）住在 lib/gates.php，有单测。
+    $skipped += contracts_case_skips($status, (int) ($decoded['skips'] ?? 0));
 
     if ($status === 'FAIL') {
         $failed++;
@@ -272,19 +237,17 @@ printf("\nPASS %d  FAIL %d  SKIP %d（腿 %s 的冻结期望 %d）\n", $passed, 
 //   - SKIP-MISMATCH 所有 case 都没失败，只是有 case 诚实标注的「不可验证子项」数与
 //                   冻结常量不符 —— 这是**一次需要签字的决定**，不是失败
 // 两者都非零退出（都不该静默放行），但含义完全不同；混在一起会把人引去查错方向。
-$verdict = $failed > 0 ? 'FAIL' : ($skipped !== $leg['skips'] ? 'SKIP-MISMATCH' : 'OK');
+$verdict = contracts_verdict($failed, $skipped, $leg['skips']);
 printf(
     "RESULT: %s%s\n",
     $verdict,
     $verdict === 'SKIP-MISMATCH' ? '（没有 case 失败；是 SKIP 数需要签字）' : ''
 );
 
-if ($failed > 0) {
+// 两种成因各自的说明照旧打到 stderr；退出码统一由 verdict 决定（0 只给恰好 OK）。
+if ($verdict === 'FAIL') {
     fwrite(STDERR, "::error::契约验证环有 {$failed} 个 case FAIL —— 看上面哪一行的 status 是 FAIL\n");
-    exit(1);
-}
-
-if ($skipped !== $leg['skips']) {
+} elseif ($verdict === 'SKIP-MISMATCH') {
     fwrite(
         STDERR,
         "::error::SKIP-MISMATCH：**没有 case 失败**，但有 case 诚实标注的不可验证子项数变了"
@@ -293,7 +256,6 @@ if ($skipped !== $leg['skips']) {
         . "该腿的常量，而不是当成失败去修。"
         . "反过来也一样：缺一个 SKIP 等于少签一个字，不要为了让它变绿而少报。\n"
     );
-    exit(1);
 }
 
-exit(0);
+exit(contracts_verdict_exit_code($verdict));

@@ -1,0 +1,24 @@
+# Composer 用户拿到的 dist 包 = GitHub 从 tag 生成的 zipball，而 GitHub 的归档
+# 走 `git archive`，export-ignore 因此对 Packagist 分发生效。本文件只做减法：
+# 列出不随包发布的开发/工具链路径，其余全部保留。
+#
+# 第一批只收零断链的项（实测 `git ls-files` 体积：tools/ 2.1MB、docs/ 1.7MB、
+# tests/ 1.0MB、.github/ 20KB，而 src/ 0.9MB）：
+#
+#   /tests            单测，只在仓库里跑
+#   /tools            契约环 + i18n 工具链，开发专用
+#   /.github          CI 定义与 issue 模板
+#   /docs/superpowers 规划文档（非交付文档）
+#   /phpunit.xml      单测配置
+#
+# 刻意保留（有功能依赖，剔除会坏）：
+#   src/**            StaticController 从包根取 src/html 下的 CSS/JS/SVG 资源
+#   joomla/ wordpress/ drupal/   README 教用户从 vendor 复制过去，必须随包
+#   docs/images/**    根 README 与 12 份 docs/i18n/*/README.md 引用的图都在这里
+#   docs/i18n/**      12 份译文 README（第二批候选：剔除它会让 vendored README
+#                     的语言切换器全部 404，需与 README 一起重新设计）
+/tests              export-ignore
+/tools              export-ignore
+/.github            export-ignore
+/docs/superpowers   export-ignore
+/phpunit.xml        export-ignore

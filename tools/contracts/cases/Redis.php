@@ -192,7 +192,10 @@ return static function (): array {
     $report = $app->handle(new \Nyholm\Psr7\ServerRequest('GET', 'http://shop.example.com:8080' . $href));
     $reportHtml = (string) $report->getBody();
     $expect('报告页（跟列表页的链接）200', $report->getStatusCode(), 200);
-    $expectContains('报告页含 get_run() 拼的 run_desc', $reportHtml, 'XHProf Run (Namespace=xhprof_foo)');
+    // run_desc 已词表化：get_run() 走 I18n::t('run.desc')。环的请求不带 ?lang=、也没有
+    // Accept-Language（裸 Nyholm PSR-7 无请求头），四级协商落到配置 locale=zh_CN
+    // （就算连配置也没有，兜底仍是 zh_CN），所以这里断言的是 zh_CN 渲染串。
+    $expectContains('报告页含 get_run() 拼的 run_desc（环不带 lang → zh_CN 词表）', $reportHtml, 'XHProf 运行（命名空间=xhprof_foo）');
     $expectContains('报告页含 main() 行（真采样数据渲染成了函数表）', $reportHtml, 'main()');
     $expectContains('报告页含 run_id', $reportHtml, $runId);
     $expect(

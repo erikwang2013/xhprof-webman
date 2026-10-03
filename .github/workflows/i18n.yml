@@ -12,9 +12,10 @@ name: i18n
 # **不比对 SVG 文本与术语表**。于是「本地生成被 generate.php 拒绝 → 提交旧图 →
 # CI 全绿」是可能的 —— bn 卡住那次就是这个状态（绿门禁罩着陈旧产物）。
 #
-# tools/i18n/*.php 全部合 PHP 8.0 语法（已用 php-parser 按 8.0 解析验证），
-# 所以这里不放进 ci.yml 的 8.0–8.4 矩阵，而是单版本跑一次；矩阵的价值在
-# 「下限能不能跑」，而这里的下限已由语法检查保证。
+# tools/i18n/*.php 全部合 PHP 8.0 语法。自 2026-10-03 起该目录**已并入**
+# ci.yml 的 8.0–8.4 lint 矩阵 —— 那才是这句声明的机器证据（并入前按 php-parser
+# 8.0 解析 + 它抓不到的形态补扫，零命中）。本文件里那步 8.3 上的 lint 是
+# 冗余的快反馈，留作单 workflow 自洽。
 
 on:
   push:
@@ -33,14 +34,48 @@ jobs:
           # check.php 用 DOMDocument 解析 SVG；mbstring 用于字数与宽度。
           extensions: dom, mbstring
           coverage: none
-      # ci.yml 的 lint 只覆盖 `find src tests`（tools/contracts 要 PHP 8.2，
-      # 放进 8.0–8.4 的矩阵会红），所以 tools/i18n 的 lint 落在这里。
+      # tools/i18n 已在 ci.yml 的 `find …` 里（8.0–8.4 矩阵），这里这步是 8.3 上的
+      # 冗余快反馈（tools/contracts 不在矩阵里：它要 PHP 8.2，放进 8.0/8.1 会假红）。
       - name: Lint the i18n tooling
         run: find tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
       # 自测先跑：它证明这些门禁在**该红的时候真的会红**。一个从未见过失败的
       # 检查等于没有检查，所以让它先于门禁本身失败。
       - name: Self-test must pass before the gates are trusted
         run: php tools/i18n/selftest.php
+      # 语种清单的权威是 tools/i18n/lib.php 的 I18N_LANGUAGES（docs 交付物清单，
+      # rootFile === null 的那些 = README 落在 docs/i18n/<code>/ 下的译文；
+      # zh 的"译文"就是仓库根 README.md 本身，是源，不进这道门禁）。
+      # 下面 for 循环里的字面列表必须与它逐字一致：docs 侧新增语种时这里不跟，
+      # 该语种的 check.php 永远不会跑一次 —— 而 I18nWorkflowTest 对齐的是**另一个
+      # 维度**（报告页的 I18n::AVAILABLE），管不到 docs 清单，于是是静默脱管。
+      # 这个字面列表必须留在 for 语句里：I18nWorkflowTest 用逐字正则解析列表文本
+      # 做机械绑定，把列表抽成变量（$LANGS）会让那条断言退化成对变量名一个词。
+      - name: Locale list must match tools/i18n/lib.php
+        run: |
+          FROM_LIB=$(php -r '
+            require "tools/i18n/lib.php";
+            $codes = [];
+            foreach (I18N_LANGUAGES as $code => [$name, $rootFile]) {
+                if ($rootFile === null) { $codes[] = $code; }
+            }
+            echo implode(" ", $codes);
+          ')
+          HERE="en ko ru de fr es pt ar hi bn id ja"
+          if [ "$FROM_LIB" != "$HERE" ]; then
+            echo "::error::i18n.yml 的语种列表与 tools/i18n/lib.php 不一致：lib=[$FROM_LIB] workflow=[$HERE]"
+            exit 1
+          fi
+          echo "locale list ok: $HERE"
+      # 补的是审计发现的另一个洞——**源与产物之间没有任何逐字比对**：
+      # check.php 只看单份产物自身的结构/链接，I18nParityTest 比的是形状
+      # （标题/围栏/表格行数/标识符存活），两者都看不见「有人手改了
+      # docs/i18n/<lang>/README.md」或「改了 tools/i18n/readme/<lang>.md
+      # 却忘了重跑 generate.php」——这类静默漂移会一路绿到发布。
+      # --verify 跑完整生成逻辑（含 autofit）但不写盘，把「将要写出的字节」
+      # 与磁盘逐字节比较；不一致就点名文件与首个差异的字节/行号并非零退出。
+      # 不带 --lang = 全部交付语言（清单从 lib.php 派生，不在此另写一份）。
+      - name: Artefacts must be byte-identical to what generate.php would write
+        run: php tools/i18n/generate.php --verify
       # 任一语言非零即整步失败（bash -e）。--lang 的 warn 不影响退出码；
       # FAIL 才会 —— 这正是「结构不合规」与「值得一看」的区别。
       - name: Every locale passes its own gate

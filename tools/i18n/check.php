@@ -113,15 +113,20 @@ const OVERLAP_FAIL_PX = 1.0;   // >= this much horizontal ink overlap fails
  * think was risky.  This threshold makes that pair visible while it is still
  * safe to change.
  *
- * Measured across the twelve locales of this tree, it fires 4-15 times per
- * locale, and the fired pairs divide by axis:
+ * Measured across the twelve locales of this tree, it fires 2-13 times per
+ * locale (13 of those in ru; 41 pairs in all), and the fired pairs divide by
+ * axis:
  *
- *   - diagonal, 15-20px: the gap the layout leaves between adjacent boxes.
- *     Identical in every locale, because it is drawn, not translated.  These
- *     are listed so the number is not a surprise when a box is resized.
- *   - horizontal: the fragile set.  fr's lifecycle#37 & #38 sit 1.4px apart on
- *     one baseline — one reworded word from a collision, and nothing else in
- *     the pipeline would have said so.
+ *   - horizontal: the fragile set, and it moves with every translation change.
+ *     fr's lifecycle#37 & #38 sit 1.4px apart on one baseline — one reworded
+ *     word from a collision, and nothing else in the pipeline would have said
+ *     so.  The two architecture pairs (#30 & #32, #83 & #85 — a framework name
+ *     beside the "新增" badge) fire in every locale: the layout leaves ~16px
+ *     there in en and a wider word for the badge eats into it.
+ *   - diagonal: not a drawn gap.  $sep below combines the model's horizontal
+ *     gap with the vertical one, so a pair separated on both axes can land
+ *     under the threshold when a long translation closes the horizontal gap —
+ *     measured in ru (7), hi (1) and bn (1), and none in the other nine.
  *
  * The vertical axis is deliberately *not* part of this threshold.  A band's
  * height does not move when a translation is reworded — it changes only by
@@ -367,9 +372,16 @@ foreach (I18N_DOCS as $doc) {
                     $sep = sqrt($h ** 2 + max(0.0, -$v) ** 2);
                     if ($sep < $nearPx) {
                         $nNear++;
-                        warn(sprintf('%s: %s clearance %.1fpx, under the %gpx near-miss threshold'
+                        // Printed truncated, not rounded: this branch only runs
+                        // when the clearance is *under* the threshold, so the
+                        // number in the sentence must not round up to it.  bn's
+                        // tightest diagonal is 19.961899px, and "%.1f" printed
+                        // "20.0px, under the 20px near-miss threshold" — a
+                        // sentence that contradicted itself.
+                        warn(sprintf('%s: %s clearance %.2fpx, under the %gpx near-miss threshold'
                             . ' — reword with room to spare — %s',
-                            $pair, $v > 0 ? 'horizontal' : 'diagonal', $sep, $nearPx, $who));
+                            $pair, $v > 0 ? 'horizontal' : 'diagonal',
+                            floor($sep * 100) / 100, $nearPx, $who));
                     }
                 }
                 continue;
