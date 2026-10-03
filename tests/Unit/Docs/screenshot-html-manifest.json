@@ -1,0 +1,43 @@
+{
+    "_how": "由 php tools/i18n/shots.php 在拍照成功后刷新（--regenerate-manifest 单独刷新）。渲染路径 = LocaleScreenshotGateTest::page()；页表 = LocaleScreenshotGateTest::screenshotPages()。",
+    "_what": "html = 每页渲染出的 HTML 的 sha1（26 页，含 zh_CN 两张根图）；assets = 页面引用到的 src/html 文件的 sha1。**不钉 PNG 字节**：Chrome/字体会漂，正确性可以分毫未动。任一条不符 = 盘上的截图拍的不是这份 HTML，重拍后由本工具刷回。",
+    "html": {
+        "zh_CN/runs-list": "65462fe029a7d4b4c3a22ae33491a06acf79a2c9",
+        "zh_CN/run-report": "21c908d7c19f33af13eee4dbf633b97729440c64",
+        "en/runs-list": "9e437484ff4eff1205a5667dff170b381e755601",
+        "en/run-report": "828f163b1cfcfcf59ff9ab6232a18ca9ed1b6f6c",
+        "ko/runs-list": "7c3be1db2332c20e382ee5a51f4b110a6302d8ba",
+        "ko/run-report": "d1e407eccbe529ff26f1ccf12b28d277b0eab658",
+        "ru/runs-list": "9ab41fb2bfc2a5dacfb9eb176a8a1f8f1fa15f00",
+        "ru/run-report": "5a025cb4d054e706505ab9d7e90f1ed43c88a51e",
+        "de/runs-list": "2f361b151d0929ea35f435340a00024a754b46f5",
+        "de/run-report": "c42d15b1cc4d21a6ebc86501b08794900e191a6f",
+        "fr/runs-list": "9fa7e02cc4e786efc2efba66d61174305a444e81",
+        "fr/run-report": "cadd9807d51f7761e45c58c706eab57b5fc61e0e",
+        "es/runs-list": "8f58234724d25b4f6d85a76244482927376e945e",
+        "es/run-report": "ab16d50c8c50d192b54825cc02b4cef9641b89a7",
+        "pt/runs-list": "1cbf02f2b54f313bf5fa3674de6feb6f6055a94c",
+        "pt/run-report": "0489b7dc1cc249693094dc70484c27da1cb4b043",
+        "ar/runs-list": "6f5217bf4ad1e8dd24aaa49958b82ad7132a6af3",
+        "ar/run-report": "5a7892eeffa632a0e70dfe69c09c504870eef840",
+        "hi/runs-list": "6ef5f572efe03d98d5b2cb23de2e7c20dd1bd048",
+        "hi/run-report": "b84be8ae08bd2a9fee100509d4ea2c902fa733f7",
+        "bn/runs-list": "bd13681bb69f1e06b7325bea6d88cb78158d74a4",
+        "bn/run-report": "3a4fc34d2136c56459b99372251c634bf79b650f",
+        "id/runs-list": "8f028ec1bace8adc5a3c1f81ee37607770067f4e",
+        "id/run-report": "f773dc433fe2a09b3ff27fe1a9e6402b326c4134",
+        "ja/runs-list": "31feae30478d279a60e0a350d3c403461073b950",
+        "ja/run-report": "e0be9cfedefae74ab75984d8e3586826780409a9"
+    },
+    "assets": {
+        "css/bootstrap.css": "6987e3bdad7a3a5d143ddf2453e29782dbd99c29",
+        "css/dataTables.bootstrap.css": "2e9987d8f5a754e9b9784243edc13b4633bf4193",
+        "css/xhprof.css": "fde4782546ac25f976e81efeca003207addc2d85",
+        "jquery/jquery-3.0.0.min.js": "d6702a1af0378b2342f6a0692e77c169f580aed7",
+        "js/bootstrap.min.js": "6c264e0e0026ab5ece49350c6a8812398e696cbb",
+        "js/dataTables.bootstrap.js": "40bdabb09b5428b1119be21d3e76dc873fdbe342",
+        "js/jquery.dataTables.min.js": "588658fcd1f3acda0cd435dd583b1fe869d8f67b",
+        "js/xhprof_report.js": "28d66acbed4f72a3942169aa489eb25dcefaac7b",
+        "pet.svg": "fcc761f1be16d299657fc52028bebc5315093590"
+    }
+}

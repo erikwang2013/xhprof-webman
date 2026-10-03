@@ -24,6 +24,8 @@ require_once dirname(__DIR__, 3) . '/tools/i18n/lib.php';
  *  2. 根 README 的相对链接没有任何解析检查——check.php 里那段解析只对
  *     `docs/i18n/<lang>/README.md` 跑。删掉一张配图、挪一个章节标题之后，根 README
  *     指着不存在的东西，而所有门禁全绿（译文里的链接反倒查得比源文严）。
+ *  3. NOTICE 声明派生文件「carries an Apache header」，但没有任何检查：重写一个
+ *     派生文件时顺手删掉许可头，是对上游的分发合规破坏，而全套门禁照绿。
  *
  * 本文件**只读磁盘**：下面「检查会红」的用例都是在内存里改真实夹具（同一个函数、
  * 同一份真文档，只动一处），所以既证明了检查有效，也不会与正在重新生成 docs/ 的
@@ -269,5 +271,117 @@ class DocsIntegrityTest extends TestCase
         $ext = self::linkProblems("[a](https://example.com/gone.png) ![b](http://x/gone.svg) [c](mailto:no@one)", $root);
         $this->assertSame([], $ext['broken']);
         $this->assertSame(0, $ext['rel'], 'http/mailto 目标不该被当成相对路径去解析');
+    }
+
+    // ---------- NOTICE 的 Apache 许可头声明 ↔ 盘上文件 ----------
+
+    /**
+     * NOTICE 声称「each derived PHP file carries an Apache header stating this」。
+     * 谁在**声称**带头，以盘上现况为准（2026-10-04 统计）：全仓搜许可声明句只命中
+     * 这五个文件（本用例写进仓库后，判据常量里还有第六处命中，就是这里——不影响
+     * 下面这条硬编码判据，但下次按 grep 结果复核时别把它算进去）。
+     * **别用「含 Apache 一词」当判据**——src/*\/config/xhprof.php 的
+     * auth_basic 注释里提到 Apache+CGI 会剥离 Authorization 头，11 份配置都会命中，
+     * 那是无关出现；src/html/css/xhprof.css 与 src/Core/XhprofLib/Display/FlameGraph.php
+     * 按 NOTICE / 源码自述是本项目重写、新写的，本就不带上游头，不在这个集合里。
+     *
+     * 集合是**硬编码的**而不是搜出来的：搜出来的集合等于「谁现在有头谁就合格」，
+     * 丢头那一刻集合一起缩小，检查永远绿——那正是这条要防的事。
+     */
+    private const APACHE_HEADER_FILES = [
+        'src/Core/XhprofLib/Display/XhprofDisplay.php',
+        'src/Core/XhprofLib/Utils/XhprofLib.php',
+        'src/Core/XhprofLib/Utils/XHProfRuns.php',
+        'src/Core/XhprofLib/Utils/XHProfRunsDefault.php',
+        'src/html/js/xhprof_report.js',
+    ];
+
+    /** 判据句：Apache-2.0 头里的许可声明整句（不是「Apache」这个词） */
+    private const APACHE_HEADER_MARKER = 'Licensed under the Apache License, Version 2.0';
+
+    /** 「头」的边界：声明必须落在文件开头这一段内——正文里再提一次不算带头 */
+    private const APACHE_HEADER_LINES = 40;
+
+    /**
+     * @param array<string, string> $contents 相对路径 => 文件内容
+     * @return list<string> 丢头（或声明不在开头）的文件
+     */
+    private static function apacheHeaderProblems(array $contents): array
+    {
+        $problems = [];
+        foreach ($contents as $rel => $body) {
+            // 不用 `\R`：无 /u 时它连字节 0x85（NEL）也当换行，而 0x85 是很多汉字
+            // UTF-8 编码的续字节——会把行拆碎、把「头 40 行」的边界算错。
+            $lines = preg_split('/\r\n|\n|\r/', $body);
+            $head = implode("\n", array_slice($lines, 0, self::APACHE_HEADER_LINES));
+            if (!str_contains($head, self::APACHE_HEADER_MARKER)) {
+                $problems[] = $rel;
+            }
+        }
+
+        return $problems;
+    }
+
+    #[Test]
+    public function theFilesNoticeSaysCarryAnApacheHeaderStillCarryIt(): void
+    {
+        $root = dirname(__DIR__, 3);
+        // 条目数也钉住：悄悄删一行就等于放行一个文件丢许可头
+        $this->assertCount(5, self::APACHE_HEADER_FILES, 'NOTICE 声明的带头文件集被改小了；增删条目都要在 NOTICE 里写明理由');
+
+        $contents = [];
+        foreach (self::APACHE_HEADER_FILES as $rel) {
+            $path = $root . '/' . $rel;
+            $this->assertFileExists($path, "$rel 不见了：删除派生文件必须同步改 NOTICE 与本用例的集合");
+            $contents[$rel] = (string) file_get_contents($path);
+        }
+
+        $this->assertSame(
+            [],
+            self::apacheHeaderProblems($contents),
+            '这些文件丢了 Apache 许可头（重写文件时最常见）：NOTICE 的「carries an Apache header」'
+            . '是对上游的分发合规声明，丢了就是合规破坏'
+        );
+    }
+
+    /**
+     * 检查有效性的证明：同一份真文件内容（读进内存），只改一处，必须只报出改掉的那个。
+     * 不落盘改 src/——那里的文件有并行写者。
+     */
+    #[Test]
+    public function theApacheHeaderGateGoesRedWhenAHeaderIsStrippedOrMovedOutOfTheHead(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $contents = [];
+        foreach (self::APACHE_HEADER_FILES as $rel) {
+            $contents[$rel] = (string) file_get_contents($root . '/' . $rel);
+        }
+        // 夹具自检：真实文件先全部带头，否则下面的红说明不了任何事
+        $this->assertSame([], self::apacheHeaderProblems($contents), '真实文件已经丢头，先修这个再看下面的证明');
+
+        // (1) 重写时删掉声明整句（判据是整句许可声明，不是「Apache」一词）
+        $stripped = $contents;
+        $stripped['src/Core/XhprofLib/Utils/XHProfRunsDefault.php'] = str_replace(
+            self::APACHE_HEADER_MARKER,
+            '',
+            $contents['src/Core/XhprofLib/Utils/XHProfRunsDefault.php'],
+            $n
+        );
+        $this->assertSame(1, $n, '夹具里找不到许可声明句，夹具已失效');
+        $this->assertSame(
+            ['src/Core/XhprofLib/Utils/XHProfRunsDefault.php'],
+            self::apacheHeaderProblems($stripped),
+            '头没了必须报出来（且只报它）'
+        );
+
+        // (2) 声明还在、但被挪到正文（前 40 行之外）→ 不再是「头」，也要报
+        $moved = $contents;
+        $moved['src/html/js/xhprof_report.js'] = str_repeat("// filler\n", self::APACHE_HEADER_LINES)
+            . $contents['src/html/js/xhprof_report.js'];
+        $this->assertSame(
+            ['src/html/js/xhprof_report.js'],
+            self::apacheHeaderProblems($moved),
+            '声明被挤出开头 40 行就不是「头」了，位置这条规则必须是活的'
+        );
     }
 }

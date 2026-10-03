@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ErikWang2013\Xhprof\Tests\Unit\Docs;
 
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -441,5 +442,143 @@ class I18nParityTest extends TestCase
 
         // 没有这一句，docs/i18n/ 为空时本测试会平凡通过
         $this->assertGreaterThanOrEqual(12, $checked, '受检产物少于 12 份，夹具已失效');
+    }
+
+    /**
+     * 同一门语言的**自称**写在两处互不相干的文件里，必须逐字一致：
+     *   - README 切换器：`tools/i18n/lib.php` 的 `I18N_LANGUAGES`（生成器读它写进
+     *     12 份产物的切换器那一行）；
+     *   - 报告页切换器：`src/Core/I18n/lang/<locale>.php` 的 `_meta.name`
+     *     （XhprofDisplay 渲染 `<option>` 时读的就是它）。
+     *
+     * 为什么要这条闸：两处今天 13/13 逐字一致，但那只是维护纪律，没有任何检查。
+     * 真实可发生的半成品是**翻译 agent 改了自己语言词表的 `_meta.name`**——README 那侧
+     * 在 tools/ 里，不在它的围栏内，词表里也没有任何东西会提醒它两边要一起改。后果不是
+     * 500，而是同一门语言在两处切换器上写成两个名字，且没有任何测试会红。
+     *
+     * 词表一侧读的是报告页自己的 `I18n::catalogOf()`，不是自己 `require` 词表文件——
+     * 与顶部 require lib.php 同一条原则：判据与线上同源，另写一套迟早分叉。
+     *
+     * 两套语言码的对应规则见 `catalogCodeFor()`（只有 zh ↔ zh_CN 一处不同）。
+     */
+    #[Test]
+    public function everyLanguageEndonymIsTheSameInTheReadmeTableAndTheReportCatalog(): void
+    {
+        $this->assertGreaterThanOrEqual(13, count(I18N_LANGUAGES), '语言表少于 13 条，夹具已失效');
+
+        $problems = self::endonymProblems(I18N_LANGUAGES);
+        $this->assertSame(
+            [],
+            $problems,
+            "README 切换器与报告页切换器对同一门语言给出了不同自称：\n- " . implode("\n- ", $problems)
+        );
+    }
+
+    /**
+     * 两套语言码在文档化映射（`catalogCodeFor()`）下必须一一对上：README 侧的语言表键
+     * 映射后应**恰好**是报告页侧的 `I18n::AVAILABLE`。
+     *
+     * 两侧任何一边加了语言而另一边没跟，这里红——「README 列了 14 种、报告页下拉只有
+     * 13 种」正是实际会发生的半成品状态（两处的加语言步骤彼此毫无关联）。
+     * 顺序不判：两边切换器的排序是各自的美术问题，不是契约。
+     */
+    #[Test]
+    public function theTwoLocaleCodeListsLineUpUnderTheDocumentedMapping(): void
+    {
+        $mapped = [];
+        foreach (array_keys(I18N_LANGUAGES) as $code) {
+            $mapped[] = self::catalogCodeFor($code);
+        }
+        sort($mapped);
+        $available = I18n::AVAILABLE;
+        sort($available);
+
+        $this->assertSame(
+            $available,
+            $mapped,
+            'tools/i18n/lib.php 的语言表（映射后）与 I18n::AVAILABLE 对不上——有一侧加了语言，另一侧没跟'
+        );
+
+        // 映射本身写进断言：两套码只在这一处不同，方向是 zh → zh_CN（不是反的）
+        $this->assertSame('zh_CN', self::catalogCodeFor('zh'));
+        $this->assertSame('ko', self::catalogCodeFor('ko'), '除 zh 外必须是恒等映射');
+    }
+
+    /**
+     * 检查有效性的证明：内存里改掉一侧的自称 → 必须点名那门语言且不牵连别人；
+     * 语言码在词表侧不存在（没有对应词表）也要点名。
+     *
+     * 不落盘改 lib.php 或词表：那是别的 agent 正在写、正在跑 generate/check 的文件，
+     * 一个短暂的红窗口对他们是假红，对我是不可归因。端到端落盘红证在 /tmp 副本里做过
+     * （见交付报告）。
+     */
+    #[Test]
+    public function theEndonymGateGoesRedWhenOneSideIsRenamed(): void
+    {
+        // 真实数据先干净，否则下面的红说明不了任何事
+        $this->assertSame([], self::endonymProblems(I18N_LANGUAGES));
+
+        // (1) 词表那侧的 _meta.name 被人改了（翻译 agent 顺手改字的真实形态）
+        $broken = I18N_LANGUAGES;
+        $broken['ko'] = ['한국어 (Korea)', null];
+        $problems = self::endonymProblems($broken);
+        $this->assertSame(1, count($problems), '只该点名被动过的那一门语言：' . implode(' / ', $problems));
+        $this->assertStringContainsString('ko', $problems[0]);
+        $this->assertStringContainsString('한국어 (Korea)', $problems[0], 'lib.php 那侧的值要出现在报错里');
+        $this->assertStringContainsString("词表 ko", $problems[0], '报错要指认词表一侧，才知道差在哪边');
+
+        // (2) 语言表里加了一个码而词表侧没有（加语言只改了 lib.php 的样子）
+        $phantom = I18N_LANGUAGES + ['xx' => ['Xx', null]];
+        $problems = self::endonymProblems($phantom);
+        $this->assertSame(1, count($problems), '只该点名那一门没有词表的语言：' . implode(' / ', $problems));
+        $this->assertStringContainsString('xx', $problems[0]);
+    }
+
+    /**
+     * README 语言表的码 → 报告页词表的码。
+     *
+     * 两套码只有一处不同：lib.php 用 `zh`（中文 README 就在仓库根 `README.md`，
+     * `docs/i18n/` 下没有 zh/ 目录），词表叫 `zh_CN`。**这层映射在仓库里没有任何
+     * 代码承载**（grep 过：tools/ 下没有 zh→zh_CN 的映射代码，`zh_CN` 只作为配置文档
+     * 里的字面量出现在 readme/*.md 的散文里；docs/i18n/ 下也没有 zh_CN 目录），只存在于
+     * 约定——所以钉在这里，红的时候一眼看到是哪一侧改了。
+     * （`I18n::catalogOf('zh')` 恰好也能经 normalize() 归一化到 zh_CN，但让 parity 断言
+     * 依赖别处的实现，失败信息就指认不出改动发生在哪一侧。）
+     */
+    private static function catalogCodeFor(string $libCode): string
+    {
+        return $libCode === 'zh' ? 'zh_CN' : $libCode;
+    }
+
+    /**
+     * @param array<string, array{0:string, 1:?string}> $languages I18N_LANGUAGES
+     * @return list<string> 两处自称不一致 / 词表侧缺 _meta.name / 码没有对应词表 的全部问题
+     */
+    private static function endonymProblems(array $languages): array
+    {
+        $problems = [];
+        foreach ($languages as $code => [$name]) {
+            $catalogCode = self::catalogCodeFor($code);
+            if (I18n::normalize($catalogCode) !== $catalogCode) {
+                $problems[] = sprintf('%s：没有对应词表（lang/%s.php 不存在）', $code, $catalogCode);
+                continue;
+            }
+            $meta = I18n::catalogOf($catalogCode)['_meta'] ?? null;
+            $reportName = is_array($meta) ? ($meta['name'] ?? null) : null;
+            if (!is_string($reportName) || $reportName === '') {
+                $problems[] = sprintf('%s：词表 %s 缺少 _meta.name', $code, $catalogCode);
+                continue;
+            }
+            if ($reportName !== $name) {
+                $problems[] = sprintf(
+                    "%s：lib.php 写的是 '%s'，词表 %s 的 _meta.name 是 '%s'",
+                    $code,
+                    $name,
+                    $catalogCode,
+                    $reportName
+                );
+            }
+        }
+        return $problems;
     }
 }

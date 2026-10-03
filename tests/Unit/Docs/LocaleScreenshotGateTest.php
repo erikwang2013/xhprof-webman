@@ -11,6 +11,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -31,6 +32,16 @@ use PHPUnit\Framework\TestCase;
  * 必须点名那一条键。红证只救得了「扫描器本身不会响」，救不了「夹具不渲染那些区块了」，
  * 所以①里另钉了非空转断言：本语种自己的值必须出现在页面上。
  *
+ * 第二条判据（清单）：每页**渲染出的 HTML** 的 sha1 钉在 screenshot-html-manifest.json
+ * 里（26 页 = 13 语种 × 2 张，含 zh_CN 的两张根图——指纹与语言无关，它俩虽没有回落
+ * 判据，同样受钉）。上一条用例问的是「今天的页面里有没有中文」，问不到「盘上的 PNG 是不是
+ * 这份 HTML 拍的」：给一条译文改个措辞（键仍齐、无回落）就能让 26 张图集体过期而全绿，
+ * 而 generate.php --verify 只 sweep README.md 与 images/*.svg，PNG 不在比对范围。
+ * 清单由 tools/i18n/shots.php 拍照时按**同一个** page() 刷新，所以「清单对得上 ⇔ 截图
+ * 拍的是当前 HTML」。清单同时钉页面引用到的 /xhprof-assets/*（JS/CSS/图标改了，
+ * HTML 指纹看不见，但浏览器里的渲染会变）。**不钉 PNG 字节**：Chrome 与字体一漂，
+ * 字节就变，正确性却可能分毫未动。
+ *
  * 两个判据来源上的讲究：
  *  - 候选值先滤「含汉字」再当 needle。zh_CN 的 `runs.col.ip`='IP' 逐字出现在**所有**
  *    语种上，不滤就是 12 个语种全假红（同一条过滤见
@@ -38,12 +49,22 @@ use PHPUnit\Framework\TestCase;
  *  - 含占位符的值（`'显示 %s 帧；…'`）在页面上是 sprintf 之后的文本，逐字比会漏
  *    （事故里的 flame.note 正是这种），所以先按占位符切开、只拿不含占位符的**汉字块**
  *    当 needle。块不足 2 个汉字的不取：`'显示 _MENU_ 项结果'` 会切出 2 字块 `显示`，
- *    这类短块理论上有跨语言误报面（实测 12 语种 24 页 0 误报，含日语汉字页）。
+ *    这类短块理论上有跨语言误报面（实测 12 语种 24 页 0 误报，含日语汉字页；2026-10-04
+ *    新键 runs.status 第一次真踩到：ja 译文自带 `· 最新`）。
+ *  - 所以扫描前还有一道**双向滤除**：块逐字出现在「本键在本语种词表里的值」中 ⇒ 豁免
+ *    该块——本语种自己就这么写，出现它不构成回落签名（逐块判、非整值；flame.note 类
+ *    占位符块在韩/日译文里逐字保留也是这条）。键缺 / 值空 ⇒ 无从豁免，块全数保留，
+ *    那正是真回落要抓的形状；块被滤光的键自然退出扫描。
  */
 final class LocaleScreenshotGateTest extends TestCase
 {
-    /** 拍照脚本打开的那条 run：列表里最慢的 /api/v1/report/export（6.85s，红行） */
-    private const REPORT_RUN = 'd4d4d4d4d4d4d4d4';
+    use XhprofStaticsSnapshot;
+
+    /**
+     * 拍照脚本打开的那条 run：列表里最慢的 /api/v1/report/export（6.85s，红行）。
+     * public：tools/i18n/shots.php 的页表也由这里取（报告页的 URL 参数）。
+     */
+    public const REPORT_RUN = 'd4d4d4d4d4d4d4d4';
 
     /**
      * 渲染会经 `Xhprof::index()` → `I18n::setLocale()` 改全局静态（src/Core/Xhprof.php:230）。
@@ -54,9 +75,20 @@ final class LocaleScreenshotGateTest extends TestCase
      */
     private string $localeBefore = I18n::FALLBACK;
 
+    /**
+     * 本文件经真 `Xhprof::index()` 渲染（bootstrap 会写 `Xhprof::$request/$response/…` 静态量），
+     * 走快照 trait 还原：没有它，随机顺序下这些静态量会带着本文件写过的值离开，
+     * 下游按「干净环境」建前置条件的用例（如 DrupalTest 的 reportRouteWorksWithoutMiddleware）
+     * 会在随机序里红——顺序依赖实测过（ci-r4 的种子序跑，差集恰 1 条）。
+     *
+     * @var array<string, mixed>
+     */
+    private array $staticsBefore = [];
+
     protected function setUp(): void
     {
         $this->localeBefore = I18n::locale();
+        $this->staticsBefore = $this->snapshotXhprofStatics();
     }
 
     protected function tearDown(): void
@@ -64,6 +96,7 @@ final class LocaleScreenshotGateTest extends TestCase
         I18n::setLocale($this->localeBefore);
         $this->assertSame($this->localeBefore, I18n::locale(),
             '渲染过 12 个语种之后必须把环境 locale 复位，否则下游用例跟着变语种');
+        $this->restoreXhprofStatics($this->staticsBefore);
     }
 
     #[Test]
@@ -89,9 +122,12 @@ final class LocaleScreenshotGateTest extends TestCase
                 self::assertStringContainsString('<html lang="ar" dir="rtl">', $report, 'ar 报告页必须是镜像布局');
             }
 
-            // 判据本尊先跑：命中即报「哪条键回落成了哪个中文块」，正是事故的签名
-            self::assertNoChineseFallback("docs/i18n/{$code}/images/runs-list.png 对应的列表页", $list, $needles);
-            self::assertNoChineseFallback("docs/i18n/{$code}/images/run-report.png 对应的报告页", $report, $needles);
+            // 判据本尊先跑：命中即报「哪条键回落成了哪个中文块」，正是事故的签名。
+            // 先按本语种词表做双向滤除——ja 的 runs.status 译文自带 `· 最新`，
+            // 那不是回落签名（同 I18nTest::assertNoHanCharacters 的按语种豁免）。
+            $scoped = self::needlesExcludingOwnText($needles, I18n::catalogOf($code));
+            self::assertNoChineseFallback("docs/i18n/{$code}/images/runs-list.png 对应的列表页", $list, $scoped);
+            self::assertNoChineseFallback("docs/i18n/{$code}/images/run-report.png 对应的报告页", $report, $scoped);
 
             // 非空转：这两页确实渲染出了本语种自己的新键文案（恰好是事故里回落的那几处）。
             // 放在扫描之后：夹具哪天不再渲染这些区块，扫描就是在空转，这两条是它的哨兵。
@@ -126,7 +162,8 @@ final class LocaleScreenshotGateTest extends TestCase
             self::assertNoChineseFallback(
                 'ko 报告页（path.title 已清空）',
                 self::page('ko', ['run' => self::REPORT_RUN, 'source' => 'xhprof_foo']),
-                $needles
+                // 要拿装坏后的词表算豁免：path.title 值空 ⇒ 无从豁免，块全数保留
+                self::needlesExcludingOwnText($needles, I18n::catalogOf('ko'))
             );
         } catch (AssertionFailedError $e) {
             $caught = $e;
@@ -139,16 +176,159 @@ final class LocaleScreenshotGateTest extends TestCase
             '闸响了，但没点名回落的那条键：' . $caught->getMessage());
     }
 
+    /**
+     * 豁免规则自身的红证（双向）：共享块要能救假阳，又不能放过真回落。
+     *
+     * 正例用真表真值钉事件本体——zh_CN 的 runs.status 切出 `· 最新`，ja 的译文逐字
+     * 就含它 ⇒ 豁免，同一段 ja 页面 0 命中；反例把豁免条件撤掉（本语种值不含这个块）
+     * ⇒ 同一页面上必须仍旧命中。缺键 / 值空同属不豁免——那正是真回落的形状。
+     */
+    #[Test]
+    public function sharedChineseBlocksInTheLocalesOwnTextAreNotFallbacks(): void
+    {
+        $chunks = self::chineseNeedles()['runs.status'] ?? [];
+        self::assertContains('· 最新', $chunks, 'zh_CN 的 runs.status 不再切成「· 最新」——夹具前提变了，重写本对照');
+
+        $jaOwn = I18n::catalogOf('ja')['runs.status'] ?? '';
+        self::assertStringContainsString('· 最新', $jaOwn, 'ja 的 runs.status 不再含「· 最新」——夹具前提变了，重写本对照');
+
+        // 正例：ja 自己写的块被豁免，页面上出现它是合法的（ja 页面 0 命中）
+        $scoped = self::needlesExcludingOwnText(['runs.status' => $chunks], ['runs.status' => $jaOwn]);
+        self::assertNotContains('· 最新', $scoped['runs.status'] ?? [], 'ja 自己写的「· 最新」被当成了回落签名——FP 回归');
+        $jaPage = '<html lang="ja"><p>保存済み 12 件 · 最新 2026-10-04</p></html>';
+        self::assertSame([], self::fallbackHits($jaPage, $scoped), 'ja 页面上的「· 最新」不该命中');
+
+        // 反例①：豁免条件不成立（本语种值不含任何块）⇒ 同一页面上必须命中
+        $noExempt = self::needlesExcludingOwnText(['runs.status' => $chunks], ['runs.status' => 'Stored %s / limit %s']);
+        self::assertContains('runs.status="· 最新"', self::fallbackHits($jaPage, $noExempt),
+            '块没被豁免、页面又出现了 zh_CN 的块——扫描必须报红，否则豁免规则把真回落也放过了');
+        // 反例②：本语种缺键 / 值空同理，没有任何豁免
+        self::assertContains('runs.status="· 最新"', self::fallbackHits($jaPage, self::needlesExcludingOwnText(['runs.status' => $chunks], [])),
+            '本语种缺键时不该有任何豁免——那正是回落的形状');
+    }
+
+    /**
+     * 指纹闸：26 张交付截图对应的页面，今天渲染出的 HTML 必须与清单逐条相符。
+     *
+     * 它管的正是上一条闸管不到的那一格：译文改了措辞（键齐、无回落）⇒ 截图过期而
+     * 上一条全绿。清单是「照片拍的就是这份 HTML」唯一的锚。
+     */
+    #[Test]
+    public function deliveredScreenshotsAreMadeFromTheCurrentHtml(): void
+    {
+        $manifest = self::manifest();
+        $pages    = self::screenshotPages();
+
+        // 清单与页表一一对应。少了页就不能只靠逐条比——没进清单的那页没人比，静默放行。
+        self::assertSame(array_keys($pages), array_keys($manifest['html']),
+            '清单的页集合与 screenshotPages() 对不上（改过语种表或手工编辑过清单）'
+            . '——php tools/i18n/shots.php --regenerate-manifest 重出清单');
+
+        $htmls = [];
+        foreach ($pages as $key => $page) {
+            $html = self::page($page['lang'], $page['params']);
+            // 非空转：清单要是从一堆空页生成出来的，哈希当然对得上
+            self::assertGreaterThan(1000, strlen($html), "{$key} 渲染出的 HTML 不足 1KB——夹具或渲染路径坏了");
+            $htmls[$key] = $html;
+
+            self::assertSame($manifest['html'][$key], sha1($html),
+                "{$page['png']} 的页面 HTML 已变 → 用 php tools/i18n/shots.php 重拍 26 张"
+                . '后重新生成清单（HTML 的 sha1 与 tests/Unit/Docs/screenshot-html-manifest.json 不符）');
+        }
+
+        // JS/CSS/图标不在 HTML 指纹里，但浏览器里渲染出来的截图会被它们改（src 正被人改的
+        // 恰恰包括这两样）——引用的每一个都单独钉一份。
+        $assets = self::assetDigests($htmls);
+        self::assertGreaterThanOrEqual(5, count($assets), '26 页没引用到几个 /xhprof-assets/*——模板或夹具坏了');
+        foreach ($assets as $rel => $digest) {
+            self::assertSame($manifest['assets'][$rel] ?? null, $digest,
+                "src/html/{$rel} 与清单不符（新引用或内容已改）——它改的是截图里浏览器渲染出的东西，"
+                . 'HTML 指纹看不见；php tools/i18n/shots.php 重拍后重新生成清单');
+        }
+    }
+
+    // ---------------- 交付页表与清单（shots.php 与两道判据共用的唯一来源） ----------------
+
+    /**
+     * 26 页 = 13 语种 × {列表, 报告}。键 "<code>/<page>" 同时是清单里的页标识与
+     * shots.php 的输出文件名依据；zh_CN 的图落在 docs/images/（它是回落的源语种，
+     * 没有 docs/i18n/zh_CN/ 目录）。
+     *
+     * shots.php 直接拿这张表：URL、渲染参数、输出路径三处不再各写一份——23:29:57 的
+     * ar 截图与 23:30:06 的词表补齐之间差的 9 秒，就是这种手抄走样的形状。
+     *
+     * @return array<string, array{lang: string, params: array<string, string>, png: string}>
+     */
+    public static function screenshotPages(): array
+    {
+        $pages = [];
+        foreach (I18n::AVAILABLE as $code) {
+            $dir = $code === I18n::FALLBACK ? 'docs/images' : "docs/i18n/{$code}/images";
+            $pages["{$code}/runs-list"] = [
+                'lang'   => $code,
+                'params' => [],
+                'png'    => "{$dir}/runs-list.png",
+            ];
+            $pages["{$code}/run-report"] = [
+                'lang'   => $code,
+                'params' => ['run' => self::REPORT_RUN, 'source' => 'xhprof_foo'],
+                'png'    => "{$dir}/run-report.png",
+            ];
+        }
+        return $pages;
+    }
+
+    /**
+     * $htmls 引用到的全部 /xhprof-assets/*（相对 src/html）的 sha1。按 26 页的**并集**
+     * 收集：某一页新引一个文件，清单就得跟着长；文件不在盘上记 'missing'，比中即红。
+     *
+     * @param array<string, string> $htmls key => 渲染出的 HTML
+     * @return array<string, string> rel => sha1（或 'missing'）
+     */
+    public static function assetDigests(array $htmls): array
+    {
+        $rels = [];
+        foreach ($htmls as $html) {
+            // 分隔符用 ~：PCRE 的定界符解析不认字符类里的 #，用 # 定界会在这里哑掉
+            preg_match_all('~/xhprof-assets/([^\'"<>?#\s]+)~', $html, $m);
+            foreach ($m[1] as $rel) {
+                $rels[$rel] = true;
+            }
+        }
+        ksort($rels);
+
+        $digests = [];
+        foreach (array_keys($rels) as $rel) {
+            $file = dirname(__DIR__, 3) . '/src/html/' . $rel;
+            $digests[$rel] = is_file($file) ? (string) sha1_file($file) : 'missing';
+        }
+        return $digests;
+    }
+
+    /** @return array{html: array<string, string>, assets: array<string, string>} */
+    private static function manifest(): array
+    {
+        $path = __DIR__ . '/screenshot-html-manifest.json';
+        self::assertFileExists($path, 'HTML 指纹清单不在——php tools/i18n/shots.php --regenerate-manifest');
+        $data = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($data['html'] ?? null, '清单缺 html 段');
+        self::assertIsArray($data['assets'] ?? null, '清单缺 assets 段');
+        return $data;
+    }
+
     // ---------------- 渲染（与拍照同一条路径） ----------------
 
     /**
-     * 真渲染一页：Fakes 注入 + `Xhprof::index()`，与截图脚本（/tmp/shots/render.php，
-     * 交付图的出处）走同一条路径、同一份夹具。夹具变了就得两处一起改，否则这条闸给
-     * 那批图背的书就不成立了。
+     * 真渲染一页：Fakes 注入 + `Xhprof::index()`。**这是交付图与两份判据共用的唯一
+     * 渲染路径**——tools/i18n/shots.php 直接从本类调它，不再像 /tmp/shots/render.php
+     * 那样手抄一份夹具：夹具漂移（闸背的书与照片不是同一份）在结构上不可能发生。
+     *
+     * public 就是为 shots.php 开的；它是纯函数（除全局 locale，由 tearDown 复位，
+     * 工具侧则一页一进程外无副作用），不参与 PHPUnit 的用例发现。
      *
      * @param array<string, mixed> $params 查询参数（列表页为空，报告页给 run/source）
      */
-    private static function page(string $lang, array $params): string
+    public static function page(string $lang, array $params): string
     {
         Xhprof::$time_limit = 0;
         Xhprof::$ignore_url_arr = ['/xhprof'];
@@ -170,7 +350,7 @@ final class LocaleScreenshotGateTest extends TestCase
         return $html;
     }
 
-    /** 与拍照脚本逐字同源的夹具：5 行列表 + 那条 6.85s run 的边表 */
+    /** 交付图的夹具：5 行列表 + 那条 6.85s run 的边表（page() 调用，故拍照工具用的是同一份） */
     private static function fixtureCache(): FakeCache
     {
         // 旧在前，lPush 前插 => 列表头 = 最新
@@ -234,6 +414,32 @@ final class LocaleScreenshotGateTest extends TestCase
             }
         }
         return $needles;
+    }
+
+    /**
+     * 双向滤除：块逐字出现在「本键在本语种词表里的值」里 ⇒ 本语种自己就这么写，
+     * 页面上出现它不算回落签名（ja 的 runs.status 自带 `· 最新`；flame.note 类
+     * 占位符块在韩/日译文里逐字保留同理）。逐**块**判、非整值——整值比对会把
+     * 「本语种值里恰好含一个共享块」误当成「整条键没回落」。键缺 / 值空 ⇒ 无从
+     * 豁免，块全数保留，那正是真回落要抓的形状；块被滤光的键自然退出扫描。
+     *
+     * @param array<string, list<string>> $needles chineseNeedles() 切出的块
+     * @param array<string, mixed>        $own     本语种词表（I18n::catalogOf($code)）
+     * @return array<string, list<string>>
+     */
+    private static function needlesExcludingOwnText(array $needles, array $own): array
+    {
+        $kept = [];
+        foreach ($needles as $key => $chunks) {
+            $value = $own[$key] ?? null;
+            foreach ($chunks as $chunk) {
+                if (is_string($value) && str_contains($value, $chunk)) {
+                    continue;   // 本语种自己写的块，出现不是回落
+                }
+                $kept[$key][] = $chunk;
+            }
+        }
+        return $kept;
     }
 
     /** @param array<string, list<string>> $needles */
