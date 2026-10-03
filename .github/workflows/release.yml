@@ -28,7 +28,7 @@ jobs:
     name: PHP 8.0 gate before tagging
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.0'
@@ -59,7 +59,7 @@ jobs:
           --health-timeout 3s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -80,7 +80,7 @@ jobs:
       # 改键时两处一起改，不然同一次 push 里这份依赖会被下载两遍。
       # 键不含 PHP 版本的理由与 ci.yml 相同：纯 PHP 依赖，8.3 与 8.2/8.4 装的字节级相同。
       - name: Cache composer vendor
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: vendor
           key: composer-root-${{ hashFiles('composer.lock') }}
@@ -103,7 +103,7 @@ jobs:
       # 两条契约腿各装一次 vendor（main 腿的 lock 375KB，6.4 腿 35KB）。缓存键就是
       # 对应锁文件的 hash：lock 没动就不重装，lock 一动键就变、必然重装。
       - name: Cache main-leg contract vendor
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/contracts/vendor
           key: composer-contracts-main-${{ hashFiles('tools/contracts/composer.lock') }}
@@ -122,7 +122,7 @@ jobs:
       # 两条腿的红都会让 job 失败，而下面打 tag / 发 Release 是默认的 if: success()，
       # 于是 tag 门禁就是「两条腿都过」——这正是要的。
       - name: Cache Symfony 6.4-leg contract vendor
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/contracts/legacy-symfony64/vendor
           key: composer-contracts-symfony64-${{ hashFiles('tools/contracts/legacy-symfony64/composer.lock') }}

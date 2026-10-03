@@ -14,7 +14,7 @@ jobs:
       matrix:
         php: ['8.0', '8.1', '8.2', '8.3', '8.4']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -50,7 +50,7 @@ jobs:
       matrix:
         php: ['8.0', '8.1']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -107,7 +107,7 @@ jobs:
         # 下限由 PHPUnit 11 决定（>= 8.2）；8.0/8.1 的覆盖见上面的 smoke job
         php: ['8.2', '8.3', '8.4']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -123,7 +123,7 @@ jobs:
       # （8.2/8.3/8.4）装的字节级相同，共用一个缓存是对的 —— 只有当依赖里出现
       # 按 PHP 版本编译的扩展二进制时，才需要把 ${{ matrix.php }} 编进键里。
       - name: Cache composer vendor
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: vendor
           key: composer-root-${{ hashFiles('composer.lock') }}
