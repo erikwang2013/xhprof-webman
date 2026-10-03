@@ -6,6 +6,7 @@ namespace ErikWang2013\Xhprof\Tests\Unit\Lib;
 
 require_once __DIR__ . '/../../Fixtures/Fakes.php';
 
+use ErikWang2013\Xhprof\Core\I18n\I18n;
 use ErikWang2013\Xhprof\Core\Xhprof;
 use ErikWang2013\Xhprof\Core\XhprofLib\Display\XhprofDisplay;
 use ErikWang2013\Xhprof\Core\XhprofLib\Utils\XhprofLib;
@@ -503,11 +504,20 @@ class XhprofLibTest extends TestCase
             'main()==>foo()' => ['wt' => 40, 'mu' => 1],
         ]));
 
-        $res = XhprofLib::xhprof_aggregate_runs(['a1a1a1a1a1a1a1a1'], [], 'xhprof_foo', true);
-        $raw = $res['raw'];
-        self::assertEqualsWithDelta(100.00001, $raw['main()']['wt'], 1e-6);
-        self::assertSame(100, $raw['main()==>__script::XHProf Run (Namespace=xhprof_foo)']['wt']);
-        self::assertSame(40, $raw['__script::XHProf Run (Namespace=xhprof_foo)==>foo()']['wt']);
+        // desc 走词表（get_run 的 run.desc），此处 `__script::` 行名就是**词表渲染
+        // 结果**：语言是进程级静态量、快照 trait 不管它，显式钉到 zh_CN 再钉字面量，
+        // 否则它会被别的用例留下的语言影响，也会变成对任意语言的恒真断言。
+        $prevLocale = I18n::locale();
+        I18n::setLocale(I18n::FALLBACK);
+        try {
+            $res = XhprofLib::xhprof_aggregate_runs(['a1a1a1a1a1a1a1a1'], [], 'xhprof_foo', true);
+            $raw = $res['raw'];
+            self::assertEqualsWithDelta(100.00001, $raw['main()']['wt'], 1e-6);
+            self::assertSame(100, $raw['main()==>__script::XHProf 运行（命名空间=xhprof_foo）']['wt']);
+            self::assertSame(40, $raw['__script::XHProf 运行（命名空间=xhprof_foo）==>foo()']['wt']);
+        } finally {
+            I18n::setLocale($prevLocale);
+        }
     }
 
     #[Test]

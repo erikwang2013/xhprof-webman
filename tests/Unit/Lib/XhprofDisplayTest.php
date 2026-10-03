@@ -246,8 +246,13 @@ class XhprofDisplayTest extends TestCase
     {
         self::assertSame('总耗时<br>(微秒)', XhprofDisplay::stat_description('wt'));
         XhprofDisplay::set_render_state(['diff_mode' => true]);
+        // diff 列头也走词表（diffcol.<统计项>）：中文用户不再看到 $diff_descriptions 的英文
+        self::assertSame('总耗时<br>差异<br>(微秒)', XhprofDisplay::stat_description('wt'));
+        self::assertSame('调用<br>次数<br>差异', XhprofDisplay::stat_description('ct'));
+        // en 词表必须仍是那批英文字面量（XhprofDisplay::$diff_descriptions 逐字）
+        I18n::setLocale('en');
         self::assertSame('Incl. Wall<br>Diff<br>(microsec)', XhprofDisplay::stat_description('wt'));
-        self::assertSame('Incl. Wall<br>Diff<br>(microsec)', XhprofDisplay::stat_description('wt'));
+        I18n::setLocale(I18n::FALLBACK);
     }
 
     #[Test]
@@ -501,6 +506,46 @@ class XhprofDisplayTest extends TestCase
     }
 
     /**
+     * diff 符号详情页里最后三处写死的英文：`per call` 行标签、`N/A` 占位符、`source` 链接。
+     * 夹具沿用上一条（symbol 只在 run2 里）——那正是 avg 一侧 ct=0、会印出 N/A 的角落。
+     */
+    #[Test]
+    public function diffSymbolReportLabelsComeFromTheCatalog(): void
+    {
+        Xhprof::$symbol_lookup_url = 'http://sym.example.com';
+        $this->useRequest(new FakeRequest(
+            ['run1' => 'r1', 'run2' => 'r2', 'symbol' => 'foo()'],
+            ['uri' => '/xhprof']
+        ));
+
+        $run1 = ['main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100]];
+        $run2 = [
+            'main()' => ['ct' => 1, 'wt' => 100000, 'mu' => 100],
+            'main()==>foo()' => ['ct' => 2, 'wt' => 40000, 'mu' => 200],
+        ];
+
+        $html = XhprofDisplay::profiler_diff_report(
+            ['run1' => 'r1', 'run2' => 'r2', 'symbol' => 'foo()'],
+            $run1,
+            'd1',
+            $run2,
+            'd2',
+            'foo()',
+            'wt',
+            'r1',
+            'r2'
+        );
+
+        // 断言整条拼好的标签而不是「每次调用：」四个字：模板里的 %s 少写了也不会抛
+        // （sprintf 多给参数是允许的），只会静默丢掉指标名——那种改写只有这条能抓住。
+        self::assertStringContainsString('每次调用：总耗时 (微秒)', $html, 'per call 行标签走词表（pc.perCall）');
+        self::assertStringNotContainsString(' per call ', $html);
+        self::assertStringContainsString('>N/A<', $html, 'ct=0 的均值格走词表（common.na）');
+        self::assertStringContainsString('>源码</a>', $html, 'source 链接文案走词表（sym.source）');
+        self::assertStringNotContainsString('>source</a>', $html);
+    }
+
+    /**
      * 曾经的崩溃：?sort=ut 通过静态白名单校验，但本扩展的 flags 永不采集 ut，
      * sort_cbk 里 abs(null) 抛 TypeError（diff 模式）。
      */
@@ -605,6 +650,128 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString('d()', $all);
     }
 
+    /**
+     * 取表头里带 `sorted` 标记的 `<th>`（attrs + 文案）。
+     *
+     * 只认 `<th …><nobr>…</th>` 这一形：两张 PHP 渲染的统计表都是这个形状
+     * （`<nobr>` 上游就没闭合，正则别要求 `</nobr>`），页面里别的表（run 列表、
+     * diff 摘要）不带 nobr，不会被误收集。
+     *
+     * @return list<array{attrs:string,label:string}>
+     */
+    private static function sortedHeaderCells(string $html): array
+    {
+        preg_match_all('/<th([^>]*)><nobr>(.*?)<\/th>/s', $html, $m, PREG_SET_ORDER);
+        $out = [];
+        foreach ($m as $row) {
+            if (str_contains($row[1], 'sorted')) {
+                $out[] = ['attrs' => $row[1], 'label' => strip_tags($row[2])];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * 平表（`$stats`）列头必须标出「当前按哪列排、什么方向」。
+     *
+     * 以前两张表的列头循环都不读 `$sort_col`：样式表里 `td.sorted` 从未被命中，
+     * 列头看不出排序列（可点的链接与不可点的表头长得一模一样），读屏器更是什么都不知道。
+     */
+    #[Test]
+    public function flatTableHeaderMarksTheSortedColumn(): void
+    {
+        $data = [
+            ['fn' => 'a()', 'ct' => 1, 'wt' => 100, 'excl_wt' => 100],
+            ['fn' => 'b()', 'ct' => 1, 'wt' => 90, 'excl_wt' => 90],
+        ];
+        XhprofDisplay::set_render_state([
+            'stats' => ['fn', 'ct', 'wt'],
+            'metrics' => ['wt'],
+            'totals' => ['ct' => 2, 'wt' => 190],
+            'sort_col' => 'wt',
+        ]);
+
+        // wt：非 fn 列一律降序
+        $sorted = self::sortedHeaderCells(XhprofDisplay::print_flat_data([], 'title', $data, 0));
+        self::assertCount(1, $sorted, '恰好一列带 sorted 标记，多了少了都是错');
+        self::assertStringContainsString('aria-sort="descending"', $sorted[0]['attrs']);
+        self::assertSame(strip_tags(XhprofDisplay::stat_description('wt')), $sorted[0]['label'], '标记落在了错误的列上');
+        self::assertStringContainsString('vwbar', $sorted[0]['attrs'], '排序列原有的 vwbar 不能被新 class 顶掉');
+
+        // fn：升序（sort_cbk 里按名称 strtoupper 比较）
+        XhprofDisplay::set_render_state(['sort_col' => 'fn']);
+        $sorted = self::sortedHeaderCells(XhprofDisplay::print_flat_data([], 'title', $data, 0));
+        self::assertCount(1, $sorted);
+        self::assertStringContainsString('aria-sort="ascending"', $sorted[0]['attrs'], 'fn 列是升序');
+        self::assertSame(strip_tags(XhprofDisplay::stat_description('fn')), $sorted[0]['label'], '标记落在了错误的列上');
+    }
+
+    /** 父/子表（`$pc_stats`）与平表同一套标记（两处循环共用一个渲染器，这条钉住别分叉） */
+    #[Test]
+    public function pcTableHeaderMarksTheSortedColumn(): void
+    {
+        $params = ['run' => 'a1a1a1a1a1a1a1a1', 'all' => 1, 'symbol' => 'foo()'];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+
+        $html = XhprofDisplay::profiler_single_run_report(
+            $params,
+            $this->sampleRunData(),
+            'desc',
+            'foo()',
+            'wt',
+            'a1a1a1a1a1a1a1a1'
+        );
+
+        $sorted = self::sortedHeaderCells($html);
+        self::assertCount(1, $sorted, '父/子表恰好一列带 sorted 标记');
+        self::assertStringContainsString('aria-sort="descending"', $sorted[0]['attrs']);
+        self::assertSame(strip_tags(XhprofDisplay::stat_description('wt')), $sorted[0]['label'], '标记落在了错误的列上');
+    }
+
+    /**
+     * 搜索框：读屏器不把 placeholder 当控件名，且回车必须等于点「搜索」。
+     *
+     * 两半分别钉：PHP 侧输出 `aria-label`（复用 search.placeholder，不新增文案）；
+     * JS 侧（无浏览器可跑，只能查源码结构）回车处理与按钮点击走**同一个** submitSearch，
+     * 否则「回车能搜」会随一次手改的复制粘贴而分叉（复制一份逻辑进去，改一处漏一处）。
+     */
+    #[Test]
+    public function searchBoxIsLabelledAndEnterSubmits(): void
+    {
+        $params = ['run' => 'a1a1a1a1a1a1a1a1', 'symbol' => 'foo()'];
+        $this->useRequest(new FakeRequest($params, ['uri' => '/xhprof']));
+        $html = XhprofDisplay::profiler_single_run_report(
+            $params,
+            $this->sampleRunData(),
+            'desc',
+            'foo()',
+            'wt',
+            'a1a1a1a1a1a1a1a1'
+        );
+
+        preg_match('/<input[^>]*id="xhprofFuncSearch"[^>]*>/', $html, $m);
+        self::assertNotEmpty($m, '页面里没有搜索输入框 —— 锚点失效，后面的断言会空转');
+        self::assertStringContainsString(
+            'aria-label="' . I18n::plain('search.placeholder') . '"',
+            $m[0],
+            '搜索框没有可及名称（aria-label），读屏里是个无名文本框'
+        );
+        self::assertStringContainsString('placeholder="' . I18n::plain('search.placeholder') . '"', $m[0]);
+
+        $js = (string) file_get_contents(dirname(__DIR__, 3) . '/src/html/js/xhprof_report.js');
+        self::assertStringContainsString('xhprof-search-input', $js, 'JS 里没有搜索框选择器，锚点失效');
+        self::assertMatchesRegularExpression(
+            '/\$\(["\']#funcSub["\']\)\.click\(submitSearch\)/',
+            $js,
+            '按钮点击必须走 submitSearch（与回车同一条路径）'
+        );
+        self::assertMatchesRegularExpression(
+            '/\$\(["\']input\.xhprof-search-input["\']\)\.keydown\(function\s*\(e\)\s*\{[^}]*e\.which\s*===?\s*13[^}]*submitSearch\(\)/s',
+            $js,
+            '回车（keydown 13）必须触发同一个 submitSearch，否则键盘用户敲回车毫无反应'
+        );
+    }
+
     #[Test]
     public function getTooltipAttributes(): void
     {
@@ -617,6 +784,12 @@ class XhprofDisplayTest extends TestCase
         self::assertSame("type='Parent' metric='mu'", $parent);
         self::assertStringNotContainsString('onmouseover', $parent);
         self::assertStringNotContainsString('RowToolTip', $parent);
+
+        // JS 侧同样钉「已经删掉」：`ParentRowToolTip`/`ChildRowToolTip` 没有触发点
+        // （onmouseover 早已移除）、没有消费端（原版依赖的 jquery.tooltip.js 不在
+        // 加载列表里），2026-10 作为死代码删除。这条防止它被顺手加回来。
+        $js = (string) file_get_contents(dirname(__DIR__, 3) . '/src/html/js/xhprof_report.js');
+        self::assertStringNotContainsString('RowToolTip', $js, '死代码又回来了：RowToolTip 没有任何调用点');
     }
 
     /**
@@ -792,7 +965,12 @@ class XhprofDisplayTest extends TestCase
     public function printSourceLink(): void
     {
         Xhprof::$symbol_lookup_url = 'http://sym.example.com';
-        self::assertStringContainsString('?symbol=foo%28%29', XhprofDisplay::print_source_link(['fn' => 'foo()']));
+        $link = XhprofDisplay::print_source_link(['fn' => 'foo()']);
+        self::assertStringContainsString('?symbol=foo%28%29', $link);
+        self::assertStringContainsString('>源码</a>', $link, '链接文案走词表（sym.source），不再是写死的 source');
+        I18n::setLocale('en');
+        self::assertStringContainsString('>source</a>', XhprofDisplay::print_source_link(['fn' => 'foo()']), 'en 与改动前逐字相同');
+        I18n::setLocale(I18n::FALLBACK);
         self::assertSame('', XhprofDisplay::print_source_link(['fn' => 'main()']));
         self::assertSame('', XhprofDisplay::print_source_link(['fn' => 'run_init_foo']));
     }

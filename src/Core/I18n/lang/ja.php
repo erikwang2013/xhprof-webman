@@ -10,7 +10,7 @@ declare(strict_types=1);
  * 先に zh_CN.php に鍵を足し、12 言語すべてを揃える。
  *
  * 値は**生テキスト**：`<br>` だけが手動折り返し用のマークアップとして許可され、それ以外の
- * 文字は出力時に I18n::html() が一括エスケープする。`<br>` が効くのは col.* だけである
+ * 文字は出力時に I18n::html() が一括エスケープする。`<br>` が効くのは col.* と diffcol.* だけである
  * ——他の鍵は I18n::plain() 経由で、そこでは `<br>` は空白に潰される。
  *
  * 列見出しは「合計（Incl.）/ 自身（Excl.）」＋対象（実時間・ユーザー・システム・CPU時間・
@@ -36,6 +36,7 @@ return [
     'run.col.time' => 'リクエスト時刻',
     'run.col.ip' => '接続元 IP',
     'run.col.totalCalls' => '関数/メソッド呼び出し総数',
+    'run.desc' => 'XHProf 実行（名前空間=%s）',
     'runs.title' => 'リクエスト記録',
     'runs.col.method' => 'メソッド',
     'runs.col.url' => 'リクエスト URL',
@@ -43,6 +44,10 @@ return [
     'runs.col.wt' => '所要時間 (秒)',
     'runs.col.mu' => 'メモリ (Mb)',
     'runs.col.ip' => 'IP',
+    'runs.compare' => '選択項目を比較',
+    'runs.selectAll' => 'すべて選択',
+    'runs.selectRow' => 'この行を選択',
+    'runs.compareHint' => '比較するには実行を 2 件選択してください',
     'flat.title.top' => '上位 %s 件の関数を表示：%s でソート',
     'flat.title.sorted' => '%s でソート',
     'flat.title.diff' => '上位 100 件の回帰/向上：%s の差分でソート',
@@ -139,4 +144,47 @@ return [
     'col.ISamples%' => 'ISamples%',
     'col.excl_samples' => '自身<br>サンプル',
     'col.ESamples%' => 'ESamples%',
+    // ——— 2026-10 追加：diff ビューとメソッド詳細ページに残っていた英語 ———
+    // 鍵の順序は契約（I18nTest が配列の並びまで照合する）。col.ESamples% の直後に置く。
+    // 'common.na' は分母が 0 / 呼び出し回数がないときのプレースホルダ：日本語の技術 UI でも
+    // N/A が通例で、`%` 列では後ろに '%' が付く（N/A%）ため、訳すとかえって不自然になる。
+    'common.na' => 'N/A',
+    // メソッド詳細ページの diff 表にある「呼び出し 1 回あたり」行のラベル。%s = 指標の列見出し（折り返し除去済み）。
+    'pc.perCall' => '呼び出し 1 回あたり：%s',
+    'sym.source' => 'ソース',
+    // diff モードの列見出し 31 個。鍵集合/順序は XhprofDisplay::$diff_descriptions と 1:1 に
+    // 対応する（en の語彙だけがこの字面量表と一致する約束で、I18nTest が鍵ごとに突き合わせる）。
+    // 日本語は col.* の既存の書き方に「差分」を足して統一し、IUser% 系の `%` 列は
+    // 上流の識別子を残したまま「差分%」とした。
+    'diffcol.fn' => '関数/メソッド名',
+    'diffcol.ct' => '呼び出し<br>回数<br>差分',
+    'diffcol.Calls%' => '呼び出し<br>回数<br>差分割合',
+    'diffcol.wt' => '合計<br>実時間<br>差分<br>(µs)',
+    'diffcol.IWall%' => '合計<br>実時間<br>差分割合',
+    'diffcol.excl_wt' => '自身<br>実時間<br>差分<br>(µs)',
+    'diffcol.EWall%' => '自身<br>実時間<br>差分割合',
+    'diffcol.ut' => '合計<br>ユーザー<br>差分<br>(µs)',
+    'diffcol.IUser%' => 'IUser<br>差分%',
+    'diffcol.excl_ut' => '自身<br>ユーザー<br>差分<br>(µs)',
+    'diffcol.EUser%' => 'EUser<br>差分%',
+    'diffcol.cpu' => '合計<br>CPU時間<br>差分<br>(µs)',
+    'diffcol.ICpu%' => '合計<br>CPU時間<br>差分割合',
+    'diffcol.excl_cpu' => '自身<br>CPU時間<br>差分<br>(µs)',
+    'diffcol.ECpu%' => '自身<br>CPU時間<br>差分割合',
+    'diffcol.st' => '合計<br>システム<br>差分<br>(µs)',
+    'diffcol.ISys%' => 'ISys<br>差分%',
+    'diffcol.excl_st' => '自身<br>システム<br>差分<br>(µs)',
+    'diffcol.ESys%' => 'ESys<br>差分%',
+    'diffcol.mu' => '合計<br>メモリ使用量<br>差分<br>(bytes)',
+    'diffcol.IMUse%' => '合計<br>メモリ使用量<br>差分割合',
+    'diffcol.excl_mu' => '自身<br>メモリ使用量<br>差分<br>(bytes)',
+    'diffcol.EMUse%' => '自身<br>メモリ使用量<br>差分割合',
+    'diffcol.pmu' => '合計<br>ピークメモリ<br>差分<br>(bytes)',
+    'diffcol.IPMUse%' => '合計<br>ピークメモリ<br>差分割合',
+    'diffcol.excl_pmu' => '自身<br>ピークメモリ<br>差分<br>(bytes)',
+    'diffcol.EPMUse%' => '自身<br>ピークメモリ<br>差分割合',
+    'diffcol.samples' => '合計<br>サンプル<br>差分',
+    'diffcol.ISamples%' => 'ISamples<br>差分%',
+    'diffcol.excl_samples' => '自身<br>サンプル<br>差分',
+    'diffcol.ESamples%' => 'ESamples<br>差分%',
 ];

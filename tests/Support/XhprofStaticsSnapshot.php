@@ -10,8 +10,8 @@ use ErikWang2013\Xhprof\Core\XhprofProfiler;
 /**
  * 进程级静态量的**快照 / 还原**：setUp 里先照单全收，tearDown 里原样放回。
  *
- * 为什么必须有：`Xhprof` 的这 13 个量（含 `XhprofProfiler::$config`）是整个进程共享的，
- * 而各测试类都会改其中几个。只"清空自己动过的那几个"是不够的 —— 曾经的做法是 tearDown
+ * 为什么必须有：`Xhprof` 的这 15 个键 = 14 个静态量（含只能反射写的 `_hyperf`）+ `XhprofProfiler::$config`，
+ * 都是整个进程共享的，而各测试类都会改其中几个。只"清空自己动过的那几个"是不够的 —— 曾经的做法是 tearDown
  * 里把 5 个适配器置 null，于是 setUp 改过的 `$ignore_url_arr` / `$ui_html` 等会原样漏给
  * 后面的用例：同一个进程里 Core 先跑、Adapter 后跑时，`DrupalTest` / `WebmanTest` 的前置
  * 条件断言就会读到别人留下的值而报假红（实测：`Core+Lib+Adapter` 顺序下 3 条红，
@@ -25,8 +25,8 @@ use ErikWang2013\Xhprof\Core\XhprofProfiler;
  *
  * `XhprofProfiler::$config` 同理（也是私有静态，在 `Xhprof::bootstrap()` 里被写）：
  * 它是 `isEnabled()` 的第二数据源，漏出去会让后面的用例读到别人的 enable/ignore_url_arr。
- * 名单里少它一个的后果实测过：`XhprofProfilerTest`（唯一一个改了 `Xhprof::$*` 却不还原的
- * 类）跑在 `WiringTest` 前面时，后者 setUp 时读到的 `key_prefix` 是 `'myxp'`、
+ * 名单里少它一个的后果实测过：`XhprofProfilerTest`（当时唯一一个改了 `Xhprof::$*` 却不还原的
+ * 类，如今也用本 trait）跑在 `WiringTest` 前面时，后者 setUp 时读到的 `key_prefix` 是 `'myxp'`、
  * `time_limit` 是 `5` → 12 条接线用例在 `--order-by=random` 下变红。
  *
  * 反射写法：静态属性的单参 `setValue($v)` 在 PHP 8.3 起已废弃，用双参 `setValue(null, $v)`；
@@ -51,6 +51,9 @@ trait XhprofStaticsSnapshot
             'time_limit' => Xhprof::$time_limit,
             'ignore_url_arr' => Xhprof::$ignore_url_arr,
             'log_num' => Xhprof::$log_num,
+            // bootstrap() 从插件配置里写进来的第二个量（XhprofProfiler.php:63）。少了它，
+            // 改过 log_ttl 的用例会把 TTL 漏给同进程后面读它的用例。
+            'log_ttl' => Xhprof::$log_ttl,
             'view_wtred' => Xhprof::$view_wtred,
             'key_prefix' => Xhprof::$key_prefix,
             'ui_html' => Xhprof::$ui_html,
@@ -75,6 +78,7 @@ trait XhprofStaticsSnapshot
         Xhprof::$time_limit = $s['time_limit'];
         Xhprof::$ignore_url_arr = $s['ignore_url_arr'];
         Xhprof::$log_num = $s['log_num'];
+        Xhprof::$log_ttl = $s['log_ttl'];
         Xhprof::$view_wtred = $s['view_wtred'];
         Xhprof::$key_prefix = $s['key_prefix'];
         Xhprof::$ui_html = $s['ui_html'];

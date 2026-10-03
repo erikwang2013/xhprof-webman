@@ -30,7 +30,7 @@ use Joomla\Event\SubscriberInterface;
  */
 final class Xhprof extends CMSPlugin implements SubscriberInterface
 {
-    /** 报告路径，硬编码（与其余 10 个框架一致） */
+    /** 报告路径，硬编码（与其余十一家入口一致） */
     private const REPORT_PATH = '/xhprof';
 
     private const DEFAULT_ASSETS_URL = '/xhprof-assets';
@@ -42,9 +42,9 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
      * 空数据，而 XHProfRunsDefault::save_run() 不会因此提前返回：_saveToRedis() 照样
      * lPush 一个 run_id、照样写入 request_log（wt/mu 全 0），xhprof_log 里写入的是
      * serialize(null) === 'N;'（非空字符串，!empty 判真）。结果是报告列表里凭空多出
-     * 一条没有数据的 run。已实测：无采样时调一次 Xhprof::xhprofStop() 就会多出一条。
-     * XhprofProfiler::stop() 自身没有幂等保护（See src/Core/XhprofProfiler.php:18），
-     * 所以这道守卫只能由入口类持有。
+     * 一条没有数据的 run（"多一条"是幂等保护下沉前的实测）。现在 `XhprofProfiler::stop()`
+     * 自带幂等守卫（Core `$running`：无配对 start 时直接返回），这道入口类守卫保留为
+     * 第二道保险（与 Symfony / Yii2 / Native / WordPress 四家同形）。
      *
      * 初值取 true 而不是 false：register_shutdown_function 的注册是**进程级**的，
      * 常驻进程里上一个请求注册的兜底回调会在进程退出时才跑。那一刻若还没有任何采样
@@ -52,6 +52,19 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
      * 初值 true 让「没启动过采样」这件事本身可判，不依赖调用顺序。
      */
     private static bool $stopped = true;
+
+    /**
+     * shutdown 兜底每进程只注册一次：常驻进程（Swoole/workerman 这类不断进程的宿主）里
+     * 按请求注册会无限堆积；而旧回调读的是**当前**静态状态，一次注册就够
+     * （与 Yii2 `XhprofBootstrap::$shutdownRegistered` / Symfony 入口同一条）。
+     *
+     * 注：这条守卫的作用是「不重复注册」，而注册次数在 PHP 里不可观测（没有枚举
+     * shutdown 回调的 API），且 `stopSampling()` 幂等——有守卫与无守卫在多请求场景下
+     * 行为完全相同，故无法用行为断言钉住它。可测的那一半是「只注册一次不会让后续请求
+     * 失去兜底」：JoomlaTest::shutdownFallbackStillCoversSecondRequest 用同一进程里的
+     * 第二个请求（响应丢失）验证第一枚回调仍然兜得住。
+     */
+    private static bool $shutdownRegistered = false;
 
     private ?CacheInterface $cache;
 
@@ -129,7 +142,7 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
             if (is_string($html)) {
                 // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被 Joomla 的
                 // System - Page Cache 插件（或反代）留存副本。两个字面量与 Drupal
-                // 控制器里的 $headers 一致（六框架同形）。
+                // 控制器及其余入口类一致（十二家同形）。
                 $res->withStatus(200)
                     ->withBody($html)
                     ->withHeaders(['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'])
@@ -162,6 +175,18 @@ final class Xhprof extends CMSPlugin implements SubscriberInterface
         // onAfterRespond 在异常路径下不保证送达（响应尚未产出就重抛、进程被终止），
         // 采样状态会泄漏到同一进程的下一个请求。兜底：PHP 关闭序列里再 stop 一次，
         // $stopped 保证与 onAfterRespond 竞争时也只落库一次。
+        self::registerShutdownStop();
+    }
+
+    /**
+     * 幂等注册 shutdown 兜底（每进程一次，见 $shutdownRegistered）。
+     */
+    private static function registerShutdownStop(): void
+    {
+        if (self::$shutdownRegistered) {
+            return;
+        }
+        self::$shutdownRegistered = true;
         register_shutdown_function([self::class, 'stopSampling']);
     }
 

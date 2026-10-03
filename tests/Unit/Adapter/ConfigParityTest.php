@@ -25,9 +25,10 @@ use ErikWang2013\Xhprof\Yii3\XhprofMiddleware as Yii3XhprofMiddleware;
  */
 class ConfigParityTest extends TestCase
 {
-    /** @var list<string> 十个键，顺序即配置文件的书写顺序 */
+    /** @var list<string> 十一个键，顺序即配置文件的书写顺序 */
     private const EXPECTED_KEYS = [
         'enable',
+        'sample_rate',
         'time_limit',
         'log_num',
         'view_wtred',
@@ -112,9 +113,10 @@ class ConfigParityTest extends TestCase
     }
 
     /**
-     * 把 YAML 里 9 个已知键的标量值取出来，转成与 PHP 数组同形的值。
+     * 把 YAML 里已知键的标量值取出来，转成与 PHP 数组同形的值。
      *
      * 解析失败**不会**静默通过：解析结果要与 PHP 侧逐项相同，猜错就会红。
+     * 浮点（sample_rate）单独一条：PHP 侧是 float，`1` 或裸字符串对不上 assertSame。
      *
      * @return array<string, mixed>
      */
@@ -153,6 +155,9 @@ class ConfigParityTest extends TestCase
         if (preg_match('/^-?\d+$/', $raw) === 1) {
             return (int) $raw;
         }
+        if (preg_match('/^-?\d+\.\d+$/', $raw) === 1) {
+            return (float) $raw;
+        }
         if (preg_match("#^'(.*)'$#", $raw, $m) === 1 || preg_match('/^"(.*)"$/', $raw, $m) === 1) {
             return $m[1];
         }
@@ -190,9 +195,9 @@ class ConfigParityTest extends TestCase
     }
 
     #[Test]
-    public function theSharedKeySetIsExactlyTheTenDocumentedKeys(): void
+    public function theSharedKeySetIsExactlyTheElevenDocumentedKeys(): void
     {
-        // 与上一条互补：上一条管「十二份彼此一致」，这条管「一致的确实是这十个」——
+        // 与上一条互补：上一条管「十二份彼此一致」，这条管「一致的确实是这十一个」——
         // 十二个配置文件被同一次改动一起加键时，只有这条会红。
         $this->assertSame(self::EXPECTED_KEYS, array_keys($this->loadPhp('src/Slim/config/xhprof.php')));
     }

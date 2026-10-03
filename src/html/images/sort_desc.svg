@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  排序图标（降序态）：升序那张整幅旋转 180°——焰尖朝下 = 降序。
+  渐变随 rotate 一起转（objectBoundingBox 空间），所以焰心仍亮在圆弧一头、焰尖深。
+  三态说明见 sort_both.svg。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="58 32 122 172" width="19" height="19" role="img">
+  <title>降序</title>
+  <defs>
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ffb26b"/>
+      <stop offset="0.45" stop-color="#ef5350"/>
+      <stop offset="1" stop-color="#c9202f"/>
+    </linearGradient>
+  </defs>
+  <path d="M130 34 C127 58 141 74 152 90 C168 110 178 126 178 146 C178 180 152 202 119 202 C86 202 60 180 60 146 C60 120 74 102 88 84 C99 70 106 58 108 46 C113 54 120 56 130 34 Z" fill="url(#flame)" transform="rotate(180 119 118)"/>
+</svg>

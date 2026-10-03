@@ -15,8 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * 报告页与静态资源（drupal/xhprof/xhprof.routing.yml，_controller: 'xhprof.controller:xxx'）。
  *
- * 这是六个框架里唯一用路由器提供报告页的：Drupal 要标准模块（用户拍板），
- * 其余五个框架在入口类里自服务短路。
+ * 这是十二家里唯一用路由器提供报告页的：Drupal 要标准模块（用户拍板），
+ * 其余十一家在入口类里自服务短路。
  *
  * 适配器由 XhprofMiddleware（priority 1000 = 最外层）在本请求内 bootstrap 过，
  * 控制器的执行发生在中间件栈之内，所以这里直接复用 Xhprof::getResponse()。

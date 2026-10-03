@@ -164,6 +164,10 @@ class StaticControllerTest extends TestCase
         yield 'css (bootstrap)' => ['css/bootstrap.css', 'text/css'];
         yield 'png' => ['images/sort_both.png', 'image/png'];
         yield 'gif' => ['jquery/indicator.gif', 'image/gif'];
+        // 宠物排序图标：与 png/gif 同口径，按**真实文件**过一遍 serve()。类型表里早有
+        // svg 这一档（pet.svg 就是靠它服务的），这条钉的是「文件真的在、真的以 image/svg+xml
+        // 出去」——上面的 url() 解析检查管引用，这里管服务，两件事。
+        yield 'svg' => ['images/sort_asc.svg', 'image/svg+xml'];
     }
 
     #[Test]
@@ -218,6 +222,85 @@ class StaticControllerTest extends TestCase
             $this->assertNotNull($file, "资源不存在：$asset");
             $this->assertSame(StaticController::contentType($path), $file[1]);
         }
+    }
+
+    /**
+     * 报告页加载的每份自管 CSS 里，`url()` 指向的文件都必须真的在包里。
+     *
+     * 反面教材就是这个仓库自己：换宠物排序图标之前，那五条 .sorting* 规则里有三条
+     * （sort_asc.png / sort_asc_disabled.png / sort_desc_disabled.png）指向从未随包
+     * 发行的文件——表头看起来就是「有的列有箭头、有的没有」。三张宠物排序 SVG 是
+     * 这次唯一新增的引用，这条断言负责把「接线接上了」钉死。
+     *
+     * `css/bootstrap.css` 不在检查范围：它逐字未改（上游副本），6 条 Glyphicons 字体
+     * url() 指向本包不发行的 fonts/ 目录；报告页不用 glyphicon——图标只有 pet.svg 与
+     * 这三张排序图，都走 .xp-* / .sorting* 规则，那 6 条永远不会被请求。
+     */
+    #[Test]
+    public function everyUrlInReportPageCssResolvesToAPackagedFile(): void
+    {
+        $assetsPath = StaticController::getAssetsPath();
+        $refs = [];
+
+        foreach (['css/xhprof.css', 'css/dataTables.bootstrap.css'] as $css) {
+            $file = $assetsPath . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $css);
+            $text = file_get_contents($file);
+            $this->assertNotFalse($text, "读不到 $css");
+
+            preg_match_all('/url\(\s*[\'"]?([^\'")]+?)[\'"]?\s*\)/', $text, $matches);
+            $this->assertNotEmpty($matches[1], "$css 里一条 url() 都没匹配到——先看正则还是文件");
+
+            foreach ($matches[1] as $ref) {
+                if (preg_match('#^(data:|https?:|//)#', $ref) === 1) {
+                    continue;
+                }
+                // CSS 里相对 url() 相对**该 css 文件**解析
+                $target = realpath(dirname($file) . DIRECTORY_SEPARATOR . $ref);
+                $this->assertNotFalse($target, "$css 引用的 $ref 在包里不存在");
+                $this->assertStringStartsWith(
+                    realpath($assetsPath) . DIRECTORY_SEPARATOR,
+                    $target,
+                    "$css 的 $ref 指到了 src/html 之外"
+                );
+                $refs[] = basename($ref);
+            }
+        }
+
+        // 图标契约：宠物本体 + 排序三态。少一张就说明规则被误删或没接上。
+        $unique = array_values(array_unique($refs));
+        sort($unique);
+        $this->assertSame(['pet.svg', 'sort_asc.svg', 'sort_both.svg', 'sort_desc.svg'], $unique);
+    }
+
+    /**
+     * 两份 pet.svg 必须始终是同一只火苗。
+     *
+     * 两个文件第 5 行都写着「改一处要同步另一处」——但在本条之前，没有任何测试比对过
+     * 两份图画（唯一提到 pet.svg 的断言只钉文件集合与 MIME）。宠物是 README 首图、
+     * 报告页品牌图标与三张排序图的共同来源，两份走形 = 文档里的火苗和页面上的不是同一只。
+     *
+     * 口径：去掉 XML 注释（头注释按用途**有意**分叉：一份说「这里（src/html/）与
+     * docs/images/pet.svg」，另一份反过来）、把连续空白归一成一个空格后，其余字节必须
+     * 逐字相同——归一空白只放过排版差异，图形、配色、坐标的差异一个都跑不掉。
+     */
+    #[Test]
+    public function theTwoPetSvgCopiesStayInSync(): void
+    {
+        $normalize = static fn(string $svg): string => trim((string) preg_replace(
+            '/\s+/',
+            ' ',
+            (string) preg_replace('/<!--.*?-->/s', '', $svg)
+        ));
+
+        $packaged = $normalize((string) file_get_contents(StaticController::getAssetsPath() . '/pet.svg'));
+        $documentation = $normalize((string) file_get_contents(StaticController::getPackageRoot() . '/docs/images/pet.svg'));
+
+        $this->assertGreaterThan(500, strlen($packaged), 'src/html/pet.svg 读出来是空的或残缺');
+        $this->assertSame(
+            $packaged,
+            $documentation,
+            'docs/images/pet.svg 与 src/html/pet.svg 走形了：改一处要同步另一处'
+        );
     }
 
     /**

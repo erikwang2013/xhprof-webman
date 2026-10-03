@@ -82,8 +82,9 @@ class XhprofBootstrap implements BootstrapInterface
      * 以及常驻进程里上一个请求注册的兜底回调跑到本请求。二次 `xhprof_disable()` 返回空数据，
      * 而 `XHProfRunsDefault::save_run()` 不会因此提前返回：照样 lPush 一个 run_id、照样写
      * request_log（wt/mu 全 0）、xhprof_log 里写的是 `serialize(null) === 'N;'`（非空字符串，
-     * !empty 判真）——报告列表里凭空多一条没有数据的 run。`XhprofProfiler::stop()` 自身没有
-     * 幂等保护，这道守卫只能由入口类持有（与 Symfony / Joomla / Native / WordPress 四家同形）。
+     * !empty 判真）——报告列表里凭空多一条没有数据的 run（当时无幂等保护）。现在
+     * `XhprofProfiler::stop()` 自带幂等守卫（Core `$running`：无配对 start 时直接返回），
+     * 这道入口类守卫保留为第二道保险（与 Symfony / Joomla / Native / WordPress 四家同形）。
      *
      * 初值取 true 而不是 false：shutdown 注册是**进程级**的，常驻进程（RoadRunner/Swoole）
      * 里上一个请求留下的回调会在进程退出时才跑，那一刻若还没有采样在跑（enable=false、

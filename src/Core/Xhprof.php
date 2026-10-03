@@ -134,8 +134,26 @@ class Xhprof
         $cfg = self::getConfig();
         // 鉴权：配置了 auth_token 后，报告页必须带 ?token=xxx 才能访问
         $authToken = $cfg !== null ? $cfg->get('xhprof.auth_token', null) : null;
-        if ($authToken !== null && $authToken !== '' && !hash_equals((string) $authToken, (string) $req->get('token', ''))) {
+        // token 与 run/source 同形的类型守卫：`?token[]=x` 以数组到达，`(string) $array`
+        // 会在 hash_equals 之前立 "Array to string conversion" warning —— warning 升异常的
+        // 宿主上 403 变成 500，不升的宿主上也是每次请求一条日志噪音。
+        // 必须在鉴权**之前**：鉴权拿它做比较，放后面等于没防。与 auth_token 是否配置无关
+        // （形态校验是形态校验；不配鉴权时也不该让数组形态走到后面的渲染路径）。
+        $token = $req->get('token', '');
+        if (!is_string($token)) {
+            return self::deny('400 Bad Request', 400);
+        }
+        if ($authToken !== null && $authToken !== '' && !hash_equals((string) $authToken, $token)) {
             return self::deny('403 Forbidden', 403);
+        }
+        if ($authToken === null || $authToken === '') {
+            // 未配 auth_token 时报告页对任何人可读。默认不鉴权是拍板的既定行为，**不改**，
+            // 但「裸奔」这件事必须留痕：每请求一条，不刷屏（一次 index() 只走到这里一次）。
+            // 文案向 deny() 的英文串看齐。
+            self::getLogger()?->error(
+                'xhprof: xhprof.auth_token is not configured, so the report page renders without authentication. '
+                . 'Set xhprof.auth_token to require ?token=xxx on every report URL.'
+            );
         }
         // run_id / source 白名单校验，防止任意 key 读取
         $run = $req->get('run');

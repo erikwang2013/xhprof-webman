@@ -542,6 +542,40 @@ class I18nTest extends TestCase
     }
 
     #[Test]
+    public function theDiffColumnKeysAreExactlyTheDiffLiteralMap(): void
+    {
+        $zh = I18n::catalogOf(I18n::FALLBACK);
+        $diffKeys = [];
+        foreach (array_keys($zh) as $key) {
+            if (str_starts_with((string) $key, 'diffcol.')) {
+                $diffKeys[] = substr((string) $key, 8);
+            }
+        }
+        $this->assertSame(array_keys(XhprofDisplay::$diff_descriptions), $diffKeys, 'diffcol.* 键集/顺序与 $diff_descriptions 必须一一对应');
+        $this->assertNotEmpty($diffKeys);
+
+        // 两张字面量表的键集也必须相同（**顺序**不同是既有的：cpu 与 st 在两张表里位置互换）。
+        // 少一列不会白掉表头——I18n::t() 会回落中文源——但 en 的逐字钉子会看不见它，
+        // diff 视图里那一列也就永远印不出译文。
+        $desc = array_keys(XhprofDisplay::$descriptions);
+        $diffDesc = array_keys(XhprofDisplay::$diff_descriptions);
+        sort($desc);
+        sort($diffDesc);
+        $this->assertSame($desc, $diffDesc, '$descriptions 与 $diff_descriptions 的键集必须相同');
+    }
+
+    #[Test]
+    public function theEnglishCatalogAndTheDiffLiteralMapStayInLockstep(): void
+    {
+        // 与 col.* 那对钉子方向相反：diff 列头的英文原文一直写在 $diff_descriptions 里，
+        // 现在 en 词表是它的第二份拷贝。两份必须逐字相同，否则英文界面会出现两套列头。
+        $en = I18n::catalogOf('en');
+        foreach (XhprofDisplay::$diff_descriptions as $stat => $literal) {
+            $this->assertSame($literal, $en['diffcol.' . $stat] ?? null, "en 的 diffcol.{$stat} 与 \$diff_descriptions 的字面量不一致");
+        }
+    }
+
+    #[Test]
     public function theChineseCatalogAndTheLiteralMapStayInLockstep(): void
     {
         // 改了一边不改另一边会在这里红——否则报告页的中文会「一半新一半旧」，

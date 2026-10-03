@@ -30,6 +30,9 @@ use ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter;
  * 采不到，这是 WordPress 的结构性限制，不是本实现的取舍。
  * 收窄范围靠配置里的 `ignore_url_arr`（`isIgnore()` 对 `uri()` 子串匹配，不改代码生效）。
  *
+ * 配置来源（后者覆盖前者）：包内 `src/Wordpress/config/xhprof.php` 默认值 → wp-config.php 的
+ * `XHPROF_WEBMAN_CONFIG` 常量（mu-plugin 引导文件读取）→ 过滤器 `xhprof_webman_config`。
+ *
  * 报告页与静态资源不注册 rewrite 规则、不注册 REST 路由：在采样开始前判路径短路。
  */
 class XhprofPlugin
@@ -53,15 +56,39 @@ class XhprofPlugin
      * 构造参数全部可选：`new XhprofPlugin()` 是 mu-plugin 引导文件走的路径。
      * `$cache` / `$logger` 留出注入点，站点若用非默认 Redis 连接或自定义日志出口可替换。
      *
+     * `$config` 先过 WP 过滤器 `xhprof_webman_config`（过滤的是这份覆盖数组本身，返回的
+     * 数组整体替换它，之后仍与包内默认值 array_replace 合并），再进 Redis 地址解析：
+     * `xhprof.redis` 子数组（可选，默认配置文件里没有这个键）给出 host/port/password/
+     * database/timeout，与另外十一家的 Redis 适配器同键名同默认值。
+     *
      * @param array<string, mixed> $config 覆盖包内 `src/Wordpress/config/xhprof.php` 的默认值
      */
     public function __construct(array $config = [], ?CacheInterface $cache = null, ?LoggerInterface $logger = null)
     {
         $this->request = new RequestAdapter();
         $this->response = new ResponseAdapter();
-        $this->config = new ConfigAdapter($config);
-        $this->cache = $cache ?? new RedisAdapter();
+        $this->config = new ConfigAdapter(self::filteredConfig($config));
+
+        $redisOptions = $this->config->get('xhprof.redis', []);
+        $this->cache = $cache ?? new RedisAdapter(is_array($redisOptions) ? $redisOptions : []);
         $this->logger = $logger ?? new LogAdapter();
+    }
+
+    /**
+     * 过 WP 过滤器 `xhprof_webman_config`（WP 惯例的插件配置入口，命名用下划线小写）。
+     *
+     * 默认值是「本来要传给构造函数的覆盖数组」（mu-plugin 路径下是常量解析出的数组，通常是
+     * 空数组）：过滤器只需写要改的键，其余键仍回落包内默认值。`function_exists` 守卫让本类
+     * 在没有 WP 函数的环境里（契约环的独立探针）被 include 时不致命——真实 WP 里
+     * `apply_filters()` 在 wp-includes/plugin.php，mu-plugin 阶段一定已加载。
+     */
+    private static function filteredConfig(array $config): array
+    {
+        if (function_exists('apply_filters')) {
+            $config = (array) apply_filters('xhprof_webman_config', $config);
+        }
+
+        return $config;
     }
 
     /** 由 mu-plugin 引导文件调用：把入口挂到 `plugins_loaded` 的最前面（PHP_INT_MIN）。 */
@@ -130,8 +157,8 @@ class XhprofPlugin
             // 鉴权失败时 index() 已经用响应适配器发过 403 并返回 null，不能再补发一次 200。
             if (is_string($html)) {
                 // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被页面缓存
-                // （WP 的页面缓存插件 / 反代）留存副本。两个字面量与 Drupal 控制器
-                // 里的 $headers 一致（六框架同形）。WordPress 页缓存在本包之外，
+                // （WP 的页面缓存插件 / 反代）留存副本。两个字面量与 Drupal 控制器及
+                // 其余入口类一致（十二家同形）。WordPress 页缓存在本包之外，
                 // 这条头是唯一能告诉缓存层「别存」的信号。
                 $this->response
                     ->withStatus(200)

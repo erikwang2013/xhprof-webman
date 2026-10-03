@@ -53,7 +53,7 @@ class RedisAdapter implements CacheInterface
      * （一个性能工具的旁路存储不该拖垮业务请求）。
      *
      * 显式给 1s 连接超时：不给的话若目标主机的 SYN 被丢（防火墙），phpredis 会按内核
-     * 默认重试两分钟。与 Drupal/Slim/Symfony/Yii3/WordPress 五家直连适配器同一条默认路径。
+     * 默认重试两分钟。与 Drupal/Slim/Symfony/Yii3/WordPress/Yii2 六家直连适配器同一条默认路径。
      */
     protected function redis(): \Redis
     {

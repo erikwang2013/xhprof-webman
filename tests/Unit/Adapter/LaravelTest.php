@@ -26,11 +26,14 @@ use ErikWang2013\Xhprof\Laravel\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Laravel\Middleware;
 use ErikWang2013\Xhprof\Laravel\XhprofServiceProvider;
 use ErikWang2013\Xhprof\Tests\Stubs\Registry;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException;
 
 class LaravelTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<string, mixed> Xhprof 静态属性快照 */
     private array $saved = [];
 
@@ -46,40 +49,6 @@ class LaravelTest extends TestCase
     {
         $this->restoreXhprofStatics($this->saved);
         xhprof_disable();
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     #[Test]

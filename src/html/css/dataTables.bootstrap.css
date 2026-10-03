@@ -54,12 +54,18 @@ table.dataTable thead .sorting_desc_disabled {
 	cursor: pointer;
 }
 
-table.dataTable thead .sorting { background: url('../images/sort_both.png') no-repeat center right; }
-table.dataTable thead .sorting_asc { background: url('../images/sort_asc.png') no-repeat center right; }
-table.dataTable thead .sorting_desc { background: url('../images/sort_desc.png') no-repeat center right; }
+/* 本包对这份主题表的唯一改动：排序图标换成项目宠物派生的三张 SVG
+   （images/sort_*.svg，焰形取自 pet.svg；待排序=灰焰、升/降序=红焰尖朝上/朝下）。
+   两个 disabled 态复用灰焰：本页列的可排序性是静态的，这两个类不可达，
+   只为不再引用不存在的文件（旧版这里有三条指向从未随发行包提供的 PNG 的死链）。
+   旧 PNG（images/sort_both.png / sort_desc.png）保留在包里，是 StaticController
+   与 Drupal 适配器按真实文件断言 MIME 的夹具，不再作图标用。 */
+table.dataTable thead .sorting { background: url('../images/sort_both.svg') no-repeat center right; }
+table.dataTable thead .sorting_asc { background: url('../images/sort_asc.svg') no-repeat center right; }
+table.dataTable thead .sorting_desc { background: url('../images/sort_desc.svg') no-repeat center right; }
 
-table.dataTable thead .sorting_asc_disabled { background: url('../images/sort_asc_disabled.png') no-repeat center right; }
-table.dataTable thead .sorting_desc_disabled { background: url('../images/sort_desc_disabled.png') no-repeat center right; }
+table.dataTable thead .sorting_asc_disabled { background: url('../images/sort_both.svg') no-repeat center right; }
+table.dataTable thead .sorting_desc_disabled { background: url('../images/sort_both.svg') no-repeat center right; }
 
 table.dataTable thead > tr > th {
 	padding-left: 18px;

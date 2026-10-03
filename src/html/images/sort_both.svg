@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  排序图标（待排序态）：项目宠物小火苗的静息剪影，灰焰。
+  焰形取自 src/html/pet.svg 的外焰路径（改宠物身形要同步重取这三张 sort_*.svg）；
+  这里裁到焰形的包围盒（viewBox 58 32 122 172），19×19 满高显示。
+  三态见 sort_asc.svg（红焰尖朝上 = 升序）/ sort_desc.svg（红焰尖朝下 = 降序）。
+  引用点：src/html/css/dataTables.bootstrap.css 的五条 .sorting* 规则。
+  fill 用 #6e7781 而不是 pet.svg 的边框灰 #d0d7de：图标衬在表头底 #f6f8fa 上，
+  前者对比度 4.27:1（过 WCAG 非文本 3:1），后者只有 1.36:1——待排序态是「可排序」
+  的唯一视觉提示，别改回去。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="58 32 122 172" width="19" height="19" role="img">
+  <title>待排序</title>
+  <path d="M130 34 C127 58 141 74 152 90 C168 110 178 126 178 146 C178 180 152 202 119 202 C86 202 60 180 60 146 C60 120 74 102 88 84 C99 70 106 58 108 46 C113 54 120 56 130 34 Z" fill="#6e7781"/>
+</svg>

@@ -521,12 +521,12 @@ class Yii2Test extends TestCase
     #[Test]
     public function shippedConfigFileHasNoRedisKey(): void
     {
-        // redis 是运行时注入的连接参数，不属于那十个共用键（与 Yii3 同一条口径）
+        // redis 是运行时注入的连接参数，不属于那十一个共用键（与 Yii3 同一条口径）
         $defaults = (array) require dirname(__DIR__, 3) . '/src/Yii2/config/xhprof.php';
 
         $this->assertArrayNotHasKey('redis', $defaults);
         $this->assertSame([
-            'enable', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr',
+            'enable', 'sample_rate', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr',
             'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale',
         ], array_keys($defaults));
     }

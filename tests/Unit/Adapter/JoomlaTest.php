@@ -24,6 +24,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\JoomlaFakeApplication;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\JoomlaNoopDispatcher;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use Joomla\CMS\Log\Log;
 use Joomla\Event\Priority;
 use Joomla\Event\SubscriberInterface;
@@ -46,6 +47,8 @@ use Joomla\Input\Input;
  */
 class JoomlaTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** 站点根（JPATH_ROOT）。常量全进程只能定义一次，故在 setUpBeforeClass 里建。 */
     private static string $root;
 
@@ -108,6 +111,7 @@ class JoomlaTest extends TestCase
         // 否则下一个用例会被残留状态污染。放在 restore 之前：此刻 xhprof 是本次
         // 用例注入的 FakeCache，落库不会碰真 Redis。
         Xhprof::stopSampling();
+        $this->resetEntryStatics();
 
         $this->restoreXhprofStatics($this->saved);
         $_SERVER = $this->savedServer;
@@ -119,6 +123,22 @@ class JoomlaTest extends TestCase
             if (is_file($file)) {
                 unlink($file);
             }
+        }
+    }
+
+    /**
+     * 入口类的两个私有静态量逐用例归零（与 Yii2Test::resetEntryStatics 同因）。
+     *
+     * `$stopped` 不还原的后果是跨用例的假绿：某个用例把采样开起来又没走到止点，
+     * 下一个用例的表就建不起来。`$shutdownRegistered` 不还原则会让第一个用例之后的
+     * 兜底注册全部空转（进程内不可观测，但会让用例顺序依赖悄悄成立）。
+     */
+    private function resetEntryStatics(): void
+    {
+        foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
+            $prop = new \ReflectionProperty(Xhprof::class, $name);
+            $prop->setAccessible(true);
+            $prop->setValue(null, $value);
         }
     }
 
@@ -205,42 +225,6 @@ class JoomlaTest extends TestCase
     private function runs(FakeCache $cache): array
     {
         return $cache->lRange('xhprof:run_id', 0, -1);
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'log_ttl' => CoreXhprof::$log_ttl,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$log_ttl = $s['log_ttl'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     // ---------- RequestAdapter ----------
@@ -447,7 +431,7 @@ class JoomlaTest extends TestCase
     #[Test]
     public function responseAdapterFileMissingBecomes404(): void
     {
-        // 与其它 10 个框架同形：读不出文件给 404，而不是抛异常
+        // 与其它 11 个框架同形：读不出文件给 404，而不是抛异常
         $app = $this->app();
         (new ResponseAdapter($app))->file($this->tempFile('css') . '.missing')->send();
 
@@ -793,7 +777,7 @@ class JoomlaTest extends TestCase
         // 'disabled' 场景不启动采样就调 stopSampling()，观测的正是初值。
         // 这条不 gate ext-xhprof：它断言的是「没启动采样」，与扩展在不在无关。
         $this->assertSame(
-            ['runs' => 0, 'hasMain' => false],
+            ['runs' => 0, 'hasMain' => false, 'hasMainAll' => false],
             $this->runScenario('disabled'),
             '没启动过采样时 stopSampling() 必须是空操作（否则落一条没有 main() 帧的空 run）'
         );
@@ -826,9 +810,10 @@ class JoomlaTest extends TestCase
      *
      *  - delivered：采样启动，AFTER_RESPOND 送达 → 1 条，且 shutdown 兜底不重复落库
      *  - lost     ：采样启动，AFTER_RESPOND 不送达 → 只剩 shutdown 兜底，仍须 1 条
+     *  - second   ：同进程两个请求；第一个送达、第二个丢失 → 第一枚兜底回调仍须兜住第二个，2 条
      *  - disabled ：enable=false，从未启动采样，随后 stopSampling() → 0 条（观测 $stopped 初值）
      *
-     * @return array{runs:int, hasMain:bool}
+     * @return array{runs:int, hasMain:bool, hasMainAll:bool}
      */
     private function runScenario(string $scenario): array
     {
@@ -847,7 +832,7 @@ require $argv[1] . '/tests/Fixtures/Fakes.php';
 require $argv[1] . '/tests/Stubs/Framework/Joomla.php';
 
 $scenario = $argv[2];
-if (!in_array($scenario, ['delivered', 'lost', 'disabled'], true)) {
+if (!in_array($scenario, ['delivered', 'lost', 'second', 'disabled'], true)) {
     fwrite(STDERR, "unknown scenario: {$scenario}\n");
     exit(2);
 }
@@ -875,6 +860,11 @@ $plugin->onAfterInitialise();
 if ($scenario === 'delivered') {
     // 正常路径：AFTER_RESPOND 送达
     $plugin->onAfterRespond();
+} elseif ($scenario === 'second') {
+    // 第一个请求正常结束；第二个请求重新起采样，但响应阶段不送达 —— 兜底回调
+    // 每进程只注册了一枚（$shutdownRegistered），它必须仍然兜住第二个请求。
+    $plugin->onAfterRespond();
+    $plugin->onAfterInitialise();
 } elseif ($scenario === 'disabled') {
     // 从未启动采样：此刻 $stopped 还是初值，这次调用必须是空操作
     Xhprof::stopSampling();
@@ -884,10 +874,18 @@ if ($scenario === 'delivered') {
 // 本回调在入口类注册的 stopSampling 之后注册，因此读到的是兜底跑完的状态
 register_shutdown_function(static function () use ($cache): void {
     $runs = $cache->lRange('xhprof:run_id', 0, -1);
-    $data = $runs === [] ? null : unserialize((string) $cache->get('xhprof:xhprof_log:' . $runs[0]));
+    $hasMain = static function (string $rid) use ($cache): bool {
+        $data = unserialize((string) $cache->get('xhprof:xhprof_log:' . $rid));
+        return is_array($data) && array_key_exists('main()', $data);
+    };
+    $all = $runs !== [];
+    foreach ($runs as $rid) {
+        $all = $all && $hasMain($rid);
+    }
     echo json_encode([
         'runs' => count($runs),
-        'hasMain' => is_array($data) && array_key_exists('main()', $data),
+        'hasMain' => $runs === [] ? false : $hasMain($runs[0]),
+        'hasMainAll' => $all,
     ]), "\n";
 });
 PHP
@@ -932,16 +930,33 @@ PHP
 
         // 正常路径：onAfterRespond 落库一次，随后的 shutdown 兜底必须幂等（不是 2 条）
         $this->assertSame(
-            ['runs' => 1, 'hasMain' => true],
+            ['runs' => 1, 'hasMain' => true, 'hasMainAll' => true],
             $this->runScenario('delivered'),
             '正常路径应恰好落库一次（shutdown 兜底不得重复落库）'
         );
 
         // 异常路径：AFTER_RESPOND 不送达，只有 shutdown 兜底能救
         $this->assertSame(
-            ['runs' => 1, 'hasMain' => true],
+            ['runs' => 1, 'hasMain' => true, 'hasMainAll' => true],
             $this->runScenario('lost'),
             'AFTER_RESPOND 未送达时 shutdown 兜底必须把采样落库'
+        );
+    }
+
+    #[Test]
+    public function shutdownFallbackCoversSecondRequestThoughRegisteredOnce(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        // $shutdownRegistered 让兜底每进程只注册一次。守卫本身不可测（注册次数在 PHP 里
+        // 没有枚举 API，stopSampling 又幂等）；可测的是守卫不削弱兜底：同一进程的第二个
+        // 请求（响应丢失）仍然由第一枚回调落库——若守卫被写成「只兜第一个请求」，这条会红。
+        $this->assertSame(
+            ['runs' => 2, 'hasMain' => true, 'hasMainAll' => true],
+            $this->runScenario('second'),
+            '每进程只注册一次的兜底必须仍然覆盖第二个请求'
         );
     }
 }

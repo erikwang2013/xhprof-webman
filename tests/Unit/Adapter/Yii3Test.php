@@ -19,6 +19,7 @@ use ErikWang2013\Xhprof\Core\StaticController;
 use ErikWang2013\Xhprof\Core\Xhprof as CoreXhprof;
 use ErikWang2013\Xhprof\Core\XhprofProfiler;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
+use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakePsrResponse;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeResponseFactory;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeServerRequest;
@@ -28,9 +29,12 @@ use ErikWang2013\Xhprof\Yii3\Adapter\RedisAdapter;
 use ErikWang2013\Xhprof\Yii3\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Yii3\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Yii3\XhprofMiddleware;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 
 class Yii3Test extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<int, string> */
     private array $tempFiles = [];
 
@@ -60,59 +64,6 @@ class Yii3Test extends TestCase
         $this->tempFiles[] = $path;
 
         return $path;
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'profilerConfig' => $this->profilerConfig(),
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    /**
-     * XhprofProfiler::$config 是私有静态、没有公开的 reset，而 isEnabled() 优先读它。
-     * 不还原的话本类的 enable=true 会漏给同进程的其它测试类（它们若直接调 isEnabled()
-     * 就会读到别人的配置）。
-     */
-    private function profilerConfig(?array $set = null): ?array
-    {
-        $prop = new \ReflectionProperty(XhprofProfiler::class, 'config');
-        $prop->setAccessible(true);
-        $current = $prop->getValue();
-        if (func_num_args() === 1) {
-            $prop->setValue(null, $set);
-        }
-
-        return is_array($current) ? $current : null;
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        $this->profilerConfig($s['profilerConfig']);
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     // ================= RequestAdapter =================
@@ -517,6 +468,72 @@ class Yii3Test extends TestCase
         $this->assertSame(0, $default['database']);
     }
 
+    #[Test]
+    public function middlewareUsesInjectedLoggerWhenSaveFails(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        // 「注入的 logger 真的被用上」的最强可观测证据：让落库失败（缓存实现抛），
+        // Core 的 XhprofProfiler::stop() 会把异常转成一行 error 日志——那行必须落在
+        // 注入的 FakeLogger 上。只断言「反射读到同一个实例」测不到「有谁真的用它」。
+        $logger = new FakeLogger();
+        $cache = new class implements CacheInterface {
+            public function get(string $key): mixed
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function set(string $key, mixed $value, ?int $ttl = null): mixed
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function mget(array $keys): array
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function incr(string $key): int
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function lPush(string $key, mixed $value): int
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function rPop(string $key): mixed
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function lRange(string $key, int $start, int $end): array
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function del(string ...$keys): int
+            {
+                throw new \RuntimeException('cache down');
+            }
+
+            public function decr(string $key): int
+            {
+                throw new \RuntimeException('cache down');
+            }
+        };
+
+        $middleware = new XhprofMiddleware(new FakeResponseFactory(), ['enable' => true], $cache, $logger);
+        $response = $middleware->process(new FakeServerRequest('GET', '/index'), $this->requestHandler());
+
+        $this->assertSame(200, $response->getStatusCode(), '落库失败不得影响业务响应');
+        $this->assertCount(1, $logger->errors, '落库异常必须写进注入的 logger');
+        $this->assertStringContainsString('cache down', $logger->errors[0]);
+    }
+
     private function cacheOf(XhprofMiddleware $middleware): RedisAdapter
     {
         $prop = new \ReflectionProperty(XhprofMiddleware::class, 'cache');
@@ -752,7 +769,7 @@ class Yii3Test extends TestCase
         // 只能由本中间件那行 withHeaders() 满足（回退验证里已验证会变红）。
         $this->assertSame('text/html; charset=UTF-8', $response->getHeaderLine('Content-Type'));
         // no-cache：报告是即时数据，且访问 URL 可能带 ?token=xxx，不能让中间缓存留副本。
-        // 字面量与 Drupal 控制器（六框架里唯一有页面缓存可承重的那家）完全一致。
+        // 字面量与 Drupal 控制器及其余入口类一致（十二家同形）。
         // 判别力已实测（删掉源码那行 → 本条红）。裸断字面量在这里安全：PSR-7 的 header 不会像
         // HttpFoundation 的 ResponseHeaderBag 那样给没设过的响应算默认值。
         $this->assertSame('no-cache, private', $response->getHeaderLine('Cache-Control'));
@@ -941,15 +958,18 @@ class Yii3Test extends TestCase
     {
         $this->assertInstanceOf(\Psr\Http\Server\MiddlewareInterface::class, $this->middleware([], new FakeCache()));
 
-        // 构造参数 2/3 可省略（reflection 默认值）——README 的
+        // 构造参数 2/3/4 可省略（reflection 默认值）——README 的
         // `withMiddlewares([XhprofMiddleware::class])` 最简写法依赖这一点，
-        // 真实 yiisoft/di 的行为在 tools/contracts/cases/Yii3.php 里定死。
+        // 真实 yiisoft/di 的行为在 tools/contracts/cases/Yii3.php 里定死
+        // （容器只绑 ResponseFactoryInterface 时，未绑定的可选接口参数走反射默认值）。
         $reflection = new \ReflectionMethod(XhprofMiddleware::class, '__construct');
         $params = $reflection->getParameters();
-        $this->assertCount(3, $params);
+        $this->assertCount(4, $params);
         $this->assertTrue($params[1]->isDefaultValueAvailable());
         $this->assertNull($params[1]->getDefaultValue());
         $this->assertTrue($params[2]->isDefaultValueAvailable());
         $this->assertNull($params[2]->getDefaultValue());
+        $this->assertTrue($params[3]->isDefaultValueAvailable());
+        $this->assertNull($params[3]->getDefaultValue());
     }
 }

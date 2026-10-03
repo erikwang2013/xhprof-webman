@@ -18,6 +18,7 @@ use ErikWang2013\Xhprof\Symfony\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Symfony\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Symfony\XhprofListener;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -40,6 +41,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
  */
 class SymfonyTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<int, string> */
     private array $tempFiles = [];
 
@@ -74,40 +77,6 @@ class SymfonyTest extends TestCase
         file_put_contents($path, $content);
         $this->tempFiles[] = $path;
         return $path;
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     // ---------- 辅助 ----------
@@ -497,7 +466,7 @@ class SymfonyTest extends TestCase
         // 显式设，不靠 ResponseListener 的 prepare() 补（单测里根本没有 ResponseListener）
         $this->assertSame('text/html; charset=UTF-8', $event->getResponse()->headers->get('Content-Type'));
         // no-cache：报告是即时数据，且访问 URL 可能带 ?token=xxx，不能让 HttpCache /
-        // 反代留副本。字面量与 Drupal 控制器（六框架里唯一有页面缓存可承重的那家）一致。
+        // 反代留副本。字面量与 Drupal 控制器及其余入口类一致（十二家同形）。
         //
         // 注意这条不能裸断字面量：真 ResponseHeaderBag 对**没设过** Cache-Control 的响应会自己
         // 算出一个默认值，恰好也是 'no-cache, private' —— 真包上那样断是恒真的，删掉源码里那行

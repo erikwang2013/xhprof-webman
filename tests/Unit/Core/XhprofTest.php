@@ -516,6 +516,89 @@ class XhprofTest extends TestCase
         $this->assertSame(400, $result->status);
     }
 
+    // ---------------- token 形态校验 & 未配鉴权的留痕 ----------------
+
+    /** @return iterable<string, array{0: array<string, mixed>}> */
+    public static function arrayTokenProvider(): iterable
+    {
+        yield '已配 auth_token' => [['xhprof' => ['auth_token' => 'secret']]];
+        yield '未配 auth_token' => [['xhprof' => []]];
+    }
+
+    /**
+     * `?token[]=x` 必须是 400，不是 500、不是 403。
+     *
+     * 到达 hash_equals 之前 `(string) ['x']` 立 "Array to string conversion" warning：
+     * 升异常的宿主上 403 变 500，不升的宿主上每次请求一条日志噪音。本用例把 warning
+     * 当场升成异常复现那条路（与生产宿主的 error_reporting 口径无关——我们要的是
+     * **根本不产生这条 warning**）。两种配置（配了/没配 auth_token）都要走形态校验。
+     */
+    #[Test]
+    #[DataProvider('arrayTokenProvider')]
+    public function indexReturns400WhenTokenArrivesAsAnArray(array $config): void
+    {
+        $this->config = new FakeConfig($config);
+        $this->request = new FakeRequest(['token' => ['x']]);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        set_error_handler(static function (int $errno, string $errstr): bool {
+            throw new \ErrorException($errstr, 0, $errno);
+        });
+        try {
+            Xhprof::index();
+        } catch (\ErrorException $e) {
+            $this->fail('数组 token 不该走到 (string) 强转：' . $e->getMessage());
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame(400, $this->response->status, '数组 token 是坏请求（400），不是 403/500');
+        $this->assertSame('400 Bad Request', $this->response->body);
+        $this->assertSame([], $this->logger->errors, '形态拒绝不该顺带写日志');
+    }
+
+    /**
+     * 未配 auth_token 时默认不鉴权（拍板行为，不改），但每请求留一条说明性日志。
+     *
+     * 「报告页对任何人可读」是个安全相关的默认值，静默等于没人会去配它；
+     * 一条日志既留痕又不至于刷屏（一次 index() 只走到这个分支一次）。
+     */
+    #[Test]
+    public function unconfiguredAuthTokenLeavesExactlyOneWarningInTheLog(): void
+    {
+        $this->request = new FakeRequest([], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        $this->assertNull($this->config->get('xhprof.auth_token', null), '前提：这份配置没配 auth_token');
+
+        Xhprof::index();
+
+        $this->assertCount(1, $this->logger->errors, '未配 token 必须恰好留一条日志（每请求一条，不刷屏）');
+        $this->assertStringContainsString('auth_token', $this->logger->errors[0]);
+        $this->assertStringContainsString('without authentication', $this->logger->errors[0]);
+        // 页面本身照常渲染：留痕不是行为改变
+        $this->assertSame(200, $this->response->status);
+    }
+
+    /** 配了 auth_token（含校验失败那支）都不该出现「未配」的告警 —— 否则等于误导运维去查配置 */
+    #[Test]
+    public function configuredAuthTokenDoesNotLogTheUnconfiguredWarning(): void
+    {
+        $this->config = new FakeConfig(['xhprof' => ['auth_token' => 'secret']]);
+
+        // 校验失败：403，且日志里没有「未配」告警
+        $this->request = new FakeRequest(['token' => 'wrong-token']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        Xhprof::index();
+        $this->assertSame(403, $this->response->status);
+        $this->assertSame([], $this->logger->errors);
+
+        // 校验通过：正常渲染，同样没有那条告警
+        $this->request = new FakeRequest(['token' => 'secret'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        $this->assertIsString(Xhprof::index());
+        $this->assertSame([], $this->logger->errors);
+    }
+
     #[Test]
     public function indexWithTwoRunsAndNoWtsRendersHtml(): void
     {
@@ -664,6 +747,48 @@ class XhprofTest extends TestCase
         }
     }
 
+    /**
+     * 页面里每个内部链接的查询串都必须转义（裸 `&` 会被 HTML 解析器当实体起头）。
+     *
+     * 这不是风格问题：`&copy_x=1` 在浏览器里解出来是 `©_x=1` —— 参数**改名**，
+     * 于是相邻参数的值被污染（配了 auth_token 时点一下链接就 403，且现象是
+     * 「token 明明在 URL 里却 403」，极难归因）。Display 层原先有十几处手拼
+     * `"$base_path?" . http_build_query(...)`，不经过 report_url() 的转义——
+     * 本用例把「页面里所有内部链接」当整体钉住，新增链接点漏掉转义同样会红。
+     *
+     * 反例参数 `copy_x` 是**判别性输入**：没有转义时它必然变形成 `©_x`。
+     */
+    #[Test]
+    public function everyInternalLinkEscapesAmpersandsInTheQueryString(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRunAndLog($runId);
+        // copy_x 会与 run/source 相邻，制造出「参数之间必须有 & 分隔」的局面
+        $this->request = new FakeRequest(['run' => $runId, 'copy_x' => '1'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $html = (string) Xhprof::index();
+        $hrefs = $this->internalHrefs($html);
+        $joined = implode(' ', $hrefs);
+
+        // 夹具判别性：页面里必须真的出现「已转义的 &」，否则下面的断言会空转
+        $this->assertStringContainsString('&amp;', $joined, '页面里没有需要转义的 & —— 夹具失效，本用例会空转');
+
+        foreach ($hrefs as $href) {
+            // 先摘掉合法实体，再看有没有裸 &
+            $stripped = preg_replace('/&(?:amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);/', '', $href);
+            $this->assertStringNotContainsString(
+                '&',
+                (string) $stripped,
+                "链接 {$href} 里有裸 &：浏览器会把后面的参数名当实体吃掉（copy_x → ©_x）"
+            );
+        }
+
+        // 判别性输入的具体形态：copy_x 必须以 `&amp;copy_x=` 出现，且不得是 `&copy_x=`
+        $this->assertStringContainsString('&amp;copy_x=1', $joined, 'copy_x 参数没跟着链接走，夹具失效');
+        $this->assertStringNotContainsString('&copy_x=', $joined, '裸 &copy_x 会被浏览器解成 ©_x');
+    }
+
     // ---------------- 查询参数的类型校验 ----------------
 
     /** @return iterable<string, array{0:string}> */
@@ -725,6 +850,53 @@ class XhprofTest extends TestCase
         $this->assertStringContainsString('xp-nav', $html);
         // 「什么都不说」与「说了」的区别就是这条：修复前这里只有导航
         $this->assertGreaterThan(80, mb_strlen(strip_tags($html)), '页面不能只剩一条导航条');
+    }
+
+    /**
+     * 缓存里的值**损坏**（写了一半 / 被手工改过）时，与「过期」同一条降级路径：
+     * 空态说明 + 一条日志，而不是让 unserialize 的 warning 顺着渲染路径漏给宿主。
+     *
+     * 漏出去的两种下场都不可接受：warning 升异常的宿主（Laravel/Symfony 的默认行为）
+     * 上是一条坏记录把整页打成 500；不升的宿主上则是每次渲染一条无人能归因的噪音。
+     * 这是**入口级**验证：单测在 XHProfRunsDefaultTest，这里钉的是报告页真的没崩。
+     */
+    #[Test]
+    public function corruptRunDataRendersEmptyStateWithoutWarningEscape(): void
+    {
+        I18n::setLocale('zh_CN');
+        $runId = 'abc123def456789';
+        // 截断的序列化数组：正是「写了半截」的样子
+        $this->cache->set(Xhprof::$key_prefix . ':xhprof_log:' . $runId, 'a:1:{i:0;s:3:"trunc');
+        $this->request = new FakeRequest(['run' => $runId, 'source' => 'xhprof_foo']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        // PHPUnit 的 error_reporting 不含 E_WARNING（见 XHProfRunsDefaultTest 同名说明），
+        // 显式抬到 E_ALL 才是严格宿主的样子；`@` 抑制期间 error_reporting() 会收窄，按契约放过。
+        $previousReporting = error_reporting(E_ALL);
+        set_error_handler(static function (int $errno, string $errstr): bool {
+            if (!(error_reporting() & $errno)) {
+                return false;
+            }
+            throw new \ErrorException($errstr, 0, $errno);
+        });
+        try {
+            $result = Xhprof::index();
+        } catch (\ErrorException $e) {
+            $this->fail('unserialize 的 warning 漏到了宿主：' . $e->getMessage());
+        } finally {
+            restore_error_handler();
+            error_reporting($previousReporting);
+        }
+
+        $this->assertIsString($result);
+        $this->assertStringContainsString('<html', $result);
+        $this->assertStringContainsString('性能数据已不存在', $result, '损坏值必须走与过期相同的空态，而不是白屏');
+        $this->assertStringContainsString('xp-card-note', $result);
+        $this->assertStringContainsString(
+            'unserialize failed for Run ID: ' . $runId,
+            implode("\n", $this->logger->errors),
+            '降级必须留一条可归因的日志（未配 auth_token 的留痕也在同一份日志里，故整份比对）'
+        );
     }
 
     /**

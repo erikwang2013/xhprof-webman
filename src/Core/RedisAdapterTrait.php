@@ -24,7 +24,7 @@ trait RedisAdapterTrait
         // ——签名 set($key,$value,$expireResolution=null,$expireTTL=null,$flag=null)，
         // 传 int 会被拼成 [null, 604800 => null]，phpredis 只识别字符串键，
         // 于是静默退化为普通 SET，永不失效（log_ttl 形同虚设）。
-        // setex 在四个框架底层都是原生 phpredis，语义统一。
+        // setex 在十二家适配器底层都是原生 phpredis，语义统一。
         // 另外 TTL 为 0 时 phpredis 会报 "EXPIRE can't be < 1" 且**不发送命令**
         // （实测服务端零字节），故仅在 > 0 时带过期。
         $ttl = (int) $ttl;

@@ -80,8 +80,9 @@ class StaticController
         // 猜成 text/html；png/gif 两个猜对了），浏览器会拒收 text/plain 的 script、
         // 不套用 text/plain 的样式表 → 报告页在 Laravel 上无 JS 无 CSS。
         // （pet.svg 是后加的，不在那次实测里：它在 MIME_TYPES 有显式映射，本就不走嗅探。）
-        // 其余十个适配器的 file() 自己钉了同一个类型（都取自本文件的 MIME_TYPES），
-        // 这里补上后十二家输出一致；类型表复用 readFile() 那张，不新造第二张。
+        // 其余十个适配器（除 Laravel / Webman 两家 response()->file() 外）的 file() 自己
+        // 钉了同一个类型（都取自本文件的 MIME_TYPES），这里补上后十二家输出一致；
+        // 类型表复用 readFile() 那张，不新造第二张。
         // withHeaders() 必须在 file() 之后：file() 返回的是**新的**响应对象（Laravel 上是一个
         // 新建的 BinaryFileResponse），先挂头会被它整个替换掉，头就白挂了。
         return $response->file($realFile)->withHeaders([

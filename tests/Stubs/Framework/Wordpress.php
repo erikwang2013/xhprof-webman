@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 /**
- * WordPress 桩：只声明本包实际调用的 4 个 WP 全局函数（wp_unslash / status_header /
- * is_ssl / add_action），外加一个测试驱动用的钩子注册表 `WordpressHooks`。
+ * WordPress 桩：只声明本包实际调用的 6 个 WP 全局函数（wp_unslash / status_header /
+ * is_ssl / add_action / apply_filters / add_filter），外加一个测试驱动用的钩子注册表
+ * `WordpressHooks`。
  *
  * **签名必须逐字忠实**：`tools/contracts/cases/Wordpress.php`（L1）会把本文件声明的
  * 每个函数与真实 `php-stubs/wordpress-stubs v7.1.0` 做反射对比（参数名 / 可选性 /
@@ -51,6 +52,25 @@ namespace {
     {
         \ErikWang2013\Xhprof\Tests\Stubs\Framework\WordpressHooks::addAction((string) $hook_name, $callback, (int) $priority);
     }
+
+    /** 与 add_action 同形（真实 WP 里就是同一个 WP_Hook 机制，只是记账到过滤器表）。 */
+    function add_filter($hook_name, $callback, $priority = 10, $accepted_args = 1)
+    {
+        \ErikWang2013\Xhprof\Tests\Stubs\Framework\WordpressHooks::addFilter(
+            (string) $hook_name,
+            $callback,
+            (int) $priority,
+            (int) $accepted_args
+        );
+    }
+
+    /**
+     * `$args` 是变参（真实 WP 的声明就是这个形状）；本包只用两个参数的形式。
+     */
+    function apply_filters($hook_name, $value, ...$args)
+    {
+        return \ErikWang2013\Xhprof\Tests\Stubs\Framework\WordpressHooks::applyFilters((string) $hook_name, $value, $args);
+    }
 }
 
 namespace ErikWang2013\Xhprof\Tests\Stubs\Framework {
@@ -66,6 +86,9 @@ namespace ErikWang2013\Xhprof\Tests\Stubs\Framework {
         /** @var array<string, array<int, array<int, callable>>> hook → priority → callables */
         private static array $actions = [];
 
+        /** @var array<string, array<int, array<int, array{callback: callable, accepted: int}>>> 过滤器表（与 $actions 分开存，apply_filters 的语义不同） */
+        private static array $filters = [];
+
         /** @var array<int, array{code:int, description:string}> */
         public static array $statuses = [];
 
@@ -75,6 +98,7 @@ namespace ErikWang2013\Xhprof\Tests\Stubs\Framework {
         public static function reset(): void
         {
             self::$actions = [];
+            self::$filters = [];
             self::$statuses = [];
             self::$ssl = false;
         }
@@ -82,6 +106,31 @@ namespace ErikWang2013\Xhprof\Tests\Stubs\Framework {
         public static function addAction(string $hook, callable $callback, int $priority): void
         {
             self::$actions[$hook][$priority][] = $callback;
+        }
+
+        public static function addFilter(string $hook, callable $callback, int $priority, int $acceptedArgs): void
+        {
+            self::$filters[$hook][$priority][] = ['callback' => $callback, 'accepted' => $acceptedArgs];
+        }
+
+        /**
+         * 忠实于 `WP_Hook::apply_filters()`：按优先级升序，前一个回调的返回值是下一个的输入；
+         * 每个回调收到的是 `[值, ...$args]` 按 accepted_args 切片（默认 1 = 只收值本身，
+         * 与真实 WP 的 `array_slice($this->args, 0, $accepted_args)` 同形）。
+         *
+         * @param array<int, mixed> $args
+         */
+        public static function applyFilters(string $hook, mixed $value, array $args): mixed
+        {
+            $byPriority = self::$filters[$hook] ?? [];
+            ksort($byPriority);
+            foreach ($byPriority as $callbacks) {
+                foreach ($callbacks as $entry) {
+                    $value = ($entry['callback'])(...array_slice(array_merge([$value], $args), 0, $entry['accepted']));
+                }
+            }
+
+            return $value;
         }
 
         public static function recordStatus(int $code, string $description): void

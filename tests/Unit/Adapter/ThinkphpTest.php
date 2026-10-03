@@ -26,6 +26,7 @@ use ErikWang2013\Xhprof\Thinkphp\Adapter\RedisAdapter;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Thinkphp\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Thinkphp\Middleware;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 
 /**
  * phpredis 可用时声明内存版 \Redis 子类，用于直连路径测试。
@@ -116,6 +117,8 @@ if (extension_loaded('redis')) {
 
 class ThinkphpTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<int, string> */
     private array $tempFiles = [];
 
@@ -147,40 +150,6 @@ class ThinkphpTest extends TestCase
         file_put_contents($path, $content);
         $this->tempFiles[] = $path;
         return $path;
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     #[Test]

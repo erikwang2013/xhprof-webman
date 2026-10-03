@@ -6,6 +6,7 @@ declare(strict_types=1);
 // Symfony 侧没有框架级配置系统可读，这份默认值由 ConfigAdapter 合并用户传入的数组得到。
 return [
     'enable' => true,
+    'sample_rate' => 1.0,  //按比例采样：每个请求以该概率记录，0.05 = 5% 请求被采样；调低它以降低采样开销；1.0 = 全采(默认)，<=0 = 不采；只在采样入口处生效
     'time_limit' => 0,
     'log_num' => 1000,
     'view_wtred' => 3,

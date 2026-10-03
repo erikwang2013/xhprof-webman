@@ -111,7 +111,7 @@ class XhprofListener implements EventSubscriberInterface
         // 缺 ext-xhprof / ext-redis 时报一句并跳过采样（SamplingGuard 见 Core）。
         // 顺序不可换：available() 短路在前，enable=false 时才不会把「缺扩展」吞掉。
         // 此前这里只判 ext-xhprof —— 缺 redis 时会照常采样、落库必然失败，
-        // 报告页读缓存还会变成未捕获错误，而另外 10 个入口早已统一到 SamplingGuard。
+        // 报告页读缓存还会变成未捕获错误，而另外十一家入口早已统一到 SamplingGuard。
         if (!SamplingGuard::available() || !XhprofProfiler::isEnabled()) {
             return;
         }
@@ -172,8 +172,8 @@ class XhprofListener implements EventSubscriberInterface
         // （实测），要靠 FrameworkBundle 的 ResponseListener@0 调 prepare() 才补上 —— 那是三处
         // 脆弱依赖（@0 必须在位且顺序对 / 需要 symfony/mime / charset 取自监听器的构造参数，
         // 实测同一份 HTML 补出的是 'UTF-8' 还是 'utf-8' 取决于谁设的 charset）。
-        // 显式设了以后 prepare() 原样保留（环里有断言）。与另外五个框架统一，
-        // 两个字面量与 Drupal 控制器里的 $headers 一致（六框架同形）。
+        // 显式设了以后 prepare() 原样保留（环里有断言）。两个字面量与 Drupal
+        // 控制器及其余入口类一致（十二家同形）。
         /** @var Response $response */
         $response = $res->withStatus(200)
             ->withHeaders(['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'])

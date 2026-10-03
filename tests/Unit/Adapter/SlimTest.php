@@ -26,6 +26,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakePsrResponse;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeResponseFactory;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeServerRequest;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 
 /**
  * Slim 4 适配器 + 入口中间件。
@@ -36,6 +37,8 @@ use ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeServerRequest;
  */
 class SlimTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<int, string> */
     private array $tempFiles = [];
 
@@ -64,40 +67,6 @@ class SlimTest extends TestCase
         file_put_contents($path, $content);
         $this->tempFiles[] = $path;
         return $path;
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     /**
@@ -391,7 +360,7 @@ class SlimTest extends TestCase
         $block = (new ConfigAdapter())->get('xhprof');
 
         $this->assertSame(
-            ['enable', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
+            ['enable', 'sample_rate', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
             array_keys($block)
         );
         $this->assertTrue($block['enable']);
@@ -646,7 +615,7 @@ class SlimTest extends TestCase
         // 浏览器会把报告页按纯文本渲染。这条断言钉住这个显式 header。
         $this->assertSame('text/html; charset=UTF-8', $result->getHeaderLine('content-type'));
         // no-cache：报告是即时数据，且访问 URL 可能带 ?token=xxx，不能让中间缓存留副本。
-        // 字面量与 Drupal 控制器（六框架里唯一有页面缓存可承重的那家）完全一致。
+        // 字面量与 Drupal 控制器及其余入口类一致（十二家同形）。
         // 判别力已实测（删掉源码那行 → 本条红）。这里裸断字面量是安全的：PSR-7 的 header 不会
         // 像 HttpFoundation 的 ResponseHeaderBag 那样给没设过的响应算默认值。
         // （Symfony 那条在真包上必须用扰动式判别，见 SymfonyTest::reportPathRendersReportWithoutSampling。）

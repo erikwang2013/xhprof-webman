@@ -542,12 +542,12 @@ class XhprofDisplay
 
   public static function stat_description($stat)
   {
-    $diff_descriptions = XhprofDisplay::$diff_descriptions;
-    $diff_mode = XhprofDisplay::diff_mode();
-    // 非 diff 模式走词表；diff 模式仍用 $diff_descriptions 的英文字面量
-    // （diff 列头这次没纳入翻译范围，行为保持不变）。
-    $result = $diff_mode ? ($diff_descriptions[$stat] ?? '') : XhprofDisplay::col_text($stat);
-    return $result;
+    // 两种模式现在都走词表：普通列头是 `col.<统计项>`，diff 列头是 `diffcol.<统计项>`
+    // （diff 的字面量仍留在 $diff_descriptions 里，由 I18nTest 钉住与 en 词表逐字相同）。
+    // 取不到时 I18n::t() 逐级回落中文源，不会白掉一列——比原先 `?? ''` 的静默空串好。
+    return XhprofDisplay::diff_mode()
+      ? I18n::html('diffcol.' . $stat)
+      : XhprofDisplay::col_text($stat);
   }
 
   public static function profiler_report(
@@ -565,7 +565,6 @@ class XhprofDisplay
     $totals_2 = 0;
 
     $diff_mode = XhprofDisplay::diff_mode();
-    $base_path = XhprofDisplay::base_path();
 
     if (!empty($rep_symbol)) {
       $run1_data = XhprofLib::xhprof_trim_run($run1_data, array($rep_symbol));
@@ -598,12 +597,10 @@ class XhprofDisplay
       $base_url_params = XhprofLib::xhprof_array_unset($base_url_params, 'run2');
       $run1_link = XhprofDisplay::xhprof_render_link(
         sprintf(I18n::plain('diff.viewRun'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')),
-        "$base_path?" .
-          http_build_query(XhprofLib::xhprof_array_set(
-            $base_url_params,
-            'run',
-            $run1
-          ))
+        // 统一走 report_url()：手拼 `"$base_path?" . http_build_query(...)` 的
+        // 查询串不转义，裸 `&` 会被 HTML 解析器当实体起头（`copy_x` → `©_x`），
+        // 把相邻参数改名（详见 XhprofLib::report_url() 的说明）。
+        XhprofLib::report_url(array('run' => $run1), array(), $base_url_params)
       );
       $run2_txt = '<b>' . sprintf(
         I18n::plain('diff.run'),
@@ -613,12 +610,7 @@ class XhprofDisplay
 
       $run2_link = XhprofDisplay::xhprof_render_link(
         sprintf(I18n::plain('diff.viewRun'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')),
-        "$base_path?" .
-          http_build_query(XhprofLib::xhprof_array_set(
-            $base_url_params,
-            'run',
-            $run2
-          ))
+        XhprofLib::report_url(array('run' => $run2), array(), $base_url_params)
       );
     } else {
       $diff_text = I18n::plain('common.run');
@@ -636,14 +628,19 @@ class XhprofDisplay
       $links[] = $run2_link;
       $links[] = XhprofDisplay::xhprof_render_link(
         sprintf(I18n::plain('diff.invert'), I18n::plain($diff_mode ? 'common.diff' : 'common.run')),
-        "$base_path?" .
-          http_build_query($inverted_params)
+        // $inverted_params 就是完整视图参数（run1/run2 已互换），起点直接用它；
+        // 值为 null 的键 http_build_query() 天然跳过，与「删除」同义。
+        XhprofLib::report_url($inverted_params, array())
       );
     }
 
 
+    // 搜索框没有可见 label，只有 placeholder —— 读屏器不把 placeholder 当名字，
+    // 于是这个控件在读屏里是"未命名文本框"。aria-label 复用 search.placeholder
+    // 的键（不新增文案，见 nav.language 那个同样的 title+aria-label 形状）。
     $links[] = '<div class="xp-search"><input type="text" class="xhprof-search-input" placeholder="'
-      . I18n::plain('search.placeholder') . '" id="xhprofFuncSearch"><button type="button" id="funcSub">'
+      . I18n::plain('search.placeholder') . '" aria-label="' . I18n::plain('search.placeholder')
+      . '" id="xhprofFuncSearch"><button type="button" id="funcSub">'
       . I18n::plain('search.button') . '</button></div>';
     $echo_page = XhprofDisplay::xhprof_render_actions($links);
     // 这两个描述此前只 sprintf 了却从不输出，导致聚合报告的
@@ -663,7 +660,7 @@ class XhprofDisplay
     // `$total <= 0` 的提前返回只能拦住"全负"这一种情况。
     // 也别顺手换成别的局部变量：$run_delta/$symbol_tab1/$symbol_tab2/$inverted_params
     // 都是 diff-only、单 run 路径上**未定义**；$run2_data 虽已定义但那是空数组
-    // （非 diff 模式压根没有第二个 run）；$base_path 渲染器自己会取；
+    // （非 diff 模式压根没有第二个 run）；路径由 report_url() 自己取；
     // $run1 是 id，它该待在 $url_params['run'] 里（当参数数组传会拼出 `?<runid>=…`）。
     //
     // - 函数详情页回答的是"这个函数为什么慢"，不是"这次请求为什么慢"，故守 $rep_symbol。
@@ -787,7 +784,8 @@ class XhprofDisplay
   public static function print_td_pct($numer, $denom, $bold = false, $attributes = null)
   {
     $class = XhprofDisplay::get_print_class($numer, $bold);
-    $pct = "N/A%";
+    // `%` 是百分号不是 sprintf 占位符（写进词表就成了格式说明符），故拼在文案后面
+    $pct = I18n::plain('common.na') . '%';
     // 调用方会传入 'N/A'（无调用次数的均值）等非数值占位符；
     // 直接 abs()/除法在 PHP 8 下抛 TypeError，故统一在此收口。
     if (is_numeric($numer) && is_numeric($denom) && $denom != 0) {
@@ -808,17 +806,11 @@ class XhprofDisplay
     $metrics = XhprofDisplay::metrics();
     $format_cbk = XhprofDisplay::$format_cbk;
     $display_calls = XhprofDisplay::display_calls();
-    $base_path = XhprofDisplay::base_path();
 
     $echo_page = "";
     $echo_page .= ($row_index % 2 === 0) ? '<tr>' : '<tr class="xp-tr-alt">';
 
-    $href = "$base_path?" .
-      http_build_query(XhprofLib::xhprof_array_set(
-        $url_params,
-        'symbol',
-        $info["fn"]
-      ));
+    $href = XhprofLib::report_url(array('symbol' => $info["fn"]), array(), $url_params);
 
     $echo_page .= '<td>';
     $echo_page .= XhprofDisplay::xhprof_render_link(htmlspecialchars($info["fn"], ENT_QUOTES, 'UTF-8'), $href);
@@ -943,8 +935,7 @@ class XhprofDisplay
 
     $link = '';
     if ($f->symbol !== '') {
-      $href = XhprofDisplay::base_path() . '?'
-        . http_build_query(XhprofLib::xhprof_array_set($url_params, 'symbol', $f->symbol));
+      $href = XhprofLib::report_url(array('symbol' => $f->symbol), array(), $url_params);
       $link = ' ' . XhprofDisplay::xhprof_render_link(I18n::plain('diag.view'), $href);
     }
 
@@ -953,6 +944,45 @@ class XhprofDisplay
     // 用户看到的是被截断的函数名。断行规则写在样式表里，不在行内——见 .xp-diag-item。
     return '<li class="xp-diag-item" style="padding:6px 20px"><b>[' . $rule . ']</b> ' . $title . $link
       . '<br><span style="color:#666;font-size:12px">' . $detail . '</span></li>';
+  }
+
+  /**
+   * 一张表的表头行（`$stats` 与 `$pc_stats` 两处的循环逐字相同，抽成一处）。
+   *
+   * 排序列要带标记，这件事以前两个循环都没做：`td.sorted` 规则在样式表里
+   * 从未被任何代码命中，列头看不出「现在按哪列排、哪个方向」。
+   * `aria-sort` 给读屏器，`class="sorted"` 走样式表（th.sorted）。
+   * **方向**：fn 列按名称升序（`sort_cbk` 走 strtoupper 比较），其余列一律降序
+   * （diff 模式下按绝对值降序，方向仍是降序）。
+   *
+   * 数据格刻意**不**加 `.sorted`：diff 模式下格子的红/绿由 vrbar/vgbar 拥有语义，
+   * 而 `td.sorted` 与它们权重相同、位置在样式表更后面，加上去会把红绿覆盖成强调色。
+   */
+  private static function render_header_row($stats, $sortable_columns, $vwbar, $url_params): string
+  {
+    $sort_col = XhprofDisplay::sort_col();
+    $echo_page = '';
+    foreach ($stats as $stat) {
+      $desc = XhprofDisplay::stat_description($stat);
+      $sorted = ($stat === $sort_col);
+      $classes = array();
+      if ($stat !== "fn" && $vwbar !== '') $classes[] = 'vwbar';
+      if ($sorted) $classes[] = 'sorted';
+      $attr = $classes === array() ? '' : ' class="' . implode(' ', $classes) . '"';
+      if ($sorted) {
+        $attr .= ' aria-sort="' . ($stat === 'fn' ? 'ascending' : 'descending') . '"';
+      }
+      if (array_key_exists($stat, $sortable_columns)) {
+        $header = XhprofDisplay::xhprof_render_link(
+          $desc,
+          XhprofLib::report_url(array('sort' => $stat), array(), $url_params)
+        );
+      } else {
+        $header = $desc;
+      }
+      $echo_page .= "<th$attr><nobr>$header</th>";
+    }
+    return $echo_page;
   }
 
   /**
@@ -966,7 +996,6 @@ class XhprofDisplay
     $stats = XhprofDisplay::stats();
     $sortable_columns = XhprofDisplay::$sortable_columns;
     $vwbar = XhprofDisplay::$vwbar;
-    $base_path = XhprofDisplay::base_path();
     $size  = count($flat_data);
     if (!$limit) {              // no limit
       $limit = $size;
@@ -974,12 +1003,7 @@ class XhprofDisplay
     } else {
       $display_link = XhprofDisplay::xhprof_render_link(
         ' [ <b class=bubble>' . I18n::plain('flat.displayAll') . ' </b>]',
-        "$base_path?" .
-          http_build_query(XhprofLib::xhprof_array_set(
-            $url_params,
-            'all',
-            1
-          ))
+        XhprofLib::report_url(array('all' => 1), array(), $url_params)
       );
     }
 
@@ -988,20 +1012,7 @@ class XhprofDisplay
     $echo_page .= '<div class="xp-table-wrap"><table class="xp-table">';
     $echo_page .= '<thead><tr>';
 
-    foreach ($stats as $stat) {
-      $desc = XhprofDisplay::stat_description($stat);
-      if (array_key_exists($stat, $sortable_columns)) {
-        $href = "$base_path?"
-          . http_build_query(XhprofLib::xhprof_array_set($url_params, 'sort', $stat));
-        $header = XhprofDisplay::xhprof_render_link($desc, $href);
-      } else {
-        $header = $desc;
-      }
-
-      if ($stat == "fn")
-        $echo_page .= "<th><nobr>$header</th>";
-      else $echo_page .= "<th " . $vwbar . "><nobr>$header</th>";
-    }
+    $echo_page .= XhprofDisplay::render_header_row($stats, $sortable_columns, $vwbar, $url_params);
     $echo_page .= "</tr></thead>\n<tbody>";
 
     if ($limit >= 0) {
@@ -1040,7 +1051,6 @@ class XhprofDisplay
     $sort_col = XhprofDisplay::sort_col();
     $format_cbk = XhprofDisplay::$format_cbk;
     $display_calls = XhprofDisplay::display_calls();
-    $base_path = XhprofDisplay::base_path();
 
     $echo_page = '<div class="xp-main">';
     $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
@@ -1053,18 +1063,8 @@ class XhprofDisplay
         ),
         'run2'
       );
-      $href1 = "$base_path?" .
-        http_build_query(XhprofLib::xhprof_array_set(
-          $base_url_params,
-          'run',
-          $run1
-        ));
-      $href2 = "$base_path?" .
-        http_build_query(XhprofLib::xhprof_array_set(
-          $base_url_params,
-          'run',
-          $run2
-        ));
+      $href1 = XhprofLib::report_url(array('run' => $run1), array(), $base_url_params);
+      $href2 = XhprofLib::report_url(array('run' => $run2), array(), $base_url_params);
 
       $echo_page .= '<h3 style="margin:0 0 12px 0;font-size:15px">' . I18n::plain('diff.summary') . '</h3>';
       $echo_page .= '<table class="xp-table"><tr>';
@@ -1172,15 +1172,16 @@ class XhprofDisplay
    * `onmouseover` 的返回值会被浏览器丢弃（只有 `return false` 在个别事件上有意义），
    * 所以它从来不是触发器 —— 真正缺的是**消费端**。
    *
-   * 现状核对过（别凭印象）：`xhprof_report.js` 里那两个函数依赖的全局量
-   * （`diff_mode`/`func_name`/`metrics_desc`/`func_metrics`/`metrics_col`…）
-   * **页面是有的**，就注入在父/子表上方那段内联 `<script>` 里（见 `symbol_report()`
-   * 末尾）。所以缺的只有消费端：原版依赖的 `jquery.tooltip.js` 不在加载列表里
+   * 现状核对过（别凭印象）：消费端那两个 JS 函数（`ParentRowToolTip`/
+   * `ChildRowToolTip`）已于 2026-10 作为死代码删除（无触发点、无调用方）；
+   * 它们依赖的全局量（`diff_mode`/`func_name`/`metrics_desc`/`func_metrics`/
+   * `metrics_col`…）仍照旧注入在父/子表上方那段内联 `<script>` 里（见
+   * `symbol_report()` 末尾）。原版依赖的 `jquery.tooltip.js` 不在加载列表里
    * （`xhprof_include_js_css()` 只加载 5 个脚本），且该插件用了 jQuery 1.x 的
    * `$.browser.msie`，与 jQuery 3 不兼容。
    *
    * 也就是说：恢复父/子悬浮提示是一个特性（要一个消费端 + 浮层样式 + 13 语言的
-   * 文案——那两句英文句子目前写在 JS 里），不是把这一行加回来就行的修复。
+   * 文案——原 JS 里那两句英文已随死代码删除），不是把这一行加回来就行的修复。
    * 数据属性保留，`type`/`metric` 正是那个特性需要的输入；本方法因此只返回数据属性。
    */
   public static function get_tooltip_attributes($type, $metric)
@@ -1237,7 +1238,6 @@ class XhprofDisplay
     $run1,
     $run2
   ) {
-    $base_path = XhprofDisplay::base_path();
     // 这里的 "public static " 是移植时一次全局替换留下的残留（把 `function` 当成 PHP
     // 关键字替换了，连字符串也没放过）：它插在 `function` 前面，把下面那句复数拼接
     // `.'s'` 的语义也打断了（读起来是 "Child public static functions"）。上游原句就是
@@ -1255,12 +1255,7 @@ class XhprofDisplay
 
     $odd_even = 0;
     foreach ($results as $info) {
-      $href = "$base_path?" .
-        http_build_query(XhprofLib::xhprof_array_set(
-          $url_params,
-          'symbol',
-          $info["fn"]
-        ));
+      $href = XhprofLib::report_url(array('symbol' => $info["fn"]), array(), $url_params);
 
       $odd_even = 1 - $odd_even;
       if ($odd_even) {
@@ -1284,7 +1279,7 @@ class XhprofDisplay
     if (strncmp($info['fn'], 'run_init', 8) && $info['fn'] !== 'main()') {
       if (Xhprof::$symbol_lookup_url) {
         $link = XhprofDisplay::xhprof_render_link(
-          'source',
+          I18n::plain('sym.source'),
           Xhprof::$symbol_lookup_url . '?symbol=' . rawurlencode($info["fn"])
         );
         $echo_page .= ' (' . $link . ')';
@@ -1319,7 +1314,6 @@ class XhprofDisplay
     $format_cbk = XhprofDisplay::$format_cbk;
     $sort_col = XhprofDisplay::sort_col();
     $display_calls = XhprofDisplay::display_calls();
-    $base_path = XhprofDisplay::base_path();
 
     $echo_page = '<div class="xp-main"><div class="xp-card">';
     $possible_metrics = XhprofLib::xhprof_get_possible_metrics();
@@ -1341,10 +1335,8 @@ class XhprofDisplay
         ),
         'run2'
       );
-      $href1 = "$base_path?"
-        . http_build_query(XhprofLib::xhprof_array_set($base_url_params, 'run', $run1));
-      $href2 = "$base_path?"
-        . http_build_query(XhprofLib::xhprof_array_set($base_url_params, 'run', $run2));
+      $href1 = XhprofLib::report_url(array('run' => $run1), array(), $base_url_params);
+      $href2 = XhprofLib::report_url(array('run' => $run2), array(), $base_url_params);
 
       $echo_page .= "<h3 align=center>"
         . sprintf(I18n::plain('pc.summary'), $regr_impr, htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8'))
@@ -1392,16 +1384,19 @@ class XhprofDisplay
 
         // AVG (per call) Inclusive stat for metric
         $echo_page .= '<tr>';
-        $echo_page .= "<td>" . str_replace("<br>", " ", XhprofDisplay::col_text($m)) . " per call </td>";
-        $avg_info1 = 'N/A';
-        $avg_info2 = 'N/A';
+        $echo_page .= "<td>" . sprintf(
+          I18n::plain('pc.perCall'),
+          str_replace("<br>", " ", XhprofDisplay::col_text($m))
+        ) . "</td>";
+        $avg_info1 = I18n::plain('common.na');
+        $avg_info2 = I18n::plain('common.na');
         if ($symbol_info1['ct'] > 0) $avg_info1 = ($symbol_info1[$m] / $symbol_info1['ct']);
         if ($symbol_info2['ct'] > 0) $avg_info2 = ($symbol_info2[$m] / $symbol_info2['ct']);
-        // 任一侧 ct 为 0 时 avg 保持 'N/A'（字符串），不能直接相减：
+        // 任一侧 ct 为 0 时 avg 保持 common.na 的文案（字符串），不能直接相减：
         // PHP 8 下 float - 'N/A' 抛 TypeError。
         $avg_diff = (is_numeric($avg_info1) && is_numeric($avg_info2))
           ? ($avg_info2 - $avg_info1)
-          : 'N/A';
+          : I18n::plain('common.na');
         $echo_page .= XhprofDisplay::print_td_num($avg_info1, $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($avg_info2, $format_cbk[$m]);
         $echo_page .= XhprofDisplay::print_td_num($avg_diff, $format_cbk[$m], true);
@@ -1434,24 +1429,7 @@ class XhprofDisplay
     $echo_page .= '<div class="xp-table-wrap"><table class="xp-table xp-pc-section">';
     $echo_page .= '<thead><tr>';
 
-    foreach ($pc_stats as $stat) {
-      $desc = XhprofDisplay::stat_description($stat);
-      if (array_key_exists($stat, $sortable_columns)) {
-        $href = "$base_path?" .
-          http_build_query(XhprofLib::xhprof_array_set(
-            $url_params,
-            'sort',
-            $stat
-          ));
-        $header = XhprofDisplay::xhprof_render_link($desc, $href);
-      } else {
-        $header = $desc;
-      }
-
-      if ($stat == "fn")
-        $echo_page .= "<th><nobr>$header</th>";
-      else $echo_page .= "<th " . $vwbar . "><nobr>$header</th>";
-    }
+    $echo_page .= XhprofDisplay::render_header_row($pc_stats, $sortable_columns, $vwbar, $url_params);
     $echo_page .= "</tr></thead><tbody>";
 
     $echo_page .= "<tr class=\"xp-pc-current\"><td colspan=\"" . (count($pc_stats)) . "\">";
@@ -1729,9 +1707,10 @@ class XhprofDisplay
 
   public static function show_nav($url_params)
   {
-    $base_path = XhprofDisplay::base_path();
     $base_url_params = XhprofLib::xhprof_array_unset($url_params, 'symbol');
-    $top_link_query_string = "$base_path?" . http_build_query($base_url_params);
+    // 「运行报告」列表页的链接：起点是已裁掉 symbol 的视图参数（保留 run 之外的
+    // token/lang 等），查询串转义由 report_url() 统一负责。
+    $top_link_query_string = XhprofLib::report_url(array(), array(), $base_url_params);
     $li_html = "";
     // 文案逐条取词表再拼接：导航是「首页 | 运行报告 | 方法详情」这种 HTML 片段，
     // 不是整串独立文案，不能整段丢给译者（会让 href 一起被改写）。

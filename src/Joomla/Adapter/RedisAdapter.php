@@ -10,9 +10,9 @@ use ErikWang2013\Xhprof\Core\RedisAdapterTrait;
 /**
  * 契约 CacheInterface → phpredis。
  *
- * 其余 10 家里，webman/laravel/thinkphp/hyperf 四家能从框架自己那里拿到 Redis 句柄
+ * 其余 11 家里，webman/laravel/thinkphp/hyperf 四家能从框架自己那里拿到 Redis 句柄
  * （两个静态门面、Cache::store('redis')、容器里的 Redis）；slim/symfony/yii3/drupal/
- * wordpress/native 六家同样直连 phpredis，但连接参数写死或走配置项。**Joomla 内核没有**
+ * wordpress/native/yii2 七家同样直连 phpredis，但连接参数写死或走配置项。**Joomla 内核没有**
  * 可复用的 redis 句柄（既无 redis 缓存处理器也无 redis session handler），参数也只从
  * 环境变量取，所以这里直连 phpredis。
  *

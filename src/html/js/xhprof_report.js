@@ -14,169 +14,18 @@
  */
 
 /**
- * Helper javascript functions for XHProf report tooltips.
+ * Helper javascript functions for the XHProf report pages.
  *
  * @author Kannan Muthukkaruppan
  */
 
-// Take a string which is actually a number in comma separated format
-// and return a string representing the absolute value of the number.
-function stringAbs(x) {
-  return x.replace("-", "");
-}
-
-// Takes a number in comma-separated string format, and
-// returns a boolean to indicate if the number is negative
-// or not.
-function isNegative(x) {
-
-  return (x.indexOf("-") == 0);
-
-}
-
-function addCommas(nStr)
-{
-  nStr += '';
-  x = nStr.split('.');
-  x1 = x[0];
-  x2 = x.length > 1 ? '.' + x[1] : '';
-  var rgx = /(\d+)(\d{3})/;
-  while (rgx.test(x1)) {
-    x1 = x1.replace(rgx, '$1' + ',' + '$2');
-  }
-  return x1 + x2;
-}
-
-// Mouseover tips for parent rows in parent/child report..
-function ParentRowToolTip(cell, metric)
-{
-  var metric_val;
-  var parent_metric_val;
-  var parent_metric_pct_val;
-  var col_index;
-  var diff_text;
-
-  row = cell.parentNode;
-  tds = row.getElementsByTagName("td");
-
-  parent_func    = tds[0].innerHTML;  // name
-
-  if (diff_mode) {
-    diff_text = " diff ";
-  } else {
-    diff_text = "";
-  }
-
-  s = '<center>';
-
-  if (metric == "ct") {
-    parent_ct      = tds[1].innerHTML;  // calls
-    parent_ct_pct  = tds[2].innerHTML;
-
-    func_ct = addCommas(func_ct);
-
-    if (diff_mode) {
-      s += 'There are ' + stringAbs(parent_ct) +
-        (isNegative(parent_ct) ? ' fewer ' : ' more ') +
-        ' calls to ' + func_name + ' from ' + parent_func + '<br>';
-
-      text = " of diff in calls ";
-    }  else {
-      text = " of calls ";
-    }
-
-    s += parent_ct_pct + text + '(' + parent_ct + '/' + func_ct + ') to '
-      + func_name + ' are from ' + parent_func + '<br>';
-  } else {
-
-    // help for other metrics such as wall time, user cpu time, memory usage
-    col_index = metrics_col[metric];
-    parent_metric_val     = tds[col_index].innerHTML;
-    parent_metric_pct_val = tds[col_index+1].innerHTML;
-
-    metric_val = addCommas(func_metrics[metric]);
-
-    s += parent_metric_pct_val + '(' + parent_metric_val + '/' + metric_val
-      + ') of ' + metrics_desc[metric] +
-      (diff_mode ? ((isNegative(parent_metric_val) ?
-                    " decrease" : " increase")) : "") +
-      ' in ' + func_name + ' is due to calls from ' + parent_func + '<br>';
-  }
-
-  s += '</center>';
-
-  return s;
-}
-
-// Mouseover tips for child rows in parent/child report..
-function ChildRowToolTip(cell, metric)
-{
-  var metric_val;
-  var child_metric_val;
-  var child_metric_pct_val;
-  var col_index;
-  var diff_text;
-
-  row = cell.parentNode;
-  tds = row.getElementsByTagName("td");
-
-  child_func   = tds[0].innerHTML;  // name
-
-  if (diff_mode) {
-    diff_text = " diff ";
-  } else {
-    diff_text = "";
-  }
-
-  s = '<center>';
-
-  if (metric == "ct") {
-
-    child_ct     = tds[1].innerHTML;  // calls
-    child_ct_pct = tds[2].innerHTML;
-
-    s += func_name + ' called ' + child_func + ' ' + stringAbs(child_ct) +
-      (diff_mode ? (isNegative(child_ct) ? " fewer" : " more") : "" )
-        + ' times.<br>';
-    s += 'This accounts for ' + child_ct_pct + ' (' + child_ct
-        + '/' + total_child_ct
-        + ') of function calls made by '  + func_name + '.';
-
-  } else {
-
-    // help for other metrics such as wall time, user cpu time, memory usage
-    col_index = metrics_col[metric];
-    child_metric_val     = tds[col_index].innerHTML;
-    child_metric_pct_val = tds[col_index+1].innerHTML;
-
-    metric_val = addCommas(func_metrics[metric]);
-
-    if (child_func.indexOf("Exclusive Metrics") != -1) {
-      s += 'The exclusive ' + metrics_desc[metric] + diff_text
-        + ' for ' + func_name
-        + ' is ' + child_metric_val + " <br>";
-
-      s += "which is " + child_metric_pct_val + " of the inclusive "
-        + metrics_desc[metric]
-        + diff_text + " for " + func_name + " (" + metric_val + ").";
-
-    } else {
-
-      s += child_func + ' when called from ' + func_name
-        + ' takes ' + stringAbs(child_metric_val)
-        + (diff_mode ? (isNegative(child_metric_val) ? " less" : " more") : "")
-        + " of " + metrics_desc[metric] + " <br>";
-
-      s += "which is " + child_metric_pct_val + " of the inclusive "
-        + metrics_desc[metric]
-        + diff_text + " for " + func_name + " (" + metric_val + ").";
-    }
-  }
-
-  s += '</center>';
-
-  return s;
-}
+// 父/子行的悬浮提示已于 2026-10 删除（消费端两个函数 + 仅它们使用的三个辅助：
+// stringAbs/isNegative/addCommas）：触发器（onmouseover）早就移除，原版依赖的
+// jquery.tooltip.js 不在加载列表里，没有任何调用点。
+// 注意：这里刻意**不逐字写出**那两个被删的函数名 —— tests/Unit/Lib/XhprofDisplayTest.php
+// 有一条断言按字面量扫本文件（"死代码不许回来"），写出来就会把它自己变成假红。
+// 数据属性（get_tooltip_attributes 的 type/metric）与内联全局量保留，恢复该特性
+// 时需要新写消费端与 13 语言文案。
 
 $(document).ready(function() {
   // 整段包在 try/catch 里：jQuery 3 的 $(document).ready(fn) 内部走 Deferred，
@@ -189,18 +38,30 @@ $(document).ready(function() {
       var y = x.split('='); cur_params[y[0]] = y[1];
     });
   
-    $("#funcSub").click(function(){
+    var submitSearch = function(){
       cur_params['symbol'] = $("input.xhprof-search-input").val();
       location.search = '?' + jQuery.param(cur_params);
+    };
+
+    $("#funcSub").click(submitSearch);
+
+    // 回车 = 点「搜索」。以前只绑了 click，键盘用户敲完回车页面毫无反应
+    // （控件看起来能搜，实际什么都不发生）。用 keydown（keypress 已废弃），
+    // 判 13 用 e.which —— jQuery 对 keydown 也会填它，旧 WebView 同样认。
+    $("input.xhprof-search-input").keydown(function(e){
+      if (e.which === 13) {
+        e.preventDefault();
+        submitSearch();
+      }
     });
-  
+
   
     // 界面文案由 PHP 按当前语言注入（window.xpI18n，见 XhprofDisplay::xhprof_include_js_css）。
     // 没有它（例如单独打开这段 JS）就什么都不传，DataTables 用它自带的英文默认值 ——
     // 比猜一个语言好。
     var dtI18n = (window.xpI18n && window.xpI18n.dataTable) || null;
   
-    $('#table_id_example').DataTable({
+    var table = $('#table_id_example').DataTable({
       language: dtI18n ? {
         "sProcessing": dtI18n.processing,
         "sLengthMenu": dtI18n.lengthMenu,
@@ -229,8 +90,13 @@ $(document).ready(function() {
       "paging":true,
       "pagingType":"full_numbers",
       "lengthMenu":[20,50,100,200],
-      "order": [[ 2, "desc" ]],
+      // 列索引与 PHP 渲染的 <th> 一一对应，**加列时两边必须一起改**：
+      // 0 复选框 / 1 方法 / 2 请求地址 / 3 请求时间 / 4 耗时 / 5 内存 / 6 IP。
+      // 默认按「请求时间」（索引 3）倒序 —— 索引没跟着复选框列右移的话，
+      // 默认排序会落到别的列上（页面看着只是「排序怪怪的」，不报错）。
+      "order": [[ 3, "desc" ]],
       "columns": [
+        { "orderable": false},
         { "orderable": false},
         { "orderable": false},
         null,
@@ -238,10 +104,68 @@ $(document).ready(function() {
         null,
         { "orderable": false},
       ]
-  
+
     });
   
   
+    // ---- 「对比选中」：勾选恰好两条 → 跳到 run1/run2 对比页 ----
+    // 选择状态就存在复选框节点上（DataTables 翻页/排序复用同一批 TR 节点，
+    // 节点被移出文档时 checked 属性照样有效），不另建一份 JS 状态，避免两边不同步。
+    var $compareBtn = $('#xp-compare-btn');
+    var $compareHint = $('.xp-compare-hint');
+    var compareHintText = $compareHint.text();
+
+    // 按**列表顺序**收集选中的行（rows({order:'index'}) 是原始数据顺序，不受当前列
+    // 排序影响；同一秒入库的两条靠它分先后，见点击处的规则）。id 之外带上下单时间，
+    // 先后判定用它、不用行位置。
+    var selectedRuns = function () {
+      var picks = [];
+      table.rows({order: 'index'}).every(function () {
+        var cb = this.node().querySelector('input.xp-run-cb');
+        if (cb && cb.checked) {
+          picks.push({ id: cb.value, t: parseInt(cb.getAttribute('data-create-time'), 10) || 0 });
+        }
+      });
+      return picks;
+    };
+
+    var refreshCompare = function () {
+      var n = selectedRuns().length;
+      $compareBtn.prop('disabled', n !== 2);
+      // 恰好两条时收起提示；其余情况说明为什么按钮不可点（role=status，读屏会播报）
+      $compareHint.text(n === 2 ? '' : compareHintText);
+    };
+
+    $('#table_id_example').on('change', 'input.xp-run-cb', refreshCompare);
+
+    // 表头全选：作用于**所有**行（含翻页后被移出文档的那些），不是只勾当前页
+    $('#table_id_example').on('change', 'input.xp-run-all', function () {
+      var on = this.checked;
+      table.rows().every(function () {
+        var cb = this.node().querySelector('input.xp-run-cb');
+        if (cb) cb.checked = on;
+      });
+      refreshCompare();
+    });
+
+    $compareBtn.click(function () {
+      var picks = selectedRuns();
+      if (picks.length !== 2) return;
+      // run1 必须是**时间早的那条**（基线）、run2 是之后：diff 的 delta = run2 − run1，
+      // 负值（变快）才显示成绿色（XhprofDisplay::get_print_class 的注释）。列表新在前、
+      // 还能被用户点列头重排，所以先后不能按行位置取，只能按每行上的 data-create-time 取。
+      // 时间相等（同一秒入库）时，列表里靠后的那条反而更早（lPush 前插）→ 相等也要反转。
+      if (picks[0].t >= picks[1].t) picks.reverse();
+      // 与 submitSearch 同款：从当前查询串出发只改这三个参数，
+      // token/lang 等原样保留（丢了 token 就是 403）
+      cur_params['run1'] = picks[0].id;
+      cur_params['run2'] = picks[1].id;
+      cur_params['source'] = $compareBtn.attr('data-source') || 'xhprof_foo';
+      location.search = '?' + jQuery.param(cur_params);
+    });
+
+    refreshCompare();
+
   } catch (e) {
     if (window.console && console.error) console.error('xhprof report init failed:', e);
   }

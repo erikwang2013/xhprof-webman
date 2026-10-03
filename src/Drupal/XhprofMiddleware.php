@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 /**
  * Drupal 的 http_middleware（xhprof.services.yml，priority 1000）。
  *
- * 与其他五个框架不同，报告页不在这里短路：Drupal 走标准模块 + 路由，
+ * 与其他十一家不同，报告页不在这里短路：Drupal 走标准模块 + 路由，
  * 由 XhprofController 提供 /xhprof 与 /xhprof-assets（见 drupal/xhprof/xhprof.routing.yml）。
  *
  * 串接方式（已对 drupal/core 10.0.7 与 11.4.7 源码复核）：内侧 kernel **由

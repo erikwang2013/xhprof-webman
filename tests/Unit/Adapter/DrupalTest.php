@@ -25,6 +25,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\Drupal\FakeConfigFactory;
 use ErikWang2013\Xhprof\Tests\Stubs\Framework\Drupal\FakeLoggerFactory;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -44,6 +45,8 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
  */
 class DrupalTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<string, mixed> */
     private array $saved = [];
 
@@ -62,42 +65,6 @@ class DrupalTest extends TestCase
     }
 
     // ---------- 辅助 ----------
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'log_ttl' => CoreXhprof::$log_ttl,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$log_ttl = $s['log_ttl'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
-    }
 
     private function configFactory(array $config = []): FakeConfigFactory
     {
@@ -421,7 +388,7 @@ class DrupalTest extends TestCase
         // R-6/R-7 家族：$default 只在**键不存在**时生效（Drupal 的 ConfigBase::get() 那时给 null）。
         // 配置里显式写下的假值必须原样返回，尤其是空列表：用户把 ignore_url_arr 设成 []
         // 的意思是「什么都不过滤」，一旦被 $default（['/xhprof']）顶掉，报告页反而被排除在
-        // 采样之外，而且没有任何报错。（对照：另外五个适配器里 array_replace 整体替换列表键，
+        // 采样之外，而且没有任何报错。（对照：其余用 array_replace 合并的配置适配器整体替换列表键，
         // Drupal 这里没有合并步骤 —— 配置对象给什么就是什么，连"像合并"的机会都不该有。）
         $config = new ConfigAdapter($this->configFactory([
             'enable' => true,
@@ -468,9 +435,9 @@ class DrupalTest extends TestCase
         preg_match_all('/^    ([a-z_]+):$/m', $schema, $b);
 
         $this->assertSame(
-            ['enable', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
+            ['enable', 'sample_rate', 'time_limit', 'log_num', 'view_wtred', 'ignore_url_arr', 'assets_url', 'auth_token', 'key_prefix', 'log_ttl', 'locale'],
             array_values(array_unique($a[1])),
-            '安装文件应恰好声明这 10 个键'
+            '安装文件应恰好声明这 11 个键'
         );
         $this->assertSame($a[1], $b[1], 'install 与 schema 的键集/顺序必须一致');
     }
@@ -976,8 +943,8 @@ class DrupalTest extends TestCase
     public function assetsRouteMissesReturnEmptyBody(string $uri): void
     {
         // 未命中时 StaticController 给的是空 body + 保持框架默认状态码（200），
-        // 与另外五个框架的短路行为逐字一致（见 SlimTest::middlewareAssetsPathTraversalIsRejected）。
-        // 这里不返回 404：六框架同语义优先于「单看 Drupal 更该 404」。
+        // 与另外十一家入口的短路行为逐字一致（见 SlimTest::middlewareAssetsPathTraversalIsRejected）。
+        // 这里不返回 404：十二家同语义优先于「单看 Drupal 更该 404」。
         $response = (new XhprofController())->assets(Request::create($uri));
         $this->assertNotInstanceOf(BinaryFileResponse::class, $response);
         $this->assertSame('', $response->getContent());

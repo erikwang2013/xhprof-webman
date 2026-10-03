@@ -67,9 +67,10 @@ final class XhprofBootstrap
      * 没有它，显式 `stop()` 与 shutdown 回调会各调一次 `xhprof_disable()`，第二次返回空数据，
      * 而 XHProfRunsDefault::save_run() 不会因此提前返回：照样 lPush 一个 run_id、照样写
      * request_log（wt/mu 全 0）、xhprof_log 里写的是 `serialize(null) === 'N;'`（非空字符串，
-     * !empty 判真）——报告列表里凭空多一条没有数据的 run。已实测：无采样时调一次
-     * `Xhprof::xhprofStop()` 就会多出一条。XhprofProfiler::stop() 自身没有幂等保护，
-     * 所以这道守卫只能由入口类持有（与 WordPress / Joomla 两家入口同形）。
+     * !empty 判真）——报告列表里凭空多一条没有数据的 run（当时无幂等保护的实测：无采样时
+     * 调一次 `Xhprof::xhprofStop()` 就会多出一条）。现在 `XhprofProfiler::stop()` 自带幂等
+     * 守卫（Core `$running`：无配对 start 时直接返回），这道入口类守卫保留为第二道保险
+     * （与 Symfony / Yii2 / Joomla / WordPress 四家入口同形）。
      */
     private bool $stopped = true;
 
@@ -175,8 +176,8 @@ final class XhprofBootstrap
             // 鉴权失败时 index() 已经用响应适配器发过 403 并返回 null，不能再补发一次 200。
             if (is_string($html)) {
                 // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被页面缓存
-                // （应用的缓存层 / 反代）留存副本。两个字面量与 Drupal 控制器里的
-                // $headers 一致（六框架同形）。反代在本包之外，这条头是唯一能告诉
+                // （应用的缓存层 / 反代）留存副本。两个字面量与 Drupal 控制器及其余
+                // 入口类一致（十二家同形）。反代在本包之外，这条头是唯一能告诉
                 // 缓存层「别存」的信号。
                 $this->response
                     ->withStatus(200)

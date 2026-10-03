@@ -21,6 +21,7 @@ use ErikWang2013\Xhprof\Native\XhprofBootstrap;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeCache;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FileCache;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 
 /**
  * 原生 PHP（无框架）入口：适配器 + 报告页/资源短路 + 采样落库。
@@ -45,6 +46,8 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FileCache;
  */
 class NativeTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<string, mixed> */
     private array $server = [];
 
@@ -86,40 +89,6 @@ class NativeTest extends TestCase
         $_COOKIE = $this->cookie;
         $this->restoreXhprofStatics($this->saved);
         xhprof_disable();
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     /** 读私有属性：响应头 / 状态码在 CLI 下没有别的可观测出口。 */
@@ -399,7 +368,7 @@ class NativeTest extends TestCase
         // 与 README「配置项说明」表一致（ConfigParityTest 会跨十二家比对 key 集与默认值）
         $this->assertSame([
             'assets_url', 'auth_token', 'enable', 'ignore_url_arr',
-            'key_prefix', 'locale', 'log_num', 'log_ttl', 'time_limit', 'view_wtred',
+            'key_prefix', 'locale', 'log_num', 'log_ttl', 'sample_rate', 'time_limit', 'view_wtred',
         ], $keys);
         $this->assertNull($cfg->get('xhprof.auth_token'), '默认不鉴权');
     }

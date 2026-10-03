@@ -19,6 +19,7 @@ use ErikWang2013\Xhprof\Wordpress\Adapter\RedisAdapter;
 use ErikWang2013\Xhprof\Wordpress\Adapter\RequestAdapter;
 use ErikWang2013\Xhprof\Wordpress\Adapter\ResponseAdapter;
 use ErikWang2013\Xhprof\Wordpress\XhprofPlugin;
+use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 
 /**
  * WordPress 适配器 + 入口类。
@@ -33,6 +34,8 @@ use ErikWang2013\Xhprof\Wordpress\XhprofPlugin;
  */
 class WordpressTest extends TestCase
 {
+    use XhprofStaticsSnapshot;
+
     /** @var array<string, mixed> */
     private array $server = [];
 
@@ -70,40 +73,6 @@ class WordpressTest extends TestCase
         WordpressHooks::reset();
         $this->restoreXhprofStatics($this->saved);
         xhprof_disable();
-    }
-
-    private function snapshotXhprofStatics(): array
-    {
-        return [
-            'request' => CoreXhprof::$request,
-            'response' => CoreXhprof::$response,
-            'config' => CoreXhprof::$config,
-            'cache' => CoreXhprof::$cache,
-            'logger' => CoreXhprof::$logger,
-            'time_limit' => CoreXhprof::$time_limit,
-            'ignore_url_arr' => CoreXhprof::$ignore_url_arr,
-            'log_num' => CoreXhprof::$log_num,
-            'view_wtred' => CoreXhprof::$view_wtred,
-            'key_prefix' => CoreXhprof::$key_prefix,
-            'ui_html' => CoreXhprof::$ui_html,
-            'symbol_lookup_url' => CoreXhprof::$symbol_lookup_url,
-        ];
-    }
-
-    private function restoreXhprofStatics(array $s): void
-    {
-        CoreXhprof::$request = $s['request'];
-        CoreXhprof::$response = $s['response'];
-        CoreXhprof::$config = $s['config'];
-        CoreXhprof::$cache = $s['cache'];
-        CoreXhprof::$logger = $s['logger'];
-        CoreXhprof::$time_limit = $s['time_limit'];
-        CoreXhprof::$ignore_url_arr = $s['ignore_url_arr'];
-        CoreXhprof::$log_num = $s['log_num'];
-        CoreXhprof::$view_wtred = $s['view_wtred'];
-        CoreXhprof::$key_prefix = $s['key_prefix'];
-        CoreXhprof::$ui_html = $s['ui_html'];
-        CoreXhprof::$symbol_lookup_url = $s['symbol_lookup_url'];
     }
 
     /** 读私有属性：响应头 / 状态码没有别的可观测出口（CLI 下 header() 是 no-op）。 */
@@ -338,7 +307,7 @@ class WordpressTest extends TestCase
         // 与 README「配置项说明」表一致（Wave 2 的 ConfigParityTest 会跨框架比对 key 集）
         $this->assertSame([
             'assets_url', 'auth_token', 'enable', 'ignore_url_arr',
-            'key_prefix', 'locale', 'log_num', 'log_ttl', 'time_limit', 'view_wtred',
+            'key_prefix', 'locale', 'log_num', 'log_ttl', 'sample_rate', 'time_limit', 'view_wtred',
         ], $keys);
         $this->assertNull($cfg->get('xhprof.auth_token'), '默认不鉴权');
     }
@@ -525,6 +494,111 @@ class WordpressTest extends TestCase
 
         WordpressHooks::do('shutdown');
         $this->assertRunSaved($cache);
+    }
+
+    // ---------- 配置注入：常量（wp-config.php）→ 构造函数 → 过滤器 ----------
+
+    #[Test]
+    public function configFilterOverridesConstructorConfig(): void
+    {
+        if (!extension_loaded('xhprof')) {
+            $this->markTestSkipped('ext-xhprof 未加载');
+        }
+
+        // 构造函数拿到 enable=false，过滤器把它翻成 true。只要插件真的过了
+        // `xhprof_webman_config`，采样就会跑起来（挂止点 + 落库）；没过就一条都不写。
+        WordpressHooks::addFilter('xhprof_webman_config', static function (array $config): array {
+            return array_replace($config, ['enable' => true]);
+        }, 10, 1);
+
+        $cache = new FakeCache();
+        $plugin = new XhprofPlugin(['enable' => false], $cache, new FakeLogger());
+        $plugin->register();
+        WordpressHooks::do('plugins_loaded');
+
+        $this->assertSame(1, WordpressHooks::count('shutdown'), '过滤器没生效：enable 还是构造函数里的 false');
+        WordpressHooks::do('shutdown');
+        $this->assertRunSaved($cache);
+    }
+
+    #[Test]
+    public function configFilterReceivesConstructorConfigAsDefault(): void
+    {
+        $seen = null;
+        WordpressHooks::addFilter('xhprof_webman_config', static function (array $config) use (&$seen): array {
+            $seen = $config;
+            return $config;
+        }, 10, 1);
+
+        new XhprofPlugin(['log_num' => 42]);
+
+        $this->assertSame(['log_num' => 42], $seen, '过滤器的默认值就是构造函数收到的覆盖数组');
+    }
+
+    #[Test]
+    public function redisOptionsFlowFromConfigToAdapter(): void
+    {
+        // `redis` 子数组（可选扩展键，包内默认配置里没有）必须真的到达适配器的构造函数。
+        $plugin = new XhprofPlugin(['redis' => ['host' => 'redis.internal', 'port' => 6380, 'database' => 3]]);
+        $options = $this->prop($this->prop($plugin, 'cache'), 'options');
+
+        $this->assertSame('redis.internal', $options['host']);
+        $this->assertSame(6380, $options['port']);
+        $this->assertSame(3, $options['database']);
+        $this->assertSame('', $options['password'], '没给的键保留适配器默认值');
+
+        // 不配置时与加入本参数之前逐字相同（默认值就是旧硬编码的那几项）。
+        $defaults = $this->prop($this->prop(new XhprofPlugin(), 'cache'), 'options');
+        $this->assertSame(
+            ['host' => '127.0.0.1', 'port' => 6379, 'password' => '', 'database' => 0, 'timeout' => 1.0],
+            $defaults
+        );
+    }
+
+    #[Test]
+    public function muPluginReadsConfigConstantAndFilter(): void
+    {
+        // wp-config.php 形态：define('XHPROF_WEBMAN_CONFIG', [...]) → 构造函数覆盖数组 → 过滤器。
+        // 三层都从**真引导文件**过一遍，各取一个判别性输入：
+        //  - 常量里的 log_num=42 能到 Xhprof::$config（包内默认是 1000）；
+        //  - 过滤器把 time_limit 改成 7（常量没写它，所以这两条各自独立）。
+        $root = dirname(__DIR__, 3);
+        $code = <<<'PHP'
+define('ABSPATH', $argv[1] . '/');
+define('XHPROF_WEBMAN_CONFIG', ['log_num' => 42]);
+require $argv[1] . '/tests/Stubs/Framework/Wordpress.php';
+
+\ErikWang2013\Xhprof\Tests\Stubs\Framework\WordpressHooks::addFilter(
+    'xhprof_webman_config',
+    static function (array $config): array {
+        return array_replace($config, ['time_limit' => 7]);
+    },
+    10,
+    1
+);
+
+$_SERVER = ['REQUEST_URI' => '/index.php?p=1', 'REQUEST_METHOD' => 'GET', 'HTTP_HOST' => 'example.com'];
+$_GET = [];
+$_POST = [];
+
+register_shutdown_function(static function (): void {
+    $config = \ErikWang2013\Xhprof\Core\Xhprof::$config;
+    fwrite(STDERR, "\n__PROBE__" . json_encode([
+        'log_num' => $config === null ? null : $config->get('xhprof.log_num'),
+        'time_limit' => $config === null ? null : $config->get('xhprof.time_limit'),
+    ]) . "\n");
+});
+
+include $argv[1] . '/wordpress/xhprof-webman.php';
+\ErikWang2013\Xhprof\Tests\Stubs\Framework\WordpressHooks::do('plugins_loaded');
+PHP;
+
+        $run = $this->runCode($code, [$root]);
+        $this->assertSame(0, $run['code'], $run['stderr']);
+
+        $probe = $this->probe($run['stderr']);
+        $this->assertSame(42, $probe['log_num'], '引导文件没把 XHPROF_WEBMAN_CONFIG 传给入口类');
+        $this->assertSame(7, $probe['time_limit'], '过滤器没生效（或没在常量之后应用）');
     }
 
     /**

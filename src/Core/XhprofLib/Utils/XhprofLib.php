@@ -498,11 +498,15 @@ class XhprofLib
    *
    * @param array      $params 要设/覆盖的参数（值为 null 表示删掉该参数）
    * @param array|null $drop   要从当前请求里摘掉的参数，默认 {@see self::VIEW_PARAMS}
+   * @param array|null $base   查询串的**起点**，默认 `Xhprof::getRequest()->all()`。
+   *   Display 层手里已有一份按视图裁剪过的参数（`$base_url_params` 之类，页面里有
+   *   十几处这么用），传进来即可与请求参数完全等价、又不丢掉视图裁剪；传了 $base
+   *   之后 $drop 通常传 `array()`（裁剪已在调用方做完），两套裁剪叠加只会互相打架。
    */
-  public static function report_url($params = array(), $drop = null)
+  public static function report_url($params = array(), $drop = null, ?array $base = null)
   {
     $drop  = $drop === null ? self::VIEW_PARAMS : $drop;
-    $query = (array) Xhprof::getRequest()->all();
+    $query = $base !== null ? $base : (array) Xhprof::getRequest()->all();
     foreach ($drop as $k) {
       unset($query[$k]);
     }

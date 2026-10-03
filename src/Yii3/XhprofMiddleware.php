@@ -31,8 +31,10 @@ use ErikWang2013\Xhprof\Yii3\Adapter\ResponseAdapter;
  *
  * 报告页与静态资源由本中间件自服务：不注册控制器、不注册路由。
  *
- * 不复用 Core\MiddlewareTrait：它的 runXhprof() 没有报告页短路，复用就得改那个
- * 共享文件（只读）。
+ * 不复用 Core\MiddlewareTrait：那是 Laravel/Thinkphp 两家共享的包裹逻辑（适配器由
+ * `xhprofAdapters()` 提供），本类是 PSR-15 中间件，两者的入口契约与构造方式不同。
+ * （此前这里写的理由是「trait 的 runXhprof() 没有报告页短路」——该说法经核实不成立：
+ * MiddlewareTrait.php 的 runXhprof() 第 2 步就是报告页/资源短路。是否可统一**未再评估**。）
  */
 class XhprofMiddleware implements MiddlewareInterface
 {
@@ -50,7 +52,7 @@ class XhprofMiddleware implements MiddlewareInterface
     private LoggerInterface $logger;
 
     /**
-     * 后三个参数都是可选的，DI 容器解析不到时走反射默认值（已用真实 yiisoft/di 1.4 验证），
+     * 后四个参数都是可选的，DI 容器解析不到时走反射默认值（已用真实 yiisoft/di 1.4 验证），
      * 所以 `withMiddlewares([XhprofMiddleware::class])` 这种最简写法是成立的。
      *
      * @param array<string, mixed>|null $config 覆盖 src/Yii3/config/xhprof.php 的同名字段；
@@ -60,18 +62,23 @@ class XhprofMiddleware implements MiddlewareInterface
      *                                    这个参数是必需的显式注入点：单测要用内存版
      *                                    CacheInterface 断言「是否落库」，而中间件不接受
      *                                    容器、也不该在测试里连真实 Redis。
+     * @param LoggerInterface|null $logger 自定义日志出口（与 Yii2 的公有 `$logger`、Joomla 的
+     *                                     `?? new LogAdapter()` 同一注入点）。不传则用
+     *                                     LogAdapter 的缺省行为（error_log）；要把告警接进
+     *                                     框架日志传 `new LogAdapter($psrLogger)`。
      */
     public function __construct(
         ResponseFactoryInterface $responseFactory,
         ?array $config = null,
-        ?CacheInterface $cache = null
+        ?CacheInterface $cache = null,
+        ?LoggerInterface $logger = null
     ) {
         $this->responseFactory = $responseFactory;
         $this->config = new ConfigAdapter($config ?? []);
 
         $redisOptions = $this->config->get('xhprof.redis', []);
         $this->cache = $cache ?? new RedisAdapter(is_array($redisOptions) ? $redisOptions : []);
-        $this->logger = new LogAdapter();
+        $this->logger = $logger ?? new LogAdapter();
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
@@ -124,7 +131,7 @@ class XhprofMiddleware implements MiddlewareInterface
         // no-cache：报告是即时数据；也避免「匿名 + ?token=xxx」访问被页面缓存留存副本。
         // Content-Type 必须显式给：PSR-7 响应不带默认值，Yii3 的响应发送器也不补，
         // 缺了它浏览器会把报告页按纯文本渲染。与 Slim/WordPress 入口类同此处理。
-        // 两个字面量与 Drupal 控制器里的 $headers 一致（六框架同形）。
+        // 两个字面量与 Drupal 控制器及其余入口类一致（十二家同形）。
         return $res
             ->withStatus(200)
             ->withHeaders(['Cache-Control' => 'no-cache, private', 'Content-Type' => 'text/html; charset=UTF-8'])

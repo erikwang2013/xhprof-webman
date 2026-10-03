@@ -71,7 +71,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
  * （enable=true 记录 / enable=false 不记录 / handler 抛异常时止点仍执行）。
  *
  * 命名统一用 `{framework}Middleware*`，这里的「Middleware」是**入口类**的代称，
- * 各框架的实际形态见下表（命名统一是为了让六框架的接线事实在一处可平铺对照）：
+ * 各框架的实际形态见下表（命名统一是为了让十一家框架的接线事实在一处可平铺对照）：
  *   slimMiddleware*     → Slim\XhprofMiddleware（PSR-15）
  *   yii3Middleware*     → Yii3\XhprofMiddleware（PSR-15，工厂构造函数）
  *   symfonyMiddleware*  → Symfony\XhprofListener（事件订阅者，无 try/finally，止点靠 shutdown 兜底）
@@ -105,7 +105,7 @@ class WiringTest extends TestCase
 
     protected function setUp(): void
     {
-        // WordPress / Joomla 的适配器读超全局。这里只快照不赋值：不改变既有 6 个框架用例
+        // WordPress / Joomla 的适配器读超全局。这里只快照不赋值：不改变其余框架用例
         // 看到的环境，用例自己摆（摆过的东西 tearDown 一定会还原）。
         $this->savedServer = $_SERVER;
         $this->savedGet = $_GET;
@@ -131,6 +131,7 @@ class WiringTest extends TestCase
         // 就会这样），残留状态会污染下一个用例。补一次收尾，且放在 restore 之前 ——
         // 此刻落库打的是本用例注入的 FakeCache，不会碰真 Redis。
         JoomlaXhprof::stopSampling();
+        $this->resetJoomlaEntryStatics();
 
         // Yii2 入口的 `$stopped` / `$shutdownRegistered` 与 Joomla 那个静态量同因：
         // 用例若停在「采样中」，残留会污染下一个用例。
@@ -227,7 +228,7 @@ class WiringTest extends TestCase
     }
 
     /**
-     * FakeCache 版的同一件事（Slim / Yii3 / Symfony / WordPress / Joomla / Drupal 六家用它）。
+     * FakeCache 版的同一件事（Slim / Yii3 / Symfony / WordPress / Joomla / Drupal / Yii2 七家用它）。
      *
      * FakeCache 的 $store/$lists 是 private，只能走 CacheInterface 的公开方法读回来 ——
      * 读回来的仍是本次真实采样数据，所以「只断言键存在」那种空转不会发生。
@@ -716,7 +717,7 @@ class WiringTest extends TestCase
      *
      * **必须真子进程**：register_shutdown_function 的时机在进程内无法观测（SymfonyTest
      * 的 shutdownFallbackSavesWhenKernelRethrows 同此做法，这里只是把同一条接线放进
-     * 六框架对照表）。闭包在监听器的 shutdown 回调**之后**注册，读到的是兜底跑完的状态。
+     * 十一家对照表）。闭包在监听器的 shutdown 回调**之后**注册，读到的是兜底跑完的状态。
      *
      * @return array{runs:int, hasMain:bool}
      */
@@ -1059,6 +1060,16 @@ PHP
     }
 
     // ---------- Yii2 全流程 ----------
+
+    /** Joomla 入口的两个私有静态量归位（与 JoomlaTest::resetEntryStatics 同一条） */
+    private function resetJoomlaEntryStatics(): void
+    {
+        foreach (['stopped' => true, 'shutdownRegistered' => false] as $name => $value) {
+            $prop = new \ReflectionProperty(JoomlaXhprof::class, $name);
+            $prop->setAccessible(true);
+            $prop->setValue(null, $value);
+        }
+    }
 
     /** Yii2 入口的两个私有静态量归位（跨用例存活，见 tearDown 的注释） */
     private function resetYii2EntryStatics(): void

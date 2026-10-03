@@ -26,9 +26,29 @@ class RedisAdapter implements CacheInterface
 
     private ?\Redis $client = null;
 
+    /** @var array<string, mixed> */
+    private array $options;
+
+    /**
+     * @param array<string, mixed> $options host / port / password / database / timeout
+     *   与另外十一家的 Redis 适配器同键名同默认值；入口类把用户配置的 `redis` 子数组传进来
+     *   （包内默认配置文件没有这个键，所以不传时的行为与加入本参数之前逐字相同：
+     *   127.0.0.1:6379、无密码、库 0、1s 超时）。
+     */
+    public function __construct(array $options = [])
+    {
+        $this->options = array_replace([
+            'host' => '127.0.0.1',
+            'port' => 6379,
+            'password' => '',
+            'database' => 0,
+            'timeout' => 1.0,
+        ], $options);
+    }
+
     protected function redis(): \Redis
     {
-        // 懒连接：入口类每个请求都会 new 一个本适配器（XhprofPlugin:62），
+        // 懒连接：入口类每个请求都会 new 一个本适配器（XhprofPlugin:73），
         // 构造时建连就是每个请求一次握手——即使采样是关的。
         // 与 Drupal/Symfony/Yii3 三家的直连适配器同形，含显式 1s 连接超时：
         // 不给的话若目标主机的 SYN 被丢（防火墙），phpredis 会按内核默认重试两分钟，
@@ -36,7 +56,19 @@ class RedisAdapter implements CacheInterface
         // 同样由 XhprofProfiler::stop() 的 catch 兜住。
         if ($this->client === null) {
             $client = new \Redis();
-            $client->connect('127.0.0.1', 6379, 1.0);
+            $client->connect(
+                (string) $this->options['host'],
+                (int) $this->options['port'],
+                (float) $this->options['timeout']
+            );
+            $password = (string) $this->options['password'];
+            if ($password !== '') {
+                $client->auth($password);
+            }
+            $database = (int) $this->options['database'];
+            if ($database !== 0) {
+                $client->select($database);
+            }
             $this->client = $client;
         }
         return $this->client;

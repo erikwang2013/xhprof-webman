@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 「装了 ext-xhprof、缺 ext-redis」时十个采样入口的一致行为：报一句、跳过采样、
+ * 「装了 ext-xhprof、缺 ext-redis」时十二个采样入口的一致行为：报一句、跳过采样、
  * 报告页不进入采样路径。
  *
  * 缺扩展**没有**在进程内模拟：整个用例跑在 `php -n -d extension=…/xhprof.so` 子进程里，
@@ -20,9 +20,11 @@ use PHPUnit\Framework\TestCase;
  * 判别力由正控给出：子进程里绕过入口直接 `xhprofStart()/xhprofStop()`，探针必须看见这次
  * 落库（runs===1）。看不见说明探针本身空转，后面的 runs===0 一条证据都不算。
  *
+ * Symfony 已列入 ENTRIES（入口改用 `SamplingGuard::available()` 之后不再有专属缺口；
+ * 排除理由「只判了 extension_loaded('xhprof')」已随这次修正消失）。告警走注入的
+ * FakeLogger（入口有 `?LoggerInterface` 参数），与其余入口同一断言口径。
+ *
  * 已知覆盖缺口（不在这里假装覆盖了）：
- *  - Symfony：`src/Symfony/XhprofListener.php` 只判了 `extension_loaded('xhprof')`，
- *    该目录不在本次改动范围内，故不列入 ENTRIES；
  *  - WordPress 与 Native 的报告页分支以 `exit` 收尾（原生那条没有框架响应层，不 exit
  *    就会把应用输出叠在报告页后面），两者的报告路径只在真实 HTTP 下验
  *    （见 WordpressTest::reportPageAndAssetsOverRealHttp / NativeTest::reportPageAssetsAndBusinessOverRealHttp）。
@@ -30,7 +32,7 @@ use PHPUnit\Framework\TestCase;
 class MissingExtensionParityTest extends TestCase
 {
     /**
-     * 十一个采样入口。Hyperf 必须排最后：它的 `markHyperfContext()` 会把 Core 的 getter
+     * 十二个采样入口。Hyperf 必须排最后：它的 `markHyperfContext()` 会把 Core 的 getter
      * 切到协程 Context（进程内不可逆），此后 `Xhprof::getCache()` 读到的是 Hyperf 的容器。
      */
     private const ENTRIES = [
@@ -44,6 +46,7 @@ class MissingExtensionParityTest extends TestCase
         'joomla',
         'native',
         'yii2',
+        'symfony',
         'hyperf',
     ];
 
@@ -74,19 +77,9 @@ class MissingExtensionParityTest extends TestCase
         $this->assertTrue($out['drupal']['handler'], 'Drupal: 业务请求要进内核');
         $this->assertFalse($out['joomla']['closed'], 'Joomla: 业务请求不该 close()');
         $this->assertTrue($out['yii2']['handler'], 'Yii2: 业务请求不该被入口吞掉');
+        $this->assertTrue($out['symfony']['handler'], 'Symfony: 业务请求不该被入口吞掉');
 
         foreach (self::ENTRIES as $entry) {
-            if ($entry === 'yii3') {
-                // Yii3 的默认 LogAdapter 走 error_log()（无 PSR logger 注入点），告警只能在外层看 stderr
-                $this->assertSame([], $out[$entry]['warnings']);
-                $this->assertSame(
-                    1,
-                    substr_count($result['stderr'], 'redis扩展未安装，性能采样已跳过'),
-                    'Yii3: error_log 端口径的缺扩展告警应恰好一条'
-                );
-                continue;
-            }
-
             $this->assertCount(1, $out[$entry]['warnings'], "$entry: 应恰好一条缺扩展告警");
             // 说的是 redis 缺，不是 xhprof 缺：xhprof 在本子进程里是**装着**的
             $this->assertStringContainsString('redis扩展未安装，性能采样已跳过', $out[$entry]['warnings'][0], $entry);
@@ -100,10 +93,10 @@ class MissingExtensionParityTest extends TestCase
         $out = $this->probe($result);
 
         $this->assertMissingRedisEnvironment($out);
-        $this->assertSame(['__env__', '__positive_control__', 'yii3', 'slim', 'drupal', 'joomla', 'yii2'], array_keys($out));
+        $this->assertSame(['__env__', '__positive_control__', 'yii3', 'slim', 'drupal', 'joomla', 'yii2', 'symfony'], array_keys($out));
         $this->assertSame(1, $out['__positive_control__']['runs'], '正控没落库 → 探针空转，本用例失去判别力');
 
-        foreach (['yii3', 'slim', 'drupal', 'joomla', 'yii2'] as $entry) {
+        foreach (['yii3', 'slim', 'drupal', 'joomla', 'yii2', 'symfony'] as $entry) {
             $row = $out[$entry];
 
             $this->assertArrayNotHasKey('error', $row, "$entry: 报告页抛异常（缺 redis 时报告页不该致命）");
@@ -117,6 +110,8 @@ class MissingExtensionParityTest extends TestCase
         $this->assertTrue($out['joomla']['closed'], 'Joomla: 报告页分支应以 close() 收尾（真实实现是 exit）');
         $this->assertFalse($out['yii2']['handler'], 'Yii2: 报告页应由入口短路输出，业务处理不该跑');
         $this->assertTrue($out['yii2']['shortCircuit'], 'Yii2: 报告页分支应以 end() 收尾（桩里是 ExitException，真实实现是 exit）');
+        $this->assertFalse($out['symfony']['handler'], 'Symfony: 报告页应由入口 setResponse 短路，内核不该跑');
+        $this->assertTrue($out['symfony']['shortCircuit'], 'Symfony: 报告页分支应 setResponse（事件上能看到响应）');
 
         // Drupal 是例外且是既知设计：报告页由路由 + Controller/XhprofController 提供，
         // 入口不短路，只保证不采样。这里如实断言这条差异，不当成 bug 抹平。
@@ -166,15 +161,6 @@ class MissingExtensionParityTest extends TestCase
             $this->assertArrayNotHasKey('error', $row, "$entry: 入口抛异常");
             $this->assertFalse($row['leaked'], "$entry: 采样泄漏");
             $this->assertSame(0, $row['runs'], "$entry: 没有扩展却落了库");
-
-            if ($entry === 'yii3') {
-                // 同上：Yii3 的告警只出现在 stderr，两条都要有、各一次
-                $this->assertSame([], $row['warnings']);
-                foreach (['xhprof扩展未安装，性能采样已跳过', 'redis扩展未安装，性能采样已跳过'] as $message) {
-                    $this->assertSame(1, substr_count($result['stderr'], $message), "Yii3: {$message}");
-                }
-                continue;
-            }
 
             // 两条都要说，且顺序与 warnMissingOnce() 一致（先 xhprof 后 redis，照抄 Webman 原文案）
             $this->assertCount(2, $row['warnings'], "$entry: 应恰好两条缺扩展告警");
@@ -399,6 +385,7 @@ $arms['thinkphp'] = static function (string $uri) use ($runs, $leaked, $resetWar
 $arms['yii3'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
     $resetWarnOnce();
     $cache = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeCache();
+    $logger = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger();
     $handler = new class implements \Psr\Http\Server\RequestHandlerInterface {
         public bool $called = false;
 
@@ -412,11 +399,11 @@ $arms['yii3'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnc
     (new \ErikWang2013\Xhprof\Yii3\XhprofMiddleware(
         new \ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeResponseFactory(),
         ['enable' => true, 'ignore_url_arr' => []],
-        $cache
+        $cache,
+        $logger
     ))->process(new \ErikWang2013\Xhprof\Tests\Stubs\Framework\FakeServerRequest('GET', $uri), $handler);
 
-    // Yii3 的默认 LogAdapter 走 error_log()（无 PSR logger 注入点），告警只能在外层看 stderr
-    return ['warnings' => [], 'runs' => $runs(), 'leaked' => $leaked(), 'handler' => $handler->called];
+    return ['warnings' => $logger->errors, 'runs' => $runs(), 'leaked' => $leaked(), 'handler' => $handler->called];
 };
 
 $arms['slim'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
@@ -573,6 +560,46 @@ $arms['yii2'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnc
     ];
 };
 
+$arms['symfony'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
+    $resetWarnOnce();
+    $cache = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeCache();
+    $logger = new \ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger();
+    $listener = new \ErikWang2013\Xhprof\Symfony\XhprofListener(['enable' => true, 'ignore_url_arr' => []], $cache, $logger);
+    $kernel = new class implements \Symfony\Component\HttpKernel\HttpKernelInterface {
+        public function handle(
+            \Symfony\Component\HttpFoundation\Request $request,
+            int $type = self::MAIN_REQUEST,
+            bool $catch = true
+        ): \Symfony\Component\HttpFoundation\Response {
+            return new \Symfony\Component\HttpFoundation\Response('business');
+        }
+    };
+    $request = \Symfony\Component\HttpFoundation\Request::create($uri);
+    $event = new \Symfony\Component\HttpKernel\Event\RequestEvent(
+        $kernel,
+        $request,
+        \Symfony\Component\HttpKernel\HttpKernelInterface::MAIN_REQUEST
+    );
+    $listener->onRequest($event);
+
+    // 真实 Kernel 即使被 setResponse 短路也会走到 filterResponse() → kernel.response 照常分发，
+    // 所以这里无条件跑一遍 onResponse（报告页那条路径上它必须是无害的空操作）。
+    $listener->onResponse(new \Symfony\Component\HttpKernel\Event\ResponseEvent(
+        $kernel,
+        $request,
+        \Symfony\Component\HttpKernel\HttpKernelInterface::MAIN_REQUEST,
+        new \Symfony\Component\HttpFoundation\Response('business')
+    ));
+
+    return [
+        'warnings' => $logger->errors,
+        'runs' => $runs(),
+        'leaked' => $leaked(),
+        'handler' => !$event->hasResponse(),
+        'shortCircuit' => $event->hasResponse(),
+    ];
+};
+
 // Hyperf 放最后：markHyperfContext() 会把 Core 的 getter 切到协程 Context（static 在本进程里
 // 不可逆），此后的 arm 用 getCache() 会读到 Hyperf 的 cache。
 $arms['hyperf'] = static function (string $uri) use ($runs, $leaked, $resetWarnOnce): array {
@@ -627,7 +654,7 @@ $out['__positive_control__'] = (static function () use ($runs, $leaked): array {
 })();
 
 if ($mode === 'report') {
-    foreach (['yii3', 'slim', 'drupal', 'joomla', 'yii2'] as $entry) {
+    foreach (['yii3', 'slim', 'drupal', 'joomla', 'yii2', 'symfony'] as $entry) {
         try {
             $out[$entry] = $arms[$entry]('/xhprof');
         } catch (\Throwable $e) {
@@ -646,7 +673,7 @@ if ($mode === 'report') {
     }
     $out['webman_x3'] = ['warnings' => $warnings, 'runs' => $row['runs'], 'leaked' => $row['leaked'], 'requests' => 3];
 } else {
-    foreach (['webman', 'laravel', 'thinkphp', 'yii3', 'slim', 'drupal', 'wordpress', 'joomla', 'native', 'yii2', 'hyperf'] as $entry) {
+    foreach (['webman', 'laravel', 'thinkphp', 'yii3', 'slim', 'drupal', 'wordpress', 'joomla', 'native', 'yii2', 'symfony', 'hyperf'] as $entry) {
         try {
             $out[$entry] = $arms[$entry]('/business');
         } catch (\Throwable $e) {
