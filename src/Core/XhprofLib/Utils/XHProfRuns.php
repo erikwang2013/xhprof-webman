@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * CHANGES FROM UPSTREAM: namespaced under ErikWang2013\Xhprof\Core\XhprofLib,
- * ten-framework adapters in place of the original PHP superglobals, an i18n
+ * twelve-framework adapters in place of the original PHP superglobals, an i18n
  * layer, and the fixes recorded in this repository's history. The rest of this
  * package (everything outside src/Core/XhprofLib/) is the MIT-licensed work of
  * this project — see LICENSE and NOTICE.

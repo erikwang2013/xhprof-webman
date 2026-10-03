@@ -29,8 +29,14 @@ use PHPUnit\Framework\TestCase;
  *   - `xdebug.mode=off`：0.62s；
  *   - `xdebug.mode=profile`（本机默认）：同一渲染 11.9s（≈19×）——慢的是环境不是代码。
  * 60s 对关闭 xdebug 的 CI 是 ~100× 余量，对本机 profile 模式只剩 ~5×：机器更慢或
- * xdebug 开销更深时会越线，**越线时先看 xdebug.mode，那不是回归**。结论只在 CI 或
- * `php -d xdebug.mode=off` 下解读（profile 模式下计时被污染，红了也说明不了渲染管线）。
+ * xdebug 开销更深时会越线，**越线时先看 xdebug.mode，那不是回归**。
+ *
+ * 2026-10-04 把上面这条结论**编码进阈值**：本机实测 profile 下同一渲染已到 61.3s
+ * （并发负载下 139.7s；off 仍 ~1.95s 级），贴着 60s 反复触发「环境性红」——会无故
+ * 变红的闸门会被忽略而不被调查，所以 xdebug 处于非 off 模式时门限 ×40（profile/
+ * debug/coverage 都是「慢的是环境」；off 模式与 CI 各格不受影响，仍是 60s 全强度）。
+ * 判据不因缩放失效：真 O(n²) 在 off 模式就 ~100× 越线，在缩放后的门限下要越线得慢到
+ * 2500s——那是「小时级」的爆炸，不是 10% 的抖动，探测器仍然只看数量级。
  */
 class RenderBombTest extends TestCase
 {
@@ -136,12 +142,25 @@ class RenderBombTest extends TestCase
         $this->assertStringContainsString('fn' . (self::FUNCTIONS - 1) . '()', $html, '最后一个函数没渲染出来');
         $this->assertGreaterThan(1_000_000, strlen($html), '页面体量不像全量渲染（参考值 ≈3.9MB）');
 
-        $this->assertLessThan(self::BOMB_SECONDS, $elapsed, sprintf(
-            '渲染耗时 %.1fs 超过 %.0fs 炸弹门限。先看 xdebug.mode：profile（本机默认）下同一渲染'
-            . '可慢约 19×（实测 0.62s → 11.9s），越线先当环境问题复测，再当渲染管线的算法回归查',
+        $this->assertLessThan($this->bombLimit(), $elapsed, sprintf(
+            '渲染耗时 %.1fs 超过 %.0fs 炸弹门限（xdebug.mode=%s%s）。先看 xdebug.mode：非 off 模式下'
+            . '同一渲染可慢一两个数量级（实测 profile 已到 61.3s，负载下 139.7s），越线先当环境问题'
+            . '复测，再当渲染管线的算法回归查',
             $elapsed,
-            self::BOMB_SECONDS
+            $this->bombLimit(),
+            (string) ini_get('xdebug.mode'),
+            $this->bombLimit() > self::BOMB_SECONDS ? '，已按 ×40 环境缩放' : ''
         ));
+    }
+
+    /**
+     * 本轮实际门限：xdebug 非 off（profile/debug/coverage/trace）时 ×40，见类注释。
+     */
+    private function bombLimit(): float
+    {
+        $mode = trim((string) ini_get('xdebug.mode'));
+
+        return ($mode === '' || $mode === 'off') ? self::BOMB_SECONDS : self::BOMB_SECONDS * 40;
     }
 
     /**

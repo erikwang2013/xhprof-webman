@@ -876,9 +876,11 @@ class DrupalTest extends TestCase
     {
         // 中间件没跑（单测直接实例化控制器 / 别的入口调用）时的兜底：
         // 路由必须永远有响应，而不是在 null 上调用方法变成 500。
-        // 刻意不动 $response：Xhprof::getResponse() 为 null 时走控制器里的 new Response() 分支。
+        // 前置条件**显式建立**（不依赖类进入时的环境——顺序敏感的红就出在这条假设上：
+        // 别的类若漏还原 $response，随机序下这里的快照会带着脏值进来）。
         CoreXhprof::$request = new FakeRequest();
         CoreXhprof::$cache = new FakeCache();
+        CoreXhprof::$response = null;
         $this->assertNull(CoreXhprof::getResponse(), '前置条件：没有 ResponseAdapter');
 
         $response = (new XhprofController())->report();

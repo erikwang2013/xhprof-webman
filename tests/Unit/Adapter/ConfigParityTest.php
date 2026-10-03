@@ -18,6 +18,7 @@ use ErikWang2013\Xhprof\Yii3\XhprofMiddleware as Yii3XhprofMiddleware;
  * 框架不生效，而两边都不报错。这里钉住：
  *   - 键集完全相同（含顺序）；
  *   - 每个键的默认值逐项相同（Drupal 是 YAML，形态不同、键与值相同）；
+ *   - 13 份 README（zh 源 + 12 译文）配置表第一列的键名与代码键集**双向**逐字一致；
  *   - src/*\/config 下不能再冒出没被列进来的 xhprof 配置文件。
  *
  * 比对的是「解析后的数组」，不是文件字节：注释、空行、`86400 * 7` vs `604800`
@@ -263,5 +264,183 @@ class ConfigParityTest extends TestCase
         // 且 RedisAdapter 构造函数刻意不碰 ext-redis，所以这里不会真去连）。
         $middleware = new Yii3XhprofMiddleware(new FakeResponseFactory(), ['enable' => false, 'redis' => ['host' => '127.0.0.1']]);
         $this->assertInstanceOf(Yii3XhprofMiddleware::class, $middleware);
+    }
+
+    // ---------- 13 份 README 的配置表 ↔ 代码键集 ----------
+
+    /**
+     * 13 份 README 源：zh 根文件 + `tools/i18n/readme/*.md`（12 种语言）。
+     *
+     * 语言文件用 glob 收、不写死 12 个路径：新增一种语言时自动进这条闸，
+     * 不用记得回来改列表（写死的列表只会静默漏检新语言）。份数守卫在调用方。
+     *
+     * @return list<string> 相对路径，zh 在前
+     */
+    private function readmeSources(): array
+    {
+        $sources = ['README.md'];
+        foreach (glob($this->root() . '/tools/i18n/readme/*.md') ?: [] as $abs) {
+            $sources[] = 'tools/i18n/readme/' . basename($abs);
+        }
+
+        return $sources;
+    }
+
+    /**
+     * 解析一份 README 的配置表键列（第一列反引号包起来的键名）。
+     *
+     * 定位规则 = **全文档反引号键名行最多的那张表**。标题文本定不了位：译文的小节
+     * 标题是翻译过的（`## Requirements` / `## 動作要件`），而键名列是唯一跨语言同形的
+     * 形状。实测余量：13 份文档里配置表都有 19 个键名行，第二大的是 5 个（清理一节
+     * 那张），差 14。解析不出（< 10 个）由调用方报红，不静默通过。
+     *
+     * 解析前剥掉 bidi 控制符：ar.md 的部分行在键名反引号后跟着 U+200E（LRM），
+     * 「行首 `|` + 反引号 + 键名 + 反引号 + 空白 + `|`」的收尾就断在它上面——实测
+     * 不剥时 ar 只认出 9/19 个键名行（键名本身没错，是行尾多了一个不可见字符），
+     * 剥掉后 19/19，且 13 份键列逐字相等。剥的是 LRM/RLM/ALM 与 LRE..PDI 这一组
+     * 不可见控制符，不碰任何可见字符。
+     *
+     * @return list<string>
+     */
+    private function documentedConfigKeys(string $markdown): array
+    {
+        $best = [];
+        $current = [];
+        // 不用 `\R`：没有 /u 时它连字节 0x85（NEL）也当换行，而 0x85 是很多汉字
+        // UTF-8 编码的续字节——实测 672 行的 README 被拆成 1070 段、汉字从中间裂开，
+        // 表格行自然一条也匹配不上。只认真正的行尾序列。
+        foreach (preg_split('/\r\n|\n|\r/', $markdown) as $line) {
+            $line = (string) preg_replace('/[\x{061C}\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $line);
+            if (!str_starts_with($line, '|')) {
+                if (count($current) > count($best)) {
+                    $best = $current;
+                }
+                $current = [];
+                continue;
+            }
+            // 行首 `|` + 可选空白 + 反引号——表头（`| Option |`）与分隔行（`|------|`）
+            // 都不以反引号开头，不会命中。
+            if (preg_match('/^\|\s*`([^`]+)`\s*\|/', $line, $m) === 1) {
+                $current[] = $m[1];
+            }
+        }
+        if (count($current) > count($best)) {
+            $best = $current;
+        }
+
+        return $best;
+    }
+
+    /**
+     * 每份 README 的配置表键列 ↔ 代码键集，**双向、逐字**。
+     *
+     * 补的是「新键无文档」这条全绿路径：本类其余用例钉住 12 份配置互相齐步走、
+     * i18n 只保 13 份 README 的**表格总行数**一致——所有配置（含 EXPECTED_KEYS）一起
+     * 加一个新键时全绿，13 份 README 却没人更新；而译文的键名是标识符（不随语言
+     * 翻译），改了名就是文档错，此前没有任何检查看得见。
+     *
+     * 只比键名集合，不比默认值文本（`86400 * 7` vs `604800` 这类书写差异会假红）。
+     * 代表配置取 Slim 一份，与本类其余用例同一个参照：另外 11 份由
+     * everyFrameworkConfigHasTheSameKeysInTheSameOrder 钉成同一键集，多读 11 份
+     * 只是把同一条链条数三遍。也不比顺序：文档表格的行序是排版，不是契约。
+     *
+     * @param array<string, string> $docs 相对路径 => Markdown
+     * @param list<string> $coded 代码键集（代表配置的 array_keys）
+     * @return list<string> 问题清单（空 = 全过）
+     */
+    private function configTableProblems(array $docs, array $coded): array
+    {
+        $problems = [];
+        foreach ($docs as $rel => $markdown) {
+            $keys = $this->documentedConfigKeys($markdown);
+            // 解析失效与「文档真的缺键」必须分开报：前者指向解析/表格形态，后者指向内容
+            if (count($keys) < 10) {
+                $problems[] = sprintf('%s: 配置表键列只解析出 %d 个键（表格形态或定位规则变了，先修解析）', $rel, count($keys));
+                continue;
+            }
+            foreach (array_diff($keys, $coded) as $extra) {
+                $problems[] = sprintf('%s: 表里写了代码里没有的键 `%s`（写错名，或配置键被删了没同步文档）', $rel, $extra);
+            }
+            foreach (array_diff($coded, $keys) as $missing) {
+                $problems[] = sprintf('%s: 代码键 `%s` 没写进这份配置表', $rel, $missing);
+            }
+        }
+
+        return $problems;
+    }
+
+    #[Test]
+    public function theThirteenReadmeConfigTablesDocumentExactlyTheCodeKeySet(): void
+    {
+        $sources = $this->readmeSources();
+        // 份数守卫：glob 坏掉（目录挪了 / 后缀变了）时不能只剩 zh 一份还悄悄全绿
+        $this->assertGreaterThanOrEqual(13, count($sources), '13 份 README 源没凑齐：工具目录结构变了，先修 readmeSources()');
+
+        $docs = [];
+        foreach ($sources as $rel) {
+            $this->assertFileExists($this->root() . '/' . $rel, "$rel 不见了");
+            $docs[$rel] = (string) file_get_contents($this->root() . '/' . $rel);
+        }
+
+        $problems = $this->configTableProblems($docs, array_keys($this->loadPhp('src/Slim/config/xhprof.php')));
+        $this->assertSame(
+            [],
+            $problems,
+            "13 份 README 的配置表键列必须逐字等于代码键集（键名是标识符，不随语言翻译）：\n" . implode("\n", $problems)
+        );
+    }
+
+    /**
+     * 检查有效性的证明：13 份真 README（读进内存），每次只改一处，必须只报出改掉的
+     * 那一份。不落盘改任何 README——它们正被 i18n / docs 的写者拿着（真文件的就地
+     * 变异用一次性 /tmp 备份 + md5 守卫还原另做，常驻证明走内存副本）。
+     */
+    #[Test]
+    public function theThirteenReadmeConfigTableGateGoesRedInAnySingleLanguage(): void
+    {
+        $docs = [];
+        foreach ($this->readmeSources() as $rel) {
+            $docs[$rel] = (string) file_get_contents($this->root() . '/' . $rel);
+        }
+        $coded = array_keys($this->loadPhp('src/Slim/config/xhprof.php'));
+
+        // 夹具自检：13 份真文件先全干净，否则下面的红说明不了任何事
+        $this->assertSame([], $this->configTableProblems($docs, $coded), '真实 README 与配置已经对不上，先修这个再看下面的证明');
+
+        // (1) 某译文缺键：ja 的 `locale` 行删掉 → 只报 ja 缺这一个键
+        $ja = preg_replace('/^\| `locale` \|.*$/m', '', $docs['tools/i18n/readme/ja.md'], 1, $n);
+        $this->assertSame(1, $n, 'ja.md 的配置表里找不到 `locale` 行，夹具已失效');
+        $docs['tools/i18n/readme/ja.md'] = (string) $ja;
+        $this->assertSame(
+            ['tools/i18n/readme/ja.md: 代码键 `locale` 没写进这份配置表'],
+            $this->configTableProblems($docs, $coded),
+            '译文少了 `locale`，检查必须报出来（且只报这一份、这一个键）'
+        );
+
+        // (2) 某译文多键：en 的表里塞一个不存在的 `no_such_key` → 只报 en 多这一个键
+        $docs['tools/i18n/readme/en.md'] = str_replace(
+            '| `enable` |',
+            "| `no_such_key` | bool | `true` | 假行 |\n| `enable` |",
+            $docs['tools/i18n/readme/en.md'],
+            $n
+        );
+        $this->assertSame(1, $n, 'en.md 的配置表里找不到 `enable` 行，夹具已失效');
+        // 顺序 = 遍历顺序（glob 按字母序：en 在 ja 之前）
+        $this->assertSame(
+            [
+                'tools/i18n/readme/en.md: 表里写了代码里没有的键 `no_such_key`（写错名，或配置键被删了没同步文档）',
+                'tools/i18n/readme/ja.md: 代码键 `locale` 没写进这份配置表',
+            ],
+            $this->configTableProblems($docs, $coded),
+            '两份各有各的问题时，两份都要被点名'
+        );
+
+        // (3) 表格形态坏掉：ru 的表格行全抹掉 → 走「解析不出键」这条，而不是静默弃权
+        $docs['tools/i18n/readme/ru.md'] = (string) preg_replace('/^\|.*$/m', '', $docs['tools/i18n/readme/ru.md']);
+        $this->assertStringContainsString(
+            'tools/i18n/readme/ru.md: 配置表键列只解析出 0 个键',
+            implode("\n", $this->configTableProblems($docs, $coded)),
+            '表格没了必须走解析守卫报出来，不能悄悄当成「没有缺键」'
+        );
     }
 }

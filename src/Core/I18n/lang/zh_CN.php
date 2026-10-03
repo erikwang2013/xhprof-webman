@@ -195,4 +195,19 @@ return [
     // flame.note 的两个 %s = 实际画出帧数、未绘制占比；字面百分号写 %%
     'flame.title' => '火焰图',
     'flame.note' => '显示 %s 帧；为控制页面体积，另有 %s%% 的总耗时未绘制',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => '与上次运行对比',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '（内存为含子调用的口径）',
+    // 报告页数字的千位 / 小数点分隔符（只服务 HTML 展示；导出与运行列表页不走这里）：各语言按 CLDR 实测值。
+    'num.thousands' => ',',
+    'num.decimal' => '.',
+    // 该请求地址的其他运行：run 详情页指向列表页并带 `requrl`（列表页 JS 读它预填搜索框）。
+    'run.otherRuns' => '该请求地址的其他运行',
+    // 页脚版权行。品牌+URL 语言无关：13 份词表**逐字同值**（I18nTest 的逐字守卫只看含汉字的源值，按设计放行）；URL 由 render_footer() 包成链接。
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // 列表页状态条：已存条数 / 上限 / 保留天数 / 最早与最新时间。前两个数刻意不随语言分组（列表页表格也是裸值，见 list_runs 的渲染处注释）。
+    'runs.status' => '已存 %s 条 / 上限 %s 条 · 数据保留 %s 天 · 最早 %s · 最新 %s',
+
 ];

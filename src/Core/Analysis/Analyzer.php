@@ -177,7 +177,7 @@ final class Analyzer
             if (!is_array($info)) {
                 continue;
             }
-            // ct 是印刷量（number_format），NAN 会印成「called nan times」——同上走 finiteNum()
+            // ct 是印刷量（I18n::numberFormat），NAN 会印成「called nan times」——同上走 finiteNum()
             $ct = self::finiteNum($info['ct'] ?? null);
             if ($ct === null || $ct < self::CALL_COUNT_THRESHOLD) {
                 continue;
@@ -192,7 +192,7 @@ final class Analyzer
                 'R2',
                 Finding::SEVERITY_MAIN,
                 $h[1],
-                sprintf(I18n::t('diag.r2.title'), $h[1], number_format($h[0])),
+                sprintf(I18n::t('diag.r2.title'), $h[1], I18n::numberFormat($h[0])),
                 I18n::t('diag.r2.detail'),
                 $h[0]
             );
@@ -263,7 +263,7 @@ final class Analyzer
                 'R3',
                 Finding::SEVERITY_MAIN,
                 $h[2],
-                sprintf(I18n::t('diag.r3.title'), $h[1], $h[2], number_format($h[3]), self::ms($h[0])),
+                sprintf(I18n::t('diag.r3.title'), $h[1], $h[2], I18n::numberFormat($h[3]), self::ms($h[0])),
                 I18n::t('diag.r3.detail'),
                 $h[0]
             );
@@ -419,9 +419,9 @@ final class Analyzer
                 sprintf(
                     I18n::t('diag.r6.title'),
                     $h[1],
-                    number_format($h[2]) . 'μs',
-                    number_format($h[3]) . 'μs',
-                    number_format($h[0]) . 'μs'
+                    I18n::numberFormat($h[2]) . 'μs',
+                    I18n::numberFormat($h[3]) . 'μs',
+                    I18n::numberFormat($h[0]) . 'μs'
                 ),
                 I18n::t('diag.r6.detail'),
                 $h[0]
@@ -434,12 +434,12 @@ final class Analyzer
     private static function bytes(float $b): string
     {
         if ($b >= 1048576) {
-            return number_format($b / 1048576, 1) . 'MB';
+            return I18n::numberFormat($b / 1048576, 1) . 'MB';
         }
         if ($b >= 1024) {
-            return number_format($b / 1024, 1) . 'KB';
+            return I18n::numberFormat($b / 1024, 1) . 'KB';
         }
-        return number_format($b) . 'B';
+        return I18n::numberFormat($b) . 'B';
     }
 
     /** 从 totals 取数值：缺失/非数值一律当 0，其余原样返回（含负数） */
@@ -470,13 +470,13 @@ final class Analyzer
     /** 微秒 → 毫秒，保留 1 位小数 */
     private static function ms(float $us): string
     {
-        return number_format($us / 1000, 1) . 'ms';
+        return I18n::numberFormat($us / 1000, 1) . 'ms';
     }
 
     /** 比率 → 百分数串（含 % 号，与 ms() 一样自带单位） */
     private static function pct(float $ratio): string
     {
-        return number_format($ratio * 100, 1) . '%';
+        return I18n::numberFormat($ratio * 100, 1) . '%';
     }
 
     /**

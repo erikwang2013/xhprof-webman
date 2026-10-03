@@ -52,6 +52,7 @@ class XhprofTest extends TestCase
         // （DrupalTest / WebmanTest）的前置条件断言读的就是这些量，落成假红。
         // 之前只清 5 个适配器，同一个进程里 Core 先跑就会打翻它们。
         $this->saved = $this->snapshotXhprofStatics();
+        self::clearLogThrottle();
 
         Xhprof::$time_limit = 0;
         Xhprof::$ignore_url_arr = ['/test'];
@@ -72,6 +73,21 @@ class XhprofTest extends TestCase
         Context::reset();
         ApplicationContext::reset();
         $this->restoreXhprofStatics($this->saved);
+        // 节流是进程级语义，别把本类用例留下的「已记过」漏给同进程后面的测试类。
+        self::clearLogThrottle();
+    }
+
+    /**
+     * 清掉 `Xhprof::$logged_paths`（私有静态、无 setter，只能反射）。
+     *
+     * 节流是**进程级**的，而 PHPUnit 把整个类的用例跑在同一个进程里：不清就会让
+     * 「本进程第一条日志」被前面某个用例吃掉，后面断言日志内容的用例（如
+     * unconfiguredAuthTokenLeavesExactlyOneWarningInTheLog、三条 ip 白名单用例）
+     * 读到空日志而假红。语义正确的做法是每个用例一份干净进程状态。
+     */
+    private static function clearLogThrottle(): void
+    {
+        (new \ReflectionProperty(Xhprof::class, '_logged_paths'))->setValue(null, []);
     }
 
     private function seedRun(string $runId, array $data = []): void
@@ -593,10 +609,11 @@ class XhprofTest extends TestCase
     }
 
     /**
-     * 未配 auth_token 时默认不鉴权（拍板行为，不改），但每请求留一条说明性日志。
+     * 未配 auth_token 时默认不鉴权（拍板行为，不改），但留一条说明性日志（每进程一条，
+     * 见 Xhprof::logOnce()：常驻进程下每请求一条等于给匿名请求一个日志放大器）。
      *
      * 「报告页对任何人可读」是个安全相关的默认值，静默等于没人会去配它；
-     * 一条日志既留痕又不至于刷屏（一次 index() 只走到这个分支一次）。
+     * 一条日志既留痕又不至于刷屏。setUp 会清掉节流键，本用例里就是「本进程第一条」。
      */
     #[Test]
     public function unconfiguredAuthTokenLeavesExactlyOneWarningInTheLog(): void
@@ -607,7 +624,7 @@ class XhprofTest extends TestCase
 
         Xhprof::index();
 
-        $this->assertCount(1, $this->logger->errors, '未配 token 必须恰好留一条日志（每请求一条，不刷屏）');
+        $this->assertCount(1, $this->logger->errors, '未配 token 留一条日志（本进程第一条）');
         $this->assertStringContainsString('auth_token', $this->logger->errors[0]);
         $this->assertStringContainsString('without authentication', $this->logger->errors[0]);
         // 页面本身照常渲染：留痕不是行为改变
@@ -1330,14 +1347,169 @@ class XhprofTest extends TestCase
         $this->assertSame('400 Bad Request', $this->response->body);
     }
 
+    /**
+     * **前提变更（2026-10 拍板）**：json 无 run 从 400 改为返回 runs 列表 JSON。
+     * 旧 400 的前提是「导出只有 run 级、没有可导对象就是坏请求」；而「有哪些 run
+     * 可以导」本身就是机器消费方的合法查询，前提不再成立。csv 无 run 仍是 400
+     * （列表 CSV 无消费场景），拆成另一条钉住。此前的 formatWithoutARunIsABadRequest
+     * 就是被这条新语义取代的。
+     *
+     * 头部五个字段与 runsOverview() 同形同义（count = 索引长度**含悬空项**、
+     * oldest/newest 只统计 mget 得到的行），rows 与列表页同一行过滤。
+     */
     #[Test]
-    public function formatWithoutARunIsABadRequest(): void
+    public function formatJsonWithoutARunReturnsTheRunsList(): void
     {
+        $this->cache->set(Xhprof::$key_prefix . ':request_log:aaa1111111111111', json_encode([
+            'request_uri' => '/older', 'method' => 'GET', 'wt' => 0.5, 'mu' => 1.0,
+            'ip' => '203.0.113.9', 'create_time' => 1700000100,
+        ]));
+        $this->cache->set(Xhprof::$key_prefix . ':request_log:bbb2222222222222', json_encode([
+            'request_uri' => '/newer', 'method' => 'POST', 'wt' => 1.5, 'mu' => 3.0,
+            'ip' => '198.51.100.7', 'create_time' => 1700000200,
+        ]));
+        // 头新尾旧（lPush 头插）；中间插一条只有索引、request_log 已过期的悬空项
+        $this->cache->lPush(Xhprof::$key_prefix . ':run_id', 'aaa1111111111111');
+        $this->cache->lPush(Xhprof::$key_prefix . ':run_id', 'de1e7ed1e7ed1e7e');
+        $this->cache->lPush(Xhprof::$key_prefix . ':run_id', 'bbb2222222222222');
         $this->bootWith([], ['format' => 'json']);
 
         Xhprof::index();
 
+        $this->assertSame(200, $this->response->status);
+        $this->assertSame('application/json; charset=UTF-8', $this->response->headers['Content-Type'] ?? null);
+        $data = json_decode($this->response->body, true);
+        $this->assertIsArray($data);
+        $this->assertSame('runs', $data['mode']);
+        $this->assertSame(3, $data['count'], 'count 取索引长度：悬空项也算占用（与状态条同义）');
+        $this->assertSame(1000, $data['limit']);
+        $this->assertSame(1700000100, $data['oldest'], 'oldest/newest 只统计 mget 得到的行');
+        $this->assertSame(1700000200, $data['newest']);
+        $this->assertSame(86400 * 7, $data['ttl']);
+        $this->assertSame(
+            ['bbb2222222222222', 'aaa1111111111111'],
+            array_column($data['runs'], 'run_id'),
+            '列表顺序 = 索引顺序（头新尾旧）；悬空项不出现在 rows'
+        );
+        $this->assertSame([
+            'run_id' => 'bbb2222222222222', 'method' => 'POST', 'request_uri' => '/newer',
+            'create_time' => 1700000200, 'wt' => 1.5, 'mu' => 3.0, 'ip' => '198.51.100.7',
+        ], $data['runs'][0], '行 = run_id + request_log 稳定字段');
+    }
+
+    /** csv 无 run 仍是 400：拍板不变（列表 CSV 没有消费场景），别被 json 的新语义带跑。 */
+    #[Test]
+    public function formatCsvWithoutARunIsStillABadRequest(): void
+    {
+        $this->bootWith([], ['format' => 'csv']);
+
+        Xhprof::index();
+
         $this->assertSame(400, $this->response->status);
+        $this->assertSame('400 Bad Request', $this->response->body);
+    }
+
+    /**
+     * symbol 是报告页的**单函数明细**视图，导出没有这个语义：静默忽略它、回一份全量
+     * 平铺，等于让调用方拿到与请求不符的数据（比 400 更坏）。json/csv 都拒；
+     * 空值也拒——与 `?format=`（空串也 400）同一条「看参数在不在」的判据。
+     */
+    #[Test]
+    public function formatRejectsSymbolBecauseExportHasNoSymbolView(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'json', 'symbol' => 'foo()']);
+        Xhprof::index();
+        $this->assertSame(400, $this->response->status, 'symbol 不能静默忽略');
+
+        $this->response = new FakeResponse();
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'csv', 'symbol' => 'foo()']);
+        Xhprof::index();
+        $this->assertSame(400, $this->response->status);
+
+        $this->response = new FakeResponse();
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'json', 'symbol' => '']);
+        Xhprof::index();
+        $this->assertSame(400, $this->response->status, '空值也算「带了 symbol」');
+    }
+
+    /** 半个 diff（只给 run1 或 run2）是坏请求——列表分支不得把它静默吞掉。 */
+    #[Test]
+    public function formatJsonWithOnlyRun1OrOnlyRun2IsStillABadRequest(): void
+    {
+        $this->bootWith([], ['run1' => 'abc123def456789', 'source' => 'xhprof_foo', 'format' => 'json']);
+        Xhprof::index();
+        $this->assertSame(400, $this->response->status, '只给 run1 不能走列表 JSON');
+
+        $this->response = new FakeResponse();
+        $this->bootWith([], ['run2' => 'abc123def456789', 'source' => 'xhprof_foo', 'format' => 'json']);
+        Xhprof::index();
+        $this->assertSame(400, $this->response->status);
+    }
+
+    /**
+     * 单 run JSON 的 `request` 元数据键（2026-10 契约新增）：request_log 行的稳定字段。
+     * 行已过期（只剩悬空索引项）时键仍在、值为 null——形状稳定，机器消费方不用防键消失。
+     */
+    #[Test]
+    public function formatJsonSingleRunCarriesRequestMetadataAndNullWhenGone(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'json']);
+
+        Xhprof::index();
+        $data = json_decode($this->response->body, true);
+        $this->assertSame('single', $data['mode']);
+        $this->assertArrayHasKey('request', $data, 'request_log 缺失时键也必须在（形状稳定）');
+        $this->assertNull($data['request'], '夹具没写 request_log：值必须是 null，不是空数组/缺键');
+
+        // 有 request_log 行时：稳定字段原样带出（键序即契约）
+        $this->cache->set(Xhprof::$key_prefix . ':request_log:' . $runId, json_encode([
+            'request_uri' => '/order?x=1', 'method' => 'GET', 'wt' => 0.8, 'mu' => 2.0,
+            'ip' => '6.6.6.6', 'create_time' => 1700000000,
+        ]));
+        $this->response = new FakeResponse();
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        Xhprof::index();
+        $data = json_decode($this->response->body, true);
+        $this->assertSame([
+            'method' => 'GET', 'request_uri' => '/order?x=1', 'create_time' => 1700000000,
+            'wt' => 0.8, 'mu' => 2.0, 'ip' => '6.6.6.6',
+        ], $data['request']);
+    }
+
+    /**
+     * token 在 query 串里，导出数据与拒绝页都不该被任何中间层缓存：
+     * respond()/deny() 两条链都带 Cache-Control: no-store（HTML 页的 no-cache 在适配器侧，
+     * 不在这里、也不动它）。deny() 带额外头（401 的 WWW-Authenticate）时 no-store 不顶掉它。
+     */
+    #[Test]
+    public function exportAndDenyResponsesAreMarkedNoStore(): void
+    {
+        // respond() 链：json 导出
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->bootWith([], ['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'json']);
+        Xhprof::index();
+        $this->assertSame('no-store', $this->response->headers['Cache-Control'] ?? null, '导出响应必须 no-store');
+
+        // deny() 链：403
+        $this->response = new FakeResponse();
+        $this->bootWith(['auth_token' => 'secret'], ['run' => $runId]);
+        Xhprof::index();
+        $this->assertSame(403, $this->response->status);
+        $this->assertSame('no-store', $this->response->headers['Cache-Control'] ?? null, '拒绝响应也必须 no-store');
+
+        // deny() 带额外头：no-store 与 WWW-Authenticate 并存（`+=` 不覆盖调用方给的头）
+        $this->response = new FakeResponse();
+        $this->bootWith(['auth_basic' => 'alice:s3cret'], []);
+        Xhprof::index();
+        $this->assertSame(401, $this->response->status);
+        $this->assertSame('no-store', $this->response->headers['Cache-Control'] ?? null);
+        $this->assertSame('Basic realm="xhprof"', $this->response->headers['WWW-Authenticate'] ?? null);
     }
 
     #[Test]
@@ -1529,5 +1701,130 @@ class XhprofTest extends TestCase
         Xhprof::index();
 
         $this->assertSame(403, $this->response->status, '导出与报告页受同一套闸门');
+    }
+
+    /**
+     * 读路径的 store 故障防线：扩展在、Redis 连不上（get_run 抛 RedisException）。
+     * 以前这个异常一路冒到框架（500 白屏）；现在 503 + 人话，日志带异常类名与消息，
+     * 运维靠类名区分「部署故障」和「渲染 bug」。渲染与导出两个入口各钉一次。
+     */
+    #[Test]
+    public function readPathStoreFailureBecomes503WithTheExceptionClassInTheLog(): void
+    {
+        $runId = 'abc123def456789';
+        $this->cache = new class () extends FakeCache {
+            public function get(string $key): mixed
+            {
+                throw new \RedisException('Connection refused');
+            }
+        };
+        $this->request = new FakeRequest(['run' => $runId, 'source' => 'xhprof_foo']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        Xhprof::index();
+
+        $this->assertSame(503, $this->response->status, 'store 读失败必须是 503，不能让异常冒到框架变成 500 白屏');
+        $this->assertStringContainsString('report store is unavailable', $this->response->body);
+        $log = implode("\n", $this->logger->errors);
+        $this->assertStringContainsString('RedisException', $log, '日志必须带异常类名：Redis 故障与渲染 bug 靠它区分');
+        $this->assertStringContainsString('Connection refused', $log, '日志必须带异常消息');
+
+        // 导出入口（?format=json 走 exportReport → get_run → 同一个抛异常的 get()）
+        $this->response = new FakeResponse();
+        $this->request = new FakeRequest(['run' => $runId, 'source' => 'xhprof_foo', 'format' => 'json']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        Xhprof::index();
+        $this->assertSame(503, $this->response->status, '导出入口同一条防线，同样 503');
+    }
+
+    /** 正常路径不受 503 包装影响：渲染与导出照常 200，干净路径一条 error 日志都不多。 */
+    #[Test]
+    public function successfulReadPathsAreUnchangedByTheStoreGuard(): void
+    {
+        $runId = 'abc123def456789';
+        $this->seedRun($runId);
+        $this->config = new FakeConfig(['xhprof' => ['auth_token' => 'secret']]);
+        $this->request = new FakeRequest(['run' => $runId, 'source' => 'xhprof_foo', 'token' => 'secret'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $html = Xhprof::index();
+        $this->assertIsString($html);
+        $this->assertStringContainsString('<html', $html);
+        $this->assertSame(200, $this->response->status);
+
+        $this->response = new FakeResponse();
+        $this->request = new FakeRequest(['run' => $runId, 'source' => 'xhprof_foo', 'token' => 'secret', 'format' => 'json'], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        $export = Xhprof::index();
+        $this->assertSame(200, $this->response->status);
+        // 导出分支必须把 respond() 的结果原样交还（FakeResponse::send() 返回 $this）：
+        // 漏写 return 会让调用方拿到渲染页 HTML，生产上是「JSON 已发、框架又拿 HTML 当响应」。
+        $this->assertSame($this->response, $export, '导出分支必须交还 respond() 的响应');
+        $payload = json_decode($this->response->body, true);
+        $this->assertIsArray($payload);
+        $this->assertSame('single', $payload['mode']);
+
+        $this->assertSame([], $this->logger->errors, '正常路径不该产生任何 error 日志');
+    }
+
+    /**
+     * 拒绝路径的 error 日志每进程每路径只记一条（Xhprof::logOnce()）。
+     *
+     * 请求 1/2 模拟常驻进程里的两次匿名请求：只有第一条进日志；请求 3 换一条路径
+     * （IP 白名单拒绝）后照常记它自己的第一条，说明节流键是**路径**而不是一个全局开关。
+     * setUp 已清节流键，故「请求 1 记一条」是本用例内的确定性前提。
+     */
+    #[Test]
+    public function rejectionLogsAreThrottledPerPathPerProcess(): void
+    {
+        // 请求 1：未配任何凭据 → 记一条
+        $this->request = new FakeRequest([], ['uri' => '/xhprof']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        Xhprof::index();
+        $this->assertCount(1, $this->logger->errors, '前提：第一次请求记一条');
+        $this->assertStringContainsString('without authentication', $this->logger->errors[0]);
+
+        // 请求 2：同一进程、同一条路径 → 不再记
+        $this->response = new FakeResponse();
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        Xhprof::index();
+        $this->assertCount(1, $this->logger->errors, '同一路径每进程只记一条');
+
+        // 请求 3：另一条路径（IP 白名单拒绝）→ 有各自的键，第一条照常记
+        $this->response = new FakeResponse();
+        $this->config = new FakeConfig(['xhprof' => ['ip_allowlist' => ['203.0.113.9']]]);
+        $this->request = new FakeRequest([], ['uri' => '/xhprof', 'ip' => '198.51.100.7']);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+        Xhprof::index();
+        $this->assertSame(403, $this->response->status);
+        $this->assertCount(2, $this->logger->errors, '节流键是路径：另一条路径的第一条仍然要记');
+        $this->assertStringContainsString('ip_allowlist', $this->logger->errors[1]);
+    }
+
+    #[Test]
+    public function throttleStateIsSnapshotByTheSharedTraitAndClearedByThisClass(): void
+    {
+        // 节流位是**跨文件**的进程级状态（任一类打到 deny 路径都会留下「已记过」），
+        // 所以它登记在 XhprofStaticsSnapshot 的键集里（少登记时登记闸
+        // XhprofStaticsSnapshotTest::everyCoreStaticPropertyIsSnapshotOrExempt 当场红）。
+        // 本类额外在两个方向都清：setUp 清（不读前一类漏下的值）+ tearDown 在 restore
+        // 之后再清（不把值漏给后一类）。两处都清不冲突：trait 保「原样放回」的通用约定，
+        // 本类保「每个用例一份干净进程态」的局部语义，后者是更强的要求。
+        $prop = new \ReflectionProperty(Xhprof::class, '_logged_paths');
+        $saved = $this->snapshotXhprofStatics();
+        try {
+            $this->assertArrayHasKey('_logged_paths', $saved, 'trait 快照必须覆盖节流位');
+
+            $sentinel = ['ip_not_allowlisted' => true];
+            $prop->setValue(null, $sentinel);
+            $this->restoreXhprofStatics($saved);
+            $this->assertSame($saved['_logged_paths'], $prop->getValue(), 'restore 必须把节流位原样放回');
+
+            // tearDown 的收尾动作（restore 之后清一次）：下一个类读到的必须是空表
+            self::clearLogThrottle();
+            $this->assertSame([], $prop->getValue(), '本类退出时不得把节流位漏给后一类');
+        } finally {
+            $prop->setValue(null, []);
+        }
     }
 }

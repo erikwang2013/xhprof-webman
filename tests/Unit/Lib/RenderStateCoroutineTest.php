@@ -148,7 +148,7 @@ class RenderStateCoroutineTest extends TestCase
         $this->assertSame(
             1,
             preg_match(
-                '#<div class="xp-table-wrap"><table class="xp-table"><thead><tr>(.*?)</tr></thead>#s',
+                '#<div class="xp-table-wrap"[^>]*><table class="xp-table"><thead><tr>(.*?)</tr></thead>#s',
                 $html,
                 $m
             ),

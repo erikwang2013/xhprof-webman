@@ -10,7 +10,7 @@ use ErikWang2013\Xhprof\Core\XhprofProfiler;
 /**
  * 进程级静态量的**快照 / 还原**：setUp 里先照单全收，tearDown 里原样放回。
  *
- * 为什么必须有：`Xhprof` 的这 15 个键 = 14 个静态量（含只能反射写的 `_hyperf`）+ `XhprofProfiler::$config`，
+ * 为什么必须有：`Xhprof` 的这 16 个键 = 15 个静态量（含只能反射写的 `_hyperf`、`_logged_paths`）+ `XhprofProfiler::$config`，
  * 都是整个进程共享的，而各测试类都会改其中几个。只"清空自己动过的那几个"是不够的 —— 曾经的做法是 tearDown
  * 里把 5 个适配器置 null，于是 setUp 改过的 `$ignore_url_arr` / `$ui_html` 等会原样漏给
  * 后面的用例：同一个进程里 Core 先跑、Adapter 后跑时，`DrupalTest` / `WebmanTest` 的前置
@@ -37,9 +37,14 @@ trait XhprofStaticsSnapshot
     protected function snapshotXhprofStatics(): array
     {
         $hyperf = new \ReflectionProperty(Xhprof::class, '_hyperf');
+        $loggedPaths = new \ReflectionProperty(Xhprof::class, '_logged_paths');
 
         return [
             '_hyperf' => $hyperf->getValue(),
+            // 进程级日志节流位（私有、无 setter，只能反射，同 `_hyperf` 一条口径）：
+            // 任一类打到 deny 路径就会留下「这一条已记过」，不归还的话后面类的日志断言
+            // 会被静默压掉（登记闸 XhprofStaticsSnapshotTest 就是为此报红）。
+            '_logged_paths' => $loggedPaths->getValue(),
             'profilerConfig' => self::profilerConfigSnapshot(),
             'request' => Xhprof::$request,
             'response' => Xhprof::$response,
@@ -64,6 +69,9 @@ trait XhprofStaticsSnapshot
     {
         $hyperf = new \ReflectionProperty(Xhprof::class, '_hyperf');
         $hyperf->setValue(null, $s['_hyperf']);
+
+        $loggedPaths = new \ReflectionProperty(Xhprof::class, '_logged_paths');
+        $loggedPaths->setValue(null, $s['_logged_paths']);
 
         self::profilerConfigRestore($s['profilerConfig'] ?? null);
 

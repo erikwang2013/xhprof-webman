@@ -189,4 +189,19 @@ return [
     'search.matches' => 'Fungsi yang mengandung "%s" (maksimal 30 ditampilkan):',
     'flame.title' => 'Grafik Api',
     'flame.note' => 'Menampilkan %s frame; agar ukuran halaman tetap kecil, %s%% dari total waktu tidak digambar',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => 'Bandingkan dengan eksekusi sebelumnya',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '(memori termasuk panggilan anak)',
+    // Pemisah ribuan / desimal untuk angka halaman laporan (hanya tampilan HTML; ekspor dan daftar run tidak memakainya): diukur menurut CLDR.
+    'num.thousands' => '.',
+    'num.decimal' => ',',
+    // Run lain untuk URL yang sama: menuju daftar dengan `requrl`, yang dibaca JS-nya untuk mengisi kotak pencarian.
+    'run.otherRuns' => 'Run lain untuk URL ini',
+    // Footer. Merek + URL tidak bergantung bahasa: 13 kamus memuat nilai yang sama kata per kata (pemeriksaan verbatim I18nTest hanya melihat nilai sumber beraksara Han); render_footer() menjadikan URL tautan.
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // Bilah status daftar run: jumlah tersimpan / batas / hari retensi / waktu terlama–terbaru.
+    'runs.status' => 'Run tersimpan: %s / batas %s · retensi %s hari · terlama %s · terbaru %s',
+
 ];

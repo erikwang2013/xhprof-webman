@@ -14,7 +14,7 @@ against the upstream repositories on 2026-09-25, not inferred from file names.
 
 phacility/xhprof is licensed under the Apache License, Version 2.0
 (https://github.com/phacility/xhprof). Those files are used and modified under
-that license. The modifications are the ten-framework adapters, the i18n layer,
+that license. The modifications are the twelve-framework adapters, the i18n layer,
 the diagnosis section, and the fixes recorded in this repository's history —
 each derived PHP file carries an Apache header stating this.
 

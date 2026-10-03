@@ -203,4 +203,19 @@ return [
     // Die zwei %s in flame.note = gezeichnete Frame-Anzahl und nicht gezeichneter Zeitanteil; ein literales Prozentzeichen wird als %% geschrieben
     'flame.title' => 'Flammengrafik',
     'flame.note' => '%s Frames werden gezeichnet; %s%% der Gesamtzeit bleiben ungezeichnet, um die Seite klein zu halten',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => 'Mit vorherigem Lauf vergleichen',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '(Speicher inklusive Kindaufrufe)',
+    // Tausender- / Dezimaltrennzeichen für Zahlen auf der Berichtsseite (nur HTML-Anzeige; Exporte und Lauf-Liste nutzen sie nicht): je Sprache nach CLDR gemessen.
+    'num.thousands' => '.',
+    'num.decimal' => ',',
+    // Weitere Läufe derselben Request-URL: verlinkt die Liste mit `requrl`, das ihr JS zum Vorbelegen der Suche liest.
+    'run.otherRuns' => 'Weitere Läufe dieser Request-URL',
+    // Fußzeile. Marke + URL sind sprachunabhängig: alle 13 Kataloge tragen denselben Wert wörtlich (die Wörtlich-Prüfung in I18nTest sieht nur Quellwerte mit Han-Zeichen an); render_footer() macht die URL zum Link.
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // Statuszeile der Lauf-Liste: gespeicherte Anzahl / Limit / Aufbewahrungstage / ältester und neuester Zeitpunkt.
+    'runs.status' => 'Gespeicherte Läufe: %s / Limit %s · Aufbewahrung %s Tage · ältester %s · neuester %s',
+
 ];

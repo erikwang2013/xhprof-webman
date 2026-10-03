@@ -33,9 +33,16 @@ $(document).ready(function() {
   // 表现就是「搜索框和分页没反应」而页面看着正常 —— 这种问题最费排查时间。
   // 至少把它变成一条 console.error。
   try {
+    // 查询串的值要按查询串语义解码（PHP 侧 http_build_query 用 urlencode，`+` 是空格）：
+    // 不解码的话，点「搜索」时 jQuery.param 会把**已经编码过**的值再编码一次
+    // （requrl 的 %3A 变 %253A，来回一趟过滤词就面目全非）。解不开的（裸 %）按原文
+    // 留着 —— decodeURIComponent 抛异常会带崩整段 init，那才是真事故。
+    var decParam = function (v) {
+      try { return decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) { return v; }
+    };
     var cur_params = {};
     $.each(location.search.replace('?','').split('&'), function(i, x) {
-      var y = x.split('='); cur_params[y[0]] = y[1];
+      var y = x.split('='); cur_params[y[0]] = y[1] === undefined ? '' : decParam(y[1]);
     });
   
     var submitSearch = function(){
@@ -87,6 +94,11 @@ $(document).ready(function() {
           "sSortDescending": dtI18n.sortDesc
         }
       } : undefined,
+      // 记住这张表上的视图状态（搜索词/排序/每页条数/页码），刷新或从 run 报告页
+      // 返回后还在。存储是 DataTables 自带的 localStorage（键 DataTables_<id>_<path>），
+      // 1.10.15 默认 2 小时过期（iStateDuration=7200）。过期只是回到初始视图，
+      // 不会出现「表是过滤过的、条件却看不见」：恢复与预填都会把词回填进可见的搜索框。
+      "stateSave": true,
       "paging":true,
       "pagingType":"full_numbers",
       "lengthMenu":[20,50,100,200],
@@ -106,7 +118,18 @@ $(document).ready(function() {
       ]
 
     });
-  
+
+    // A4：列表页「请求地址」列的 run 链接带着 requrl（XHProfRunsDefault::list_runs 生成）
+    // → 落到带这个参数的页面上就把它预填进搜索框。必须走 table.search().draw()：
+    // DataTables 1.10.15 的 search.dt 处理器会把词回填进**可见的**搜索框（输入框不是
+    // 焦点元素时），用户看得见过滤条件也改得动；自己塞一个不可见的过滤器就成了
+    // 「表少了行但没人知道为什么」。纯客户端子串匹配，不发请求。
+    // 在全段末尾初始化之后执行，天然压在 stateSave 恢复之上：URL 上的词优先。
+    // 报告页的 URL 里也有 requrl 但没有这张表 —— 空选择集上 search()/draw() 是 no-op。
+    if (cur_params['requrl']) {
+      table.search(cur_params['requrl']).draw();
+    }
+
   
     // ---- 「对比选中」：勾选恰好两条 → run1/run2 对比页；>2 条 → 聚合报告 ----
     // 选择状态就存在复选框节点上（DataTables 翻页/排序复用同一批 TR 节点，

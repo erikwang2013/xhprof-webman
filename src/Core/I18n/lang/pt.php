@@ -201,4 +201,19 @@ return [
     // Os dois %s de flame.note = quadros realmente desenhados e a fração de tempo não desenhada; por cento literal escreve-se %%
     'flame.title' => 'Gráfico de chamas',
     'flame.note' => 'Exibindo %s quadros; %s%% do tempo total não é desenhado para manter a página leve',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => 'Comparar com a execução anterior',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '(memória incluindo as chamadas filhas)',
+    // Separadores de milhar / decimal dos números da página de relatório (apenas exibição HTML; exportações e a lista de execuções não os usam): medidos conforme a CLDR.
+    'num.thousands' => '.',
+    'num.decimal' => ',',
+    // Outras execuções da mesma URL: aponta para a lista com `requrl`, que o JS dela lê para preencher a busca.
+    'run.otherRuns' => 'Outras execuções desta URL',
+    // Rodapé. Marca + URL independem do idioma: os 13 catálogos trazem o mesmo valor ao pé da letra (a guarda do I18nTest só olha valores-fonte com han); render_footer() transforma a URL em link.
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // Barra de status da lista de execuções: armazenadas / limite / dias de retenção / datas mais antiga e mais recente.
+    'runs.status' => 'Execuções armazenadas: %s / limite %s · retenção %s dias · mais antiga %s · mais recente %s',
+
 ];

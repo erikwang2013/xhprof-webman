@@ -191,4 +191,19 @@ return [
     // of time not drawn; a literal percent sign is written %%.
     'flame.title' => 'Flame graph',
     'flame.note' => 'Showing %s frames; %s%% of the time is not drawn to keep the page small',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => 'Compare with previous run',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '(memory is inclusive of child calls)',
+    // Thousands / decimal separators for report-page numbers (HTML display only; exports and the runs list do not use them): measured from CLDR.
+    'num.thousands' => ',',
+    'num.decimal' => '.',
+    // Other runs of the same request URL: links to the runs list with `requrl`, which its JS reads to prefill the search box.
+    'run.otherRuns' => 'Other runs of this request URL',
+    // Footer credit. Brand + URL are language-independent: all 13 catalogs carry the same value verbatim (I18nTest's verbatim guard only looks at source values containing Han characters); render_footer() links the URL.
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // Runs list status bar: stored count / limit / retention days / oldest–newest times.
+    'runs.status' => 'Stored %s runs / limit %s · retention %s days · oldest %s · newest %s',
+
 ];

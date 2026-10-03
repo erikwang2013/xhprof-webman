@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * CHANGES FROM UPSTREAM: namespaced under ErikWang2013\Xhprof\Core\XhprofLib,
- * ten-framework adapters in place of the original PHP superglobals, an i18n
+ * twelve-framework adapters in place of the original PHP superglobals, an i18n
  * layer, and the fixes recorded in this repository's history. The rest of this
  * package (everything outside src/Core/XhprofLib/) is the MIT-licensed work of
  * this project — see LICENSE and NOTICE.
@@ -305,14 +305,9 @@ class XHProfRunsDefault implements XHProfRuns
         // 列表链接与「对比选中」按钮共用一个 source：按钮把它经 data-source 交给 JS，
         // 拼出的 run1=/run2= 链接与行链接同形（少了它 diff 分支读不到 run 数据）。
         $source = 'xhprof_foo';
-        //取所有请求数据
-        $run_id_lists = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
+        //取所有请求数据（一趟 lRange + 一趟 mget；状态条复用同一份，见 runsIndexAndLogs）
+        list($run_id_lists, $values) = self::runsIndexAndLogs();
         $table_html = "";
-        $keys = array_map(function ($run_id) {
-            return Xhprof::$key_prefix . ":request_log:" . $run_id;
-        }, $run_id_lists);
-        // mget 批量取，消除 N+1；兼容部分驱动返回 [key=>value] 的形态
-        $values = array_values(Xhprof::getCache()->mget($keys));
         foreach ($run_id_lists as $i => $run_id) {
             if (!self::xhprof_valid_run_id($run_id)) continue;
             $res = $values[$i] ?? null;
@@ -347,6 +342,9 @@ class XHProfRunsDefault implements XHProfRuns
             $table_html .= $tr;
         }
 
+        // 状态条的汇总与表格同源：数据已由上面那一趟 lRange + mget 拿到，这里只做归并。
+        $overview = self::overviewFromRows($run_id_lists, $values);
+
         // 「对比选中」按钮**默认 disabled**：没选够两条时点击无意义，而在 JS 没跑起来
         // （词表/脚本加载失败、禁了 JS）时按钮也必须是不可用的——页面行为与加这个入口
         // 之前完全一致，单 run 链接照旧。提示文字由 JS 按选中数显隐，静态渲染的是初态。
@@ -359,38 +357,64 @@ class XHProfRunsDefault implements XHProfRuns
             // role=status（aria-live）：选中数变化时读屏会播报「请勾选两条…」
             . '<span class="xp-compare-hint" role="status">' . I18n::plain('runs.compareHint') . '</span>'
             . '</div>'
-            . '<div class="xp-table-wrap"><table id="table_id_example" class="xp-table xp-runs-table">'
+            // 状态条（A3）：已存条数 / 上限 / 保留天数 / 最早–最新时间。数字**不走**本地化
+            // 格式化：列表页通篇是英式裸值（表体的 wt/mu 是 PHP 浮点裸串、DataTables 分页行
+            // 不传 sInfoThousands），这里单独本地化反而造出 D9 要消灭的同页混写。
+            // 放在工具区下方独立成行（不挤进 flex 行）：.xp-runs-toolbar 不换行、.xp-card 又
+            // overflow:hidden，窄视口下状态条会被静默裁掉；块级行能正常折行。
+            . '<div class="xp-runs-status" style="padding:0 20px 10px;color:var(--xp-text-muted);font-size:13px">'
+            . sprintf(
+                I18n::plain('runs.status'),
+                $overview['count'],
+                $overview['limit'],
+                (int) round($overview['ttl'] / 86400),
+                $overview['oldest'] !== null ? date('Y-m-d H:i:s', (int) $overview['oldest']) : '-',
+                $overview['newest'] !== null ? date('Y-m-d H:i:s', (int) $overview['newest']) : '-'
+            )
+            . '</div>'
+            // tabindex=0：宽度不够时这个容器横滚（overflow-x:auto），键盘用户得能聚焦进来
+            // 用方向键滚；没有它滚动区对键盘不可达。
+            . '<div class="xp-table-wrap" tabindex="0"><table id="table_id_example" class="xp-table xp-runs-table">'
             . '<thead><tr>'
-            // 表头复选框 = 全选（作用于当前全部行）
-            . '<th><input type="checkbox" class="xp-run-all" aria-label="'
+            // 表头复选框 = 全选（作用于当前全部行）。scope="col" 给读屏标出「表头对应整列」；
+            // 这个 `<th>` 里是复选框、没有文本，仍需 scope 才能把列关系连上。
+            . '<th scope="col"><input type="checkbox" class="xp-run-all" aria-label="'
             . I18n::plain('runs.selectAll') . '"></th>'
-            . '<th>' . I18n::plain('runs.col.method') . '</th>'
-            . '<th>' . I18n::plain('runs.col.url') . '</th>'
-            . '<th>' . I18n::plain('runs.col.time') . '</th>'
-            . '<th>' . I18n::plain('runs.col.wt') . '</th>'
-            . '<th>' . I18n::plain('runs.col.mu') . '</th>'
-            . '<th>' . I18n::plain('runs.col.ip') . '</th>'
+            . '<th scope="col">' . I18n::plain('runs.col.method') . '</th>'
+            . '<th scope="col">' . I18n::plain('runs.col.url') . '</th>'
+            . '<th scope="col">' . I18n::plain('runs.col.time') . '</th>'
+            . '<th scope="col">' . I18n::plain('runs.col.wt') . '</th>'
+            . '<th scope="col">' . I18n::plain('runs.col.mu') . '</th>'
+            . '<th scope="col">' . I18n::plain('runs.col.ip') . '</th>'
             . '</tr></thead><tbody>' . $table_html . '</tbody></table></div></div></div>';
         return $str_html;
     }
 
     /**
-     * 列表概览（供列表页状态条用）：一趟 lRange + 一趟 mget，与 list_runs() 同一条
-     * 数据路径，不额外扫 Redis。
+     * 列表页表格与状态条**共用**的取数：一趟 lRange + 一趟 mget。
      *
-     * count 取**索引列表长度**——它就是状态条要表达的「占用 / 上限」，包含数据已过期、
-     * 只剩指针的悬空项（索引刻意不带 TTL，见类头注释）；oldest/newest 只统计能 mget 到
-     * create_time 的行，一条都没有时是 null。返回结构是 Display 批的调用契约，别改形状：
-     *   ['count' => int, 'limit' => int, 'oldest' => int|null, 'newest' => int|null, 'ttl' => int]
+     * 抽出来是为了让状态条与表格同源：list_runs() 若先渲染表格、再调一次
+     * runsOverview()，列表页的 Redis 往返就翻倍（两趟 lRange + 两趟 mget）。
+     * 两个调用方各自再拿这份数组算自己要的东西。
+     *
+     * @return array{0: array<int, string>, 1: array<int, mixed>} [run_id 列表, 对应的 request_log 原始值（顺序对齐）]
      */
-    public static function runsOverview(): array
+    private static function runsIndexAndLogs(): array
     {
         $run_id_lists = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
-        $count = count($run_id_lists);
         $keys = array_map(function ($run_id) {
             return Xhprof::$key_prefix . ":request_log:" . $run_id;
         }, $run_id_lists);
-        $values = array_values(Xhprof::getCache()->mget($keys));
+        // mget 批量取，消除 N+1；兼容部分驱动返回 [key=>value] 的形态
+        return array($run_id_lists, array_values(Xhprof::getCache()->mget($keys)));
+    }
+
+    /**
+     * 由 runsIndexAndLogs() 的原始数据归并出概览。语义（count 含悬空项、时间只取
+     * mget 到的行）见 runsOverview() 的说明——那是调用契约，抽助手不改语义。
+     */
+    private static function overviewFromRows(array $run_id_lists, array $values): array
+    {
         $oldest = null;
         $newest = null;
         foreach ($run_id_lists as $i => $run_id) {
@@ -404,12 +428,27 @@ class XHProfRunsDefault implements XHProfRuns
             if ($newest === null || $t > $newest) $newest = $t;
         }
         return array(
-            'count'  => $count,
+            'count'  => count($run_id_lists),
             'limit'  => (int) Xhprof::$log_num,
             'oldest' => $oldest,
             'newest' => $newest,
             'ttl'    => (int) Xhprof::$log_ttl,
         );
+    }
+
+    /**
+     * 列表概览（供列表页状态条用）：一趟 lRange + 一趟 mget，与 list_runs() 同一条
+     * 数据路径（同一个 runsIndexAndLogs() 助手，列表页只花一趟），不额外扫 Redis。
+     *
+     * count 取**索引列表长度**——它就是状态条要表达的「占用 / 上限」，包含数据已过期、
+     * 只剩指针的悬空项（索引刻意不带 TTL，见类头注释）；oldest/newest 只统计能 mget 到
+     * create_time 的行，一条都没有时是 null。返回结构是 Display 批的调用契约，别改形状：
+     *   ['count' => int, 'limit' => int, 'oldest' => int|null, 'newest' => int|null, 'ttl' => int]
+     */
+    public static function runsOverview(): array
+    {
+        list($run_id_lists, $values) = self::runsIndexAndLogs();
+        return self::overviewFromRows($run_id_lists, $values);
     }
 
     /**

@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * CHANGES FROM UPSTREAM: namespaced under ErikWang2013\Xhprof\Core\XhprofLib,
- * ten-framework adapters in place of the original PHP superglobals, an i18n
+ * twelve-framework adapters in place of the original PHP superglobals, an i18n
  * layer, and the fixes recorded in this repository's history. The rest of this
  * package (everything outside src/Core/XhprofLib/) is the MIT-licensed work of
  * this project — see LICENSE and NOTICE.
@@ -118,39 +118,39 @@ class XhprofDisplay
     "fn" => "",
     "ct" => "XhprofDisplay::xhprof_count_format",
     "Calls%" => "XhprofDisplay::xhprof_percent_format",
-    "wt" => "number_format",
+    "wt" => "XhprofDisplay::xhprof_num_format",
     "IWall%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_wt" => "number_format",
+    "excl_wt" => "XhprofDisplay::xhprof_num_format",
     "EWall%" => "XhprofDisplay::xhprof_percent_format",
 
-    "ut" => "number_format",
+    "ut" => "XhprofDisplay::xhprof_num_format",
     "IUser%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_ut" => "number_format",
+    "excl_ut" => "XhprofDisplay::xhprof_num_format",
     "EUser%" => "XhprofDisplay::xhprof_percent_format",
 
-    "st" => "number_format",
+    "st" => "XhprofDisplay::xhprof_num_format",
     "ISys%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_st" => "number_format",
+    "excl_st" => "XhprofDisplay::xhprof_num_format",
     "ESys%" => "XhprofDisplay::xhprof_percent_format",
 
-    "cpu" => "number_format",
+    "cpu" => "XhprofDisplay::xhprof_num_format",
     "ICpu%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_cpu" => "number_format",
+    "excl_cpu" => "XhprofDisplay::xhprof_num_format",
     "ECpu%" => "XhprofDisplay::xhprof_percent_format",
 
-    "mu" => "number_format",
+    "mu" => "XhprofDisplay::xhprof_num_format",
     "IMUse%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_mu" => "number_format",
+    "excl_mu" => "XhprofDisplay::xhprof_num_format",
     "EMUse%" => "XhprofDisplay::xhprof_percent_format",
 
-    "pmu" => "number_format",
+    "pmu" => "XhprofDisplay::xhprof_num_format",
     "IPMUse%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_pmu" => "number_format",
+    "excl_pmu" => "XhprofDisplay::xhprof_num_format",
     "EPMUse%" => "XhprofDisplay::xhprof_percent_format",
 
-    "samples" => "number_format",
+    "samples" => "XhprofDisplay::xhprof_num_format",
     "ISamples%" => "XhprofDisplay::xhprof_percent_format",
-    "excl_samples" => "number_format",
+    "excl_samples" => "XhprofDisplay::xhprof_num_format",
     "ESamples%" => "XhprofDisplay::xhprof_percent_format",
   );
 
@@ -207,7 +207,7 @@ class XhprofDisplay
    * 本次请求的渲染状态：`$stats`/`$pc_stats`/`$totals`/`$totals_1`/`$totals_2`/
    * `$sort_col`/`$metrics`/`$diff_mode`/`$display_calls` 这九个量是**按请求**算出来的
    * （见 XhprofLib::init_metrics() 与 profiler_report()），却存在进程级静态属性里——
-   * Hyperf 常驻 worker 里两个协程并发渲染时互相覆盖。
+   * 常驻 worker 里两个协程并发渲染时互相覆盖。
    *
    * 覆盖是**可达**的，不是理论风险：单 run 报告的渲染链在 `init_metrics()` 写完、
    * 列头/行渲染读之前，还有一次真 I/O —— `full_report()` 里的
@@ -217,44 +217,41 @@ class XhprofDisplay
    * 换成别人的 totals、行序按别人的排序列重排。复现见
    * tests/Unit/Lib/RenderStateCoroutineTest.php（让出点钉在那次 request_log 读上）。
    *
-   * 隔离方式与 `I18n::$locale` 同一套：Hyperf 下读写 `\Hyperf\Context\Context`
-   * （每协程一份存储），其余框架仍读写上面那些静态属性——那些框架一个请求一个进程，
-   * 静态属性本来就是请求级的。**这里只隔离了这九个量**：`$descriptions`/
+   * 隔离方式与 `I18n::$locale`、`Xhprof` 的五个适配器同一套：有协程后端就读写它
+   * （后端由 `Xhprof::coroutineContextClass()` 定：Hyperf 的 Context / workerman 的
+   * Context，每协程一份存储），否则读写上面那些静态属性——一个请求一个进程（或
+   * workerman 的 Select 事件循环，请求本就串行）时，静态属性本来就是请求级的。
+   * **这里只隔离了这九个量**：`$descriptions`/
    * `$sortable_columns`/`$format_cbk`/`$diff_descriptions` 与 `$vwbar`/`$vbar`/
    * `$vbbar`/`$vrbar`/`$vgbar` 是常量（每次请求写入的值都相同），继续共享。
    *
-   * **绕过本类读写 `$stats` 等属性（含测试夹具、`XhprofLib` 之外的调用方）在 Hyperf 下
-   * 会静默失效**：写进去没人读（读的是 Context），读出来是别人或上一次的值。新增写入点
-   * 请走 set_render_state()。
+   * **绕过本类读写 `$stats` 等属性（含测试夹具、`XhprofLib` 之外的调用方）在后端生效时
+   * 会静默失效**：写进去没人读（读的是协程 Context），读出来是别人或上一次的值。新增
+   * 写入点请走 set_render_state()。
    */
   private const RENDER_KEY = 'xhprof.display';
 
-  /** Hyperf 协程环境且 Context 类真的在（与 I18n::inCoroutineContext() 同一套判定）。 */
-  private static function in_coroutine_context(): bool
-  {
-    return Xhprof::isHyperfContext() && class_exists(\Hyperf\Context\Context::class);
-  }
-
   /**
-   * 取本协程的渲染状态量。Hyperf 下读本协程的 Context（没写过就是下面那个默认值），
-   * 其余框架读静态属性——两条路的默认值逐字相同。
+   * 取本协程的渲染状态量。有协程后端就读它（没写过就是下面那个默认值），否则读静态
+   * 属性——两条路的默认值逐字相同。
    *
    * @return mixed
    */
   private static function state(string $name, mixed $default)
   {
-    if (self::in_coroutine_context()) {
-      $state = \Hyperf\Context\Context::get(self::RENDER_KEY);
+    $ctx = Xhprof::coroutineContextClass();
+    if ($ctx !== null) {
+      $state = $ctx::get(self::RENDER_KEY);
       return is_array($state) && array_key_exists($name, $state) ? $state[$name] : $default;
     }
     return self::$$name;
   }
 
   /**
-   * 写本协程的渲染状态（**只更新传入的键**）。Hyperf 下写 Context，其余框架写静态属性。
+   * 写本协程的渲染状态（**只更新传入的键**）。有协程后端就写它，否则写静态属性。
    *
    * 键名与属性名逐个对应（`'stats' => self::$stats`）：这是本类内部契约，拼错在两条路上
-   * 都会当场炸（非 Hyperf 是 `self::$$name` 的 Error，Hyperf 是下面那句异常）——
+   * 都会当场炸（静态那条是 `self::$$name` 的 Error，后端那条是下面那句异常）——
    * 静默写进一个没人读的键正是这次要消灭的那类 bug。
    *
    * @param array<string, mixed> $values
@@ -266,9 +263,10 @@ class XhprofDisplay
         throw new \InvalidArgumentException("XhprofDisplay::set_render_state(): unknown render state key '$name'");
       }
     }
-    if (self::in_coroutine_context()) {
-      $state = \Hyperf\Context\Context::get(self::RENDER_KEY);
-      \Hyperf\Context\Context::set(self::RENDER_KEY, $values + (is_array($state) ? $state : array()));
+    $ctx = Xhprof::coroutineContextClass();
+    if ($ctx !== null) {
+      $state = $ctx::get(self::RENDER_KEY);
+      $ctx::set(self::RENDER_KEY, $values + (is_array($state) ? $state : array()));
       return;
     }
     foreach ($values as $name => $value) {
@@ -405,13 +403,13 @@ class XhprofDisplay
         'info' => 'runs.dt.info',
         'infoEmpty' => 'runs.dt.infoEmpty',
         'infoFiltered' => 'runs.dt.infoFiltered',
-        // 千位分隔符（`sInfoThousands`）**不进词表**：报告页上的数字是 PHP 的
-        // `number_format()` 打的（`$format_cbk`），它永远是英式的 `123,456`；
-        // 而 DataTables 只负责分页那一行的 `_TOTAL_`。两边各用本地分隔符的结果是
-        // **同一张页面上两种写法**（pt 的译者实测报回：表里 123,456、分页行 1.234）。
-        // 统一取英式：不给 DataTables 传这个键，它就用自带的默认值。
-        // 想让整页数字真正本地化是另一件事（要连 number_format 调用点一起改，
-        // 见 `$format_cbk`），那时再把它作为一对（thousands + decimal）加回来。
+        // 千位分隔符（`sInfoThousands`）**是刻意不传的**，别顺手加回来：
+        // 这个分页器只出现在运行列表页，而**列表页的表体数字一律是英式**——wt/mu
+        // 是 PHP 浮点的裸字符串（`0.1234`）、没有千位分隔，本页也没有任何走
+        // `$format_cbk` 的单元格。给 DataTables 传本地分隔符就会造出同一页两种写法
+        // （pt 的译者实测报回过这个形状：表里 123,456、分页行 1.234）。
+        // 报告页（run 详情）的数字才本地化：走 `$format_cbk`/`xhprof_num_format()`，
+        // 与 `num.thousands`/`num.decimal` 成对，见那两处。
         'search' => 'runs.dt.search',
         'first' => 'runs.dt.first',
         'previous' => 'runs.dt.previous',
@@ -437,16 +435,39 @@ class XhprofDisplay
   }
 
 
+  /**
+   * 页面数字的千位/小数分隔符（`num.thousands` / `num.decimal` 一对，逐语言）。
+   *
+   * 只服务**给人看的 HTML**（`$format_cbk`、计数/百分比格式化、汇总表的直接调用点）。
+   * CSV/JSON 导出走 `Xhprof::exportReport()` 自己的机器口径，不经过这里；
+   * 运行列表页也刻意保持英式（表体是 PHP 浮点的裸字符串，DataTables 分页行不传
+   * `sInfoThousands` —— 两边一起看才是同一页只有一种写法，见 xhprof_include_js_css）。
+   *
+   * 具体实现（含坏词表兜底）住在 `I18n::numberFormat()`：诊断区文案（Analyzer）
+   * 要印同一套分隔符，两边共用一处，免得 Analysis 层反向依赖 Display。
+   */
+  public static function xhprof_num_format($num, $decimals = 0)
+  {
+    return I18n::numberFormat($num, $decimals);
+  }
+
   public static function xhprof_count_format($num)
   {
     $num = round($num, 3);
-    if (round($num) == $num) return number_format($num);
-    return number_format($num, 3);
+    if (round($num) == $num) return XhprofDisplay::xhprof_num_format($num);
+    return XhprofDisplay::xhprof_num_format($num, 3);
   }
 
   public static function xhprof_percent_format($s, $precision = 1)
   {
-    return sprintf('%.' . $precision . 'f%%', 100 * $s);
+    // 小数点也随语言（de/fr/ru 等用逗号）。注意只换小数点、不加千位分隔符——
+    // 与改动前逐字等价（sprintf 本来就不分组），只是小数点的来源从写死变成词表。
+    $text = sprintf('%.' . $precision . 'f', 100 * $s);
+    $decimal = I18n::numberSeparators()[0];
+    if ($decimal !== '.') {
+      $text = str_replace('.', $decimal, $text);
+    }
+    return $text . '%';
   }
 
   /**
@@ -645,6 +666,21 @@ class XhprofDisplay
     }
 
 
+    // 只读导出入口（`?format=json|csv` 的实现在 Xhprof::index()，位于鉴权与参数
+    // 白名单**之后**：token/basic 与 IP 白名单对导出同样有效）。只在整份报告的视图里给：
+    // 导出忽略 symbol（拿到的是整个 run），挂在函数详情页上会误导。
+    // 链接文字直接用格式名——JSON/CSV 是格式标识、不是待翻译文案（先例：IP）。
+    if (empty($rep_symbol)) {
+      foreach (array('json', 'csv') as $fmt) {
+        $links[] = XhprofDisplay::xhprof_render_link(
+          strtoupper($fmt),
+          // run/run1/run2/source 都在 $url_params 里：单 run 走 run=，diff 走 run1/run2=，
+          // 与入口的派发条件一一对应。token/lang 照旧随 base 传播。
+          XhprofLib::report_url(array('format' => $fmt), array(), $url_params)
+        );
+      }
+    }
+
     // 搜索框没有可见 label，只有 placeholder —— 读屏器不把 placeholder 当名字，
     // 于是这个控件在读屏里是"未命名文本框"。aria-label 复用 search.placeholder
     // 的键（不新增文案，见 nav.language 那个同样的 title+aria-label 形状）。
@@ -697,23 +733,71 @@ class XhprofDisplay
       // 返回空串，整卡不输出。帧链接与其它内部链接同源（report_url 已做属性安全，
       // FlameGraph 原样写 href，不二次转义）。占比用 number_format 定点输出——不吃
       // precision ini（`*100 . '%'` 在那个 ini 前有前科）。
+      // 指标白名单：只放行 xhprof_get_possible_metrics() 里这四项，且本次 run 必须真的
+      // 采集到。非法值（含数组形态 `?flamemetric[]=wt`）与未采集的指标一律回落到默认，
+      // 绝不因为一个查询串参数把整张卡片搞没——渲染空串等于卡片消失，用户连切回去的
+      // 入口都没有。默认仍是 wt；wt 没采集时退到第一个可用指标（samples-only 的 run）。
+      $flame_whitelist = array_values(array_intersect(
+          array('wt', 'cpu', 'mu', 'pmu'),
+          array_keys(XhprofLib::xhprof_get_possible_metrics())
+      ));
+      $flame_metrics = array_values(array_intersect($flame_whitelist, (array) XhprofDisplay::metrics()));
+      $flame_metric = $flame_metrics === array() ? 'wt'
+          : (in_array('wt', $flame_metrics, true) ? 'wt' : $flame_metrics[0]);
+      $requested_metric = Xhprof::getRequest()->get('flamemetric');
+      if (is_string($requested_metric) && in_array($requested_metric, $flame_metrics, true)) {
+        $flame_metric = $requested_metric;
+      }
       $flame = FlameGraph::renderWithStats(
           $run1_data,
-          'wt',
+          $flame_metric,
           FlameGraph::DEFAULT_MAX_FRAMES,
           static function (string $fn) use ($base_url_params): string {
               return XhprofLib::report_url(array('symbol' => $fn), array(), $base_url_params);
           }
       );
       if ($flame['svg'] !== '') {
+        // 指标切换行：当前指标加粗，其余是指向 ?flamemetric=<m> 的链接（同一个 run，
+        // 只换图）。标签复用已翻译的列头 col.<m>（含单位），不新增词条。
+        // 内存（mu/pmu）是 inclusive 口径（含子调用），选中时补一句说明——1 个新键。
+        $metric_switch = array();
+        foreach ($flame_metrics as $m) {
+          $label = I18n::plain('col.' . $m);
+          $metric_switch[] = ($m === $flame_metric)
+              ? '<b>' . $label . '</b>'
+              : XhprofDisplay::xhprof_render_link(
+                  $label,
+                  XhprofLib::report_url(array('flamemetric' => $m), array(), $url_params)
+              );
+        }
+        if ($flame_metric === 'mu' || $flame_metric === 'pmu') {
+          $metric_switch[] = I18n::plain('flame.muInclusive');
+        }
+        // 三档色带图例：阈值取 FlameGraph 的公开常量（不抄第二份数字），颜色与
+        // FlameGraph::fillColor() 同一组 CSS 变量（那里是真源，字面量只是兜底）。
+        // 档值是纯数字，故零新词条。
+        $flame_legend = '';
+        foreach (array(
+            array(FlameGraph::SHARE_HOT, 'var(--xp-orange, #bc4c00)'),
+            array(FlameGraph::SHARE_WARM, 'var(--xp-accent, #0969da)'),
+        ) as $tier) {
+          $flame_legend .= '<span style="margin-right:12px"><span style="display:inline-block;'
+            . 'width:10px;height:10px;border-radius:2px;vertical-align:-1px;background:' . $tier[1]
+            . '"></span> ≥' . number_format($tier[0] * 100, 0) . '%</span>';
+        }
+        $flame_legend .= '<span><span style="display:inline-block;width:10px;height:10px;'
+          . 'border-radius:2px;vertical-align:-1px;background:var(--xp-text-muted, #57606a)"></span> &lt;'
+          . number_format(FlameGraph::SHARE_WARM * 100, 0) . '%</span>';
         $echo_page .= '<div class="xp-main"><div class="xp-card">'
           . '<div class="xp-card-title">' . I18n::plain('flame.title') . '</div>'
           . '<div style="padding:12px 20px">' . $flame['svg']
-          . '<p style="margin:8px 0 0;color:#666;font-size:12px">'
+          . '<p style="margin:8px 0 0;color:#666;font-size:12px">' . implode(' | ', $metric_switch) . '</p>'
+          . '<p style="margin:4px 0 0;color:#666;font-size:12px">' . $flame_legend . '</p>'
+          . '<p style="margin:4px 0 0;color:#666;font-size:12px">'
           . sprintf(
               I18n::plain('flame.note'),
               $flame['frames'],
-              number_format($flame['pruned_pct'] * 100, 1, '.', '')
+              number_format($flame['pruned_pct'] * 100, 1, I18n::t('num.decimal'), '')
           )
           . '</p></div></div></div>';
       }
@@ -813,6 +897,11 @@ class XhprofDisplay
    * For instance, negative numbers in diff reports comparing two runs (run1 & run2)
    * represent improvement from run1 to run2. We use green to display those deltas,
    * and red for regression deltas.
+   *
+   * 非数值（diff 的 per-call 行在任一侧 ct=0 时是 `common.na` 的文案，如 'N/A'）
+   * 没有可判的方向，**必须是中性 class**：PHP 8 下 `'N/A' <= 0` 是 false（非数字串与
+   * int 比较时 int 转成串按字典序比），旧写法把 N/A 单元格染成红色 VRBAR——等于把
+   * 「没数据」报成「性能退化」。
    */
   public static function get_print_class($num, $bold)
   {
@@ -822,15 +911,12 @@ class XhprofDisplay
     $vgbar = XhprofDisplay::$vgbar;
     $diff_mode = XhprofDisplay::diff_mode();
 
-    if ($bold) {
-      if ($diff_mode) {
-        $class = $vrbar; // red (regression)
-        if ($num <= 0) $class = $vgbar; // green (improvement)
-      } else {
-        $class = $vbbar; // blue
-      }
+    if ($bold && $diff_mode && is_numeric($num)) {
+      $class = ($num <= 0) ? $vgbar : $vrbar;   // green (improvement) / red (regression)
+    } elseif ($bold && !$diff_mode) {
+      $class = $vbbar;  // blue
     } else {
-      $class = $vbar;  // default (black)
+      $class = $vbar;   // default (black)，非数值的加粗格也落在这一档
     }
 
     return $class;
@@ -1116,7 +1202,8 @@ class XhprofDisplay
       } else {
         $header = $desc;
       }
-      $echo_page .= "<th$attr><nobr>$header</th>";
+      // scope="col"：表头是列头不是行头，读屏器按它把数据格与列关联起来
+      $echo_page .= "<th$attr scope=\"col\"><nobr>$header</th>";
     }
     return $echo_page;
   }
@@ -1145,7 +1232,9 @@ class XhprofDisplay
 
 
     $echo_page = '<div class="xp-card"><div class="xp-card-title">' . htmlspecialchars(strip_tags($title)) . ' ' . $display_link . '</div>';
-    $echo_page .= '<div class="xp-table-wrap"><table class="xp-table">';
+    // tabindex="0"：.xp-table-wrap 是 overflow-x:auto 的横向滚动容器，键盘用户要能
+    // 聚焦它再用方向键滚动（不可聚焦的滚动区域在纯键盘下够不到右侧的列）
+    $echo_page .= '<div class="xp-table-wrap" tabindex="0"><table class="xp-table">';
     $echo_page .= '<thead><tr>';
 
     $echo_page .= XhprofDisplay::render_header_row($stats, $sortable_columns, $vwbar, $url_params);
@@ -1204,11 +1293,11 @@ class XhprofDisplay
 
       $echo_page .= '<h3 style="margin:0 0 12px 0;font-size:15px">' . I18n::plain('diff.summary') . '</h3>';
       $echo_page .= '<table class="xp-table"><tr>';
-      $echo_page .= "<th></th>";
-      $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link(sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')), $href1) . "</th>";
-      $echo_page .= "<th $vwbar>" . XhprofDisplay::xhprof_render_link(sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')), $href2) . "</th>";
-      $echo_page .= "<th $vwbar>" . I18n::plain('common.diff') . "</th>";
-      $echo_page .= "<th $vwbar>" . I18n::plain('diff.diffPct') . "</th>";
+      $echo_page .= "<th scope=\"col\"></th>";
+      $echo_page .= "<th $vwbar scope=\"col\">" . XhprofDisplay::xhprof_render_link(sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')), $href1) . "</th>";
+      $echo_page .= "<th $vwbar scope=\"col\">" . XhprofDisplay::xhprof_render_link(sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')), $href2) . "</th>";
+      $echo_page .= "<th $vwbar scope=\"col\">" . I18n::plain('common.diff') . "</th>";
+      $echo_page .= "<th $vwbar scope=\"col\">" . I18n::plain('diff.diffPct') . "</th>";
       $echo_page .= '</tr>';
 
       if ($display_calls) {
@@ -1250,7 +1339,7 @@ class XhprofDisplay
       $echo_page .= "<td>" . I18n::plain('run.col.time') . "</td><td>{$create_time_text}</td>";
       $echo_page .= "<td>" . I18n::plain('run.col.ip') . "</td><td>" . htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') . "</td>";
       if ($display_calls) {
-        $echo_page .= "<td>" . I18n::plain('run.col.totalCalls') . "</td><td>" . number_format($totals['ct']) . "</td>";
+        $echo_page .= "<td>" . I18n::plain('run.col.totalCalls') . "</td><td>" . XhprofDisplay::xhprof_num_format($totals['ct']) . "</td>";
       }
       $echo_page .= "</tr><tr>";
       foreach ($metrics as $metric) {
@@ -1258,8 +1347,52 @@ class XhprofDisplay
         // 单位（microsecs/bytes/samples）也进词表：它出现在汇总表里，和列头一样是给人看的。
         // 键名由单位本身派生（unit.xxx），词表里没有就原样输出——不硬编码第二张映射表。
         $unit = (string) $possible_metrics[$metric][1];
-        $echo_page .= "<td>" . number_format($totals[$metric]) . " "
+        $echo_page .= "<td>" . XhprofDisplay::xhprof_num_format($totals[$metric]) . " "
           . (I18n::has('unit.' . $unit) ? I18n::plain('unit.' . $unit) : $unit) . "</td>";
+      }
+      // 两条「同 URI」入口，共用一个居中的格子：
+      //  1) 「与上次运行对比」：同一 request_uri 的上一条 run 与本条直接开 diff。
+      //     uri 用**落库的原串**（`$request_info['request_uri']`），不是上面那份已经
+      //     urldecode + htmlspecialchars 的展示串——findPreviousRunForUri() 是逐字比较，
+      //     拿解码过的串在 uri 带 %xx/空格时会对不上（它自己注释里也钉了这一条）。
+      //     找不到就不显示（首次运行、列表被清、本页是聚合 run=a,b 查不到 request_log）。
+      //     链接里 `run` 必须置 null 删掉：Xhprof.php 的 dispatch 里 `if ($run)` 先于
+      //     `run1 && run2`，URL 里留着 run 会盖过 diff，点进去还是单跑页。
+      //  2) 「该请求地址的其他运行」（A4 生产者半截）：回列表页并带上 `requrl`
+      //     （URL 编码交给 report_url()->http_build_query()；值必须是这份逐字原串——
+      //     列表页 JS 拿它预填搜索框，与落库、搜索子串匹配是同一形态）。
+      //     这里正是 VIEW_PARAMS 防传播设计要绕的一步：report_url() 默认摘掉视图参数
+      //     （含 requrl），所以把 requrl 作为 **params** 显式传入——params 在 drop 之后才
+      //     落到查询串上，参数据此保住；run/all 等仍被摘掉，链接才落到列表页而不是继续
+      //     停在单跑页。**别把 requrl 移出 VIEW_PARAMS**：默认 drop 表是全页面链接的
+      //     传播规则，动它会顺带把它塞进 symbol/sort/导出等所有别的链接。
+      $raw_uri = $request_info['request_uri'] ?? null;
+      $cur_run = Xhprof::getRequest()->get('run');
+      $run_nav_links = array();
+      if (is_string($raw_uri) && $raw_uri !== '') {
+        $run_nav_links[] = XhprofDisplay::xhprof_render_link(
+          I18n::plain('run.otherRuns'),
+          XhprofLib::report_url(array('requrl' => $raw_uri))
+        );
+      }
+      if (is_string($cur_run) && $cur_run !== ''
+        && is_string($raw_uri) && $raw_uri !== ''
+        && !empty($request_info['create_time'])) {
+        $prev_run = XHProfRunsDefault::findPreviousRunForUri($raw_uri, (int) $request_info['create_time']);
+        if ($prev_run !== null) {
+          $run_nav_links[] = XhprofDisplay::xhprof_render_link(
+            I18n::plain('run.previous'),
+            XhprofLib::report_url(
+              array('run' => null, 'run1' => $prev_run, 'run2' => $cur_run),
+              array(),
+              $url_params
+            )
+          );
+        }
+      }
+      if ($run_nav_links) {
+        $echo_page .= '<tr><td colspan="8" style="text-align:center">'
+          . implode(' | ', $run_nav_links) . '</td></tr>';
       }
       $echo_page .= "</tr></table>";
     }
@@ -1480,11 +1613,11 @@ class XhprofDisplay
       $echo_page .= '<table border=1 cellpadding=2 cellspacing=1 width="30%" '
         . 'rules=rows bordercolor="#bdc7d8" align=center>' . "\n";
       $echo_page .= '<tr bgcolor="#bdc7d8" align=right>';
-      $echo_page .= "<th align=left>" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</th>";
-      $echo_page .= "<th $vwbar><a href=" . $href1 . ">" . sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')) . "</a></th>";
-      $echo_page .= "<th $vwbar><a href=" . $href2 . ">" . sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')) . "</a></th>";
-      $echo_page .= "<th $vwbar>" . I18n::plain('common.diff') . "</th>";
-      $echo_page .= "<th $vwbar>" . I18n::plain('diff.diffPct') . "</th>";
+      $echo_page .= "<th align=left scope=\"col\">" . htmlspecialchars($rep_symbol, ENT_QUOTES, 'UTF-8') . "</th>";
+      $echo_page .= "<th $vwbar scope=\"col\"><a href=" . $href1 . ">" . sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run1, ENT_QUOTES, 'UTF-8')) . "</a></th>";
+      $echo_page .= "<th $vwbar scope=\"col\"><a href=" . $href2 . ">" . sprintf(I18n::plain('diff.runShort'), htmlspecialchars((string) $run2, ENT_QUOTES, 'UTF-8')) . "</a></th>";
+      $echo_page .= "<th $vwbar scope=\"col\">" . I18n::plain('common.diff') . "</th>";
+      $echo_page .= "<th $vwbar scope=\"col\">" . I18n::plain('diff.diffPct') . "</th>";
       $echo_page .= '</tr>';
       $echo_page .= '<tr>';
 
@@ -1562,7 +1695,7 @@ class XhprofDisplay
 
     $echo_page .= "</center></h4>";
 
-    $echo_page .= '<div class="xp-table-wrap"><table class="xp-table xp-pc-section">';
+    $echo_page .= '<div class="xp-table-wrap" tabindex="0"><table class="xp-table xp-pc-section">';
     $echo_page .= '<thead><tr>';
 
     $echo_page .= XhprofDisplay::render_header_row($pc_stats, $sortable_columns, $vwbar, $url_params);
@@ -1800,7 +1933,7 @@ class XhprofDisplay
       }
 
       if ($xhprof_data === false || $xhprof_data === null) {
-        return XhprofDisplay::no_data_page($data);
+        return XhprofDisplay::no_data_page($data) . XhprofDisplay::render_footer();
       }
 
       $data .= XhprofDisplay::profiler_single_run_report(
@@ -1821,7 +1954,7 @@ class XhprofDisplay
       // falsy 而不是 === false：聚合一个都读不到时 xhprof_aggregate_runs() 的 raw 是 null
       // （get_run 单条读不到才是 false），两种「数据不在了」都要走同一张空态卡。
       if (!$xhprof_data1 || !$xhprof_data2) {
-        return XhprofDisplay::no_data_page($data);
+        return XhprofDisplay::no_data_page($data) . XhprofDisplay::render_footer();
       }
       $data .= XhprofDisplay::profiler_diff_report(
         $url_params,
@@ -1837,7 +1970,10 @@ class XhprofDisplay
     } else {
       $data .= XHProfRunsDefault::list_runs();
     }
-    return $data;
+    // 页脚挂在**本函数的每个出口**而不是 index() 里：`</body>` 由 index() 收尾（围栏外），
+    // 报告页（列表页/单跑页/diff 页/空态页）的 HTML 全部从这里出去，收口在这里最省事，
+    // 也不会漏掉任何一个分支（导出走 index() 的 format 分支，压根不到这里）。
+    return $data . XhprofDisplay::render_footer();
   }
 
   /**
@@ -1870,6 +2006,33 @@ class XhprofDisplay
       . '<div class="xp-card-title">' . I18n::plain('report.title') . '</div>'
       . '<div class="xp-card-note">' . I18n::plain('report.noData') . '</div>'
       . '</div></div>';
+  }
+
+  /**
+   * 页脚版权行（`footer.credit`）。displayXHProfReport 的每个出口都拼它，
+   * 落在 `</body>`（index() 加，围栏外）之前的最后一块。
+   *
+   * 词表值就是给人看的整行文案，品牌+URL 语言无关、13 份逐字同值（同 `runs.col.ip`
+   * 的 `IP` 类先例，I18nTest 的逐字守卫只看含汉字的源值）。这里把值与代码里同一个
+   * URL 字面量做替换、只给 URL 本身套链接——**不用** %s 占位符：那要求 13 份译者
+   * 都正确保留占位符才不掉链接，而这一行本来就不该被翻译。词表若被改坏到没有这个
+   * URL，就退化成一行纯文本（页脚仍在，测试会红在缺链接上）。
+   * 样式与上方火焰图说明同一档弱化灰（--xp-text-muted 定义在 xhprof.css），
+   * 外链与导航条 GitHub 链接同式。
+   */
+  public static function render_footer(): string
+  {
+    $url = 'https://erik.xyz';
+    $credit = I18n::plain('footer.credit');
+    if (strpos($credit, $url) !== false) {
+      $credit = str_replace(
+        $url,
+        '<a href="' . $url . '" target="_blank" rel="noopener">' . $url . '</a>',
+        $credit
+      );
+    }
+    return '<div style="padding:14px 0 22px;text-align:center;color:var(--xp-text-muted);font-size:12px">'
+      . $credit . '</div>';
   }
 
   public static function show_nav($url_params)

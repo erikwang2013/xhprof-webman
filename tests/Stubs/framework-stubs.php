@@ -637,6 +637,303 @@ namespace Illuminate\Support {
         {
             $this->published[] = $paths;
         }
+
+        /**
+         * 真实现（Illuminate/Support/ServiceProvider.php:474-481，Laravel 13 同形）的注册动作是：
+         *
+         *     Artisan::starting(function ($artisan) use ($commands) {
+         *         $artisan->resolveCommands($commands);
+         *     });
+         *
+         * 注意同文件 :6 的 `use Illuminate\Console\Application as Artisan;`：这里叫 Artisan 的是
+         * **类**不是门面（Support/Facades/Artisan.php 是另一回事），starting() 是
+         * Illuminate\Console\Application 上的静态方法（:120-123），把闭包追加进
+         * protected static $bootstrappers（:53），由 Application::__construct() 末行的
+         * bootstrap() 在建控制台应用时逐个执行（:80 → :130-135）。桩把别名换成 FQN，其余照抄。
+         */
+        public function commands(mixed $commands): void
+        {
+            $commands = is_array($commands) ? $commands : func_get_args();
+
+            \Illuminate\Console\Application::starting(static function (\Illuminate\Console\Application $artisan) use ($commands): void {
+                $artisan->resolveCommands($commands);
+            });
+        }
+    }
+}
+
+namespace Illuminate\Console {
+    /**
+     * 桩面 = 「包的代码 extends 它」+「单测把一条命令跑起来」两件事。
+     *
+     * 与真类的结构差异，写下来免得被当成缺陷：
+     *   1. 真基类**没有** handle() 声明：入口是 execute() 里的
+     *      `method_exists($this, 'handle') ? 'handle' : '__invoke'`
+     *      （Illuminate/Console/Command.php:195,209；Laravel 13 同形 :276）——
+     *      子类写 `handle(): int` 是新增方法，不是覆写；
+     *   2. $signature 的真解析发生在 __construct() → configureUsingFluentDefinition()
+     *      （同文件 :131-146，交 Illuminate\Console\Parser 建 Symfony InputDefinition）。
+     *      桩只从 $signature 抽「命令名 + 位置实参名」，不建 InputDefinition —— 于是
+     *      实参/选项**不校验**是否在签名里声明（真 Symfony 会抛异常），默认值也不填。
+     */
+    class Command
+    {
+        /** SUCCESS/FAILURE/INVALID 的真源是 Symfony（symfony/console Command/Command.php:38-40），
+         *  Illuminate 的 Command 直接继承使用；桩没有 Symfony 基层，在这里声明同一组。 */
+        public const SUCCESS = 0;
+        public const FAILURE = 1;
+        public const INVALID = 2;
+
+        /** @var string|null 同真类：无默认值，子类用 `'name {arg : 说明}'` 形态声明 */
+        protected $signature;
+
+        /** @var string */
+        protected $description = '';
+
+        private ?Application $application = null;
+
+        /** @var array<string, mixed> 位置实参：按 $signature 的声明顺序落座（真实现读绑定的 InputInterface） */
+        private array $stubArguments = [];
+
+        /** @var array<string, string|bool> 选项：命令行里 `--k` / `--k=v` 的解析结果 */
+        private array $stubOptions = [];
+
+        /** @var list<string> $signature 里位置实参的名字，顺序即位置 */
+        private array $argumentNames = [];
+
+        public function __construct()
+        {
+            // 真解析见类注释；这里只取 `{line : 说明}` / `{line}` 的名字（`{--x}` 是选项，跳过）。
+            preg_match_all('/\{([^}]*)\}/', (string) $this->signature, $matches);
+            foreach ($matches[1] as $spec) {
+                $name = trim(explode(':', $spec, 2)[0]);
+                if ($name !== '' && !str_starts_with($name, '-')) {
+                    $this->argumentNames[] = $name;
+                }
+            }
+        }
+
+        /** 真签名 `setApplication(?Application $application): void`（Symfony Command/Command.php:173） */
+        public function setApplication(?Application $application): void
+        {
+            $this->application = $application;
+        }
+
+        /** 真签名 `getApplication(): ?Application`（同文件 :201，可空） */
+        public function getApplication(): ?Application
+        {
+            return $this->application;
+        }
+
+        /** 真实现返回 ?string（没名字的命令为 null，同文件 :538）；桩只认 $signature 形态，直接给名字。 */
+        public function getName(): string
+        {
+            return (string) strtok((string) $this->signature, ' ');
+        }
+
+        /**
+         * 真实现从绑定后的 InputInterface 读（InteractsWithIO.php:76，参数无类型声明）；
+         * 桩从 stubHandle() 喂进来的表读，`$key = null` 时返回全表。
+         */
+        public function argument(?string $key = null): mixed
+        {
+            return $key === null ? $this->stubArguments : ($this->stubArguments[$key] ?? null);
+        }
+
+        /** 同 argument()，真实现 InteractsWithIO.php:112 */
+        public function option(?string $key = null): mixed
+        {
+            return $key === null ? $this->stubOptions : ($this->stubOptions[$key] ?? null);
+        }
+
+        /**
+         * 桩专用入口：真路径是 Application::run() → Symfony Command::run() → execute() →
+         * 容器调 handle()（Command.php:209-211，返回值 `(int)` 收口，这里也收）。
+         * 差异：真实现找不到 handle() 时回落到 __invoke（同 :209），桩不支持 __invoke。
+         *
+         * @param list<string> $arguments 位置实参，按命令行出现顺序
+         * @param array<string, string|bool> $options
+         */
+        public function stubHandle(array $arguments, array $options): int
+        {
+            $this->stubArguments = [];
+            foreach ($this->argumentNames as $i => $name) {
+                if (array_key_exists($i, $arguments)) {
+                    $this->stubArguments[$name] = $arguments[$i];
+                }
+            }
+            $this->stubOptions = $options;
+
+            return (int) $this->handle();
+        }
+    }
+
+    /**
+     * 真类 extends Symfony\Console\Application（Application.php:25），构造要
+     * `(Container $laravel, Dispatcher $events, $version)`（:69）。桩不收容器/事件派发器：
+     * 桩的 call() 只做「解析命令行 → 找到命令 → 喂实参 → 跑 handle()」，没有需要容器的
+     * 路径（真实现用容器实例化命令对象、给 handle() 解依赖）。
+     *
+     * bootstrappers 这条真路径桩是**有状态**的：ServiceProvider::commands() 正是走它
+     * （静态表 + 构造时执行，见下面 starting()/bootstrap()）。用例之间用真 API
+     * forgetBootstrappers() 清场，否则上一个用例注册的命令会飘进下一个用例的新应用。
+     */
+    class Application
+    {
+        /** @var array<string, Command> */
+        private array $commands = [];
+
+        /** 真实现 protected static $bootstrappers = []（:53，无类型声明）；攒的是 commands() 交来的闭包 */
+        protected static array $bootstrappers = [];
+
+        /**
+         * 真构造（:69-81）收容器/事件派发器并建 Symfony 基层，末行 `$this->bootstrap()`（:80）
+         * —— 于是 commands() 攒下的闭包在**应用建出来的那一刻**执行（内核也是在这儿 new 的，
+         * Foundation/Console/Kernel.php:561-566 getArtisan()）。桩只保留这一句。
+         */
+        public function __construct()
+        {
+            $this->bootstrap();
+        }
+
+        /**
+         * 真签名 `starting(Closure $callback)`（:120-123），体是 `static::$bootstrappers[] = $callback;`。
+         * 上层写作 `Artisan::starting(...)`，其中 Artisan 是 `Illuminate\Console\Application`
+         * 的类别名（ServiceProvider.php:6）——**不是**门面。
+         */
+        public static function starting(\Closure $callback): void
+        {
+            static::$bootstrappers[] = $callback;
+        }
+
+        /** 真实现 :143-146：清空静态表。真 API（本仓用例拿它做隔离），不是为桩发明的。 */
+        public static function forgetBootstrappers(): void
+        {
+            static::$bootstrappers = [];
+        }
+
+        /** 真实现 :130-135：逐个把 `$this`（应用实例）喂给 bootstrapper。 */
+        protected function bootstrap(): void
+        {
+            foreach (static::$bootstrappers as $bootstrapper) {
+                $bootstrapper($this);
+            }
+        }
+
+        /**
+         * 真签名 `call($command, array $parameters = [], $outputBuffer = null): int`（:157）：
+         * 字符串走 Symfony StringInput（:190 `new StringInput($command)`）再 run() 派发，
+         * $parameters 非空时改走 ArrayInput。桩只接字符串。
+         *
+         * 桩顶替 StringInput 的只是分词那一层（双引号成组、`--k`、`--k=v`）：不处理转义与
+         * 单引号，也不校验选项是否声明（见 Command 类注释）；$parameters / $outputBuffer
+         * 收下不用（桩没有 Input/Output 两件套）。
+         *
+         * @param \Illuminate\Console\Command|string $command
+         * @param array<int|string, mixed> $parameters
+         */
+        public function call($command, array $parameters = [], $outputBuffer = null): int
+        {
+            [$name, $arguments, $options] = self::parseLine((string) $command);
+
+            if (!isset($this->commands[$name])) {
+                // 真实现抛 CommandNotFoundException（:159-161）；桩换成本文件可用的异常
+                throw new \BadMethodCallException("Illuminate Console stub: command not found: {$name}");
+            }
+
+            return $this->commands[$name]->stubHandle($arguments, $options);
+        }
+
+        /** 真签名 `add(SymfonyCommand $command): ?SymfonyCommand`（:233）；桩收窄成只接桩的 Command、返回 void。 */
+        public function add(Command $command): void
+        {
+            $command->setApplication($this);
+            $this->commands[$command->getName()] = $command;
+        }
+
+        /**
+         * 真签名 `resolveCommands($commands): $this`（:303-312，Laravel 13 同形 :284-293）：
+         * 非数组收成 `func_get_args()` 的可变参数形态（`commands('a', 'b')` 也合法），逐个
+         * resolve()。桩返回 void —— 真实现的链式返回是内核 getArtisan() 用来串
+         * `->resolveCommands(...)->setContainerCommandLoader()` 的（Kernel.php:561-562），
+         * 本包不走那条链。
+         */
+        public function resolveCommands(mixed $commands): void
+        {
+            $commands = is_array($commands) ? $commands : func_get_args();
+
+            foreach ($commands as $command) {
+                $this->resolve($command);
+            }
+        }
+
+        /**
+         * 真实现（:274-296，L13 :260-277）三条岔路：@AsCommand 属性里的名字先收进 commandMap
+         * 交容器命令加载器惰性解析、Command 实例直接 add、其余类名交 `$this->laravel->make()`。
+         * 桩只表达前两条的简化版：类名用 `new`（无容器、无依赖注入），@AsCommand 那条惰性路径
+         * 不表达 —— 沿着它会注册的命令 has() 也看不见（本包的命令不走那条路）。
+         *
+         * @param \Illuminate\Console\Command|string $command
+         */
+        public function resolve(mixed $command): void
+        {
+            if ($command instanceof Command) {
+                $this->add($command);
+
+                return;
+            }
+
+            // is_a(..., true) 顺带把 string 收窄成 class-string<Command>（phpstan 认这个窄化）
+            if (is_string($command) && is_a($command, Command::class, true)) {
+                $this->add(new $command());
+
+                return;
+            }
+
+            throw new \BadMethodCallException(sprintf(
+                'Illuminate Console stub: resolve() 只接 Command 实例或 Command 类名，收到 %s',
+                get_debug_type($command)
+            ));
+        }
+
+        /**
+         * 真实现继承自 Symfony（symfony/console Application.php:638-643），还会多问一句命令
+         * 加载器（`$this->commandLoader?->has($name)`，内核 getArtisan() 会
+         * setContainerCommandLoader()，那是桩不表达的惰性解析路径）；桩只查已 add 的表。
+         */
+        public function has(string $name): bool
+        {
+            return isset($this->commands[$name]);
+        }
+
+        /**
+         * 命令行分词：命令名 + 位置实参 + `--选项`。
+         *
+         * @return array{0: string, 1: list<string>, 2: array<string, string|bool>}
+         */
+        private static function parseLine(string $line): array
+        {
+            // str_getcsv 只认双引号 —— README 的用法 `xhprof:profile "migrate --force"`
+            // 正是靠双引号把整串收成一个实参。空串滤掉：多个空格不该变成空实参。
+            $tokens = array_values(array_filter(
+                str_getcsv(trim($line), ' ', '"', '\\'),
+                static fn (string $token): bool => $token !== ''
+            ));
+
+            $name = (string) array_shift($tokens);
+            $arguments = [];
+            $options = [];
+            foreach ($tokens as $token) {
+                if (!str_starts_with($token, '--')) {
+                    $arguments[] = $token;
+                    continue;
+                }
+                [$key, $value] = array_pad(explode('=', substr($token, 2), 2), 2, true);
+                $options[$key] = $value;
+            }
+
+            return [$name, $arguments, $options];
+        }
     }
 }
 
@@ -1506,6 +1803,108 @@ namespace Psr\Http\Server {
     interface RequestHandlerInterface
     {
         public function handle(\Psr\Http\Message\ServerRequestInterface $request): \Psr\Http\Message\ResponseInterface;
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// workerman/coroutine：`Xhprof::coroutineContextClass()` 的第三个后端（判定「当下在不在
+// 协程里」+ 协程上下文存储）。单测里没有它就只剩两态（Hyperf / 静态），workerman 那一档
+// 走不到。
+//
+// 保真性不靠这份文件自证（同 Framework/*.php 的约定）：桩的 14 条等价断言在真包
+// workerman/coroutine v1.1.6 上逐条跑过、结果逐字相同（含两个真 Fiber 挂起交错的几条）；
+// `tools/contracts/cases/Webman.php` 用**真实的** workerman + coroutine 包跑同一套语义。
+//
+// 与真类的差异（刻意，别照真类"补全"）：
+//   1. 驱动固定 Fiber：真包在 class 加载时按 `Worker::$eventLoopClass` 在 Fiber / Swoole /
+//      Swow 三个驱动里选（`src/Coroutine.php`、`src/Context.php` 文件末尾各有顶层 init 调用，
+//      加载即钉）。本仓装不到 Swoole/Swow 扩展，桩只有 Fiber 这一种。
+//   2. `isCoroutine()` 由真 `\Fiber::getCurrent()` 决定，**不是可写标志**：本仓要测的语义
+//      恰是「同一个类在两种形状下的行为」（非协程 = 进程级存储 / 真协程 = 每协程一份），
+//      可写标志能测出的只是「我按标志走了哪条路」。
+//   3. 只桩**静态**调用面：真 `Coroutine` 还有 `__construct/create/defer/getCurrent/id/init/
+//      resume/start/suspend`，真 `Context` 还有 `destroy/reset/initDriver` —— 本仓代码不调，
+//      桩**不提供**（多一个臆造的方法就是给未来留一条假绿的路，要加先问「谁在调」）。
+//   4. 存储本体与真 `Context\Fiber` 同构：非协程用进程级 ArrayObject、协程用 WeakMap 按
+//      `\Fiber::getCurrent()` 分桶（协程结束后条目随 WeakMap 消失）。差异只在真类用顶层
+//      `initContext()` 初始化、桩惰性初始化。
+// ---------------------------------------------------------------------------------------
+namespace Workerman\Coroutine {
+    /** 真身：workerman/coroutine v1.1.6 `src/Context.php`（转发到当前驱动）。 */
+    final class Context
+    {
+        /** @var \WeakMap|null 协程（\Fiber 对象）→ ArrayObject */
+        private static ?\WeakMap $contexts = null;
+
+        /** @var \ArrayObject|null 非协程（顶层 / 事件循环回调之外）用的进程级存储 */
+        private static ?\ArrayObject $nonFiberContext = null;
+
+        public static function get(?string $name = null, mixed $default = null): mixed
+        {
+            self::init();
+            $fiber = \Fiber::getCurrent();
+            if ($fiber === null) {
+                return $name !== null ? (self::$nonFiberContext[$name] ?? $default) : self::$nonFiberContext;
+            }
+            if ($name === null) {
+                return self::$contexts[$fiber] ??= new \ArrayObject([], \ArrayObject::ARRAY_AS_PROPS);
+            }
+
+            return self::$contexts[$fiber][$name] ?? $default;
+        }
+
+        public static function set(string $name, mixed $value): void
+        {
+            self::init();
+            $fiber = \Fiber::getCurrent();
+            if ($fiber === null) {
+                self::$nonFiberContext[$name] = $value;
+
+                return;
+            }
+            self::$contexts[$fiber] ??= new \ArrayObject([], \ArrayObject::ARRAY_AS_PROPS);
+            self::$contexts[$fiber][$name] = $value;
+        }
+
+        public static function has(string $name): bool
+        {
+            self::init();
+            $fiber = \Fiber::getCurrent();
+            if ($fiber === null) {
+                return self::$nonFiberContext->offsetExists($name);
+            }
+
+            return isset(self::$contexts[$fiber]) && self::$contexts[$fiber]->offsetExists($name);
+        }
+
+        /** 真身是文件末尾的顶层 `Context::initDriver();`；桩没有驱动要选，惰性建容器。 */
+        private static function init(): void
+        {
+            self::$contexts ??= new \WeakMap();
+            self::$nonFiberContext ??= new \ArrayObject([], \ArrayObject::ARRAY_AS_PROPS);
+        }
+    }
+}
+
+namespace Workerman {
+    /** 真身：workerman/coroutine v1.1.6 `src/Coroutine.php`（class Coroutine implements CoroutineInterface）。 */
+    final class Coroutine
+    {
+        public static function isCoroutine(): bool
+        {
+            return \Workerman\Coroutine\Coroutine\Fiber::isCoroutine();
+        }
+    }
+}
+
+namespace Workerman\Coroutine\Coroutine {
+    /** 真身：workerman/coroutine v1.1.6 `src/Coroutine/Fiber.php`。 */
+    final class Fiber
+    {
+        public static function isCoroutine(): bool
+        {
+            return \Fiber::getCurrent() !== null;
+        }
     }
 }
 

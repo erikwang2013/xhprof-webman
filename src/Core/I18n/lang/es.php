@@ -195,4 +195,19 @@ return [
     // of time not drawn; a literal percent sign is written %%.
     'flame.title' => 'Gráfico de llamas',
     'flame.note' => 'Mostrando %s marcos; un %s%% del tiempo no se dibuja para no agrandar la página',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => 'Comparar con la ejecución anterior',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '(memoria incluida la de las llamadas hijas)',
+    // Separadores de millar / decimal de los números de la página de informe (solo visualización HTML; las exportaciones y la lista de ejecuciones no los usan): medidos según CLDR.
+    'num.thousands' => '.',
+    'num.decimal' => ',',
+    // Otras ejecuciones de la misma URL: enlaza a la lista con `requrl`, que su JS lee para prerrellenar la búsqueda.
+    'run.otherRuns' => 'Otras ejecuciones de esta URL',
+    // Pie de página. Marca + URL son independientes del idioma: los 13 catálogos llevan el mismo valor literal (la guarda de I18nTest solo mira valores fuente con han); render_footer() convierte la URL en enlace.
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // Barra de estado de la lista de ejecuciones: guardadas / límite / días de retención / fechas más antigua y más reciente.
+    'runs.status' => 'Ejecuciones guardadas: %s / límite %s · retención %s días · más antigua %s · más reciente %s',
+
 ];

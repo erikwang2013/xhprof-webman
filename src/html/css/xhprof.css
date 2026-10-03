@@ -264,12 +264,25 @@ td.vrbar {
   text-align: right;
   border-left: 1px solid var(--xp-border);
   color: var(--xp-red);
+  unicode-bidi: plaintext; /* RTL 下把符号摆回数字左边，见下方 ::before 说明 */
+}
+
+/* 色盲通道：红/绿之外的第二个线索。改善侧的数值自带 `-`（number_format 打的），
+   回归侧在数值前补一个 `+`。只挂 vrbar —— 它是 get_print_class 里「diff + 加粗 +
+   数值 > 0」那一档；非数值格（N/A）在同一函数里落回中性档 vbar，不会带上这个 `+`。
+   RTL（ar 页）：`+` 来自 ::before 这个**独立盒子**，U+002B 是中性符（ES），Chrome 把它
+   排到数字**右**边（实测「1,234+」）；`-` 在数字自己的文本里不受影响。所以带符号的
+   数值格统一 unicode-bidi: plaintext（无强方向字符 → 段落按 LTR 排）：实测 RTL 下
+   `+` 回到数字左边、LTR 页逐像素不变。仍不写 [dir="rtl"] 规则。 */
+td.vrbar::before {
+  content: "+";
 }
 
 td.vgbar {
   text-align: right;
   border-left: 1px solid var(--xp-border);
   color: var(--xp-green);
+  unicode-bidi: plaintext; /* 与 vrbar 同款，符号一侧保持一致（`-` 本就在文本里） */
 }
 
 td.vwbar, th.vwbar {
@@ -545,5 +558,39 @@ ul.xhprof_actions a:hover {
   .xp-table td {
     padding: 8px 10px;
     font-size: 12px;
+  }
+}
+
+/* ========== 打印 ========== */
+@media print {
+  /* 导航/工具区/表格控件在纸上只有噪声（按钮点不了、分页印不全）：
+     .xp-nav 导航条；.xp-runs-toolbar 列表页「对比选中」工具区；
+     ul.xhprof_actions 报告页的动作链接；.xp-search 报告页的符号搜索框；
+     DataTables 的每页条数/搜索框/分页控件。
+     保留 .dataTables_info（「显示第 1 至 20 条，共 N 条」）—— 它是纸面上唯一
+     说明「这只是其中一页」的行。 */
+  .xp-nav,
+  .xp-runs-toolbar,
+  ul.xhprof_actions,
+  .xp-search,
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter,
+  .dataTables_wrapper .dataTables_paginate {
+    display: none;
+  }
+
+  /* 卡片尽量不跨页断开（比一页还长的卡片浏览器会自动放弃这条：行为是「尽量」） */
+  .xp-card {
+    break-inside: avoid;
+  }
+
+  /* overflow-x:auto 的滚动容器打印时只输出可见部分 —— 放开，宽表按页续印 */
+  .xp-table-wrap {
+    overflow: visible;
+  }
+
+  /* 长表跨页时表头在每页顶部重复 */
+  .xp-table thead {
+    display: table-header-group;
   }
 }

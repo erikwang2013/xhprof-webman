@@ -52,18 +52,18 @@ class I18n
     ];
 
     /**
-     * 当前语言。**Hyperf 协程下存进 \Hyperf\Context\Context**（由 Hyperf 中间件
-     * markHyperfContext() 置位），其余框架存这个静态属性——那些框架的进程模型本来就是
-     * 一请求一进程或已有自己的隔离。
+     * 当前语言。**跑在协程里就存进协程上下文**（后端由 Xhprof::coroutineContextClass()
+     * 决定：Hyperf 的 Context，或 workerman/webman 的 Context），不在协程里存这个静态
+     * 属性 —— 那时没有并发请求要隔离（一请求一进程的框架、workerman 的 Select 事件循环
+     * 都属于这一档）。
      *
      * 为什么语言非要隔离：`Xhprof::index()` 在**页首**读一次 htmlLang()/dir() 拼
-     * `<html>`，而正文的 t() 要在 Redis I/O **之后**才读；Hyperf 常驻 worker 里中间
-     * 一让出协程，另一个请求就把语言改掉了 —— 同一页能出 `<html lang="en">` 配阿拉伯语
+     * `<html>`，而正文的 t() 要在 Redis I/O **之后**才读；常驻 worker 里中间一让出
+     * 协程，另一个请求就把语言改掉了 —— 同一页能出 `<html lang="en">` 配阿拉伯语
      * 正文、`bodyDir=ltr`。文案错位不影响数据，但它是最刺眼的一种错，而且可复现。
      *
-     * **这是部分隔离，不是「协程问题解决了」**：XhprofDisplay 的
-     * `$stats`/`$pc_stats`/`$totals`/`$sort_col` 那批渲染静态量仍在共享区，两个协程并发
-     * 渲染同一进程时照样互相覆盖。隔离的只有语言这一份状态。
+     * 隔离的不止语言：XhprofDisplay 的 9 个渲染状态量与 Xhprof 的 5 个适配器走**同一个**
+     * 后端（三条路都问 coroutineContextClass()，别再各自判定）。
      */
     private static string $locale = self::FALLBACK;
 
@@ -139,8 +139,9 @@ class I18n
     public static function setLocale(mixed $locale): void
     {
         $code = self::normalize($locale) ?? self::FALLBACK;
-        if (self::inCoroutineContext()) {
-            \Hyperf\Context\Context::set(self::LOCALE_KEY, $code);
+        $ctx = Xhprof::coroutineContextClass();
+        if ($ctx !== null) {
+            $ctx::set(self::LOCALE_KEY, $code);
             return;
         }
         self::$locale = $code;
@@ -148,25 +149,22 @@ class I18n
 
     public static function locale(): string
     {
-        if (self::inCoroutineContext()) {
+        $ctx = Xhprof::coroutineContextClass();
+        if ($ctx !== null) {
             // 再归一化一次：这个键只有 setLocale() 会写，但读到什么就返回什么的话，
             // 一旦有别人往同名键里塞了字符串，`<html lang="…">` 与切换器就会印出它。
-            return self::normalize(\Hyperf\Context\Context::get(self::LOCALE_KEY)) ?? self::FALLBACK;
+            return self::normalize($ctx::get(self::LOCALE_KEY)) ?? self::FALLBACK;
         }
         return self::$locale;
-    }
-
-    /** Hyperf 协程环境且 Context 类真的在（与 Xhprof::getRequest() 同一套判定）。 */
-    private static function inCoroutineContext(): bool
-    {
-        return Xhprof::isHyperfContext() && class_exists(\Hyperf\Context\Context::class);
     }
 
     /** `<html lang="…">` 用的 BCP-47 标签：`zh_CN` → `zh-CN`。 */
     public static function htmlLang(): string
     {
         $lang = self::meta('lang');
-        return is_string($lang) && $lang !== '' ? $lang : str_replace('_', '-', self::$locale);
+        // 兜底也走 locale()：self::$locale 在后端生效时**不承载真值**（见上面那条注释），
+        // 直读它会印出一个与本请求无关的语言标签 —— 就是这里要消灭的那类串扰。
+        return is_string($lang) && $lang !== '' ? $lang : str_replace('_', '-', self::locale());
     }
 
     /** 书写方向：阿拉伯语等从右往左的语言返回 `rtl`。 */
@@ -228,6 +226,38 @@ class I18n
             ' ',
             htmlspecialchars($raw, self::HTML_FLAGS, 'UTF-8')
         );
+    }
+
+    /**
+     * [小数分隔符, 千位分隔符]——`num.decimal` / `num.thousands` 一对，逐语言。
+     *
+     * 住在这里而不是渲染层：这对键**报告页表格**（XhprofDisplay）与**诊断区文案**
+     * （Analyzer）都要用，两边都依赖本类，谁也不用去 import 对方。只服务给人看的
+     * HTML：CSV/JSON 导出与运行列表页刻意保持英式（说明见
+     * XhprofDisplay::xhprof_num_format）。
+     *
+     * 键名这里刻意写成 `I18n::t(...)` 字面量而不是 `self::t(...)`：I18nKeyReferenceTest
+     * 按字面量扫 `I18n::…('key')` 核对词表，换个写法这两个键就从闸门视野里消失。
+     *
+     * 语言拿不到这对键时 t() 返回 key 名而不是空串，直接当分隔符会把数字拼坏，
+     * 故收口到英式默认值——键集一致性有 I18nTest 钉着，这里是坏词表的最后兜底。
+     *
+     * @return array{0:string,1:string}
+     */
+    public static function numberSeparators(): array
+    {
+        $decimal = I18n::t('num.decimal');
+        $thousands = I18n::t('num.thousands');
+        if ($decimal === 'num.decimal' || $decimal === '') $decimal = '.';
+        if ($thousands === 'num.thousands' || $thousands === '') $thousands = ',';
+        return array($decimal, $thousands);
+    }
+
+    /** 按当前语言的分隔符格式化数字（HTML 展示口径；见 numberSeparators()）。 */
+    public static function numberFormat($num, $decimals = 0): string
+    {
+        list($decimal, $thousands) = self::numberSeparators();
+        return number_format((float) $num, (int) $decimals, $decimal, $thousands);
     }
 
     /** 词表里有没有这个 key（含值为空串的）。给调用方做兜底判断用。 */

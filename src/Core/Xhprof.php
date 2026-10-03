@@ -34,6 +34,9 @@ class Xhprof
 
     private static bool $_hyperf = false;
 
+    /** 进程级日志节流：已记过日志的路径标识 → true（见 logOnce()）。 */
+    private static array $_logged_paths = [];
+
     /**
      * 声明当前运行在 Hyperf 协程环境，使 bootstrap() 把适配器写入协程 Context
      * 而不是共享的静态属性。
@@ -51,44 +54,70 @@ class Xhprof
     /**
      * 当前进程有没有被声明成 Hyperf 协程环境（markHyperfContext() 或 autoDetect 置位）。
      *
-     * Core 里凡是要决定「写静态属性还是写协程 Context」的地方都问这一句，别各自去读
-     * 那个私有标志：本进程一旦置位就不可逆（常驻 worker 里本来也该一直是 true）。
+     * Core 里要决定「写静态属性还是写协程存储」的地方问 coroutineContextClass()，别各自
+     * 去读那个私有标志：本进程一旦置位就不可逆（常驻 worker 里本来也该一直是 true）。
      */
     public static function isHyperfContext(): bool
     {
         return self::$_hyperf;
     }
 
+    /**
+     * 本次调用该把适配器 / 渲染状态写进哪个协程上下文后端；null = 写进程静态属性。
+     *
+     * 两个后端、一套调用面（`$ctx::get($key)` / `$ctx::set($key, $value)`）：
+     *   - `\Hyperf\Context\Context`：Hyperf，由 markHyperfContext() 声明（进程闩，见上）。
+     *   - `\Workerman\Coroutine\Context`：workerman/webman 常驻 worker。**必须每次现问
+     *     `isCoroutine()`**，不能像 Hyperf 那样置闩：实测真服务器上 onWorkerStart 在协程
+     *     里、onMessage 不在（Select 事件循环，stock webman 的形状），启动时探一次会得到
+     *     **反的**答案。而 Select 循环下 workerman 的 Fiber 驱动退化成**进程级**存储
+     *     （真 `\Fiber::getCurrent()` 为 null 的那一支），切过去只是把共享状态换块地方放，
+     *     隔离收益为零 —— 所以非协程一律留在静态属性（= 今天的行为，逐字不变）。
+     *     跑在协程里时（Fiber 事件循环每回调一层 Fiber、Swoole/Swow 每请求一协程）这份
+     *     存储按协程分桶，才是真的每请求一份。
+     *
+     * 装不上 workerman/coroutine 的环境（PHP 8.0、非 webman 应用、本仓单测）里
+     * class_exists() 为 false，走静态属性，与重构前一致。类名只以字符串形态出现，
+     * 不会把没装的类拉进 autoload。
+     */
+    public static function coroutineContextClass(): ?string
+    {
+        if (self::$_hyperf) {
+            return class_exists(\Hyperf\Context\Context::class) ? \Hyperf\Context\Context::class : null;
+        }
+        if (class_exists(\Workerman\Coroutine::class) && \Workerman\Coroutine::isCoroutine()) {
+            return \Workerman\Coroutine\Context::class;
+        }
+
+        return null;
+    }
+
     public static function getRequest(): ?RequestInterface
     {
-        if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
-            return \Hyperf\Context\Context::get('xhprof.request');
-        }
-        return self::$request;
+        $ctx = self::coroutineContextClass();
+
+        return $ctx !== null ? $ctx::get('xhprof.request') : self::$request;
     }
 
     public static function getResponse(): ?ResponseInterface
     {
-        if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
-            return \Hyperf\Context\Context::get('xhprof.response');
-        }
-        return self::$response;
+        $ctx = self::coroutineContextClass();
+
+        return $ctx !== null ? $ctx::get('xhprof.response') : self::$response;
     }
 
     public static function getCache(): ?CacheInterface
     {
-        if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
-            return \Hyperf\Context\Context::get('xhprof.cache');
-        }
-        return self::$cache;
+        $ctx = self::coroutineContextClass();
+
+        return $ctx !== null ? $ctx::get('xhprof.cache') : self::$cache;
     }
 
     public static function getLogger(): ?LoggerInterface
     {
-        if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
-            return \Hyperf\Context\Context::get('xhprof.logger');
-        }
-        return self::$logger;
+        $ctx = self::coroutineContextClass();
+
+        return $ctx !== null ? $ctx::get('xhprof.logger') : self::$logger;
     }
 
     /**
@@ -108,10 +137,9 @@ class Xhprof
      */
     public static function getConfig(): ?ConfigInterface
     {
-        if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
-            return \Hyperf\Context\Context::get('xhprof.config');
-        }
-        return self::$config;
+        $ctx = self::coroutineContextClass();
+
+        return $ctx !== null ? $ctx::get('xhprof.config') : self::$config;
     }
 
     public static function index(): mixed
@@ -163,11 +191,9 @@ class Xhprof
                 // 配置本身没有冒号时永远匹配不上，留一条可归因的日志，否则运维只看到
                 // 一个 401、不知道是密码错还是配置写错了。
                 if (!str_contains($authBasic, ':')) {
-                    self::getLogger()?->error(
-                        'xhprof: xhprof.auth_basic must look like "user:password" (the first colon separates; '
+                    self::logOnce('auth_basic_malformed', 'xhprof: xhprof.auth_basic must look like "user:password" (the first colon separates; '
                         . 'the password may contain colons). The configured value has no colon, so no credentials '
-                        . 'can ever match and the report page stays locked.'
-                    );
+                        . 'can ever match and the report page stays locked.');
                 }
                 return self::deny('401 Unauthorized', 401, array('WWW-Authenticate' => 'Basic realm="xhprof"'));
             }
@@ -175,13 +201,11 @@ class Xhprof
                 return self::deny('403 Forbidden', 403);
             }
             // 两个凭据都没配：报告页对任何人可读。默认不鉴权是拍板的既定行为，**不改**，
-            // 但「裸奔」这件事必须留痕：每请求一条，不刷屏（一次 index() 只走到这里一次）。
-            // 文案向 deny() 的英文串看齐。
-            self::getLogger()?->error(
-                'xhprof: neither xhprof.auth_token nor xhprof.auth_basic is configured, so the report page '
+            // 但「裸奔」这件事必须留痕，节流到每进程一条（见 logOnce()）。文案向 deny()
+            // 的英文串看齐。
+            self::logOnce('auth_unconfigured', 'xhprof: neither xhprof.auth_token nor xhprof.auth_basic is configured, so the report page '
                 . 'renders without authentication. Set xhprof.auth_token to require ?token=xxx, or '
-                . 'xhprof.auth_basic ("user:password") to require HTTP Basic credentials.'
-            );
+                . 'xhprof.auth_basic ("user:password") to require HTTP Basic credentials.');
         }
         // run_id / source 白名单校验，防止任意 key 读取
         $run = $req->get('run');
@@ -222,7 +246,18 @@ class Xhprof
             if (!is_string($format) || !in_array($format, ['json', 'csv'], true)) {
                 return self::deny('400 Bad Request', 400);
             }
-            return self::exportReport($format, $run, $run1, $run2, $source, $wts, $sort);
+            // symbol 是报告页的**单函数明细**视图，导出没有这个语义。以前它被静默忽略，
+            // 调用方拿到一份全量平铺、还以为是自己要的那一个函数——拿到与请求语义不符的
+            // 数据比报错更坏。带了 symbol（空值也算「要 symbol 视图」）就是坏请求。
+            if ($symbol !== null) {
+                return self::deny('400 Bad Request', 400);
+            }
+            // 导出与渲染共用同一个上报失败的出口（见 reportStoreUnavailable()）。
+            try {
+                return self::exportReport($format, $run, $run1, $run2, $source, $wts, $sort);
+            } catch (\Throwable $e) {
+                return self::reportStoreUnavailable($e);
+            }
         }
         $params = $req->all();
         // 报告页语言：?lang= > 配置 xhprof.locale > Accept-Language > 兜底中文。
@@ -241,16 +276,21 @@ class Xhprof
         $echo_page .= XhprofDisplay::xhprof_include_js_css($assetsUrl);
         $echo_page .= "</head>";
         $echo_page .= "<body>";
-        $echo_page .= XhprofDisplay::displayXHProfReport(
-            $params,
-            $source,
-            $run,
-            $wts,
-            $symbol,
-            $sort,
-            $run1,
-            $run2
-        );
+        try {
+            $echo_page .= XhprofDisplay::displayXHProfReport(
+                $params,
+                $source,
+                $run,
+                $wts,
+                $symbol,
+                $sort,
+                $run1,
+                $run2
+            );
+        } catch (\Throwable $e) {
+            // 已拼好的一半页面直接丢弃：宁可 503 也不能回半张白屏。
+            return self::reportStoreUnavailable($e);
+        }
         $echo_page .= "</body>";
         $echo_page .= "</html>";
         return $echo_page;
@@ -259,21 +299,69 @@ class Xhprof
     /**
      * @param array<string, string> $headers 额外响应头（如 401 的 WWW-Authenticate）。
      *   12 家 ResponseAdapter 的 withHeaders() 都接受 `array<string,string>` 并逐条 set。
-     *   无 Response 绑定的兜底分支保持既有形态（只设状态码、返回 body）：那条路径下
-     *   连 deny() 的既有调用者也拿不到响应头，不为它单独发明一套。
+     *   无 Response 绑定的兜底分支保持既有形态（只设状态码 + no-store、返回 body）：
+     *   那条路径下连 deny() 的既有调用者也拿不到**其他**响应头，不为它单独发明一套；
+     *   no-store 是响应类别的属性（见下），不是某个调用者的额外头，两个分支都给。
      */
     private static function deny(string $body, int $status, array $headers = []): mixed
     {
+        // token 在 query 串里，拒绝页与数据页同理不该被任何中间层缓存；与 respond()
+        // 口径对齐（`+=`：调用方给了就不覆盖）。
+        $headers += ['Cache-Control' => 'no-store'];
         $res = self::getResponse();
         if ($res !== null) {
-            $res = $res->withStatus($status);
-            if ($headers !== []) {
-                $res = $res->withHeaders($headers);
-            }
-            return $res->withBody($body)->send();
+            // withHeaders() 无条件调（与 respond() 对齐）：上面那行 `+=` 保证 `$headers`
+            // 至少含 no-store，原先的 `if ($headers !== [])` 在新不变量下是死分支
+            // （phpstan: notIdentical.alwaysTrue）。
+            return $res->withStatus($status)->withHeaders($headers)->withBody($body)->send();
         }
         http_response_code($status);
+        header('Cache-Control: no-store');
         return $body;
+    }
+
+    /**
+     * 进程级日志节流：同一条路径每进程只记一次（粒度照抄 SamplingGuard 的先例）。
+     *
+     * 被节流的五条日志**全部能被匿名请求打到**：三条在鉴权之前（白名单形态错、转发头
+     * 不可验证、白名单拒绝），两条在「凭据校验没过」分支里（auth_basic 无冒号、未配
+     * 任何凭据）。常驻进程（Webman/Swoole/RoadRunner/FrankenPHP）下每请求一条等于给
+     * 攻击者一个日志放大器——变着 XFF 打就能刷。这些日志是「运维去修配置」的路标，
+     * 不是审计流水，丢重复的正是不变的那个事实。
+     *
+     * `$logger === null` 时不置位：这一次没写成，别把「本进程已经说过」记成事实。
+     */
+    private static function logOnce(string $path, string $message): void
+    {
+        $logger = self::getLogger();
+        if ($logger === null || isset(self::$_logged_paths[$path])) {
+            return;
+        }
+        self::$_logged_paths[$path] = true;
+        $logger->error($message);
+    }
+
+    /**
+     * 读路径（导出 / 报告页渲染）里未捕获的异常 → 503 + 人话，而不是让框架吐 500 白屏。
+     *
+     * 写路径早有兜底（XhprofProfiler.php:54-61），读路径此前只有「扩展没装」有人话提示
+     * （index() 开头）：扩展在、Redis 连不上时 get_run()/list_runs() 抛的 RedisException
+     * 会一路冒到框架。`catch (\Throwable)` 的边界：连渲染 bug（TypeError 等）也会变成
+     * 503——刻意如此（宁可 503 不可白屏）；区分职责交给日志里的异常类名（RedisException
+     * 是部署故障，TypeError 是代码缺陷）。日志**不**节流：同一进程里先后抛出两种异常时，
+     * 后者的类名不该被前者的节流键吞掉。
+     *
+     * 未实测：Hyperf 协程分支（本机没装 hyperf/redis）下连接失败的具体异常类，可能经
+     * 包装层（如 Hyperf\Redis\Exception\RedisException）抛出。catch (\Throwable) 不依赖
+     * 具体类型，兜底照常生效；日志里的类名以实际抛出者为准。
+     */
+    private static function reportStoreUnavailable(\Throwable $e): mixed
+    {
+        self::getLogger()?->error(
+            'xhprof: the report page failed while reading or rendering profile data: '
+            . get_class($e) . ': ' . $e->getMessage()
+        );
+        return self::deny('503 xhprof: the report store is unavailable (' . get_class($e) . ').', 503);
     }
 
     /**
@@ -361,10 +449,8 @@ class Xhprof
         if (!is_array($allow)) {
             // 形态写错（写成字符串）时静默关闭会**丢掉一层安全控制**，与 fail closed 相反，
             // 所以这里选择拒绝并留日志。
-            self::getLogger()?->error(
-                'xhprof: xhprof.ip_allowlist must be an array of IP strings; got ' . gettype($allow)
-                . '. Refusing the request (fail closed) until the configuration is fixed.'
-            );
+            self::logOnce('ip_allowlist_malformed', 'xhprof: xhprof.ip_allowlist must be an array of IP strings; got ' . gettype($allow)
+                . '. Refusing the request (fail closed) until the configuration is fixed.');
             return false;
         }
         $trusted = $cfg->get('xhprof.trusted_proxies', []);
@@ -373,16 +459,16 @@ class Xhprof
         }
         $ip = $req->getRealIp();
         if ($trusted === [] && self::ipLookedForwarded($req, $ip)) {
-            self::getLogger()?->error(
-                'xhprof: xhprof.ip_allowlist is enabled, but the client IP was taken from a forwarded header '
+            self::logOnce('ip_forwarded_unverifiable', 'xhprof: xhprof.ip_allowlist is enabled, but the client IP was taken from a forwarded header '
                 . '(X-Forwarded-For / X-Real-IP) and xhprof.trusted_proxies is empty, so the value cannot be '
                 . 'verified. Refusing the request. Set xhprof.trusted_proxies when (and only when) the app runs '
-                . 'behind a proxy you control, or turn xhprof.ip_allowlist off.'
-            );
+                . 'behind a proxy you control, or turn xhprof.ip_allowlist off.');
             return false;
         }
         if (!in_array($ip, $allow, true)) {
-            self::getLogger()?->error('xhprof: request rejected by xhprof.ip_allowlist (client IP: ' . $ip . ').');
+            // 键只按路径不含 IP：否则「变着 XFF 打」又能把日志刷起来。代价是长驻进程里
+            // 只留下第一个被拒的 IP——这条日志是「去修白名单」的路标，不是审计流水。
+            self::logOnce('ip_not_allowlisted', 'xhprof: request rejected by xhprof.ip_allowlist (client IP: ' . $ip . ').');
             return false;
         }
         return true;
@@ -441,8 +527,15 @@ class Xhprof
             $runs = explode(',', $run);
         } elseif ($run1 !== null && $run2 !== null) {
             $diffMode = true;
+        } elseif ($run1 !== null || $run2 !== null) {
+            // 半个 diff（只给 run1 或 run2）是坏请求。**必须排在列表分支之前**：
+            // json 无 run 现在会返回列表，别把调用方给的半个 diff 静默吞掉。
+            return self::deny('400 Bad Request', 400);
+        } elseif ($format === 'json') {
+            // 没给任何 run 的 json：返回 runs 列表（前提变更见 exportRunsList()）。
+            return self::exportRunsList();
         } else {
-            // 没指定任何 run：导出没有可导的对象。与非法 format 值同属坏请求。
+            // csv 无 run：列表 CSV 没有消费场景，仍是坏请求（拍板不变）。
             return self::deny('400 Bad Request', 400);
         }
 
@@ -501,6 +594,9 @@ class Xhprof
                 $payload['bad_runs'] = $badRuns;
             } else {
                 $payload['run'] = $runs[0];
+                // 该 run 的请求元数据（列表页那一行的同源数据）。request_log 过期只剩
+                // 悬空索引项时是 null——键在、值为 null，机器消费方形状稳定。
+                $payload['request'] = self::runRequestMetadata($runs[0]);
             }
             $payload['totals'] = $totals;
             $payload['findings'] = [];
@@ -514,19 +610,7 @@ class Xhprof
                 ];
             }
             $payload['functions'] = $flat;
-            // INVALID_UTF8_SUBSTITUTE：坏符号名（非 UTF-8）替换成 U+FFFD，不让整份导出失败；
-            // PARTIAL_OUTPUT_ON_ERROR：INF/NAN 这类 JSON 无法表达的值不会让 encode 返回 false。
-            $json = json_encode(
-                $payload,
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-                | JSON_PRESERVE_ZERO_FRACTION | JSON_PARTIAL_OUTPUT_ON_ERROR
-            );
-            if ($json === false) {
-                // 上面几个 flag 兜底后基本不可能发生；真发生宁可 500 让调用方看见，
-                // 也不能回一个空 body 当成功。
-                return self::deny('500 xhprof: the report data could not be encoded as JSON.', 500);
-            }
-            return self::respond($json, ['Content-Type' => 'application/json; charset=UTF-8']);
+            return self::respondJson($payload);
         }
 
         // CSV：列 = 平铺报告的列语义（fn + 调用次数 + 各指标 + 各自耗时），diff 时值列
@@ -570,6 +654,9 @@ class Xhprof
     /** 200 + 给定响应头 + body 的直出（与 deny() 同一条链，状态固定 200）。 */
     private static function respond(string $body, array $headers): mixed
     {
+        // token 在 query 串里，导出响应与 HTML 页同理不该被任何中间层缓存；HTML 路径的
+        // no-cache 在适配器侧，这里与 deny() 口径对齐（`+=`：调用方给了就不覆盖）。
+        $headers += ['Cache-Control' => 'no-store'];
         $res = self::getResponse();
         if ($res !== null) {
             return $res->withStatus(200)->withHeaders($headers)->withBody($body)->send();
@@ -579,6 +666,103 @@ class Xhprof
             header($name . ': ' . $value);
         }
         return $body;
+    }
+
+    /**
+     * `?format=json` 且没给 run/run1/run2：runs 列表 JSON。
+     *
+     * 2026-10 语义变更：此前是 400，那个拍板的**前提**是「导出只有 run 级」——列表
+     * JSON 对机器消费方有意义后前提不再成立（「有哪些 run 可以导」本身就是合法查询）；
+     * csv 无 run 仍是 400（列表 CSV 无消费场景），拍板不变。
+     *
+     * 一次读取喂两者：lRange + mget 只跑一趟，rows 与头部五个字段（count/limit/
+     * oldest/newest/ttl，形状与语义逐字抄 XHProfRunsDefault::runsOverview()——count
+     * 取索引长度含悬空项，oldest/newest 只统计 mget 得到的行）同源。**不调**
+     * list_runs()/runsOverview()：两者各自再读一遍 Redis 就是双调（它们共用的
+     * runsIndexAndLogs() 是 Display 批的私有助手，本文件够不着）。
+     *
+     * sort/wts 在这里**暂不生效、有意不 400**：它们是「当前未实现、将来可实现」的
+     * 列表取向参数（按 wts 排序是合理的未来特性），400 会把路堵死；与 symbol 不同——
+     * symbol 是报告页单函数视图，导出没有这个语义，给了就是语义不符。
+     */
+    private static function exportRunsList(): mixed
+    {
+        $runIds = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
+        $keys = array_map(static function ($runId) {
+            return Xhprof::$key_prefix . ':request_log:' . $runId;
+        }, $runIds);
+        $values = array_values(Xhprof::getCache()->mget($keys));
+
+        $rows = [];
+        $oldest = null;
+        $newest = null;
+        foreach ($runIds as $i => $runId) {
+            // 与 list_runs() 同一条行过滤：非法 id / 读不到 / 坏 JSON 的行不出现
+            if (!XHProfRunsDefault::xhprof_valid_run_id($runId)) continue;
+            $row = self::requestRow($values[$i] ?? null);
+            if ($row === null) continue;
+            $t = $row['create_time'];
+            if ($oldest === null || $t < $oldest) $oldest = $t;
+            if ($newest === null || $t > $newest) $newest = $t;
+            $rows[] = ['run_id' => $runId] + $row;
+        }
+
+        return self::respondJson([
+            'mode'   => 'runs',
+            'count'  => count($runIds),
+            'limit'  => (int) Xhprof::$log_num,
+            'oldest' => $oldest,
+            'newest' => $newest,
+            'ttl'    => (int) Xhprof::$log_ttl,
+            'runs'   => $rows,
+        ]);
+    }
+
+    /**
+     * request_log 的原始 JSON 串 → 稳定字段行（只含数字/字符串）；读不到 / 坏 JSON
+     * 返回 null。单 run 导出的 `request` 键与列表 JSON 的 runs[] 行共用这一个形状。
+     */
+    private static function requestRow(mixed $raw): ?array
+    {
+        if (!is_string($raw) || $raw === '') {
+            return null;
+        }
+        $row = json_decode($raw, true);
+        if (!is_array($row)) {
+            return null;
+        }
+        return [
+            'method'      => (string) ($row['method'] ?? ''),
+            'request_uri' => (string) ($row['request_uri'] ?? ''),
+            'create_time' => (int) ($row['create_time'] ?? 0),
+            'wt'          => (float) ($row['wt'] ?? 0),
+            'mu'          => (float) ($row['mu'] ?? 0),
+            'ip'          => (string) ($row['ip'] ?? ''),
+        ];
+    }
+
+    /** 单 run 的 request 元数据：一次 GET request_log；缺失/坏值 → null。 */
+    private static function runRequestMetadata(string $runId): ?array
+    {
+        return self::requestRow(Xhprof::getCache()->get(Xhprof::$key_prefix . ':request_log:' . $runId));
+    }
+
+    /** payload → JSON 直出（encode flags 与失败口径：单 run/diff/aggregate/列表共用一份）。 */
+    private static function respondJson(array $payload): mixed
+    {
+        // INVALID_UTF8_SUBSTITUTE：坏符号名（非 UTF-8）替换成 U+FFFD，不让整份导出失败；
+        // PARTIAL_OUTPUT_ON_ERROR：INF/NAN 这类 JSON 无法表达的值不会让 encode 返回 false。
+        $json = json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+            | JSON_PRESERVE_ZERO_FRACTION | JSON_PARTIAL_OUTPUT_ON_ERROR
+        );
+        if ($json === false) {
+            // 上面几个 flag 兜底后基本不可能发生；真发生宁可 500 让调用方看见，
+            // 也不能回一个空 body 当成功。
+            return self::deny('500 xhprof: the report data could not be encoded as JSON.', 500);
+        }
+        return self::respond($json, ['Content-Type' => 'application/json; charset=UTF-8']);
     }
 
     /**
@@ -627,13 +811,14 @@ class Xhprof
         } else {
             self::autoDetect();
         }
-        // Hyperf coroutine safety: store adapters in coroutine-local Context
-        if (self::$_hyperf && class_exists(\Hyperf\Context\Context::class)) {
-            \Hyperf\Context\Context::set('xhprof.request', self::$request);
-            \Hyperf\Context\Context::set('xhprof.response', self::$response);
-            \Hyperf\Context\Context::set('xhprof.config', self::$config);
-            \Hyperf\Context\Context::set('xhprof.cache', self::$cache);
-            \Hyperf\Context\Context::set('xhprof.logger', self::$logger);
+        // 协程安全：有协程后端就写本协程的 Context，否则留在静态属性上（见 coroutineContextClass()）
+        $ctx = self::coroutineContextClass();
+        if ($ctx !== null) {
+            $ctx::set('xhprof.request', self::$request);
+            $ctx::set('xhprof.response', self::$response);
+            $ctx::set('xhprof.config', self::$config);
+            $ctx::set('xhprof.cache', self::$cache);
+            $ctx::set('xhprof.logger', self::$logger);
         }
         XhprofProfiler::bootstrap();
     }

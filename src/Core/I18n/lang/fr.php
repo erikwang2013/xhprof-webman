@@ -203,4 +203,19 @@ return [
     // Les deux %s de flame.note = trames réellement dessinées, part non dessinée ; un pourcent littéral s'écrit %%
     'flame.title' => 'Graphe de flammes',
     'flame.note' => '%s trames affichées ; pour limiter la taille de la page, %s%% du temps total n\'est pas dessiné',
+    // 与上次运行对比（run 详情页里指向同 URI 的上一条 run 的 diff 链接）。
+    'run.previous' => 'Comparer avec l\'exécution précédente',
+    // 火焰图 metric 选中 mu/pmu 时的口径说明，跟在指标名后面。
+    'flame.muInclusive' => '(mémoire incluant les appels enfants)',
+    // Séparateurs de milliers / décimales des nombres de la page de rapport (affichage HTML uniquement ; exports et liste des exécutions ne les utilisent pas) : valeurs mesurées via CLDR.
+    'num.thousands' => ' ',
+    'num.decimal' => ',',
+    // Autres exécutions de la même URL : mène à la liste avec `requrl`, que son JS lit pour préremplir la recherche.
+    'run.otherRuns' => 'Autres exécutions de cette URL',
+    // Pied de page. Marque et URL sont indépendantes de la langue : les 13 catalogues portent la même valeur au mot près (le garde-fou du test I18nTest ne voit que les valeurs sources contenant des han) ; render_footer() en fait un lien.
+    'footer.credit' => '© erik · https://erik.xyz',
+
+    // Barre d'état de la liste des exécutions : nombre stocké / limite / jours de conservation / dates la plus ancienne et la plus récente.
+    'runs.status' => 'Exécutions stockées : %s / limite %s · conservation %s jours · la plus ancienne %s · la plus récente %s',
+
 ];
