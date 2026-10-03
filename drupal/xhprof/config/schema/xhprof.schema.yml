@@ -7,6 +7,9 @@ xhprof.settings:
     enable:
       type: boolean
       label: 'Enable profiling'
+    sample_rate:
+      type: float
+      label: 'Fraction of requests to profile (0.05 = 5%, 1 = all, <=0 = none)'
     time_limit:
       type: integer
       label: 'Only record requests slower than this many seconds (0 = every request)'
