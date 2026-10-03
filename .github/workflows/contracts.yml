@@ -80,7 +80,7 @@ jobs:
           --health-timeout 3s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           # 逐腿给 php（matrix.php），不是全局一个：主腿与 6.4 腿仍是 8.3（两个
@@ -102,19 +102,19 @@ jobs:
       # 步骤，键与 release.yml 那三条逐字一致（改一处就得两处一起改）。
       - name: Cache main-leg contract vendor
         if: matrix.leg == 'main'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/contracts/vendor
           key: composer-contracts-main-${{ hashFiles('tools/contracts/composer.lock') }}
       - name: Cache Symfony 6.4-leg contract vendor
         if: matrix.leg == 'symfony64'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/contracts/legacy-symfony64/vendor
           key: composer-contracts-symfony64-${{ hashFiles('tools/contracts/legacy-symfony64/composer.lock') }}
       - name: Cache Symfony 8-leg contract vendor
         if: matrix.leg == 'symfony8'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/contracts/legacy-symfony8/vendor
           key: composer-contracts-symfony8-${{ hashFiles('tools/contracts/legacy-symfony8/composer.lock') }}
