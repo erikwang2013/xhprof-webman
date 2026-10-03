@@ -1,5 +1,7 @@
 # Perfilador de rendimiento XHProf
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 Un plugin de perfilado de rendimiento de código compatible con webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal y PHP puro (sin framework).
 
 Recoge datos de perfilado mediante la extensión xhprof y los guarda en Redis. Los desarrolladores pueden consultar rápidamente informes de análisis de rendimiento desde el navegador para localizar cuellos de botella en el código.
@@ -10,11 +12,11 @@ Esa misma llamita es también el icono del sitio, el icono de marca de la esquin
 
 **Registro de peticiones**
 
-![Registro de peticiones](docs/images/runs-list.png)
+![Registro de peticiones](docs/i18n/es/images/runs-list.png)
 
 **Informe de una ejecución**
 
-![Informe de una ejecución](docs/images/run-report.png)
+![Informe de una ejecución](docs/i18n/es/images/run-report.png)
 
 **Comparación de dos ejecuciones** — en la lista «Registro de peticiones» marca exactamente dos filas (una casilla por fila, seleccionar todo en el encabezado) y pulsa «Comparar seleccionados» para abrir la vista diff. Los dos lados se ordenan por tiempo (run1 = la ejecución más antigua, run2 = la más reciente, independientemente del orden actual de la lista); los colores significan mejora / regresión «de run1 a run2», y el enlace «Invertir el informe» de la página intercambia los lados en cualquier momento.
 
@@ -67,6 +69,26 @@ Instala con Composer:
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### Inicio rápido
+
+La ruta más corta, en tres pasos:
+
+1. **Instala la extensión** — `pecl install xhprof` y añade una sección `[xhprof]` a php.ini (`extension=xhprof.so`, `xhprof.output_dir=/tmp/xhprof`).
+2. **Arranca Redis** — `redis-server --daemonize yes`, o usa una instancia que ya tengas (los parámetros de conexión van en el subarray `redis` del `config/xhprof.php` de cada framework).
+3. **Conéctalo y abre la página de informe** — `composer require aaron-dev/xhprof-webman`, monta la clase de entrada en cualquiera de los frameworks siguiendo «Configuración por framework», haz una petición de negocio y abre `http://<tu sitio>/xhprof`.
+
+> **¿No quieres instalar nada?** `demo/` trae una demo de docker compose lista para usar (entrada de PHP puro, sin framework): `cd demo && docker compose up -d`, y luego abre `http://127.0.0.1:8080/xhprof` para ver una página de informe real; las instrucciones están en `demo/README.md`.
+
+### Solución de problemas
+
+| Síntoma | Qué revisar primero |
+|---------|-------------|
+| La página de informe sale en blanco y la lista no tiene registros | ¿`enable` es `true`?; ¿se puso `sample_rate` a `0` (entonces solo se muestrean las peticiones que llevan la cabecera `X-Xhprof-Token`)?; ¿`<key_prefix>:run_id` está vacío en Redis? |
+| La página de informe devuelve 403 / 401 | 403: `ip_allowlist` está bloqueando la IP actual (o la IP de la petición vino de una cabecera de reenvío mientras `trusted_proxies` está vacío), o `auth_token` está configurado y la URL no lleva `?token=`; 401 con el cuadro de credenciales del navegador: `auth_basic` está configurado y el usuario/contraseña introducidos no coinciden |
+| Errores al conectar con Redis | ¿Está instalada la extensión redis (`php -m` lista `redis`)?, ¿está Redis en marcha?, ¿el host / puerto / password / database del subarray `redis` coinciden con la instancia? |
+| La extensión está instalada, pero las peticiones de negocio no se guardan | ¿La clase de entrada está realmente montada (véase «Configuración por framework»)?; ¿la ruta de la petición cae en `ignore_url_arr`?; ¿`max_runs_per_minute` ha alcanzado su techo (hasta el minuto siguiente no se muestrea nada)? |
+| La página de informe abre, pero sus CSS/JS dan 404 | ¿El prefijo `assets_url` coincide con la ruta desplegada?; ¿el proxy inverso también reenvía ese prefijo a la aplicación? |
 
 ---
 
@@ -396,6 +418,14 @@ Todos los frameworks comparten estas opciones de configuración:
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Activa/desactiva el perfilado |
 | `sample_rate` | float | `1.0` | Muestreo proporcional: cada petición se registra con esta probabilidad (p. ej. `0.05` = 5 % de las peticiones); `1.0` = muestrear todo, `<=0` o `false` = no muestrear nada |
+| `trigger_token` | string\|null | `null` | Muestreo a demanda: una vez definido, cualquier petición que lleve la cabecera `X-Xhprof-Token: <valor>` se **muestrea siempre** (ignora `sample_rate`, incluso `0`); `null` o vacío = desactivado, y la cabecera se ignora por completo. Solo cabecera, **nunca un parámetro de query**. Puede forzar el muestreo completo de cualquier petición, así que usa un valor aleatorio lo bastante largo y compártelo solo con personas de confianza |
+| `auth_basic` | string\|null | `null` | Credencial HTTP Basic (`user:password`, dividida en el primer dos puntos; la contraseña puede contener dos puntos). Guarda una relación de **o** con `auth_token`: con que haya uno configurado ya se exige y con que uno pase ya se entra; ninguno configurado = sin autenticación. **Apache+CGI/FastCGI elimina la cabecera `Authorization` por defecto** (necesita `CGIPassAuth On`, 2.4.13+); nginx+php-fpm no se ve afectado |
+| `ip_allowlist` | array | `[]` | Lista blanca de IP de la página de informe, comparada **byte a byte**: sin rangos CIDR y sin normalización IPv6 (`2001:0db8::1` y `2001:db8::1` son dos cadenas distintas). Vacía = desactivada; un valor que no sea un array lo rechaza todo (fail closed, con una entrada de error en el log). El valor procede de `getRealIp()` y hay que leerlo junto con `trusted_proxies` |
+| `trusted_proxies` | array | `[]` | **Declaración de despliegue, no imposición técnica**: solo después de declarar «delante de mí hay un proxy de confianza» acepta `ip_allowlist` una IP de cliente tomada de `X-Forwarded-For`/`X-Real-IP`. Casi todos los adaptadores toman las cabeceras de reenvío incondicionalmente: declararlo **no** detiene un XFF falsificado, así que solo es seguro detrás de un proxy que controles |
+| `webhook_url` | string\|null | `null` | Después de guardar una ejecución lenta (`wt >= view_wtred`), se envía por POST un JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) a esta dirección. Vacío = no se envía nada. **No es una cola**: no espera respuesta, no tiene reintentos ni compensación en disco; un endpoint lento o caído solo pierde esta notificación |
+| `sample_cli` | bool | `false` | Muestrear también CLI / peticiones sin HTTP: con `true`, el `request_uri` de una ejecución guardada se registra como `cli:<nombre del script>`; `false` = se ignora siempre (el valor por defecto, incluidos los workers de colas y las tareas programadas) |
+| `symbol_lookup_url` | string\|null | `null` | Plantilla de enlace al código fuente: la página de informe renderiza `<plantilla>?symbol=<nombre de función urlencoded>`; `null`/vacío = sin enlace |
+| `max_runs_per_minute` | int\|null | `null` | Presupuesto adaptativo: máximo de ejecuciones registradas por minuto (un contador por minuto; superado el límite no se muestrea nada hasta que cambie el minuto); `null`/no positivo = desactivado. Cuando la caché no está disponible o lanza una excepción, falla abierto (el muestreo sigue con `sample_rate` como siempre); **el muestreo por disparo no está sujeto a él** |
 | `time_limit` | int | `0` | Perfila solo las peticiones que superen n segundos; 0 significa todas |
 | `log_num` | int | `1000` | Número máximo de registros |
 | `view_wtred` | int | `3` | Resalta en rojo las filas con tiempo de respuesta > n segundos |
@@ -411,6 +441,26 @@ Las limitaciones conocidas de estas opciones en cada framework están en [Verifi
 Bajar `sample_rate` es la única forma de recortar la sobrecarga de forma proporcional (`0.05` registra el 5 % de las peticiones); `ignore_url_arr` sigue excluyendo rutas completas, y las dos se combinan. La decisión se toma una vez por petición, en el punto de entrada del muestreo, y no afecta a cómo se leen o se conservan las ejecuciones existentes. Los valores inválidos (p. ej. `'5%'`, `'disabled'`) recaen en `1.0`: muestrear de más es mejor que no registrar nada en silencio, lo que haría que la página de informe pareciera rota.
 
 Para purgar los datos de perfilado: para vaciar solo la lista, usa `DEL <prefix>:run_id` — las claves de datos caducan solas con `log_ttl`, y la lista omite los ids colgantes que queden en el índice; para purgarlo todo, recorre las claves `<prefix>:request_log:*` y `<prefix>:xhprof_log:*` y bórralas junto con la lista del índice (`DEL` no acepta comodines, así que enumera primero las claves con `redis-cli --scan --pattern '<prefix>:*'` — no uses `KEYS`). La lista del índice no lleva TTL a propósito: está acotada por `log_num` y no es más que una lista de punteros a las claves de datos (`<prefix>` es el valor de `key_prefix` configurado para este proyecto).
+
+**Muestreo por disparo (`trigger_token`)**
+
+El disparo a demanda y el muestreo proporcional son dos ejes independientes: primero se juzga el disparo y después se tira el dado. Con `trigger_token` definido, producción puede bajar `sample_rate` hasta `0` (en operación normal no se muestrea nada) y, cuando haya que investigar, enviar una petición con la cabecera `X-Xhprof-Token`, que se muestrea por completo. La clave se compara con `hash_equals` en tiempo constante; solo se acepta en la cabecera de la petición — no la pases por la cadena de consulta (las queries acaban en los logs de acceso, el `Referer` y el historial del navegador). Un disparo no salta `ignore_url_arr` (las peticiones a la página de informe y a los recursos estáticos se siguen omitiendo aunque lleven la clave), y `enable: false` sigue siendo el interruptor maestro.
+
+**Autenticación de la página de informe (`auth_token` y `auth_basic`)**
+
+`auth_token` (`?token=xxx`) y `auth_basic` (HTTP Basic) guardan una relación de **o**: con que haya uno configurado ya se exige, y con que uno pase ya se entra; ninguno configurado = sin autenticación (el valor por defecto, con una entrada de aviso en el log por cada renderizado). Una credencial Basic tiene la forma `user:password` (dividida en el primer dos puntos; la contraseña puede contener dos puntos, y tanto la mitad del usuario como la de la contraseña se comparan con `hash_equals`); cuando Basic está configurado y la comprobación falla, la respuesta es 401 con `WWW-Authenticate` — lo único que hace que el navegador muestre su cuadro de credenciales —, mientras que un fallo solo de token devuelve 403. **No autenticar por defecto es una decisión deliberada**: la clase de entrada toma el control de la página de informe **antes** de que se ejecute la autenticación de la aplicación anfitriona, así que sin nada configurado cualquiera que pueda alcanzar esa ruta puede leer la URI de petición, la IP de origen y los nombres de función de cada ejecución — los despliegues públicos y multiinquilino **deben** configurar uno de los dos. **Trampa de despliegue**: Apache + CGI/FastCGI elimina la cabecera `Authorization` por defecto, así que Basic nunca puede coincidir (no hace más que devolver 401 una y otra vez) — necesita `CGIPassAuth On` (2.4.13+) o una variable reenviada equivalente; nginx + php-fpm no se ve afectado.
+
+**Lista blanca de IP y proxies de confianza (`ip_allowlist` / `trusted_proxies`)**
+
+La lista blanca compara **byte a byte**: sin rangos CIDR y sin normalización IPv6 (`2001:0db8::1` y `2001:db8::1` son dos cadenas distintas); vacía = desactivada; un valor que no sea un array **lo rechaza todo** y registra una entrada de error (fail closed — desactivarla en silencio equivaldría a perder discretamente una capa de control de seguridad). El valor que se comprueba procede del `getRealIp()` del adaptador, y casi todos los adaptadores toman la cabecera de reenvío **incondicionalmente** cuando ven `X-Forwarded-For` / `X-Real-IP`: comparar ese valor directamente dejaría a cualquier cliente falsificar su propia dirección y saltarse la lista blanca. De ahí `trusted_proxies`: cuando el valor de IP viene precisamente de una cabecera de reenvío, se exige una declaración `trusted_proxies` no vacía; si no, la petición se rechaza y se registra en el log. **Esto es una declaración de despliegue, no una imposición técnica**: declararlo no frena un XFF falsificado, y solo es seguro cuando la aplicación corre de verdad detrás de un proxy que controlas — qué saltos intermedios son de fiar es responsabilidad de la configuración de tu proxy. La lista blanca se comprueba antes que las credenciales (el rechazo es 403).
+
+**Webhook de peticiones lentas (`webhook_url`)**
+
+Después de guardar una ejecución cuyo tiempo de respuesta cumple `wt >= view_wtred`, se envía por POST un JSON (campos: `run_id` / `uri` / `wt` / `ct` / `ip` / `time`) a esta dirección. Vacío = no se envía nada. **No es una cola**: fire-and-forget — conecta, escribe la petición, cierra el socket, nunca espera respuesta ni lee el código de estado, sin reintentos y sin compensación en disco; un endpoint lento o caído simplemente pierde esta notificación (el tiempo de conexión se aprieta a 200 ms, aunque la resolución DNS no está sujeta a él). Cualquier fallo registra una entrada de error y nunca afecta a la petición de negocio. La lista marca las filas con un `>` estricto, mientras que la condición del webhook es `>=`: el límite difiere en un escalón.
+
+**Presupuesto adaptativo (`max_runs_per_minute`)**
+
+Máximo de ejecuciones registradas por minuto: lo que se cuenta es **el número de peticiones que llegan al punto de entrada del muestreo** (incluidas las que pierden el sorteo — se juzga antes de tirar el dado), y superado ese número no se muestrea nada hasta que cambie el minuto; `null`/no positivo = desactivado. El contador vive en la caché: en Redis aparece una clave `<key_prefix>:budget:<YmdHi>` (p. ej. `xhprof:budget:202610032316`), a la que el primer incr le pone un TTL de 120 segundos y que expira sola a cero — verla durante una revisión de operación es normal. Cuando la caché no está disponible o lanza una excepción, el mecanismo **falla abierto**: el muestreo sigue con `sample_rate` como siempre, y el presupuesto nunca hace fallar una petición ni detiene el muestreo en silencio. **El muestreo por disparo no está sujeto a él**: quien lleva el token para investigar no debería quedar fuera por el presupuesto (orden de decisión: disparo → presupuesto → dado).
 
 **Selector de idioma de la página de informe**
 
@@ -533,6 +583,7 @@ xhprof-webman/
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
+├── demo/                         # demo de docker compose (entrada de PHP puro, página de informe sin instalar nada)
 └── docs/images/                  # README diagrams
 ```
 
@@ -542,7 +593,7 @@ Salvo Drupal, todos los directorios `src/<Fw>/` tienen la misma forma:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 10 config keys as every other framework
+└── config/xhprof.php             # the same 19 config keys as every other framework
 ```
 
 `src/Drupal/` es la única excepción: no tiene directorio `config/` — su configuración vive en configuración tipada a nivel de módulo (`drupal/xhprof/config/install/xhprof.settings.yml`).

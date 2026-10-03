@@ -611,11 +611,24 @@ function generate_locale(string $lang, Sink $sink): int
     /**
      * Rewrite root-relative asset links for a README that now lives in
      * <outroot>/<lang>/.  The three translated diagrams point at this locale's own
-     * copies; every other docs/ asset still points at the original.
+     * copies; every other docs/ asset still points at the original; a link into
+     * this locale's own delivered directory (docs/i18n/<lang>/…) is already a
+     * sibling of the output and loses the prefix entirely.
      */
     $translated = array_fill_keys(I18N_DOCS, true);
     $up = str_repeat('../', i18n_out_depth());
-    $rewrite = function (string $url) use ($translated, $up): string {
+    $rewrite = function (string $url) use ($translated, $up, $lang): string {
+        // 本语种自己的交付资源（docs/i18n/<lang>/images/runs-list.png 这类）在源里
+        // 必须写全路径：同一行在 GitHub 上、在 12 份源之间都是对的。但写进
+        // docs/i18n/<lang>/README.md 之后它就是同目录下的一个邻居，前缀在这里
+        // 是冗余的——而这冗余恰恰是危险的：产物根可以被 I18N_OUT_ROOT 挪走，
+        // 只有「剥掉前缀、写成邻居」才不依赖任何深度算术。
+        // 只认**本**语种：别的语种的路径不是本文件的邻居，继续走下面 docs/
+        // 的通用改写（写到仓库根的深度），否则 docs/i18n/ko/README.md 会被
+        // 指到 docs/i18n/<lang>/ko/images/… 这种不存在的地方。
+        if (preg_match('#^(?:\./)?docs/i18n/' . preg_quote($lang, '#') . '/(.+)$#', $url, $m)) {
+            return $m[1];
+        }
         // 仓库里所有会被 README 引用的资源都在 `docs/` 下（三张图 + 两张报告页截图），
         // 所以这里只认这一个前缀。曾经还有一批放在 `doc/`（少一个 s）里的截图，
         // 因此这段代码短暂地同时认 `doc|docs` —— 那批图已挪进 `docs/images/`，

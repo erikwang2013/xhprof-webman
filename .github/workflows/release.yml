@@ -21,9 +21,13 @@ jobs:
   # ci.yml 的 8.0 腿与 release.yml 并行触发、互相没有 needs: 依赖 —— 8.0 腿红，
   # tag 与 Release 照常产生。把它复制成 release 的前置 job：`needs: php80` 让
   # release job（以及其中打 tag 的那一步）在 8.0 没跑绿时根本不会启动。
-  # 只取 8.0 这一格：语法检查单调（8.0 解析器接受的，8.2/8.4 全部接受），更高
+  # 只取 8.0 这一格：语法检查单调（8.0 解析器接受的，8.2/8.4/8.5 全部接受），更高
   # 版本不带来新信息；单测下限由 release job 自己的 PHP 8.3 phpunit 覆盖。
-  # 两条步骤与 ci.yml:17-29（lint 8.0）和 ci.yml:59-64（post-8.0 函数扫描）逐字一致。
+  # 步骤与 ci.yml 的 8.0 侧逐字对应：lint job 的 "Lint all PHP files"（扫描面与 ci 相同，
+  # 含 tools/i18n）；smoke job 的 "No post-8.0 functions in shipped PHP"、"Generate autoloader"、
+  # "Load shipped classes and exercise pure logic"（autoloader 是类加载步的前置）。
+  # 类加载步不能省：只有 lint + 黑名单时，「语法过、函数名过、类加载/纯逻辑即崩」的提交
+  # 照样会被打 tag —— 这正是本 job 存在的理由。
   php80:
     name: PHP 8.0 gate before tagging
     runs-on: ubuntu-latest
@@ -35,13 +39,44 @@ jobs:
           extensions: redis, xhprof
           coverage: none
       - name: Lint all PHP files
-        run: find src tests joomla wordpress -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find src tests joomla wordpress tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
+      # 只生成 autoloader。不能写 composer install --no-dev：--no-dev 并不会让
+      # composer 跳过 require-dev 的依赖求解（官方原话：no-dev 只代表不安装），
+      # 而 phpunit/phpunit ^11.5 要求 php >= 8.2，在 8.0/8.1 上解析阶段就直接失败。
+      # 本项目 require 里没有任何包（仅 php + 两个扩展），故只需 autoloader；
+      # dump-autoload 不做依赖求解，正合此处所需。
+      - name: Generate autoloader
+        run: composer dump-autoload --no-interaction
       - name: No post-8.0 functions in shipped PHP
         run: |
           if grep -rnE '\b(array_is_list|enum_exists|array_find|array_any|array_all|json_validate|mb_str_pad|ini_parse_quantity|memory_reset_peak_usage|mb_ucfirst|mb_lcfirst)[[:space:]]*\(' src/ joomla/ wordpress/ --include='*.php'; then
             echo "::error::src/ joomla/ wordpress/ 使用了 PHP 8.1+ 才提供的函数，与 composer.json 的 php >= 8.0 不符"
             exit 1
           fi
+      - name: Load shipped classes and exercise pure logic
+        run: |
+          php -r '
+          require "vendor/autoload.php";
+          $ns = "ErikWang2013\\Xhprof\\";
+          $classes = [
+            "Core\\Xhprof",
+            "Core\\XhprofProfiler",
+            "Core\\StaticController",
+            "Core\\Analysis\\Analyzer",
+            "Core\\Analysis\\Finding",
+            "Core\\XhprofLib\\Utils\\XhprofLib",
+            "Core\\XhprofLib\\Utils\\XHProfRunsDefault",
+            "Core\\XhprofLib\\Display\\XhprofDisplay",
+          ];
+          foreach ($classes as $c) {
+            if (!class_exists($ns . $c)) { fwrite(STDERR, "cannot load {$ns}{$c}\n"); exit(1); }
+          }
+          $lib  = $ns . "Core\\XhprofLib\\Utils\\XhprofLib";
+          $disp = $ns . "Core\\XhprofLib\\Display\\XhprofDisplay";
+          if (count($lib::xhprof_get_possible_metrics()) !== 7) { exit(1); }
+          if ($disp::xhprof_count_format(1234) !== "1,234") { exit(1); }
+          echo "runtime smoke ok on ", PHP_VERSION, "\n";
+          '
 
   release:
     needs: php80
@@ -75,15 +110,21 @@ jobs:
           # 已装载的扩展再列一次是空操作，少列一个是"本地能跑、runner 上必红"。
           extensions: redis, xhprof, dom, mbstring
           coverage: none
-      # 与 ci.yml 的 test job 共享同一键（`composer-root` + 根 composer.lock 的 hash）：
+      # 与 ci.yml 的 test job **刻意共享同一键**（`composer-root` + 根 composer.json 的 hash）：
       # 两边装的是同一份根依赖（phpunit 及其依赖树），同一键 = 谁先跑谁暖、另一个直接命中。
       # 改键时两处一起改，不然同一次 push 里这份依赖会被下载两遍。
-      # 键不含 PHP 版本的理由与 ci.yml 相同：纯 PHP 依赖，8.3 与 8.2/8.4 装的字节级相同。
+      # 键跟 composer.json 不跟锁：根项目刻意不提交锁（.gitignore 的 /composer.lock，库的
+      # 惯例），checkout 里没有锁文件 —— 原先 hashFiles('composer.lock') 恒为空串、键退化成
+      # 常量。无锁时 composer install 是 update 语义（每次现解整棵树），缓存只省下载、不会
+      # 喂出错误依赖集（composer 与缓存带回来的 installed.json 对账）。边界与 ci.yml 同：
+      # 键反映约束不反映解析，11.x 补丁漂移不改键（策略：dev 工具链跟当前 11.x，炸 CI 不炸
+      # 使用者的包），且 minimum-stability: dev + prefer-stable: true 下极端情况可解析到 dev 版本。
+      # 键不含 PHP 版本的理由与 ci.yml 相同：纯 PHP 依赖，8.3 与 8.2/8.4/8.5 装的字节级相同。
       - name: Cache composer vendor
         uses: actions/cache@v4
         with:
           path: vendor
-          key: composer-root-${{ hashFiles('composer.lock') }}
+          key: composer-root-${{ hashFiles('composer.json') }}
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --ignore-platform-reqs
       - name: Unit tests must pass before tagging

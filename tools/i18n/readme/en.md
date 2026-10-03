@@ -1,5 +1,7 @@
 # XHProf Performance Profiler
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 A code performance profiling plugin compatible with webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal and native PHP (no framework).
 
 Collects profiling data via the xhprof extension and stores it in Redis. Developers can quickly access performance analysis reports through a browser to identify code performance bottlenecks.
@@ -10,11 +12,11 @@ The same little flame is also the report page's site icon, the top-left brand ic
 
 **Request Log**
 
-![Request Log](docs/images/runs-list.png)
+![Request Log](docs/i18n/en/images/runs-list.png)
 
 **Single run report**
 
-![Single run report](docs/images/run-report.png)
+![Single run report](docs/i18n/en/images/run-report.png)
 
 **Comparing two runs** — in the Request Log list tick exactly two rows (one checkbox per row, select-all in the header) and click "Compare selected" to open the diff view. The two sides are ordered by time (run1 = the earlier run, run2 = the later one, independent of how the list is currently sorted); colours mean improvement / regression "from run1 to run2", and the in-page "Invert" link swaps the sides at any time.
 
@@ -67,6 +69,26 @@ Install via Composer:
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### Quick Start
+
+The shortest path in three steps:
+
+1. **Install the extension** — `pecl install xhprof`, and add an `[xhprof]` section to php.ini (`extension=xhprof.so`, `xhprof.output_dir=/tmp/xhprof`).
+2. **Start Redis** — `redis-server --daemonize yes`, or use an instance you already have (connection settings go in the `redis` sub-array of each framework's `config/xhprof.php`).
+3. **Wire it up and open the report page** — `composer require aaron-dev/xhprof-webman`, mount the entry class in any one framework following "Framework Configuration", then make one business request and open `http://<your site>/xhprof`.
+
+> **Don't want to install anything?** `demo/` ships an out-of-the-box docker compose demo (native PHP entry, no framework): `cd demo && docker compose up -d`, then open `http://127.0.0.1:8080/xhprof` for a real report page; see `demo/README.md`.
+
+### Troubleshooting
+
+| Symptom | Check first |
+|---------|-------------|
+| The report page is blank and the list has no runs | Is `enable` `true`; was `sample_rate` set to `0` (then only requests carrying the `X-Xhprof-Token` header are sampled); is `<key_prefix>:run_id` empty in Redis |
+| The report page returns 403 / 401 | 403: `ip_allowlist` is blocking the current IP (or the request IP came from a forwarding header while `trusted_proxies` is empty), or `auth_token` is configured and the URL carries no `?token=`; 401 with a browser credential prompt: `auth_basic` is configured and the username/password entered do not match |
+| Errors about connecting to Redis | Is the redis extension installed (`php -m` lists `redis`), is Redis running, do the `redis` sub-array's host / port / password / database match the instance |
+| The extension is installed but business requests are not stored | Is the entry class really mounted (see "Framework Configuration"); does the request path hit `ignore_url_arr`; has `max_runs_per_minute` hit its ceiling (nothing is sampled until the next minute) |
+| The report page opens but its CSS/JS 404s | Does the `assets_url` prefix match the deployed path; does the reverse proxy forward that prefix to the application too |
 
 ---
 
@@ -396,6 +418,14 @@ All frameworks share these configuration options:
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | Enable/disable profiling |
 | `sample_rate` | float | `1.0` | Proportional sampling: each request is recorded with this probability (e.g. `0.05` = 5% of requests); `1.0` = sample everything, `<=0` or `false` = sample nothing |
+| `trigger_token` | string\|null | `null` | On-demand sampling: once set, any request carrying the header `X-Xhprof-Token: <value>` is **always sampled** (ignores `sample_rate`, even `0`); `null` or empty = off, the header is ignored entirely. Header only, **never a query parameter**. It can force full sampling of any request, so use a long random value and share it only with trusted people |
+| `auth_basic` | string\|null | `null` | HTTP Basic credential (`user:password`, split at the first colon; the password may contain colons). It is an **or** relationship with `auth_token`: either one configured is enforced, either one passing lets you in; neither configured = no authentication. **Apache+CGI/FastCGI strips the `Authorization` header by default** (needs `CGIPassAuth On`, 2.4.13+); nginx+php-fpm is unaffected |
+| `ip_allowlist` | array | `[]` | Report page IP allowlist, matched **byte for byte**: no CIDR ranges, no IPv6 normalisation (`2001:0db8::1` and `2001:db8::1` are two different strings). Empty = off; a value that is not an array rejects everything (fail closed, one error log entry). The value comes from `getRealIp()` and must be read together with `trusted_proxies` |
+| `trusted_proxies` | array | `[]` | **A deployment declaration, not technical enforcement**: only after declaring "there is a trusted proxy in front of me" will `ip_allowlist` accept a client IP taken from `X-Forwarded-For`/`X-Real-IP`. Most adapters take forwarding headers unconditionally — declaring this does **not** stop a forged XFF, so it is only safe behind a proxy you control |
+| `webhook_url` | string\|null | `null` | After a slow run (`wt >= view_wtred`) is stored, POST JSON (`run_id`/`uri`/`wt`/`ct`/`ip`/`time`) to this address. Empty = nothing is sent. **Not a queue**: it does not wait for a response, has no retries and no on-disk fallback; a slow or dead endpoint just loses this one notification |
+| `sample_cli` | bool | `false` | Also sample CLI / requests without HTTP: when `true`, a stored run's `request_uri` is recorded as `cli:<script name>`; `false` = always ignored (the default, including queue workers and scheduled tasks) |
+| `symbol_lookup_url` | string\|null | `null` | Source-link template: the report page renders `<template>?symbol=<urlencoded function name>`; `null`/empty = no link |
+| `max_runs_per_minute` | int\|null | `null` | Adaptive budget: at most this many runs are recorded per minute (a per-minute counter; beyond it nothing is sampled); `null`/non-positive = off. When the cache is unavailable or throws it fails open (sampling follows `sample_rate` as usual); **triggered sampling is not subject to it** |
 | `time_limit` | int | `0` | Only profile requests exceeding n seconds, 0 means all |
 | `log_num` | int | `1000` | Maximum number of records |
 | `view_wtred` | int | `3` | Highlight rows with response time > n seconds in red |
@@ -411,6 +441,26 @@ Known limitations of these options on each framework are listed in [Verification
 Lowering `sample_rate` is the only way to cut overhead proportionally (`0.05` records 5% of requests); `ignore_url_arr` still excludes whole paths, and the two combine. The decision happens once per request at the sampling entry point and does not affect how existing runs are read or retained. Invalid values (e.g. `'5%'`, `'disabled'`) fall back to `1.0`: over-sampling beats silently recording nothing, which would make the report page look broken.
 
 To purge profiling data: to empty just the list page use `DEL <prefix>:run_id` — the data keys expire on their own via `log_ttl`, and dangling ids left in the index are skipped by the list; to purge everything, scan `<prefix>:request_log:*` and `<prefix>:xhprof_log:*` and delete them together with the index list (`DEL` takes no wildcards, so list the keys with `redis-cli --scan --pattern '<prefix>:*'` first — don't use `KEYS`). The index list carries no TTL on purpose: it is bounded by `log_num` and is only a pointer list to the data keys (`<prefix>` is the `key_prefix` value configured for this project).
+
+**Triggered sampling (`trigger_token`)**
+
+On-demand triggering and proportional sampling are two independent axes — the trigger is judged first, the dice second: with `trigger_token` set, production can push `sample_rate` down to `0` (sampling nothing at all in normal operation) and, when you need to investigate, send one request with the `X-Xhprof-Token` header, and that request is sampled in full. The key is compared with the constant-time `hash_equals`; it is accepted on the request header only — do not pass it in the query string (queries end up in access logs, `Referer` and browser history). A trigger does not bypass `ignore_url_arr` (report page and static asset requests are still skipped even with the key), and `enable: false` remains the master switch.
+
+**Report page authentication (`auth_token` and `auth_basic`)**
+
+`auth_token` (`?token=xxx`) and `auth_basic` (HTTP Basic) are an **or** relationship: either one configured is enforced, either one passing lets you in; neither configured = no authentication (the default, with one warning log entry per render). A Basic credential looks like `user:password` (split at the first colon; the password may contain colons, and both the username and the password halves are compared with `hash_equals`); when Basic is configured and the check fails the response is 401 with `WWW-Authenticate` — the only thing that makes a browser pop up its credential prompt — while a token-only failure returns 403. **Not authenticating by default is a deliberate decision**: the entry class takes over the report page **before** the host application's own authentication runs, so with nothing configured anyone who can reach that path can read every run's request URI, source IP and function names — public and multi-tenant deployments **must** configure one of the two. **Deployment trap**: Apache + CGI/FastCGI strips the `Authorization` header by default, so Basic can never match (it just keeps returning 401) — it needs `CGIPassAuth On` (2.4.13+) or an equivalent forwarded variable; nginx + php-fpm is unaffected.
+
+**IP allowlist and trusted proxies (`ip_allowlist` / `trusted_proxies`)**
+
+The allowlist matches **byte for byte**: no CIDR ranges and no IPv6 normalisation (`2001:0db8::1` and `2001:db8::1` are two different strings); empty = off; a value that is not an array **rejects everything** and logs one error entry (fail closed — silently turning off would quietly drop a layer of security control). The value being checked comes from the adapter's `getRealIp()`, and most adapters take the forwarding header **unconditionally** when they see `X-Forwarded-For` / `X-Real-IP`: matching that value directly would let any client forge its own address and walk around the allowlist. Hence `trusted_proxies`: when the IP value happens to come from a forwarding header, a non-empty `trusted_proxies` declaration is required, otherwise the request is rejected and logged. **This is a deployment declaration, not technical enforcement**: declaring it does not stop a forged XFF, and it is only safe when the app really runs behind a proxy you control — which hops in between are trustworthy is your proxy configuration's responsibility. The allowlist gate runs before credential verification (rejection is 403).
+
+**Slow-request webhook (`webhook_url`)**
+
+After a run whose response time is `wt >= view_wtred` has been stored, a JSON payload (fields: `run_id` / `uri` / `wt` / `ct` / `ip` / `time`) is POSTed to this address. Empty = nothing is sent. **It is not a queue**: fire-and-forget — connect, write the request, close the socket, never wait for a response and never read the status code, with no retries and no on-disk fallback; a slow or dead endpoint simply loses this one notification (the connect timeout is squeezed to 200ms, though DNS resolution is not subject to it). Any failure logs one error entry and never affects the business request. The list page highlights rows with a strict `>`, while the webhook condition is `>=` — the boundary differs by one notch.
+
+**Adaptive budget (`max_runs_per_minute`)**
+
+At most this many runs are recorded per minute: what is counted is **the number of requests reaching the sampling entry point** (including those that lose the draw — it is judged before the dice), beyond which nothing is sampled until the minute rolls over; `null`/non-positive = off. The counter lives in the cache: a `<key_prefix>:budget:<YmdHi>` key (e.g. `xhprof:budget:202610032316`) appears in Redis, given a 120-second TTL on its first incr and expiring back to zero on its own — seeing it during an operations check is normal. When the cache is unavailable or throws, it **fails open**: sampling follows `sample_rate` as usual, and the budget mechanism never makes a request fail or silently stops sampling altogether. **Triggered sampling is not subject to it**: someone holding the token to investigate should not be locked out by the budget (decision order: trigger → budget → dice).
 
 **Language switcher on the report page**
 
@@ -533,6 +583,7 @@ xhprof-webman/
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
+├── demo/                         # docker compose demo (native PHP entry, report page without installing anything)
 └── docs/images/                  # README diagrams
 ```
 
@@ -542,7 +593,7 @@ Except for Drupal, every `src/<Fw>/` directory has the same shape:
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 10 config keys as every other framework
+└── config/xhprof.php             # the same 19 config keys as every other framework
 ```
 
 `src/Drupal/` is the one exception: it has no `config/` directory — its configuration lives in module-level typed config (`drupal/xhprof/config/install/xhprof.settings.yml`).
@@ -558,8 +609,8 @@ src/<Fw>/
 | Adapter and entry-wiring behaviour | `tests/Unit/Adapter/*Test.php`: enabled → saved / disabled → not saved / business exception → still saved via `finally` |
 | All twelve frameworks share one config key set | config parity test (key sets, not byte-for-byte; comments may differ) |
 | The two READMEs mirror each other | README parity test: compares the `##` / `###` heading sequence and the number of code blocks |
-| `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the nine frameworks in the loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); native PHP / ThinkPHP / Hyperf are not in the loop, for different reasons each — see below |
-| The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run |
+| Every method the adapter calls really exists | `tools/contracts/` verification loop (its own CI job, **two legs**: the main leg installs each framework's latest packages, and the separate `tools/contracts/legacy-symfony64` project runs the same Symfony case against 6.4): it installs real framework packages (real `drupal/core` for Drupal, two real CMS release packages for Joomla) and asserts via reflection that every method / constant / global function exists **for the nine frameworks in the loop** (Slim / Symfony / Yii3 / Yii2 / Joomla / WordPress / Drupal / Laravel / Webman); native PHP / ThinkPHP / Hyperf are not in the loop, for different reasons each — see below |
+| Adapter semantics are correct | The same loop instantiates real request and response objects and runs the adapters, including two invariants: `uri()` carries no scheme/host, and `withHeaders()` still applies after `file()`. The loop's SKIP count is a frozen constant (2 on the main leg, 0 on the 6.4 leg) and both skips sit in Joomla: the real read path of `#__extensions.params` and the installer shape, each of which needs a database or an installer to run |
 
 
 **Not automatically verified (do not read this as "everything is covered")**

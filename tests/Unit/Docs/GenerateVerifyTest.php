@@ -92,10 +92,13 @@ class GenerateVerifyTest extends TestCase
         $langs = self::deliveredLocales();
         $this->assertNotSame([], $langs, 'I18N_LANGUAGES 里没有交付语言，夹具已失效');
 
-        $perLocale = count(I18N_DOCS) + 1;   // 三张图 + README
+        $generated = count(I18N_DOCS) + 1;   // 每门语言由生成器写出的：三张图 + README
+        // 交付树里每门语言还多两张本语种 UI 截图（runs-list / run-report）——不是本脚本
+        // 生成的，但住在同一个目录里，指纹的普查口径得把它们算上。
+        $shipped = $generated + 2;
         $before = self::fingerprint();
-        $this->assertCount(count($langs) * $perLocale, $before,
-            'docs/i18n 的文件数不是「交付语言 × 4」——夹具或交付树已经不对了');
+        $this->assertCount(count($langs) * $shipped, $before,
+            'docs/i18n 的文件数不是「交付语言 × 6」（README + 3 SVG + 2 截图）——夹具或交付树已经不对了');
 
         [$rc, $out] = self::verify();   // 全量：不带 --lang
         $this->assertSame(0, $rc, "全量 generate.php --verify 非零退出：\n$out");
@@ -106,7 +109,7 @@ class GenerateVerifyTest extends TestCase
             $this->assertStringContainsString("verify  $code ", $out, "全量 --verify 没有覆盖 $code");
         }
         $this->assertStringContainsString(
-            sprintf('%d artefacts match', count($langs) * $perLocale), $out);
+            sprintf('%d artefacts match', count($langs) * $generated), $out);
 
         // 只读：比较是"看"，不是"重写一遍再比"。字节相同的重写同样不许——
         // mtime 在指纹里。

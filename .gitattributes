@@ -22,3 +22,5 @@
 /.github            export-ignore
 /docs/superpowers   export-ignore
 /phpunit.xml        export-ignore
+# 内部审计稿（面向维护者的历史文档，README 不引用）：不该随 composer 分发包出去
+/docs/code-review-report-*.md  export-ignore

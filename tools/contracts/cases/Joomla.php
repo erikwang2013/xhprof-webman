@@ -1988,7 +1988,6 @@ $obs['plugin_is_cms_plugin'] = $plugin instanceof Joomla\CMS\Plugin\CMSPlugin;
 $obs['dispatcher_identity'] = $plugin->getDispatcher() === $dispatcher;
 // getApplication() 是 protected（真实 CMSPlugin 如此，桩亦如此）—— 观测只能走反射
 $getApp = new ReflectionMethod($plugin, 'getApplication');
-$getApp->setAccessible(true);
 $obs['get_application_visibility'] = $getApp->isProtected() ? 'protected' : ($getApp->isPublic() ? 'public' : 'private');
 $obs['application_before_set'] = $getApp->invoke($plugin) === null;
 $plugin->setApplication($app);

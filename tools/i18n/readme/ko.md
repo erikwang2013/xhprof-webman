@@ -1,5 +1,7 @@
 # XHProf 성능 프로파일러
 
+![PHP](https://img.shields.io/badge/PHP-%3E%3D%208.0-777bb4) ![CI](https://github.com/erikwang2013/xhprof-webman/actions/workflows/ci.yml/badge.svg) ![Release](https://img.shields.io/github/v/release/erikwang2013/xhprof-webman) ![License](https://img.shields.io/badge/license-MIT-blue)
+
 webman / Laravel / ThinkPHP / Hyperf / Yii2 / Yii3 / Symfony / Slim 4 / WordPress / Joomla / Drupal / 순수 PHP(프레임워크 없음)과 호환되는 코드 성능 프로파일링 플러그인입니다.
 
 xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니다. 개발자는 브라우저로 성능 분석 보고서를 빠르게 열어 코드의 성능 병목을 찾아낼 수 있습니다.
@@ -10,11 +12,11 @@ xhprof 확장으로 프로파일링 데이터를 수집해 Redis에 저장합니
 
 **요청 기록**
 
-![요청 기록](docs/images/runs-list.png)
+![요청 기록](docs/i18n/ko/images/runs-list.png)
 
 **단일 실행 보고서**
 
-![단일 실행 보고서](docs/images/run-report.png)
+![단일 실행 보고서](docs/i18n/ko/images/run-report.png)
 
 **두 실행 비교** — 「요청 기록」 목록에서 정확히 두 행을 선택하고(행마다 체크박스 하나, 표 헤더에서 전체 선택 가능) 「선택 항목 비교」를 누르면 diff 뷰가 열립니다. 두 쪽은 시간 순서로 정해집니다(run1 = 이른 쪽, run2 = 늦은 쪽이며, 목록의 현재 정렬과는 무관합니다). 색은 「run1 → run2」 방향의 개선 / 회귀를 뜻하고, 페이지 안의 「보고서 반전」 링크로 언제든 두 쪽을 바꿀 수 있습니다.
 
@@ -67,6 +69,26 @@ Composer로 설치합니다:
 ```sh
 composer require aaron-dev/xhprof-webman
 ```
+
+### 빠른 시작
+
+가장 짧은 경로, 세 단계:
+
+1. **확장 설치** — `pecl install xhprof`, 그리고 php.ini 에 `[xhprof]` 섹션을 추가합니다(`extension=xhprof.so`, `xhprof.output_dir=/tmp/xhprof`).
+2. **Redis 시작** — `redis-server --daemonize yes`, 또는 이미 쓰고 있는 인스턴스를 사용합니다(접속 파라미터는 각 프레임워크 설정 파일 `config/xhprof.php` 의 `redis` 하위 배열에 들어갑니다).
+3. **연결하고 보고서 페이지 열기** — `composer require aaron-dev/xhprof-webman`, 아무 프레임워크 하나에서 "프레임워크 설정"대로 진입 클래스를 마운트한 뒤, 비즈니스 요청을 한 번 발생시키고 `http://<사이트 주소>/xhprof` 에 접속합니다.
+
+> **환경 설치 없이 바로 보고 싶다면?** `demo/` 에는 바로 실행해 볼 수 있는 docker compose 데모가 들어 있습니다(네이티브 PHP 진입점, 프레임워크 의존 없음): `cd demo && docker compose up -d` 를 실행한 뒤 `http://127.0.0.1:8080/xhprof` 를 열면 실제 보고서 페이지를 볼 수 있습니다; 설명은 `demo/README.md` 를 참고하십시오.
+
+### 문제 해결 빠른 점검
+
+| 증상 | 먼저 확인할 것 |
+|------|---------|
+| 보고서 페이지가 비어 있고 목록에 기록이 없음 | `enable` 이 `true` 인지; `sample_rate` 를 `0` 으로 해 두지 않았는지(이때는 `X-Xhprof-Token` 헤더가 붙은 요청만 샘플링됩니다); Redis 의 `<key_prefix>:run_id` 가 비어 있지 않은지 |
+| 보고서 페이지가 403 / 401 을 반환 | 403: `ip_allowlist` 가 현재 IP를 막고 있거나(또는 요청 IP가 전달 헤더에서 왔는데 `trusted_proxies` 가 비어 있거나), `auth_token` 을 설정했는데 URL에 `?token=` 이 없는 경우; 401 과 브라우저 자격 증명 창: `auth_basic` 을 설정했는데 입력한 사용자 이름 / 비밀번호가 맞지 않는 경우 |
+| Redis 에 연결할 수 없다는 오류 | redis 확장이 설치되어 있는지(`php -m` 출력에 `redis` 가 있는지), Redis 가 실행 중인지, `redis` 하위 배열의 host / port / password / database 가 인스턴스와 일치하는지 |
+| 확장은 설치했는데 비즈니스 요청이 저장되지 않음 | 진입 클래스가 실제로 마운트되었는지("프레임워크 설정" 참조); 요청 경로가 `ignore_url_arr` 에 걸리는지; `max_runs_per_minute` 가 상한에 도달했는지(초과하면 다음 분까지 샘플링되지 않습니다) |
+| 보고서 페이지는 열리는데 스타일 / 스크립트가 404 | `assets_url` 접두사가 배포 경로와 일치하는지; 리버스 프록시가 그 접두사도 애플리케이션으로 전달하는지 |
 
 ---
 
@@ -396,6 +418,14 @@ Yii2(`yiisoft/yii2 ^2.0`, PHP >= 8.0)용입니다. **Yii3와는 같은 프레임
 |--------|------|---------|-------------|
 | `enable` | bool | `true` | 프로파일링 활성화/비활성화 |
 | `sample_rate` | float | `1.0` | 비례 샘플링: 각 요청은 이 확률로 기록됩니다(예: `0.05` = 요청의 5%가 샘플링됨); `1.0` = 전부 샘플링, `<=0` 또는 `false` = 샘플링 안 함 |
+| `trigger_token` | string\|null | `null` | 온디맨드 트리거 샘플링: 설정하면 요청 헤더 `X-Xhprof-Token: <값>` 을 붙인 요청이 **강제 샘플링**됩니다(`sample_rate` 를 무시하고 `0` 이어도 샘플링); `null` 또는 빈 문자열 = 끔(해당 헤더는 완전히 무시됩니다). 헤더만 인정하고 **query 는 인정하지 않습니다**(query 는 접근 로그와 `Referer` 에 남습니다). 임의 요청을 전부 샘플링하도록 강제할 수 있으므로, 키는 충분히 긴 난수열로 두고 신뢰하는 사람에게만 공유하십시오 |
+| `auth_basic` | string\|null | `null` | HTTP Basic 자격 증명(`user:password`, 첫 콜론에서 나누며 비밀번호에 콜론이 들어갈 수 있습니다). `auth_token` 과 **OR** 관계입니다: 둘 중 하나만 설정해도 적용되고, 둘 중 하나만 통과해도 들어올 수 있습니다; 둘 다 설정하지 않으면 인증하지 않습니다. **Apache+CGI/FastCGI 는 `Authorization` 헤더를 기본으로 제거합니다**(`CGIPassAuth On` 필요, 2.4.13+); nginx+php-fpm 은 해당 없음 |
+| `ip_allowlist` | array | `[]` | 보고서 페이지 IP 허용 목록, **문자열 그대로 비교**: CIDR 대역을 지원하지 않고 IPv6 정규화도 하지 않습니다(`2001:0db8::1` 과 `2001:db8::1` 은 서로 다른 두 문자열입니다). 빈 값 = 끔; 배열이 아닌 값을 넣으면 **전부 거부**합니다(fail closed, error 로그 한 줄). 값은 `getRealIp()` 에서 오며 `trusted_proxies` 와 함께 이해해야 합니다 |
+| `trusted_proxies` | array | `[]` | **배포 선언이며 기술적 강제가 아닙니다**: "내 앞에 신뢰할 수 있는 프록시가 있다"고 선언해야 `ip_allowlist` 가 `X-Forwarded-For`/`X-Real-IP` 에서 가져온 클라이언트 IP를 받아들입니다. 대부분의 어댑터는 전달 헤더를 무조건 취합니다 — 선언해도 **위조된 XFF 를 막지 못하며**, 신뢰하는 프록시 뒤에 있을 때만 안전합니다 |
+| `webhook_url` | string\|null | `null` | 느린 요청(`wt >= view_wtred`)이 저장된 뒤 JSON(`run_id`/`uri`/`wt`/`ct`/`ip`/`time`)을 이 주소로 POST 합니다. 비워 두면 = 보내지 않습니다. **큐가 아닙니다**: 응답을 기다리지 않고 재시도도, 디스크 보정도 없으며, 엔드포인트가 느리거나 죽어 있으면 이 알림 하나를 잃을 뿐입니다 |
+| `sample_cli` | bool | `false` | CLI/HTTP 없는 요청도 샘플링: `true` 면 저장되는 `request_uri` 가 `cli:<스크립트 이름>` 으로 기록됩니다; `false` = 항상 무시(기본값, 큐 워커와 예약 작업 포함) |
+| `symbol_lookup_url` | string\|null | `null` | 소스 링크 템플릿: 보고서 페이지가 `<템플릿>?symbol=<urlencoded 함수 이름>` 을 렌더링합니다; `null`/빈 값 = 링크를 표시하지 않습니다 |
+| `max_runs_per_minute` | int\|null | `null` | 적응형 예산: 분당 최대 몇 건을 기록할지(분 버킷 카운트, 초과분은 샘플링하지 않음); `null`/0 이하 = 끔. 캐시를 쓸 수 없거나 예외가 나면 fail-open(평소대로 `sample_rate` 를 따릅니다); **트리거 샘플링은 이 제한을 받지 않습니다** |
 | `time_limit` | int | `0` | n초를 초과한 요청만 프로파일링, 0은 전체 |
 | `log_num` | int | `1000` | 최대 기록 수 |
 | `view_wtred` | int | `3` | 응답 시간이 n초를 넘는 행을 빨간색으로 강조 |
@@ -411,6 +441,26 @@ Yii2(`yiisoft/yii2 ^2.0`, PHP >= 8.0)용입니다. **Yii3와는 같은 프레임
 `sample_rate` 를 낮추는 것이 비례적으로 부하를 줄이는 유일한 수단입니다(`0.05` = 요청의 5%만 기록); `ignore_url_arr` 는 여전히 경로 전체를 배제하는 안전장치이고, 둘은 겹쳐 쓸 수 있습니다. 판정은 샘플링 진입점에서 요청마다 한 번 일어나며, 이미 저장된 데이터의 읽기와 보존에는 영향을 주지 않습니다. 잘못된 값(예: `'5%'`, `'disabled'`)은 `1.0` 으로 처리합니다: 많이 샘플링하는 편이, 조용히 「아무것도 기록하지 않음」이 되어 보고서 페이지가 고장 난 것처럼 보이는 것보다 낫습니다.
 
 프로파일링 데이터를 정리하려면: 목록 페이지만 비울 때는 `DEL <prefix>:run_id` 를 씁니다 — 데이터 키는 `log_ttl` 에 따라 자연히 만료되고, 인덱스에 남은 끊긴 id는 목록에서 건너뜁니다. 전부 지울 때는 `<prefix>:request_log:*` 와 `<prefix>:xhprof_log:*` 를 스캔해 인덱스 목록과 함께 삭제합니다(`DEL` 은 와일드카드를 받지 않으므로 `redis-cli --scan --pattern '<prefix>:*'` 로 먼저 키를 나열한 뒤 지우십시오 — `KEYS` 는 쓰지 마십시오). 인덱스 목록에 TTL이 없는 것은 의도된 것입니다: `log_num` 으로 상한이 정해져 있고, 데이터 키를 가리키는 포인터 목록일 뿐입니다(`<prefix>` 는 이 프로젝트에 설정된 `key_prefix` 값입니다).
+
+**트리거 샘플링(`trigger_token`)**
+
+온디맨드 트리거와 비례 샘플링은 서로 독립된 두 축입니다 — 트리거를 먼저 판정하고, 그다음에 추첨합니다: `trigger_token` 을 설정해 두면 운영 환경에서 `sample_rate` 를 `0` 까지 낮춰 두고(평소에는 전혀 샘플링하지 않음) 조사가 필요할 때 특정 요청에 `X-Xhprof-Token` 헤더를 붙이면 그 요청이 전부 샘플링됩니다. 키 비교는 상수 시간 `hash_equals` 를 씁니다. 요청 헤더에서만 인정하며, query 로 넘기지 마십시오(접근 로그, `Referer`, 브라우저 기록에 남습니다). 트리거는 `ignore_url_arr` 를 우회하지 않고(보고서 페이지/정적 리소스 요청은 키가 있어도 그대로 건너뜁니다), `enable: false` 는 여전히 최상위 스위치입니다.
+
+**보고서 페이지 인증(`auth_token` 과 `auth_basic`)**
+
+`auth_token`(`?token=xxx`)과 `auth_basic`(HTTP Basic)은 **OR** 관계입니다: 둘 중 하나만 설정해도 적용되고, 둘 중 하나만 통과해도 들어올 수 있습니다; 둘 다 설정하지 않으면 인증하지 않습니다(기본값이며, 렌더링할 때마다 경고 로그 한 줄을 기록합니다). Basic 자격 증명은 `user:password` 형태이고(첫 콜론에서 나누며 비밀번호에 콜론이 들어갈 수 있고, 사용자 이름과 비밀번호 두 부분 모두 `hash_equals` 로 비교합니다); Basic 을 설정했는데 검증에 실패하면 401 과 함께 `WWW-Authenticate` 를 반환합니다 — 브라우저 자격 증명 창이 뜨는 유일한 방식이며, 토큰만 쓰는데 실패하면 403 을 반환합니다. **기본값이 인증 없음인 것은 의도된 결정입니다**: 보고서 페이지는 진입 클래스가 호스트 애플리케이션의 인증 **전에** 가로채므로, 아무것도 설정하지 않으면 그 경로에 접근할 수 있는 사람은 누구나 모든 run 의 요청 URI, 출처 IP와 함수 이름을 읽을 수 있습니다 — 공용·멀티 테넌트 배포는 **반드시** 둘 중 하나를 설정해야 합니다. **배포 함정**: Apache + CGI/FastCGI 는 `Authorization` 헤더를 기본으로 제거하므로 Basic 은 영영 통과하지 못합니다(계속 401 만 반환). `CGIPassAuth On`(2.4.13+) 또는 이에 준하는 전달 변수가 필요하며, nginx + php-fpm 은 해당 없음입니다.
+
+**IP 허용 목록과 신뢰 프록시(`ip_allowlist` / `trusted_proxies`)**
+
+허용 목록은 **문자열 그대로 비교**합니다: CIDR 대역을 지원하지 않고 IPv6 정규화도 하지 않으며(`2001:0db8::1` 과 `2001:db8::1` 은 서로 다른 두 문자열입니다); 빈 값 = 끔; 배열이 아닌 값을 넣으면 **전부 거부**하고 error 로그 한 줄을 남깁니다(fail closed — 조용히 끄는 것은 보안 통제 한 층을 소리 없이 걷어내는 일입니다). 판정에 쓰는 값은 어댑터의 `getRealIp()` 에서 오며, 대부분의 어댑터는 `X-Forwarded-For` / `X-Real-IP` 가 보이면 전달 헤더를 **무조건** 취합니다: 그 값을 그대로 비교하면 어떤 클라이언트든 스스로 주소를 위조해 허용 목록을 우회할 수 있습니다. 그래서 `trusted_proxies` 를 함께 봅니다: IP 값이 전달 헤더에서 온 경우 `trusted_proxies` 선언이 비어 있지 않아야 하며, 그렇지 않으면 거부하고 로그를 남깁니다. **이것은 배포 선언이지 기술적 강제가 아닙니다**: 선언해도 위조된 XFF 를 막지 못하고, 정말로 내가 통제하는 프록시 뒤에서 돌 때만 안전합니다 — 중간 홉을 신뢰할지는 프록시 설정의 책임입니다. 허용 목록 게이트는 자격 증명 검증보다 먼저 실행됩니다(거부는 403).
+
+**느린 요청 웹훅(`webhook_url`)**
+
+응답 시간이 `wt >= view_wtred` 인 run 이 저장된 뒤, 이 주소로 JSON(필드: `run_id` / `uri` / `wt` / `ct` / `ip` / `time`)을 POST 합니다. 비워 두면 = 보내지 않습니다. **큐가 아닙니다**: fire-and-forget — 연결하고, 요청을 쓰고, 즉시 끊습니다. 응답을 기다리지 않고 상태 코드도 읽지 않으며, 재시도도 디스크 보정도 없습니다; 엔드포인트가 느리거나 죽어 있으면 이 알림 하나를 잃을 뿐입니다(연결 타임아웃은 200ms 로 눌러 두었지만 DNS 해석에는 적용되지 않습니다). 어떤 실패든 error 로그 한 줄만 남기고 비즈니스 요청에는 절대 영향을 주지 않습니다. 목록 페이지의 빨간 강조는 엄격한 `>` 를 쓰고 웹훅 조건은 `>=` 라서 경계가 한 칸 다릅니다.
+
+**적응형 예산(`max_runs_per_minute`)**
+
+분당 최대 몇 건을 기록할지: 세는 것은 **샘플링 진입점에 도달한 요청 수**입니다(추첨에서 떨어진 요청도 포함되며, 추첨 전에 판정합니다). 초과하면 그 분에는 더 샘플링하지 않고 다음 분에 자동으로 0 이 됩니다; `null`/0 이하 = 끔. 카운트는 캐시를 씁니다: Redis 에 `<key_prefix>:budget:<YmdHi>` 키(예: `xhprof:budget:202610032316`)가 생기고, 첫 incr 때 120초 TTL 이 붙어 스스로 만료되어 0 으로 돌아갑니다 — 운영 점검 중에 이 키가 보이는 것은 정상입니다. 캐시를 쓸 수 없거나 예외가 나면 **fail-open** 입니다: 평소대로 `sample_rate` 에 따라 샘플링하며, 예산 때문에 요청이 실패하거나 샘플링이 조용히 멈추는 일은 없습니다. **트리거 샘플링은 이 제한을 받지 않습니다**: 키를 들고 조사하러 온 사람이 예산에 막혀서는 안 됩니다(판정 순서: 트리거 → 예산 → 추첨).
 
 **보고서 페이지의 언어 전환기**
 
@@ -533,6 +583,7 @@ xhprof-webman/
 ├── tools/i18n/                   # translation toolchain for the README and the three SVGs (generate / check / selftest)
 ├── docs/i18n/                    # the 12 translated deliverables (English, Korean, Russian, German, French, Spanish, Portuguese, Arabic, Hindi, Bengali, Indonesian, Japanese)
 ├── tests/                        # PHPUnit: adapter tests, wiring tests, Core tests, structural parity across all 14 READMEs
+├── demo/                         # docker compose 데모(네이티브 PHP 진입점, 환경 설치 없이 보고서 페이지 확인)
 └── docs/images/                  # README diagrams
 ```
 
@@ -542,7 +593,7 @@ Drupal을 제외하면 모든 `src/<Fw>/` 디렉터리가 같은 모양입니다
 src/<Fw>/
 ├── Adapter/{Request,Response,Config,Redis,Log}Adapter.php
 ├── <EntryClass>.php
-└── config/xhprof.php             # the same 10 config keys as every other framework
+└── config/xhprof.php             # the same 19 config keys as every other framework
 ```
 
 `src/Drupal/` 이 유일한 예외입니다. `config/` 디렉터리가 없고, 설정은 모듈 수준의 타입 지정 config(`drupal/xhprof/config/install/xhprof.settings.yml`)에 있습니다.

@@ -17,6 +17,14 @@ on:
     branches: [main]
   pull_request:
 
+# 同一分支/PR 连续推送时旧的一轮没有意义却要占 runner（契约环还要装两套 composer
+# 依赖）。group 含 workflow 名 + ref：不同 workflow 互不取消，同一 ref 新轮取消旧轮。
+# 写法与 release.yml:16 一致 —— 唯一刻意不同的是 release 的 cancel-in-progress: false
+# （发版那轮被连推取消会错版），别顺手统一。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   contracts:
     name: 契约验证环（${{ matrix.leg }}）

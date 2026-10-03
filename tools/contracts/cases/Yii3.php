@@ -359,7 +359,6 @@ return static function (): array {
 
     $readPrivate = static function (object $object, string $property): mixed {
         $prop = new \ReflectionProperty($object, $property);
-        $prop->setAccessible(true);
         return $prop->getValue($object);
     };
     // 第 2、3 个参数走反射默认值 → config = null（全默认）、cache = 直连版 RedisAdapter

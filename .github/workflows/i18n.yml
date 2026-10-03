@@ -13,7 +13,7 @@ name: i18n
 # CI 全绿」是可能的 —— bn 卡住那次就是这个状态（绿门禁罩着陈旧产物）。
 #
 # tools/i18n/*.php 全部合 PHP 8.0 语法。自 2026-10-03 起该目录**已并入**
-# ci.yml 的 8.0–8.4 lint 矩阵 —— 那才是这句声明的机器证据（并入前按 php-parser
+# ci.yml 的 8.0–8.5 lint 矩阵 —— 那才是这句声明的机器证据（并入前按 php-parser
 # 8.0 解析 + 它抓不到的形态补扫，零命中）。本文件里那步 8.3 上的 lint 是
 # 冗余的快反馈，留作单 workflow 自洽。
 
@@ -21,6 +21,14 @@ on:
   push:
     branches: [main]
   pull_request:
+
+# 同一分支/PR 连续推送时旧的一轮没有意义却要占 runner（本 workflow 要跑 13 次
+# check.php + 全量 --verify）。group 含 workflow 名 + ref：不同 workflow 互不取消，
+# 同一 ref 新轮取消旧轮。写法与 release.yml:16 一致 —— 唯一刻意不同的是
+# release 的 cancel-in-progress: false（发版那轮被连推取消会错版），别顺手统一。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   i18n:
@@ -34,7 +42,7 @@ jobs:
           # check.php 用 DOMDocument 解析 SVG；mbstring 用于字数与宽度。
           extensions: dom, mbstring
           coverage: none
-      # tools/i18n 已在 ci.yml 的 `find …` 里（8.0–8.4 矩阵），这里这步是 8.3 上的
+      # tools/i18n 已在 ci.yml 的 `find …` 里（8.0–8.5 矩阵），这里这步是 8.3 上的
       # 冗余快反馈（tools/contracts 不在矩阵里：它要 PHP 8.2，放进 8.0/8.1 会假红）。
       - name: Lint the i18n tooling
         run: find tools/i18n -name '*.php' -print0 | xargs -0 -n1 php -l
