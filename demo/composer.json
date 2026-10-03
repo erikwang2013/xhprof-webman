@@ -1,0 +1,20 @@
+{
+    "name": "aaron-dev/xhprof-webman-demo",
+    "description": "xhprof-webman 的 docker 演示（原生 PHP 入口，零框架依赖）",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "aaron-dev/xhprof-webman": "*"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": ".."
+        },
+        {
+            "packagist.org": false
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

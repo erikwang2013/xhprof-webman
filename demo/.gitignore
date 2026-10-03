@@ -1,0 +1,3 @@
+# compose 起来时在挂载目录里生成的（容器内以 root 生成，删不掉就 sudo rm -rf）
+/vendor/
+/composer.lock

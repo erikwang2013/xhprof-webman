@@ -1,0 +1,44 @@
+# xhprof-webman 演示环境：原生 PHP 入口（Native\XhprofBootstrap），零框架依赖。
+#
+#   cd demo
+#   docker compose up -d
+#   curl -s http://127.0.0.1:8080/ > /dev/null   # 打几次业务请求（产生采样数据）
+#   浏览器打开 http://127.0.0.1:8080/xhprof       # 看报告页
+#
+# 演示默认不鉴权（auth_token 为 null）、只绑本机回环，别把这个端口暴露出去。
+services:
+  app:
+    build:
+      context: .
+      # apk 源：默认官方 CDN；从国内访问它常常只有几十 KB/s（实测同一个 gcc 包 61 KB/s，
+      # 清华源 33 MB/s），首次构建会卡在这一步。换源（环境变量会被上面的 Dockerfile ARG 读走）：
+      #     APK_MIRROR=mirrors.tuna.tsinghua.edu.cn docker compose up -d --build
+      args:
+        APK_MIRROR: ${APK_MIRROR:-dl-cdn.alpinelinux.org}
+    # 只发布到 127.0.0.1：容器内监听的仍是 0.0.0.0:8080。
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # 仓库根挂进 /app —— 这正是 demo/composer.json 里 path repository 的 url（..）。
+      # 于是演示跑的永远是当前工作树的代码：改了 src/ 不用重建镜像，下一个请求就是新代码。
+      - ..:/app
+    working_dir: /app/demo
+    # vendor 装在挂载进来的 demo/vendor（已在 .gitignore 里）：
+    # 每次启动都按当前工作树重装 —— packagist 已在 composer.json 里禁用，只有 .. 这一个
+    # 本地包要解析，不联网、亚秒级。用 update 而不是 install：path 包的版本随分支变，
+    # 一份提交进来的 lock 只会随分支切换而过期。
+    command: sh -c "composer update --no-interaction --no-progress --quiet && php -S 0.0.0.0:8080 -t public public/index.php"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    # 有这条 healthcheck，depends_on 才等得到「Redis 能应答」再起 app。
+    # 适配器是懒连接（每个请求里第一次落库时才建连），少了这一步，最先到的几个请求
+    # 会因为连不上 Redis 而静默不落库（stop() 里被吞成一条日志），报告页就少几条数据。
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
