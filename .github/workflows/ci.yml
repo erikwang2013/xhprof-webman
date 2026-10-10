@@ -24,7 +24,7 @@ jobs:
         # 完全相同的扫描面全量 php -l 过一遍（179 个文件，0 个非 "No syntax errors"）。
         php: ['8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -56,7 +56,7 @@ jobs:
       matrix:
         php: ['8.0', '8.1']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -106,7 +106,7 @@ jobs:
           - php: '8.3'
             coverage: pcov
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 覆盖率格的差分闸门要拿 PR base sha 跑 `git diff`；默认 fetch-depth: 1
           # 只取到 merge commit 本身，base 提交不在本地 → git diff 报 unknown revision。
@@ -137,7 +137,7 @@ jobs:
       # ${{ matrix.php }} 编进键里。键与 release.yml 的根 install 刻意同名（同一份根依赖），
       # 改要一起改。
       - name: Cache composer vendor
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: vendor
           key: composer-root-${{ hashFiles('composer.json') }}
@@ -179,7 +179,7 @@ jobs:
       # always()：差分闸门红了时这一步照跑 —— 恰恰是那种时候最需要看 clover。
       - name: Upload coverage clover
         if: always() && matrix.coverage == 'pcov'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-clover
           path: test-reports/clover.xml
@@ -191,7 +191,7 @@ jobs:
     name: PHPStan (level 5, baseline)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           # 8.3：与本仓其它"分析用"门禁（tools/contracts、i18n）同一个版本。
@@ -205,7 +205,7 @@ jobs:
       # 与 test job 同一个键：两边装的是同一份根依赖树（phpunit + phpstan），
       # 谁先跑谁暖。键与 release.yml 的根 install 也是刻意同名，改要一起改。
       - name: Cache composer vendor
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: vendor
           key: composer-root-${{ hashFiles('composer.json') }}
