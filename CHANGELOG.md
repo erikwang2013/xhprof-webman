@@ -9,6 +9,43 @@
 生成的一行 compare 链接），2026-10-04 由同一工具按同一规则回溯生成。
 <!-- CHANGELOG:INSERT：新段落插在这一行下面（保持新→旧） -->
 
+## v3.10.0 — 2026-10-18
+
+### feat（新增）
+
+- **pet**：expose mascot forms through a Mascot API（d0085f1）
+  > Mascot::forms() lists the default pet and its 12 expression SVGs; form() returns the SVG source with case-insensitive names and rejects unknown or traversal names; svg() defaults to the base pet.
+  > 
+  > The tests pin the form list to the shipped SVG files and verify every form is well-formed, script-free XML.
+
+### fix（修复）
+
+- **report**：tolerate malformed assets_url and initialize base info（c52d41b）
+  > A non-string xhprof.assets_url raised an Array-to-string warning while building the page head; treat it as unset like the other config guards. Initialize $base_info before the metric loop so a run with no metrics cannot pass an undefined variable to print_pc_array().
+- **storage**：keep run rows with invalid UTF-8 in the index（174b019）
+  > json_encode() returned false for a non-UTF-8 request URI, so the row was written as an empty string and list_runs() skipped it forever. Substitute U+FFFD instead, and reuse runsIndexAndLogs() so the index fetch path has one implementation.
+
+### docs（文档）
+
+- **i18n**：sync pet expressions and visual-assets license（288e99a）
+  > Add the two README sections introduced in 44567d2 to all 12 translation sources, regenerate the delivered READMEs, and teach the link rewriter to make ASSETS-LICENSE.md resolve from docs/i18n/<lang>/.
+- replace README HTML with Markdown; add social preview（3831b15）
+  > README: the pet-expression table and payment QR block now use plain Markdown, so no visible HTML tags remain.
+  > 
+  > .github: add a 1280x640 social preview (SVG source + rendered PNG) featuring the flame pet.
+- refresh report screenshots after removing the pet magnifier（94aa0fd）
+  > The 26 delivered screenshots embed the brand icon in the page header. They were re-shot with tools/i18n/shots.php; the manifest keeps the new pet.svg digest and the HTML fingerprints are unchanged.
+- reserve commercial rights for visual assets（44567d2）
+  > Project pets, images, icons and emoji are proprietary and require a
+  > commercial license. Code licenses are unchanged.
+
+### chore（杂务）
+
+- **pet**：transparent flame expression forms（b3da989）
+  > Remove the baked-in magnifier/background so the forms work as emoji.
+
+**完整变更**：https://github.com/erikwang2013/xhprof-webman/compare/v3.9.0...v3.10.0
+
 ## v3.9.0 — 2026-10-03
 
 ### feat（新增）
