@@ -188,7 +188,7 @@ class XHProfRunsDefault implements XHProfRuns
             if (isset($parts['query'])) {
                 $path .= '?' . $parts['query'];
             }
-            $body = (string) json_encode($payload);
+            $body = (string) json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
             $request = 'POST ' . $path . " HTTP/1.1\r\n"
                 . 'Host: ' . $parts['host'] . "\r\n"
                 . "Content-Type: application/json\r\n"
@@ -292,7 +292,10 @@ class XHProfRunsDefault implements XHProfRuns
             'create_time' => time(),  //请求时间
         );
         $key = Xhprof::$key_prefix . ':request_log:' . $run_id;  //请求列表log
-        Xhprof::getCache()->set($key, json_encode($row), Xhprof::$log_ttl);
+        // JSON_INVALID_UTF8_SUBSTITUTE：请求 URI / IP 来自网络，原始字节可能不是合法 UTF-8。
+        // 不带这个标志时 json_encode() 返回 false，set() 会把空串写进列表行，list_runs()
+        // 再跳过它——索引里留下一条永远看不见的 run。替换成 U+FFFD 比丢整行好。
+        Xhprof::getCache()->set($key, json_encode($row, JSON_INVALID_UTF8_SUBSTITUTE), Xhprof::$log_ttl);
         $key = Xhprof::$key_prefix . ':xhprof_log:' . $run_id;   //列表存储log
         $xhprof_data_str = serialize($xhprof_data);
         if (!empty($xhprof_data_str)) Xhprof::getCache()->set($key, $xhprof_data_str, Xhprof::$log_ttl);
@@ -463,11 +466,9 @@ class XHProfRunsDefault implements XHProfRuns
      */
     public static function findPreviousRunForUri(string $uri, int $beforeTime): ?string
     {
-        $run_id_lists = Xhprof::getCache()->lRange(Xhprof::$key_prefix . ':run_id', 0, Xhprof::$log_num);
-        $keys = array_map(function ($run_id) {
-            return Xhprof::$key_prefix . ":request_log:" . $run_id;
-        }, $run_id_lists);
-        $values = array_values(Xhprof::getCache()->mget($keys));
+        // 与 list_runs()/runsOverview() 共用同一条取数路径：lRange + mget 的键拼法
+        // 只存在一份，prefix / log_num / mget 返回形态的改变不会在某一条路径上漏掉。
+        list($run_id_lists, $values) = self::runsIndexAndLogs();
         foreach ($run_id_lists as $i => $run_id) {
             if (!self::xhprof_valid_run_id($run_id)) continue;
             $res = $values[$i] ?? null;

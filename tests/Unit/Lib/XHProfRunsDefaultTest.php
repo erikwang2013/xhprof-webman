@@ -407,6 +407,27 @@ class XHProfRunsDefaultTest extends TestCase
         self::assertSame(3600, $this->cache->ttls['xhprof:xhprof_log:' . $runId]);
     }
 
+    /**
+     * 网络来的 URI 可能是非法 UTF-8。旧实现 json_encode() 返回 false，set() 把空串写进
+     * request_log，list_runs() 再跳过这一行：索引里留下一条永远看不见的 run。修复是把
+     * 非法字节替换成 U+FFFD，整行仍然可解析。
+     */
+    #[Test]
+    public function saveRunSubstitutesInvalidUtf8InRequestUri(): void
+    {
+        $this->request = new FakeRequest([], ['uri' => "/order/\xC3\x28"]);
+        $this->useRequest($this->request);
+
+        $runId = XHProfRunsDefault::save_run($this->sampleData(), 'xhprof_foo');
+
+        self::assertIsString($runId);
+        $raw = $this->cache->get('xhprof:request_log:' . $runId);
+        self::assertIsString($raw, 'request_log 必须是 JSON 字符串，不能因非法 UTF-8 变成 false/空串');
+        $row = json_decode($raw, true);
+        self::assertIsArray($row);
+        self::assertStringContainsString("\u{FFFD}", (string) $row['request_uri']);
+    }
+
     #[Test]
     public function checkLogNumTrimsOldestRunWhenOverLimit(): void
     {
