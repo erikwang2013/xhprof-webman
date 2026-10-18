@@ -696,10 +696,8 @@ Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看
 
 ## 开源不易，欢迎支持
 
-<p align="center">
-  <img src="./docs/weixinpay.png" alt="微信支付" width="130" height="130" title="微信支付" />
-  <img src="./docs/alipay.png" alt="支付宝" width="130" height="130" title="支付宝" />
-</p>
+![微信支付](docs/weixinpay.png "微信支付")
+![支付宝](docs/alipay.png "支付宝")
 
 ---
 
@@ -708,10 +706,18 @@ Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看
 <!-- pet-expressions:start -->
 ## 项目宠物表情形态 · 焰焰
 
-<table align="center">
-<tr><td align="center"><img src="docs/pet-expressions/smile.svg" width="88" alt="笑"><br><b>笑</b><br><code>:emoji-smile:</code></td><td align="center"><img src="docs/pet-expressions/joy.svg" width="88" alt="欢乐"><br><b>欢乐</b><br><code>:emoji-joy:</code></td><td align="center"><img src="docs/pet-expressions/cry.svg" width="88" alt="哭"><br><b>哭</b><br><code>:emoji-cry:</code></td><td align="center"><img src="docs/pet-expressions/depressed.svg" width="88" alt="沮丧"><br><b>沮丧</b><br><code>:emoji-depressed:</code></td><td align="center"><img src="docs/pet-expressions/terrified.svg" width="88" alt="惊恐"><br><b>惊恐</b><br><code>:emoji-terrified:</code></td><td align="center"><img src="docs/pet-expressions/angry.svg" width="88" alt="愤怒"><br><b>愤怒</b><br><code>:emoji-angry:</code></td></tr>
-<tr><td align="center"><img src="docs/pet-expressions/coquettish.svg" width="88" alt="撒娇"><br><b>撒娇</b><br><code>:emoji-coquettish:</code></td><td align="center"><img src="docs/pet-expressions/cute.svg" width="88" alt="卖萌"><br><b>卖萌</b><br><code>:emoji-cute:</code></td><td align="center"><img src="docs/pet-expressions/pleasing.svg" width="88" alt="讨好"><br><b>讨好</b><br><code>:emoji-pleasing:</code></td><td align="center"><img src="docs/pet-expressions/knocking.svg" width="88" alt="敲打"><br><b>敲打</b><br><code>:emoji-knocking:</code></td><td align="center"><img src="docs/pet-expressions/facepalm.svg" width="88" alt="捂脸"><br><b>捂脸</b><br><code>:emoji-facepalm:</code></td><td align="center"><img src="docs/pet-expressions/tongue.svg" width="88" alt="吐舌头"><br><b>吐舌头</b><br><code>:emoji-tongue:</code></td></tr>
-</table>
+- ![笑](docs/pet-expressions/smile.svg) **笑** `:emoji-smile:`
+- ![欢乐](docs/pet-expressions/joy.svg) **欢乐** `:emoji-joy:`
+- ![哭](docs/pet-expressions/cry.svg) **哭** `:emoji-cry:`
+- ![沮丧](docs/pet-expressions/depressed.svg) **沮丧** `:emoji-depressed:`
+- ![惊恐](docs/pet-expressions/terrified.svg) **惊恐** `:emoji-terrified:`
+- ![愤怒](docs/pet-expressions/angry.svg) **愤怒** `:emoji-angry:`
+- ![撒娇](docs/pet-expressions/coquettish.svg) **撒娇** `:emoji-coquettish:`
+- ![卖萌](docs/pet-expressions/cute.svg) **卖萌** `:emoji-cute:`
+- ![讨好](docs/pet-expressions/pleasing.svg) **讨好** `:emoji-pleasing:`
+- ![敲打](docs/pet-expressions/knocking.svg) **敲打** `:emoji-knocking:`
+- ![捂脸](docs/pet-expressions/facepalm.svg) **捂脸** `:emoji-facepalm:`
+- ![吐舌头](docs/pet-expressions/tongue.svg) **吐舌头** `:emoji-tongue:`
 
 > 12 种彩色动态形态：笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头。每个 SVG 自带表情、情绪特效与整体动效，并遵循 `prefers-reduced-motion`。
 <!-- pet-expressions:end -->

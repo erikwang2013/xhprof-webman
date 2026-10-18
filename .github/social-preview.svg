@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="spTitle spDesc" shape-rendering="geometricPrecision">
+  <title id="spTitle">erikwang2013/xhprof-webman — PHP 性能分析插件</title>
+  <desc id="spDesc">Social Preview：一套插件、十二种接入；右侧是项目宠物小火苗焰焰。</desc>
+
+  <rect width="1280" height="640" fill="#FFF8F5"/>
+  <circle cx="960" cy="330" r="248" fill="#FDE1D2"/>
+
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC',sans-serif" fill="#24292F">
+    <text x="88" y="180" font-size="28" font-weight="700" letter-spacing="1.2">erikwang2013/xhprof-webman</text>
+    <text x="84" y="292" font-size="92" font-weight="700">一套插件</text>
+    <text x="84" y="392" font-size="92" font-weight="700" fill="#CF222E">十二种接入</text>
+    <text x="90" y="458" font-size="34" font-weight="500">PHP 多框架性能分析插件</text>
+    <rect x="90" y="488" width="96" height="8" rx="4" fill="#FFB26B"/>
+    <text x="90" y="542" font-size="23" font-weight="400" fill="#57606A">webman · Laravel · ThinkPHP · Hyperf</text>
+    <text x="90" y="577" font-size="23" font-weight="400" fill="#57606A">Yii2 · Yii3 · Symfony · Slim 4</text>
+    <text x="90" y="612" font-size="23" font-weight="400" fill="#57606A">WordPress · Joomla · Drupal · 原生 PHP</text>
+    <text x="960" y="608" font-size="22" font-weight="400" fill="#57606A" text-anchor="middle">项目宠物 · 小火苗焰焰</text>
+  </g>
+
+  <!-- 由 docs/images/pet.svg 内联（去掉圆底与放大镜）；更新宠物后请重新生成本文件 -->
+  <g transform="translate(725 94) scale(2)">
+    <title id="flameTitle">小火苗焰焰 — xhprof-webman 项目宠物</title>
+    <desc id="flameDesc">一只橙红色小火苗，火尖微倾、分叉，带笑脸与腮红。</desc>
+
+    <ellipse cx="120" cy="205" rx="50" ry="7" fill="#24292F" opacity=".08"/>
+
+    <defs>
+      <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="#ffb26b"/>
+        <stop offset="0.45" stop-color="#ef5350"/>
+        <stop offset="1" stop-color="#c9202f"/>
+      </linearGradient>
+      <linearGradient id="core" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stop-color="#ffe9c9"/>
+        <stop offset="1" stop-color="#fff8ee"/>
+      </linearGradient>
+    </defs>
+
+    <!-- 火焰身体 -->
+    <path d="M130 34
+             C 127 58 141 74 152 90
+             C 168 110 178 126 178 146
+             C 178 180 152 202 119 202
+             C 86 202 60 180 60 146
+             C 60 120 74 102 88 84
+             C 99 70 106 58 108 46
+             C 113 54 120 56 130 34 Z"
+          fill="url(#flame)"/>
+
+    <!-- 内焰（脸底） -->
+    <path d="M119 132
+             C 131 132 142 152 142 172
+             C 142 190 132 200 119 200
+             C 106 200 96 190 96 172
+             C 96 152 107 132 119 132 Z"
+          fill="url(#core)"/>
+
+    <!-- 腮红 -->
+    <ellipse cx="92" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
+    <ellipse cx="146" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
+
+    <!-- 眼睛 -->
+    <circle cx="103" cy="159" r="9" fill="#ffffff"/>
+    <circle cx="135" cy="159" r="9" fill="#ffffff"/>
+    <circle cx="103" cy="160" r="4.8" fill="#24292f"/>
+    <circle cx="135" cy="160" r="4.8" fill="#24292f"/>
+    <circle cx="101" cy="157.5" r="1.7" fill="#ffffff"/>
+    <circle cx="133" cy="157.5" r="1.7" fill="#ffffff"/>
+
+    <!-- 笑 -->
+    <path d="M110 174 Q119 183 128 174" fill="none" stroke="#24292f"
+          stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+</svg>
