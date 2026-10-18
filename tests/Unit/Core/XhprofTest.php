@@ -488,6 +488,35 @@ class XhprofTest extends TestCase
         $this->assertStringNotContainsString('/xhprof-assets', $result);
     }
 
+    /**
+     * 配置形态错误（assets_url 写成数组）不能让报告页 500：字符串插值会立
+     * "Array to string conversion" warning。与 symbol_lookup_url 同口径按「没配」
+     * 处理，回落到默认前缀。
+     */
+    #[Test]
+    public function indexIgnoresMalformedAssetsUrlInsteadOfWarning(): void
+    {
+        $this->config = new FakeConfig(['xhprof' => ['assets_url' => ['/custom-assets']]]);
+        Xhprof::bootstrap($this->request, $this->response, $this->config, $this->cache, $this->logger);
+
+        $previous = error_reporting(E_ALL);
+        set_error_handler(static function (int $severity, string $message): bool {
+            if (str_contains($message, 'Array to string conversion')) {
+                throw new \ErrorException($message, 0, $severity);
+            }
+            return false;
+        });
+        try {
+            $result = Xhprof::index();
+        } finally {
+            restore_error_handler();
+            error_reporting($previous);
+        }
+
+        $this->assertIsString($result);
+        $this->assertStringContainsString('/xhprof-assets', $result);
+    }
+
     #[Test]
     public function indexFallsBackToUiHtmlStaticWhenNoAssetsUrl(): void
     {

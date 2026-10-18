@@ -37,12 +37,6 @@ parameters:
 			path: src/Core/XhprofLib/Display/XhprofDisplay.php
 
 		-
-			message: '#^Variable \$base_info might not be defined\.$#'
-			identifier: variable.undefined
-			count: 2
-			path: src/Core/XhprofLib/Display/XhprofDisplay.php
-
-		-
 			message: '#^Variable \$fake_edge might not be defined\.$#'
 			identifier: variable.undefined
 			count: 1

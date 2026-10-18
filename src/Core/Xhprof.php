@@ -269,6 +269,13 @@ class Xhprof
         if ($cfg !== null) {
             $assetsUrl = $cfg->get('xhprof.assets_url', '');
         }
+        // 形态错误（写成数组）按「没配」处理，与上面的 symbol_lookup_url / auth_token
+        // 同一口径：把数组塞进字符串插值会立 "Array to string conversion" warning，
+        // 升异常的宿主上就是整页 500。十二家入口类对同一个配置都先 is_string 再归一化，
+        // 报告页这条路径不能是例外。
+        if (!is_string($assetsUrl)) {
+            $assetsUrl = '';
+        }
         if ($assetsUrl === '') {
             $assetsUrl = self::$ui_html ?: '/xhprof-assets';
         }

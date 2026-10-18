@@ -1755,6 +1755,10 @@ class XhprofDisplay
     $results = array();
     $base_ct = 0;
     if ($display_calls) $base_ct = $symbol_info["ct"];
+    // 先初始化：$metrics 为空（损坏的 run / 无指标）时下面的循环不执行，
+    // 后面两个 print_pc_array() 仍会把这个变量传下去。未初始化变量在
+    // error_reporting 升异常的宿主上就是一条 warning → 整页 500。
+    $base_info = array();
     foreach ($metrics as $metric) {
       $base_info[$metric] = $symbol_info[$metric];
     }
