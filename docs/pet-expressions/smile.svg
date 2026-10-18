@@ -42,10 +42,6 @@
       <stop offset="0" stop-color="#ffe9c9"/>
       <stop offset="1" stop-color="#fff8ee"/>
     </linearGradient>
-    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
-      <stop offset="1" stop-color="#96d0ff" stop-opacity="0.45"/>
-    </linearGradient>
   </defs>
 
   
@@ -87,8 +83,4 @@
         stroke-width="2.6" stroke-linecap="round"/>
 
   
-  <line x1="205" y1="76" x2="221" y2="92" stroke="#0969da" stroke-width="8"
-        stroke-linecap="round"/>
-  <circle cx="191" cy="62" r="19" fill="url(#lens)" stroke="#0969da" stroke-width="6.5"/>
-  <path d="M182 56 a 12 12 0 0 1 9 -5" fill="none" stroke="#ffffff"
-        stroke-width="3" stroke-linecap="round" opacity="0.85"/></g><g class="ex-face"><ellipse cx="120" cy="168" rx="32" ry="26" fill="url(#core)"/><path d="M 94.45,161.52 Q 103,148.65 111.55,161.52" fill="none" stroke="#24292F" stroke-width="1.8" stroke-linecap="round"/><path d="M 126.45,161.52 Q 135,148.65 143.55,161.52" fill="none" stroke="#24292F" stroke-width="1.8" stroke-linecap="round"/><path d="M 108.65,178.8 Q 119,188.52 129.35,178.8" fill="none" stroke="#24292F" stroke-width="1.7" stroke-linecap="round"/><ellipse cx="96.25" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.5"/><ellipse cx="141.75" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.5"/><path class="ex-anim-spark" style="animation-delay:0.0s" d="M 84.65,134.66 L 86.04,138.22 L 89.6,139.61 L 86.04,141 L 84.65,144.56 L 83.27,141 L 79.7,139.61 L 83.27,138.22 Z" fill="#FFD166"/><path class="ex-anim-spark" style="animation-delay:0.5s" d="M 151.13,128.63 L 152.19,131.35 L 154.91,132.41 L 152.19,133.47 L 151.13,136.19 L 150.07,133.47 L 147.35,132.41 L 150.07,131.35 Z" fill="#FFD166"/></g></g></svg>
+</g><g class="ex-face"><ellipse cx="120" cy="168" rx="32" ry="26" fill="url(#core)"/><path d="M 94.45,161.52 Q 103,148.65 111.55,161.52" fill="none" stroke="#24292F" stroke-width="1.8" stroke-linecap="round"/><path d="M 126.45,161.52 Q 135,148.65 143.55,161.52" fill="none" stroke="#24292F" stroke-width="1.8" stroke-linecap="round"/><path d="M 108.65,178.8 Q 119,188.52 129.35,178.8" fill="none" stroke="#24292F" stroke-width="1.7" stroke-linecap="round"/><ellipse cx="96.25" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.5"/><ellipse cx="141.75" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.5"/><path class="ex-anim-spark" style="animation-delay:0.0s" d="M 84.65,134.66 L 86.04,138.22 L 89.6,139.61 L 86.04,141 L 84.65,144.56 L 83.27,141 L 79.7,139.61 L 83.27,138.22 Z" fill="#FFD166"/><path class="ex-anim-spark" style="animation-delay:0.5s" d="M 151.13,128.63 L 152.19,131.35 L 154.91,132.41 L 152.19,133.47 L 151.13,136.19 L 150.07,133.47 L 147.35,132.41 L 150.07,131.35 Z" fill="#FFD166"/></g></g></svg>
