@@ -706,3 +706,32 @@ Ce paquet est publié sous licence MIT (voir `LICENSE`) ; `src/Core/XhprofLib/**
 ---
 
 Ce plugin s'appuie sur [phacility/xhprof](https://github.com/phacility/xhprof) et [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## Expressions de la mascotte du projet · petite flamme
+
+- ![Sourire](../../../docs/pet-expressions/smile.svg) **Sourire** `:emoji-smile:`
+- ![Joie](../../../docs/pet-expressions/joy.svg) **Joie** `:emoji-joy:`
+- ![Pleurs](../../../docs/pet-expressions/cry.svg) **Pleurs** `:emoji-cry:`
+- ![Déprime](../../../docs/pet-expressions/depressed.svg) **Déprime** `:emoji-depressed:`
+- ![Terrifié](../../../docs/pet-expressions/terrified.svg) **Terrifié** `:emoji-terrified:`
+- ![En colère](../../../docs/pet-expressions/angry.svg) **En colère** `:emoji-angry:`
+- ![Coquet](../../../docs/pet-expressions/coquettish.svg) **Coquet** `:emoji-coquettish:`
+- ![Mignon](../../../docs/pet-expressions/cute.svg) **Mignon** `:emoji-cute:`
+- ![Complaisant](../../../docs/pet-expressions/pleasing.svg) **Complaisant** `:emoji-pleasing:`
+- ![Toc-toc](../../../docs/pet-expressions/knocking.svg) **Toc-toc** `:emoji-knocking:`
+- ![Facepalm](../../../docs/pet-expressions/facepalm.svg) **Facepalm** `:emoji-facepalm:`
+- ![Langue tirée](../../../docs/pet-expressions/tongue.svg) **Langue tirée** `:emoji-tongue:`
+
+> 12 formes d'expression animées et colorées : Sourire / Joie / Pleurs / Déprime / Terrifié / En colère / Coquet / Mignon / Complaisant / Toc-toc / Facepalm / Langue tirée. Chaque SVG contient son expression, ses effets émotionnels et son animation globale, et respecte `prefers-reduced-motion`.
+
+Dans le code, utilisez `ErikWang2013\Xhprof\Core\Mascot` : `Mascot::svg()` renvoie la forme par défaut, `Mascot::form('smile')` une expression nommée, et `Mascot::forms()` liste `default` ainsi que les 12 expressions avec leurs noms chinois/anglais et leurs codes courts.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## Licence des ressources visuelles
+
+La mascotte du projet, les images, les icônes et les expressions (y compris les fichiers SVG / PNG sous `docs/pet-expressions/`) ne sont **pas des ressources open source**. Tous droits réservés à l'auteur. Toute copie, modification, redistribution, transmission publique ou utilisation commerciale est interdite sans autorisation écrite préalable ; une licence commerciale est requise pour un usage commercial. Voir [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md) ; contact : **erik@erik.xyz**.
+
+> Le code reste sous la `LICENSE` du dépôt ; les ressources tierces (par exemple le Go Gopher explicitement signalé) conservent leurs licences d'origine.
+<!-- assets-license:end -->

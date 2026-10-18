@@ -45,7 +45,8 @@ class ReadmeLinkRewriteTest extends TestCase
         . "![other screenshot](docs/i18n/ko/images/runs-list.png)\n\n"
         . "![pet](docs/images/pet.svg)\n\n"
         . "![architecture](docs/images/architecture.svg)\n\n"
-        . "[pet again](./docs/images/pet.svg)\n";
+        . "[pet again](./docs/images/pet.svg)\n\n"
+        . "[assets license](ASSETS-LICENSE.md)\n";
 
     /** @return array{0:int,1:string} 退出码与合并后的输出 */
     private static function generate(string $lang, string $in, string $out): array
@@ -98,6 +99,10 @@ class ReadmeLinkRewriteTest extends TestCase
             $this->assertStringContainsString('![architecture](./images/architecture.svg)', $en);
             $this->assertStringContainsString('[pet again](../../../docs/images/pet.svg)', $en,
                 '`./docs/…` 这种带点斜杠的写法在原有改写里是同一个前缀，行为必须逐字不变');
+            // 仓库根文件（ASSETS-LICENSE.md）不是 docs/ 前缀，但产物在 docs/i18n/<lang>/
+            // 下时同样要回到仓库根；深度由生成器算，源文里写根相对路径即可。
+            $this->assertStringContainsString('[assets license](../../../ASSETS-LICENSE.md)', $en,
+                'ASSETS-LICENSE.md 没被改写成产物目录到仓库根的相对路径');
 
             // 角色对调。同一份夹具，换成 ko 当主语：短路径与长路径必须正好互换，
             // 没有这一轮，「规则键的是当前语种」和「规则只认写死的 en」分不开。
@@ -110,6 +115,8 @@ class ReadmeLinkRewriteTest extends TestCase
             $this->assertStringContainsString(
                 '![own screenshot](../../../docs/i18n/en/images/runs-list.png)', $ko,
                 'en 的路径在 ko 产物里被误改短了');
+            $this->assertStringContainsString('[assets license](../../../ASSETS-LICENSE.md)', $ko,
+                'ASSETS-LICENSE.md 的改写必须与语种无关');
         } finally {
             exec('rm -rf ' . escapeshellarg($scratch));
             // rmdir 只删空目录：并发跑的另一个测试还有草稿在时，这里删不动，也不该删动。

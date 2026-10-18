@@ -704,3 +704,32 @@ This package is released under the MIT license (see `LICENSE`); `src/Core/Xhprof
 ---
 
 This plugin references [phacility/xhprof](https://github.com/phacility/xhprof) and [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## Project pet expressions · Yanyan
+
+- ![Smile](../../../docs/pet-expressions/smile.svg) **Smile** `:emoji-smile:`
+- ![Joy](../../../docs/pet-expressions/joy.svg) **Joy** `:emoji-joy:`
+- ![Cry](../../../docs/pet-expressions/cry.svg) **Cry** `:emoji-cry:`
+- ![Depressed](../../../docs/pet-expressions/depressed.svg) **Depressed** `:emoji-depressed:`
+- ![Terrified](../../../docs/pet-expressions/terrified.svg) **Terrified** `:emoji-terrified:`
+- ![Angry](../../../docs/pet-expressions/angry.svg) **Angry** `:emoji-angry:`
+- ![Coquettish](../../../docs/pet-expressions/coquettish.svg) **Coquettish** `:emoji-coquettish:`
+- ![Cute](../../../docs/pet-expressions/cute.svg) **Cute** `:emoji-cute:`
+- ![Pleasing](../../../docs/pet-expressions/pleasing.svg) **Pleasing** `:emoji-pleasing:`
+- ![Knocking](../../../docs/pet-expressions/knocking.svg) **Knocking** `:emoji-knocking:`
+- ![Facepalm](../../../docs/pet-expressions/facepalm.svg) **Facepalm** `:emoji-facepalm:`
+- ![Tongue Out](../../../docs/pet-expressions/tongue.svg) **Tongue Out** `:emoji-tongue:`
+
+> 12 animated expression forms: Smile / Joy / Cry / Depressed / Terrified / Angry / Coquettish / Cute / Pleasing / Knocking / Facepalm / Tongue Out. Each SVG carries its own expression, emotion effects and overall motion, and respects `prefers-reduced-motion`.
+
+In code, use `ErikWang2013\Xhprof\Core\Mascot`: `Mascot::svg()` returns the default form, `Mascot::form('smile')` returns a named expression, and `Mascot::forms()` lists `default` and the 12 expressions with their Chinese/English names and shortcodes.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## Visual Assets License
+
+The project pet, images, icons and expression forms in this project (including the SVG / PNG files under `docs/pet-expressions/`) are **not open-source assets**. All rights are reserved by the author. No copying, modification, redistribution, public transmission or commercial use is permitted without prior written permission; commercial use requires a commercial license. See [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md); contact **erik@erik.xyz** for licensing.
+
+> The code remains under the repository's `LICENSE`; third-party assets (such as the Go Gopher where explicitly marked) keep their original licenses.
+<!-- assets-license:end -->

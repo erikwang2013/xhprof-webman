@@ -702,3 +702,32 @@ Symfony 6.4 संगतता मापी गई है (इसी से 7.4 
 ---
 
 यह प्लगइन [phacility/xhprof](https://github.com/phacility/xhprof) और [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof) को संदर्भित करता है।
+
+<!-- pet-expressions:start -->
+## प्रोजेक्ट पेट के भाव · छोटी लौ
+
+- ![मुस्कान](docs/pet-expressions/smile.svg) **मुस्कान** `:emoji-smile:`
+- ![खुशी](docs/pet-expressions/joy.svg) **खुशी** `:emoji-joy:`
+- ![रोना](docs/pet-expressions/cry.svg) **रोना** `:emoji-cry:`
+- ![उदासी](docs/pet-expressions/depressed.svg) **उदासी** `:emoji-depressed:`
+- ![भयभीत](docs/pet-expressions/terrified.svg) **भयभीत** `:emoji-terrified:`
+- ![गुस्सा](docs/pet-expressions/angry.svg) **गुस्सा** `:emoji-angry:`
+- ![नखरा](docs/pet-expressions/coquettish.svg) **नखरा** `:emoji-coquettish:`
+- ![प्यारा](docs/pet-expressions/cute.svg) **प्यारा** `:emoji-cute:`
+- ![खुश करना](docs/pet-expressions/pleasing.svg) **खुश करना** `:emoji-pleasing:`
+- ![खटखटाना](docs/pet-expressions/knocking.svg) **खटखटाना** `:emoji-knocking:`
+- ![फेसपाम](docs/pet-expressions/facepalm.svg) **फेसपाम** `:emoji-facepalm:`
+- ![जीभ बाहर](docs/pet-expressions/tongue.svg) **जीभ बाहर** `:emoji-tongue:`
+
+> 12 रंगीन एनिमेटेड भाव-रूप: मुस्कान / खुशी / रोना / उदासी / भयभीत / गुस्सा / नखरा / प्यारा / खुश करना / खटखटाना / फेसपाम / जीभ बाहर। प्रत्येक SVG में अपना भाव, भावना-प्रभाव और समग्र मोशन है, और यह `prefers-reduced-motion` का पालन करता है।
+
+कोड में `ErikWang2013\Xhprof\Core\Mascot` का उपयोग करें: `Mascot::svg()` डिफ़ॉल्ट रूप देता है, `Mascot::form('smile')` एक नामित भाव देता है, और `Mascot::forms()` `default` तथा 12 भावों के नाम (चीनी/अंग्रेज़ी) और शॉर्टकोड सूचीबद्ध करता है।
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## दृश्य संपत्ति लाइसेंस
+
+इस प्रोजेक्ट का पेट, चित्र, आइकन और भाव-रूप (जिनमें `docs/pet-expressions/` के अंतर्गत SVG / PNG फ़ाइलें शामिल हैं) **ओपन-सोर्स संपत्ति नहीं हैं**। सभी अधिकार लेखक के पास सुरक्षित हैं। पूर्व लिखित अनुमति के बिना प्रतिलिपि, संशोधन, पुनर्वितरण, सार्वजनिक प्रसारण या व्यावसायिक उपयोग की अनुमति नहीं है; व्यावसायिक उपयोग के लिए व्यावसायिक लाइसेंस आवश्यक है। देखें [ASSETS-LICENSE.md](ASSETS-LICENSE.md); संपर्क: **erik@erik.xyz**.
+
+> कोड भाग रिपॉज़िटरी के `LICENSE` के अंतर्गत ही रहता है; तृतीय-पक्ष सामग्री (जैसे स्पष्ट रूप से चिह्नित Go Gopher) अपने मूल लाइसेंस बनाए रखती है।
+<!-- assets-license:end -->

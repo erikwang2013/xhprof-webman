@@ -702,3 +702,32 @@ Este pacote é distribuído sob a licença MIT (ver `LICENSE`); `src/Core/Xhprof
 ---
 
 Este plugin faz referência a [phacility/xhprof](https://github.com/phacility/xhprof) e [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## Expressões do mascote do projeto · pequena chama
+
+- ![Sorriso](docs/pet-expressions/smile.svg) **Sorriso** `:emoji-smile:`
+- ![Alegria](docs/pet-expressions/joy.svg) **Alegria** `:emoji-joy:`
+- ![Choro](docs/pet-expressions/cry.svg) **Choro** `:emoji-cry:`
+- ![Deprimido](docs/pet-expressions/depressed.svg) **Deprimido** `:emoji-depressed:`
+- ![Aterrorizado](docs/pet-expressions/terrified.svg) **Aterrorizado** `:emoji-terrified:`
+- ![Bravo](docs/pet-expressions/angry.svg) **Bravo** `:emoji-angry:`
+- ![Dengoso](docs/pet-expressions/coquettish.svg) **Dengoso** `:emoji-coquettish:`
+- ![Fofo](docs/pet-expressions/cute.svg) **Fofo** `:emoji-cute:`
+- ![Agradável](docs/pet-expressions/pleasing.svg) **Agradável** `:emoji-pleasing:`
+- ![Batendo](docs/pet-expressions/knocking.svg) **Batendo** `:emoji-knocking:`
+- ![Facepalm](docs/pet-expressions/facepalm.svg) **Facepalm** `:emoji-facepalm:`
+- ![Língua para fora](docs/pet-expressions/tongue.svg) **Língua para fora** `:emoji-tongue:`
+
+> 12 formas de expressão animadas e coloridas: Sorriso / Alegria / Choro / Deprimido / Aterrorizado / Bravo / Dengoso / Fofo / Agradável / Batendo / Facepalm / Língua para fora. Cada SVG traz sua expressão, efeitos emocionais e animação geral, e respeita `prefers-reduced-motion`.
+
+No código, use `ErikWang2013\Xhprof\Core\Mascot`: `Mascot::svg()` retorna a forma padrão, `Mascot::form('smile')` retorna uma expressão nomeada e `Mascot::forms()` lista `default` e as 12 expressões com nomes em chinês/inglês e shortcodes.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## Licença de recursos visuais
+
+O mascote do projeto, as imagens, os ícones e as expressões (incluindo os arquivos SVG / PNG em `docs/pet-expressions/`) **não são recursos de código aberto**. Todos os direitos são reservados ao autor. Não é permitido copiar, modificar, redistribuir, transmitir publicamente ou usar comercialmente sem permissão prévia por escrito; o uso comercial exige uma licença comercial. Veja [ASSETS-LICENSE.md](ASSETS-LICENSE.md); contato: **erik@erik.xyz**.
+
+> O código continua sob a `LICENSE` do repositório; recursos de terceiros (como o Go Gopher explicitamente indicado) mantêm suas licenças originais.
+<!-- assets-license:end -->

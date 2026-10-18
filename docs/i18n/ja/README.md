@@ -706,3 +706,32 @@ Symfony 6.4 互換性は実測済みです（7.4 では見えない 2 つの過�
 ---
 
 本プラグインは [phacility/xhprof](https://github.com/phacility/xhprof) と [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof) を参考にしています。
+
+<!-- pet-expressions:start -->
+## プロジェクトペットの表情 · 小さな炎
+
+- ![笑顔](../../../docs/pet-expressions/smile.svg) **笑顔** `:emoji-smile:`
+- ![喜び](../../../docs/pet-expressions/joy.svg) **喜び** `:emoji-joy:`
+- ![泣き](../../../docs/pet-expressions/cry.svg) **泣き** `:emoji-cry:`
+- ![落ち込み](../../../docs/pet-expressions/depressed.svg) **落ち込み** `:emoji-depressed:`
+- ![恐怖](../../../docs/pet-expressions/terrified.svg) **恐怖** `:emoji-terrified:`
+- ![怒り](../../../docs/pet-expressions/angry.svg) **怒り** `:emoji-angry:`
+- ![甘え](../../../docs/pet-expressions/coquettish.svg) **甘え** `:emoji-coquettish:`
+- ![かわいい](../../../docs/pet-expressions/cute.svg) **かわいい** `:emoji-cute:`
+- ![ご機嫌取り](../../../docs/pet-expressions/pleasing.svg) **ご機嫌取り** `:emoji-pleasing:`
+- ![ノック](../../../docs/pet-expressions/knocking.svg) **ノック** `:emoji-knocking:`
+- ![顔を覆う](../../../docs/pet-expressions/facepalm.svg) **顔を覆う** `:emoji-facepalm:`
+- ![舌を出す](../../../docs/pet-expressions/tongue.svg) **舌を出す** `:emoji-tongue:`
+
+> 12 種類のカラーアニメーション表情：笑顔 / 喜び / 泣き / 落ち込み / 恐怖 / 怒り / 甘え / かわいい / ご機嫌取り / ノック / 顔を覆う / 舌を出す。各 SVG には表情・感情エフェクト・全体のモーションが含まれ、`prefers-reduced-motion` に従います。
+
+コードでは `ErikWang2013\Xhprof\Core\Mascot` を利用できます：`Mascot::svg()` はデフォルトの姿を、`Mascot::form('smile')` は指定した表情を返し、`Mascot::forms()` は `default` と 12 種類の表情の名前（中国語/英語）とショートコードを一覧します。
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## ビジュアルアセットライセンス
+
+本プロジェクトのペット、画像、アイコン、表情（`docs/pet-expressions/` 配下の SVG / PNG を含む）は**オープンソースアセットではありません**。すべての権利は作者に帰属します。事前の書面による許可なく、複製、改変、再配布、公衆送信、商業利用を行うことはできません。商業利用には商用ライセンスが必要です。詳細は [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md)、連絡先は **erik@erik.xyz** です。
+
+> コード部分は引き続きリポジトリの `LICENSE` に従います。第三者の素材（明示されている Go Gopher など）は元のライセンスを維持します。
+<!-- assets-license:end -->

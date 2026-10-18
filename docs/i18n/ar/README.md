@@ -706,3 +706,32 @@ src/<Fw>/
 ---
 
 تستند هذه الإضافة إلى [phacility/xhprof](https://github.com/phacility/xhprof) و [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## أشكال تعبيرات حيوان المشروع الأليف · اللهيب الصغير
+
+- ![ابتسامة](../../../docs/pet-expressions/smile.svg) **ابتسامة** `:emoji-smile:`
+- ![فرح](../../../docs/pet-expressions/joy.svg) **فرح** `:emoji-joy:`
+- ![بكاء](../../../docs/pet-expressions/cry.svg) **بكاء** `:emoji-cry:`
+- ![اكتئاب](../../../docs/pet-expressions/depressed.svg) **اكتئاب** `:emoji-depressed:`
+- ![رعب](../../../docs/pet-expressions/terrified.svg) **رعب** `:emoji-terrified:`
+- ![غضب](../../../docs/pet-expressions/angry.svg) **غضب** `:emoji-angry:`
+- ![دلع](../../../docs/pet-expressions/coquettish.svg) **دلع** `:emoji-coquettish:`
+- ![لطافة](../../../docs/pet-expressions/cute.svg) **لطافة** `:emoji-cute:`
+- ![تملّق](../../../docs/pet-expressions/pleasing.svg) **تملّق** `:emoji-pleasing:`
+- ![طرق](../../../docs/pet-expressions/knocking.svg) **طرق** `:emoji-knocking:`
+- ![تغطية الوجه](../../../docs/pet-expressions/facepalm.svg) **تغطية الوجه** `:emoji-facepalm:`
+- ![إخراج اللسان](../../../docs/pet-expressions/tongue.svg) **إخراج اللسان** `:emoji-tongue:`
+
+> 12 شكلاً متحركاً وملوناً للتعبيرات: ابتسامة / فرح / بكاء / اكتئاب / رعب / غضب / دلع / لطافة / تملّق / طرق / تغطية الوجه / إخراج اللسان. يحتوي كل SVG على تعبيره وتأثيراته العاطفية وحركته العامة، ويراعي `prefers-reduced-motion`.
+
+في الكود، استخدم `ErikWang2013\Xhprof\Core\Mascot`: يعيد `Mascot::svg()` الشكل الافتراضي، ويعيد `Mascot::form('smile')` تعبيراً محدداً، ويسرد `Mascot::forms()` الشكل `default` والتعبيرات الاثني عشر مع أسمائها بالصينية/الإنجليزية ورمزها المختصر.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## ترخيص الأصول البصرية
+
+حيوان المشروع الأليف والصور والأيقونات والتعبيرات (بما في ذلك ملفات SVG / PNG تحت `docs/pet-expressions/`) **ليست أصولاً مفتوحة المصدر**. جميع الحقوق محفوظة للمؤلف. لا يُسمح بالنسخ أو التعديل أو إعادة التوزيع أو النقل العام أو الاستخدام التجاري دون إذن كتابي مسبق؛ ويشترط ترخيص تجاري للاستخدام التجاري. راجع [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md)؛ للتواصل: **erik@erik.xyz**.
+
+> يظل الكود خاضعاً لترخيص `LICENSE` الخاص بالمستودع؛ وتحتفظ الأصول الخارجية (مثل Go Gopher المحدد صراحةً) بتراخيصها الأصلية.
+<!-- assets-license:end -->

@@ -706,3 +706,32 @@ Dieses Paket steht unter der MIT-Lizenz (siehe `LICENSE`); `src/Core/XhprofLib/*
 ---
 
 Dieses Plugin verweist auf [phacility/xhprof](https://github.com/phacility/xhprof) und [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## Ausdrucksformen des Projektmaskottchens · kleine Flamme
+
+- ![Lächeln](../../../docs/pet-expressions/smile.svg) **Lächeln** `:emoji-smile:`
+- ![Freude](../../../docs/pet-expressions/joy.svg) **Freude** `:emoji-joy:`
+- ![Weinen](../../../docs/pet-expressions/cry.svg) **Weinen** `:emoji-cry:`
+- ![Niedergeschlagen](../../../docs/pet-expressions/depressed.svg) **Niedergeschlagen** `:emoji-depressed:`
+- ![Entsetzt](../../../docs/pet-expressions/terrified.svg) **Entsetzt** `:emoji-terrified:`
+- ![Wütend](../../../docs/pet-expressions/angry.svg) **Wütend** `:emoji-angry:`
+- ![Kokett](../../../docs/pet-expressions/coquettish.svg) **Kokett** `:emoji-coquettish:`
+- ![Niedlich](../../../docs/pet-expressions/cute.svg) **Niedlich** `:emoji-cute:`
+- ![Gefällig](../../../docs/pet-expressions/pleasing.svg) **Gefällig** `:emoji-pleasing:`
+- ![Klopfen](../../../docs/pet-expressions/knocking.svg) **Klopfen** `:emoji-knocking:`
+- ![Facepalm](../../../docs/pet-expressions/facepalm.svg) **Facepalm** `:emoji-facepalm:`
+- ![Zunge raus](../../../docs/pet-expressions/tongue.svg) **Zunge raus** `:emoji-tongue:`
+
+> 12 farbige animierte Ausdrucksformen: Lächeln / Freude / Weinen / Niedergeschlagen / Entsetzt / Wütend / Kokett / Niedlich / Gefällig / Klopfen / Facepalm / Zunge raus. Jedes SVG enthält seinen eigenen Ausdruck, Emotionseffekte und eine Gesamtanimation und respektiert `prefers-reduced-motion`.
+
+Im Code steht `ErikWang2013\Xhprof\Core\Mascot` zur Verfügung: `Mascot::svg()` liefert die Standardform, `Mascot::form('smile')` eine benannte Ausdrucksform und `Mascot::forms()` listet `default` sowie die 12 Ausdrucksformen mit chinesischem/englischem Namen und Shortcode auf.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## Lizenz für visuelle Assets
+
+Das Projektmaskottchen, Bilder, Icons und Ausdrucksformen (einschließlich der SVG-/PNG-Dateien unter `docs/pet-expressions/`) sind **keine Open-Source-Assets**. Alle Rechte liegen beim Autor. Ohne vorherige schriftliche Genehmigung ist das Kopieren, Ändern, Weiterverbreiten, öffentliche Übertragen oder die kommerzielle Nutzung nicht gestattet; für die kommerzielle Nutzung ist eine kommerzielle Lizenz erforderlich. Siehe [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md); Lizenzanfragen an **erik@erik.xyz**.
+
+> Der Code steht weiterhin unter der `LICENSE` des Repositories; Materialien Dritter (etwa der ausdrücklich gekennzeichnete Go Gopher) behalten ihre ursprünglichen Lizenzen.
+<!-- assets-license:end -->

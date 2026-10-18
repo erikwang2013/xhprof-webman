@@ -706,3 +706,32 @@ Paket ini dirilis dengan lisensi MIT (lihat `LICENSE`); `src/Core/XhprofLib/**`,
 ---
 
 Plugin ini merujuk pada [phacility/xhprof](https://github.com/phacility/xhprof) dan [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## Ekspresi hewan peliharaan proyek · nyala kecil
+
+- ![Senyum](../../../docs/pet-expressions/smile.svg) **Senyum** `:emoji-smile:`
+- ![Kegembiraan](../../../docs/pet-expressions/joy.svg) **Kegembiraan** `:emoji-joy:`
+- ![Menangis](../../../docs/pet-expressions/cry.svg) **Menangis** `:emoji-cry:`
+- ![Murung](../../../docs/pet-expressions/depressed.svg) **Murung** `:emoji-depressed:`
+- ![Ketakutan](../../../docs/pet-expressions/terrified.svg) **Ketakutan** `:emoji-terrified:`
+- ![Marah](../../../docs/pet-expressions/angry.svg) **Marah** `:emoji-angry:`
+- ![Genit](../../../docs/pet-expressions/coquettish.svg) **Genit** `:emoji-coquettish:`
+- ![Imut](../../../docs/pet-expressions/cute.svg) **Imut** `:emoji-cute:`
+- ![Menyenangkan](../../../docs/pet-expressions/pleasing.svg) **Menyenangkan** `:emoji-pleasing:`
+- ![Mengetuk](../../../docs/pet-expressions/knocking.svg) **Mengetuk** `:emoji-knocking:`
+- ![Facepalm](../../../docs/pet-expressions/facepalm.svg) **Facepalm** `:emoji-facepalm:`
+- ![Menjulurkan lidah](../../../docs/pet-expressions/tongue.svg) **Menjulurkan lidah** `:emoji-tongue:`
+
+> 12 bentuk ekspresi berwarna dan beranimasi: Senyum / Kegembiraan / Menangis / Murung / Ketakutan / Marah / Genit / Imut / Menyenangkan / Mengetuk / Facepalm / Menjulurkan lidah. Setiap SVG membawa ekspresinya sendiri, efek emosi, dan animasi keseluruhan, serta menghormati `prefers-reduced-motion`.
+
+Dalam kode, gunakan `ErikWang2013\Xhprof\Core\Mascot`: `Mascot::svg()` mengembalikan bentuk default, `Mascot::form('smile')` mengembalikan ekspresi bernama, dan `Mascot::forms()` mencantumkan `default` serta 12 ekspresi dengan nama Tionghoa/Inggris dan shortcode.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## Lisensi Aset Visual
+
+Hewan peliharaan proyek, gambar, ikon, dan ekspresi (termasuk file SVG / PNG di `docs/pet-expressions/`) **bukan aset open-source**. Semua hak dilindungi oleh penulis. Tanpa izin tertulis sebelumnya, dilarang menyalin, memodifikasi, mendistribusikan ulang, mengirimkan secara publik, atau menggunakan secara komersial; penggunaan komersial memerlukan lisensi komersial. Lihat [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md); kontak: **erik@erik.xyz**.
+
+> Bagian kode tetap berada di bawah `LICENSE` repositori; aset pihak ketiga (misalnya Go Gopher yang ditandai secara eksplisit) tetap memakai lisensi aslinya.
+<!-- assets-license:end -->

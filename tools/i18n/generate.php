@@ -643,6 +643,12 @@ function generate_locale(string $lang, Sink $sink): int
             }
             return $up . 'docs/' . $rest;
         }
+        // 仓库根目录的许可证文件：与 docs/ 不同前缀，但同样要从产物目录回到仓库根。
+        // 不让源文硬编码 `../../../`：产物根可由 I18N_OUT_ROOT 挪动，深度只能由
+        // i18n_out_depth() 算（selftest 的输出根就不是 docs/i18n）。
+        if (preg_match('#^(?:\./)?ASSETS-LICENSE\.md$#', $url) === 1) {
+            return $up . 'ASSETS-LICENSE.md';
+        }
         return $url;
     };
 

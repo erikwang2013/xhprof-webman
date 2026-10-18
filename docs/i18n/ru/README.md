@@ -706,3 +706,32 @@ src/<Fw>/
 ---
 
 Этот плагин опирается на [phacility/xhprof](https://github.com/phacility/xhprof) и [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof).
+
+<!-- pet-expressions:start -->
+## Выражения питомца проекта · маленькое пламя
+
+- ![Улыбка](../../../docs/pet-expressions/smile.svg) **Улыбка** `:emoji-smile:`
+- ![Радость](../../../docs/pet-expressions/joy.svg) **Радость** `:emoji-joy:`
+- ![Плач](../../../docs/pet-expressions/cry.svg) **Плач** `:emoji-cry:`
+- ![Подавленность](../../../docs/pet-expressions/depressed.svg) **Подавленность** `:emoji-depressed:`
+- ![Ужас](../../../docs/pet-expressions/terrified.svg) **Ужас** `:emoji-terrified:`
+- ![Гнев](../../../docs/pet-expressions/angry.svg) **Гнев** `:emoji-angry:`
+- ![Кокетство](../../../docs/pet-expressions/coquettish.svg) **Кокетство** `:emoji-coquettish:`
+- ![Милота](../../../docs/pet-expressions/cute.svg) **Милота** `:emoji-cute:`
+- ![Угождение](../../../docs/pet-expressions/pleasing.svg) **Угождение** `:emoji-pleasing:`
+- ![Стук](../../../docs/pet-expressions/knocking.svg) **Стук** `:emoji-knocking:`
+- ![Фейспалм](../../../docs/pet-expressions/facepalm.svg) **Фейспалм** `:emoji-facepalm:`
+- ![Показать язык](../../../docs/pet-expressions/tongue.svg) **Показать язык** `:emoji-tongue:`
+
+> 12 цветных анимированных выражений: Улыбка / Радость / Плач / Подавленность / Ужас / Гнев / Кокетство / Милота / Угождение / Стук / Фейспалм / Показать язык. Каждый SVG содержит выражение, эмоциональные эффекты и общую анимацию и учитывает `prefers-reduced-motion`.
+
+В коде используйте `ErikWang2013\Xhprof\Core\Mascot`: `Mascot::svg()` возвращает образ по умолчанию, `Mascot::form('smile')` — заданное выражение, а `Mascot::forms()` перечисляет `default` и 12 выражений с названиями на китайском/английском и шорткодами.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## Лицензия на визуальные материалы
+
+Питомец проекта, изображения, значки и выражения (включая SVG / PNG в `docs/pet-expressions/`) **не являются открытыми ресурсами**. Все права принадлежат автору. Без предварительного письменного разрешения запрещены копирование, изменение, повторное распространение, публичная передача и коммерческое использование; для коммерческого использования требуется коммерческая лицензия. Подробнее: [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md); контакт для лицензирования: **erik@erik.xyz**.
+
+> Кодовая часть по-прежнему распространяется по `LICENSE` репозитория; сторонние материалы (например, явно отмеченный Go Gopher) сохраняют свои исходные лицензии.
+<!-- assets-license:end -->

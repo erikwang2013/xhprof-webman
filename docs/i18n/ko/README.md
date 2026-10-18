@@ -706,3 +706,32 @@ Symfony 6.4 호환성은 실측으로 확인했습니다(7.4에서는 보이지 
 ---
 
 이 플러그인은 [phacility/xhprof](https://github.com/phacility/xhprof) 와 [xiexianbo123/xhprof](https://github.com/xiexianbo123/xhprof) 를 참고했습니다.
+
+<!-- pet-expressions:start -->
+## 프로젝트 펫 표정 · 작은 불꽃
+
+- ![미소](../../../docs/pet-expressions/smile.svg) **미소** `:emoji-smile:`
+- ![기쁨](../../../docs/pet-expressions/joy.svg) **기쁨** `:emoji-joy:`
+- ![울음](../../../docs/pet-expressions/cry.svg) **울음** `:emoji-cry:`
+- ![우울](../../../docs/pet-expressions/depressed.svg) **우울** `:emoji-depressed:`
+- ![공포](../../../docs/pet-expressions/terrified.svg) **공포** `:emoji-terrified:`
+- ![분노](../../../docs/pet-expressions/angry.svg) **분노** `:emoji-angry:`
+- ![애교](../../../docs/pet-expressions/coquettish.svg) **애교** `:emoji-coquettish:`
+- ![귀여움](../../../docs/pet-expressions/cute.svg) **귀여움** `:emoji-cute:`
+- ![아첨](../../../docs/pet-expressions/pleasing.svg) **아첨** `:emoji-pleasing:`
+- ![노크](../../../docs/pet-expressions/knocking.svg) **노크** `:emoji-knocking:`
+- ![얼굴 가리기](../../../docs/pet-expressions/facepalm.svg) **얼굴 가리기** `:emoji-facepalm:`
+- ![메롱](../../../docs/pet-expressions/tongue.svg) **메롱** `:emoji-tongue:`
+
+> 12가지 컬러 애니메이션 표정: 미소 / 기쁨 / 울음 / 우울 / 공포 / 분노 / 애교 / 귀여움 / 아첨 / 노크 / 얼굴 가리기 / 메롱. 각 SVG에는 표정, 감정 효과, 전체 모션이 들어 있으며 `prefers-reduced-motion`을 따릅니다.
+
+코드에서는 `ErikWang2013\Xhprof\Core\Mascot`을 사용할 수 있습니다: `Mascot::svg()`는 기본 형태를, `Mascot::form('smile')`은 지정한 표정을, `Mascot::forms()`는 `default`와 12가지 표정의 이름(중국어/영어) 및 숏코드를 반환합니다.
+<!-- pet-expressions:end -->
+
+<!-- assets-license:start -->
+## 시각 자산 라이선스
+
+이 프로젝트의 프로젝트 펫, 이미지, 아이콘, 표정(예: `docs/pet-expressions/` 아래의 SVG / PNG)은 **오픈소스 자산이 아닙니다**. 모든 권리는 저자에게 있습니다. 사전 서면 허가 없이 복제, 수정, 재배포, 공개 전송 또는 상업적 사용을 할 수 없으며, 상업적 사용에는 상업 라이선스가 필요합니다. 자세한 내용은 [ASSETS-LICENSE.md](../../../ASSETS-LICENSE.md)를 참고하고, 라이선스 문의는 **erik@erik.xyz**로 연락하세요.
+
+> 코드 부분은 저장소의 기존 `LICENSE`를 따릅니다. 제3자 자산(명시적으로 표시된 Go Gopher 등)은 원래 라이선스를 유지합니다.
+<!-- assets-license:end -->
