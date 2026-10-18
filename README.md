@@ -720,6 +720,8 @@ Symfony 6.4 的兼容性是实测过的（并因此修掉了两处在 7.4 上看
 - ![吐舌头](docs/pet-expressions/tongue.svg) **吐舌头** `:emoji-tongue:`
 
 > 12 种彩色动态形态：笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头。每个 SVG 自带表情、情绪特效与整体动效，并遵循 `prefers-reduced-motion`。
+
+在代码里可以通过 `ErikWang2013\Xhprof\Core\Mascot` 取用：`Mascot::svg()` 返回默认形象，`Mascot::form('smile')` 返回指定表情，`Mascot::forms()` 列出 `default` 与 12 种表情的形态名、中英文名和短码。
 <!-- pet-expressions:end -->
 
 <!-- assets-license:start -->
