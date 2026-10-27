@@ -10,3 +10,6 @@ vendor
 /.phpunit.cache/
 /test-reports/
 /.selftest/
+
+# Generated static site, deployed separately
+/site/

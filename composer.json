@@ -19,7 +19,7 @@
         "performance"
     ],
     "type": "library",
-    "homepage": "https://github.com/erikwang2013/xhprof-webman",
+    "homepage": "https://package.erik.xyz/xhprof/",
     "license": "MIT",
     "minimum-stability": "dev",
     "prefer-stable": true,
