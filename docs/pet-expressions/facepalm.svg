@@ -67,20 +67,19 @@
         fill="url(#core)"/>
 
   
-  <ellipse cx="92" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
-  <ellipse cx="146" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
+  
+  
 
   
-  <circle cx="103" cy="159" r="9" fill="#ffffff"/>
-  <circle cx="135" cy="159" r="9" fill="#ffffff"/>
-  <circle cx="103" cy="160" r="4.8" fill="#24292f"/>
-  <circle cx="135" cy="160" r="4.8" fill="#24292f"/>
-  <circle cx="101" cy="157.5" r="1.7" fill="#ffffff"/>
-  <circle cx="133" cy="157.5" r="1.7" fill="#ffffff"/>
+  
+  
+  
+  
+  
+  
 
   
-  <path d="M110 174 Q119 183 128 174" fill="none" stroke="#24292f"
-        stroke-width="2.6" stroke-linecap="round"/>
+  
 
   
-</g><g class="ex-face"><ellipse cx="120" cy="168" rx="32" ry="26" fill="url(#core)"/><path d="M 94.45,157.2 Q 103,168.9 111.55,157.2" fill="none" stroke="#24292F" stroke-width="1.8" stroke-linecap="round"/><path d="M 108.65,178.8 Q 111.24,169.73 113.83,172.32 Q 116.41,169.73 119,178.8 Q 121.59,187.87 124.17,185.28 Q 126.76,187.87 129.35,178.8" fill="none" stroke="#24292F" stroke-width="1.7" stroke-linecap="round"/><ellipse cx="96.25" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.7"/><ellipse cx="141.75" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.7"/><g transform="translate(136.35 160.35) rotate(12)"><rect class="ex-anim-palm" x="-7.76" y="-10.87" width="15.52" height="20.7" rx="5.69" fill="#EF5350" stroke="#24292F" stroke-width="1.4"/><path class="ex-anim-palm" d="M -3.73,-7.76 L -3.73,-1.03" stroke="#24292F" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 0,-7.76 L 0,-1.03" stroke="#24292F" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 3.73,-7.76 L 3.73,-1.03" stroke="#24292F" stroke-width="1" stroke-linecap="round" opacity=".55"/></g><g transform="translate(94.14 132.41)"><circle class="ex-anim-steam" style="animation-delay:0.0s" r="2.97" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(96.84 130.52)"><circle class="ex-anim-steam" style="animation-delay:0.28s" r="3.78" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(99.54 132.68)"><circle class="ex-anim-steam" style="animation-delay:0.56s" r="2.7" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(0 0)"><path class="ex-anim-sweat" style="animation-delay:0.2s" d="M 148.05,145.5 C 150.75,149.82 150.75,153.78 148.05,153.78 C 145.35,153.78 145.35,149.82 148.05,145.5 Z" fill="#6FB2F0"/><circle cx="148.05" cy="149.64" r="0.79" fill="#FFFFFF" opacity=".8"/></g></g></g></svg>
+</g><g class="ex-face"><path d="M 94.45,157.2 Q 103,168.9 111.55,157.2" fill="none" stroke="#24292F" stroke-width="1.8" stroke-linecap="round"/><path d="M 108.65,178.8 Q 111.24,169.73 113.83,172.32 Q 116.41,169.73 119,178.8 Q 121.59,187.87 124.17,185.28 Q 126.76,187.87 129.35,178.8" fill="none" stroke="#24292F" stroke-width="1.7" stroke-linecap="round"/><ellipse cx="96.25" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.7"/><ellipse cx="141.75" cy="171.15" rx="7.02" ry="3.78" fill="#FF9B9B" opacity="0.7"/><g transform="translate(136.35 160.35) rotate(12)"><rect class="ex-anim-palm" x="-7.76" y="-10.87" width="15.52" height="20.7" rx="5.69" fill="#EF5350" stroke="#24292F" stroke-width="1.4"/><path class="ex-anim-palm" d="M -3.73,-7.76 L -3.73,-1.03" stroke="#24292F" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 0,-7.76 L 0,-1.03" stroke="#24292F" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 3.73,-7.76 L 3.73,-1.03" stroke="#24292F" stroke-width="1" stroke-linecap="round" opacity=".55"/></g><g transform="translate(94.14 132.41)"><circle class="ex-anim-steam" style="animation-delay:0.0s" r="2.97" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(96.84 130.52)"><circle class="ex-anim-steam" style="animation-delay:0.28s" r="3.78" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(99.54 132.68)"><circle class="ex-anim-steam" style="animation-delay:0.56s" r="2.7" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(0 0)"><path class="ex-anim-sweat" style="animation-delay:0.2s" d="M 148.05,145.5 C 150.75,149.82 150.75,153.78 148.05,153.78 C 145.35,153.78 145.35,149.82 148.05,145.5 Z" fill="#6FB2F0"/><circle cx="148.05" cy="149.64" r="0.79" fill="#FFFFFF" opacity=".8"/></g></g></g></svg>

@@ -67,20 +67,19 @@
         fill="url(#core)"/>
 
   
-  <ellipse cx="92" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
-  <ellipse cx="146" cy="177" rx="7.5" ry="4.5" fill="#ff9b9b" opacity="0.8"/>
+  
+  
 
   
-  <circle cx="103" cy="159" r="9" fill="#ffffff"/>
-  <circle cx="135" cy="159" r="9" fill="#ffffff"/>
-  <circle cx="103" cy="160" r="4.8" fill="#24292f"/>
-  <circle cx="135" cy="160" r="4.8" fill="#24292f"/>
-  <circle cx="101" cy="157.5" r="1.7" fill="#ffffff"/>
-  <circle cx="133" cy="157.5" r="1.7" fill="#ffffff"/>
+  
+  
+  
+  
+  
+  
 
   
-  <path d="M110 174 Q119 183 128 174" fill="none" stroke="#24292f"
-        stroke-width="2.6" stroke-linecap="round"/>
+  
 
   
-</g><g class="ex-face"><ellipse cx="120" cy="168" rx="32" ry="26" fill="url(#core)"/><path d="M 94.45,145.05 L 107.95,150.45" stroke="#24292F" stroke-width="2" stroke-linecap="round"/><path d="M 143.55,145.05 L 130.05,150.45" stroke="#24292F" stroke-width="2" stroke-linecap="round"/><ellipse cx="103" cy="159" rx="9" ry="5.94" fill="#FFFFFF" stroke="#24292F" stroke-width="1.44"/><ellipse cx="103" cy="159" rx="4.32" ry="3.27" fill="#24292F"/><circle cx="101.02" cy="157.34" r="1.8" fill="#FFFFFF"/><ellipse cx="135" cy="159" rx="9" ry="5.94" fill="#FFFFFF" stroke="#24292F" stroke-width="1.44"/><ellipse cx="135" cy="159" rx="4.32" ry="3.27" fill="#24292F"/><circle cx="133.02" cy="157.34" r="1.8" fill="#FFFFFF"/><rect x="108.65" y="174.26" width="20.7" height="8.75" rx="1.81" fill="#FFFFFF" stroke="#24292F" stroke-width="1.36"/><path d="M 112.79,174.26 L 112.79,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 116.93,174.26 L 116.93,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 121.07,174.26 L 121.07,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 125.21,174.26 L 125.21,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 108.65,178.8 L 129.35,178.8" stroke="#24292F" stroke-width="1" opacity=".55"/><g class="ex-anim-pulse"><path d="M 144.48,132.96 L 146.21,138.44 L 151.68,140.16 L 146.21,141.89 L 144.48,147.36 L 142.76,141.89 L 137.28,140.16 L 142.76,138.44 Z" fill="#EF4444"/></g><g transform="translate(116.08 128.53)"><circle class="ex-anim-steam" style="animation-delay:0.0s" r="3.22" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(119 126.48)"><circle class="ex-anim-steam" style="animation-delay:0.28s" r="4.09" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(121.92 128.82)"><circle class="ex-anim-steam" style="animation-delay:0.56s" r="2.93" fill="#D7DEE8" opacity=".72"/></g><circle class="ex-anim-pulse" cx="119" cy="159" r="33.24" fill="none" stroke="#EF4444" stroke-width="2.99" opacity=".35"/></g></g></svg>
+</g><g class="ex-face"><path d="M 94.45,145.05 L 107.95,150.45" stroke="#24292F" stroke-width="2" stroke-linecap="round"/><path d="M 143.55,145.05 L 130.05,150.45" stroke="#24292F" stroke-width="2" stroke-linecap="round"/><ellipse cx="103" cy="159" rx="9" ry="5.94" fill="#FFFFFF" stroke="#24292F" stroke-width="1.44"/><ellipse cx="103" cy="159" rx="4.32" ry="3.27" fill="#24292F"/><circle cx="101.02" cy="157.34" r="1.8" fill="#FFFFFF"/><ellipse cx="135" cy="159" rx="9" ry="5.94" fill="#FFFFFF" stroke="#24292F" stroke-width="1.44"/><ellipse cx="135" cy="159" rx="4.32" ry="3.27" fill="#24292F"/><circle cx="133.02" cy="157.34" r="1.8" fill="#FFFFFF"/><rect x="108.65" y="174.26" width="20.7" height="8.75" rx="1.81" fill="#FFFFFF" stroke="#24292F" stroke-width="1.36"/><path d="M 112.79,174.26 L 112.79,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 116.93,174.26 L 116.93,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 121.07,174.26 L 121.07,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 125.21,174.26 L 125.21,183.01" stroke="#24292F" stroke-width="1" opacity=".55"/><path d="M 108.65,178.8 L 129.35,178.8" stroke="#24292F" stroke-width="1" opacity=".55"/><g class="ex-anim-pulse"><path d="M 144.48,132.96 L 146.21,138.44 L 151.68,140.16 L 146.21,141.89 L 144.48,147.36 L 142.76,141.89 L 137.28,140.16 L 142.76,138.44 Z" fill="#EF4444"/></g><g transform="translate(116.08 128.53)"><circle class="ex-anim-steam" style="animation-delay:0.0s" r="3.22" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(119 126.48)"><circle class="ex-anim-steam" style="animation-delay:0.28s" r="4.09" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(121.92 128.82)"><circle class="ex-anim-steam" style="animation-delay:0.56s" r="2.93" fill="#D7DEE8" opacity=".72"/></g></g></g></svg>
