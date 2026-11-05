@@ -14,6 +14,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
+use ErikWang2013\Xhprof\Tests\Support\Han;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -448,7 +449,7 @@ class I18nTest extends TestCase
                     continue;   // 空值 = 还没翻，由 t() 回落中文源，不算「拿中文冒充译文」
                 }
                 $source = (string) ($zh[$key] ?? '');
-                if (preg_match('/\p{Han}/u', $source) !== 1) {
+                if (!Han::matches($source)) {
                     continue;   // 源文本本身没有汉字（IUser%、IP 这类标识），照抄是正常的
                 }
                 $this->assertNotSame(
@@ -716,12 +717,12 @@ class I18nTest extends TestCase
     {
         $scanned = (string) preg_replace('#<select class="xp-lang".*?</select>#s', '', $html);
 
-        if (preg_match('/\p{Han}/u', $scanned, $m, PREG_OFFSET_CAPTURE) === 1) {
+        if (preg_match(Han::REGEX, $scanned, $m, PREG_OFFSET_CAPTURE) === 1) {
             $from = max(0, $m[0][1] - 60);
             $this->fail("{$where} 的英文页里还有汉字：…" . substr($scanned, $from, 140) . '…');
         }
         // 命中不了才算通过也要有断言，否则这条检查在空转
-        $this->assertSame(0, preg_match('/\p{Han}/u', $scanned), "{$where} 的英文页里还有汉字");
+        $this->assertSame(0, preg_match(Han::REGEX, $scanned), "{$where} 的英文页里还有汉字");
     }
 
     #[Test]

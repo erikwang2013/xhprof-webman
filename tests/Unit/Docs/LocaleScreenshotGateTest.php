@@ -11,6 +11,7 @@ use ErikWang2013\Xhprof\Tests\Fixtures\FakeConfig;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeLogger;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeRequest;
 use ErikWang2013\Xhprof\Tests\Fixtures\FakeResponse;
+use ErikWang2013\Xhprof\Tests\Support\Han;
 use ErikWang2013\Xhprof\Tests\Support\XhprofStaticsSnapshot;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\Test;
@@ -413,13 +414,13 @@ final class LocaleScreenshotGateTest extends TestCase
     {
         $needles = [];
         foreach (I18n::catalogOf('zh_CN') as $key => $value) {
-            if (!is_string($value) || preg_match('/\p{Han}/u', $value) !== 1) {
+            if (!is_string($value) || !Han::matches($value)) {
                 continue;   // 不含汉字的值（'IP' 这类）逐字出现在哪个语种上都合法
             }
             // 占位符：sprintf（%s/%d/%%/%1$s）与 DataTables（_START_/_MENU_…）两种
             foreach (preg_split('/%[0-9]*[$]?[sdf%]|_[A-Z]+_/', $value) as $chunk) {
                 $chunk = trim($chunk);
-                if (preg_match_all('/\p{Han}/u', $chunk) >= 2) {
+                if (preg_match_all(Han::REGEX, $chunk) >= 2) {
                     $needles[$key][] = $chunk;
                 }
             }
