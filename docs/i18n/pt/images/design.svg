@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Trade-offs de design: decisão, motivo e custo</title>
   <desc>Uma comparação de cinco decisões-chave, cada uma listando a decisão, o benefício que ela rendeu e o custo que cobrou: o Core depende só de 5 contratos, as classes de entrada servem a página de relatório sozinhas, nenhuma camada compartilhada é extraída, os stubs são conferidos por um ciclo de verificação independente, e os 8 frameworks adicionados depois usam injeção explícita em vez de autoDetect. Tradução automática. Este documento foi traduzido automaticamente e não passou por revisão de um falante nativo; em caso de dúvida, vale a versão em inglês.</desc>
 

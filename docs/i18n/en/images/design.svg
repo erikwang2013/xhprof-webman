@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Design trade-offs: decision, reason and cost</title>
   <desc>A comparison of five key decisions, each listing the decision, the benefit it bought and the cost it charged: Core depends on 5 contracts only, entry classes serve the report page themselves, no shared layer is extracted, stubs are checked by an independent verification loop, and the 8 frameworks added later use explicit injection rather than autoDetect.</desc>
 

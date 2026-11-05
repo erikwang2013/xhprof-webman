@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman layered architecture</title>
   <desc>Three layered diagrams: the top layer is the 12 framework entry classes (4 initially supported + 8 added later), the middle is the 5 interfaces in src/Core/Contract/, the bottom is the 5 classes in Core. The red band at the bottom marks the only two couplings to frameworks left in Core, and notes that the 8 frameworks added later never go through autoDetect — all use explicit injection via Xhprof::bootstrap().</desc>
 

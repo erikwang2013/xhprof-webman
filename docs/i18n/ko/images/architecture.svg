@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman 계층형 아키텍처</title>
   <desc>3계층 구조도입니다. 맨 위는 프레임워크 진입 클래스 12개(이미 지원하는 4개 + 이후 확장 8개), 가운데는 src/Core/Contract/ 의 인터페이스 5개, 아래는 Core의 클래스 5개입니다. 맨 아래 빨간 띠는 Core에 남은 프레임워크 결합 두 곳을 표시하고, 확장된 8개 프레임워크가 autoDetect를 거치지 않고 모두 Xhprof::bootstrap() 으로 명시적 주입을 쓴다는 점을 적고 있습니다. 기계 번역. 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 영문판을 기준으로 하십시오.</desc>
 

@@ -77,7 +77,8 @@ class StaticController
         // **缺** Content-Type 时用 finfo 按**内容**嗅探——实测本包 src/html 当时的 11 个文件里
         // 8 个被猜错（三个 css 全被猜成 text/plain；四个 js 里 xhprof_report.js /
         // jquery.dataTables.min.js / bootstrap.min.js 猜成 text/plain，dataTables.bootstrap.js
-        // 猜成 text/html；png/gif 两个猜对了），浏览器会拒收 text/plain 的 script、
+        // 猜成 text/html；png/gif 两个猜对了。bootstrap.min.js 后来因报告页不使用任何
+        // Bootstrap JS 组件而移除，当时的实测数字保留不动），浏览器会拒收 text/plain 的 script、
         // 不套用 text/plain 的样式表 → 报告页在 Laravel 上无 JS 无 CSS。
         // （pet.svg 是后加的，不在那次实测里：它在 MIME_TYPES 有显式映射，本就不走嗅探。）
         // 其余十个适配器（除 Laravel / Webman 两家 response()->file() 外）的 file() 自己

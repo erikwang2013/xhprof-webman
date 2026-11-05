@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 584" width="1200" height="584" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 584" width="1200" height="584" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>프로파일링되는 요청 하나의 수명 주기</title>
   <desc>위쪽은 샘플링되는 요청의 8단계입니다: 요청 진입, 진입 클래스가 보고서 페이지와 리소스 경로를 먼저 확인(일치하면 샘플링 없이 단락, 보고서 페이지는 Xhprof::index() 가 인증하고 통과하지 못하면 deny() 403/401/503), Xhprof::bootstrap 이 어댑터 5개를 주입, 샘플링 판정(먼저 자격 isEnabled() 와 ext-xhprof/ext-redis 를 보고, 이어서 트리거 token → 예산 → 샘플링), xhprofStart, 비즈니스 로직, finally 에서 xhprofStop, save_run 이 Redis 에 기록. 아래쪽은 레인 5개로, 색 띠로 PSR-15 (Yii3 / Slim), Symfony, WordPress, Joomla, Drupal 각각의 샘플링 시작·종료 지점과 shutdown 폴백을 표시합니다. 기계 번역. 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 영문판을 기준으로 하십시오.</desc>
 

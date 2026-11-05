@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Compensaciones de diseño: decisión, motivo y coste</title>
   <desc>Una comparación de cinco decisiones clave, cada una con la decisión en sí, el beneficio que aportó y el coste que supuso: Core solo depende de 5 contratos, las clases de entrada sirven la página de informe ellas mismas, no se extrae ninguna capa compartida, los stubs los comprueba un bucle de verificación independiente, y los 8 frameworks añadidos después usan inyección explícita en lugar de autoDetect. Traducción automática sin revisar. Este documento es una traducción automática al español y no ha sido revisada por un hablante nativo; ante cualquier duda, la versión de referencia es la versión inglesa.</desc>
 

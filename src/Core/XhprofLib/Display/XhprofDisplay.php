@@ -426,9 +426,8 @@ class XhprofDisplay
     // **同步**执行，而 xhprof_report.js 的顶层就是 `$(document).ready(...)`。jQuery 排在
     // 它后面 = `$` 未定义 → ReferenceError，该脚本剩余部分不再执行，搜索按钮的点击处理器
     // 与请求列表的 DataTable（分页/排序/搜索）全都注册不上，且页面不报错、看起来「就是没反应」。
-    $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery-3.0.0.min.js'></script>";
+    $echo_page .= "<script src='$ui_dir_url_path/jquery/jquery-3.7.1.min.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/xhprof_report.js'></script>";
-    $echo_page .= "<script src='$ui_dir_url_path/js/bootstrap.min.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/jquery.dataTables.min.js'></script>";
     $echo_page .= "<script src='$ui_dir_url_path/js/dataTables.bootstrap.js'></script>";
     return $echo_page;

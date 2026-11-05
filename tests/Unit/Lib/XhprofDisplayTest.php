@@ -251,7 +251,7 @@ class XhprofDisplayTest extends TestCase
         self::assertStringContainsString("<link href='/assets/css/xhprof.css'", $out);
         self::assertStringContainsString('css/bootstrap.css', $out);
         self::assertStringContainsString('js/xhprof_report.js', $out);
-        self::assertStringContainsString('jquery-3.0.0.min.js', $out);
+        self::assertStringContainsString('jquery-3.7.1.min.js', $out);
     }
 
     #[Test]
@@ -765,7 +765,7 @@ class XhprofDisplayTest extends TestCase
     public function jqueryIsLoadedBeforeTheReportScript(): void
     {
         $html = XhprofDisplay::xhprof_include_js_css('/xhprof-assets');
-        $jquery = strpos($html, 'jquery-3.0.0.min.js');
+        $jquery = strpos($html, 'jquery-3.7.1.min.js');
         $report = strpos($html, 'xhprof_report.js');
 
         // 先各自确认找得到：strpos 找不到返回 false，而 `false < 正数` 恒真，

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Trade-off desain: keputusan, alasan, dan biaya</title>
   <desc>Perbandingan lima keputusan kunci, masing-masing mencantumkan keputusannya, manfaat yang dibelinya, dan biaya yang dibayarnya: Core hanya bergantung pada 5 kontrak, kelas entri melayani halaman report sendiri, tidak ada lapisan bersama yang diekstrak, stub diperiksa oleh loop verifikasi independen, dan 8 framework susulan memakai injeksi eksplisit alih-alih autoDetect. Terjemahan mesin. Dokumen ini diterjemahkan secara otomatis dan belum diperiksa oleh penutur asli. Acuan resminya adalah versi bahasa Inggris.</desc>
 

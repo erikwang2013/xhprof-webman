@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img"
-     font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+     font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman 分层架构</title>
   <desc>三张分层图：上层是 12 个框架入口类（已适配 4 个 + 后续扩展 8 个），中层是 src/Core/Contract/ 的 5 个接口，下层是 Core 的 5 个类。底部用红色标出 Core 对框架仅剩的两处耦合，并注明扩展的 8 个框架不经过 autoDetect，全部走显式注入 Xhprof::bootstrap()。</desc>
 

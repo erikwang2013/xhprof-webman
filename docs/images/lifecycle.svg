@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 584" width="1200" height="584" role="img"
-     font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+     font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>一次被采样请求的生命周期</title>
   <desc>上半部分是采样请求的 8 个阶段：请求进入、入口类先判报告页与资源路径（命中则短路不采样，报告页由 Xhprof::index() 鉴权，不过则 deny() 403/401/503）、Xhprof::bootstrap 注入 5 个适配器、采样判定（先判资格 isEnabled() 与 ext-xhprof/ext-redis，再走触发 token → 预算 → 抽样）、xhprofStart、业务处理、finally 中 xhprofStop、save_run 落 Redis。下半部分是 5 条泳道，用色带标出 PSR-15（Yii3 / Slim）、Symfony、WordPress、Joomla、Drupal 各自的采样起止点与 shutdown 兜底。</desc>
 

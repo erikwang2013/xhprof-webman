@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 664" width="1200" height="664" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>설계 트레이드오프: 결정, 이유, 비용</title>
   <desc>다섯 가지 핵심 결정을 대조한 표로, 각 항목이 결정 자체와 그것이 얻은 이익, 그리고 치른 비용을 나열합니다: Core는 계약 5개에만 의존, 진입 클래스가 보고서 페이지를 자체 제공, 공유 계층을 뽑지 않음, 스텁은 독립 검증 루프가 검사, autoDetect 대신 명시적 주입. 기계 번역. 이 문서는 기계 번역한 결과이며 한국어 원어민의 검수를 받지 않았습니다. 내용이 어긋날 경우 영문판을 기준으로 하십시오.</desc>
 

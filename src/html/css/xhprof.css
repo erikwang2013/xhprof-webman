@@ -20,7 +20,11 @@
   --xp-highlight: #ddf4ff;
   --xp-radius: 8px;
   --xp-radius-sm: 6px;
-  --xp-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* Arial and Noto Sans CJK SC first: on the Linux build box Arial resolves to
+     Liberation Sans (open) and CJK to Noto Sans CJK SC (open, OFL).  A missing
+     family earlier in the list would let fontconfig substitute a commercial
+     fallback (华康圆体W5) for every script. */
+  --xp-font: Arial, "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 * {
@@ -34,6 +38,12 @@ body {
   font-family: var(--xp-font);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* bootstrap.css is linked after this file and sets its own body font stack;
+   html body outranks it without touching the vendored copy. */
+html body {
+  font-family: var(--xp-font);
 }
 
 /* ========== 顶部导航 ========== */

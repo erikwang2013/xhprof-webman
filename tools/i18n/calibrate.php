@@ -15,16 +15,19 @@ declare(strict_types=1);
  *
  * The font question is not academic.  The source diagrams declare
  *
- *   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
- *   Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif
+ *   Arial, "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+ *   Roboto, "Helvetica Neue", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
+ *   sans-serif
  *
- * so a Mac renders them in SF Pro and Windows in Segoe UI; on this build box
- * none of the first six families exist and fontconfig hands back 华康圆体W5
- * for the whole list.  The tables in lib.php were measured on that face, so
- * they are exact only for a reader whose font resolves the same way.  Pass
- * --font=<family> to re-measure against a specific face: the model is safe for
- * a face when its predicted width is >= the measured one, because then the
- * error is slack the layout does not need rather than overflow it cannot see.
+ * so a Mac and Windows render the Latin text in Arial.  On this build box
+ * Arial resolves to Liberation Sans and CJK to Noto Sans CJK SC — both
+ * open-source; the commercial 华康圆体W5 that fontconfig used to return for
+ * the old stack is no longer reachable.  The ASCII table in lib.php is
+ * Arial/Liberation metrics, CJK is exactly 1em, and the per-script means were
+ * measured against DejaVu Sans.  Pass --font=<family> to re-measure against a
+ * specific face: the model is safe for a face when its predicted width is >=
+ * the measured one, because then the error is slack the layout does not need
+ * rather than overflow it cannot see.
  *
  * --rtl is the experiment behind the text-anchor swap in generate.php: it
  * renders the same string under direction:ltr and direction:rtl and prints

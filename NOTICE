@@ -24,17 +24,21 @@ each derived PHP file carries an Apache header stating this.
 src/html/ also ships libraries authored elsewhere, which the report page loads
 (or once loaded):
 
-  jquery/jquery-3.0.0.min.js                    jQuery 3.0.0 (jQuery Foundation, MIT)
-  js/bootstrap.min.js, css/bootstrap.css        Bootstrap 3.3.5 (MIT — header present)
+  jquery/jquery-3.7.1.min.js                    jQuery 3.7.1 (OpenJS Foundation, MIT)
+  css/bootstrap.css                             Bootstrap 3.3.5 (MIT — header present).
+                                                Its JS bundle is not shipped: the report
+                                                page uses no Bootstrap JS component.
   js/jquery.dataTables.min.js                   DataTables 1.10.15 (MIT) — byte-identical
                                                  to the 1.10.15 release
   js/dataTables.bootstrap.js, css/dataTables.bootstrap.css
                                                 DataTables/Bootstrap integration; these two
                                                 are the 1.x-era files, **not** 1.10.15
-  images/sort_both.png, images/sort_desc.png    the 1.x-era DataTables sort icons; no CSS
-                                                references them any more — kept only as the
-                                                PNG fixtures of the MIME-type tests. What the
-                                                report actually renders are images/sort_both.svg,
+  images/sort_both.png                          the 1.x-era DataTables sort icon; no CSS
+                                                references it any more — kept only as the
+                                                PNG fixture of the MIME-type tests (its
+                                                sort_desc.png sibling had no reference and
+                                                was removed). What the report actually
+                                                renders are images/sort_both.svg,
                                                 images/sort_asc.svg and images/sort_desc.svg,
                                                 drawn for this project from src/html/pet.svg
                                                 (own artwork, no upstream terms)
@@ -47,4 +51,6 @@ upstream); where the upstream file shipped a license header it is kept verbatim.
 Removed in this change: `jquery/jquery-1.2.6.js`, `jquery/jquery.autocomplete.{js,css}`,
 `jquery/jquery.tooltip.{js,css}` (vendored by phacility/xhprof, last used by a tooltip
 library that predates jQuery 3) and `js/bootstrap-table.js` + its Chinese locale file
-(unreferenced). They are recoverable from this repository's history.
+(unreferenced). Also removed later: `js/bootstrap.min.js` (unused — the report page
+uses no Bootstrap JS component) and `images/sort_desc.png` (no reference).
+They are recoverable from this repository's history.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>Многослойная архитектура XHProf Webman</title>
   <desc>Три слоя диаграммы: верхний — 12 классов входа фреймворков (4 уже поддерживаются + 8 добавленных позже), средний — 5 интерфейсов в src/Core/Contract/, нижний — 5 классов Core. Красная полоса внизу отмечает две последние связи с фреймворками, оставшиеся в Core, и указывает, что 8 фреймворков, добавленных позже, не проходят через autoDetect — все используют явное внедрение через Xhprof::bootstrap(). Машинный перевод. Этот документ переведён автоматически и не проверен носителем языка; при расхождениях верен английский оригинал.</desc>
 

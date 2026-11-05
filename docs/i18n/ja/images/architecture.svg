@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman 階層アーキテクチャ</title>
   <desc>3 層の図：上層は 12 のフレームワーク入口クラス（最初に対応した 4 つ + 後から拡張した 8 つ）、中層は src/Core/Contract/ の 5 インターフェース、下層は Core の 5 クラス。最下部に Core に残るフレームワークとの結合 2 箇所を赤で示し、後から拡張した 8 フレームワークは autoDetect を通らず、すべて明示的注入 Xhprof::bootstrap() を通ることを注記する。 機械翻訳。 この文書は自動翻訳されたもので、母語話者による校閲を受けていません。内容が食い違う場合は 英語版 を正とします。</desc>
 

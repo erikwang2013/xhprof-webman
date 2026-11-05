@@ -124,12 +124,12 @@ class StaticControllerTest extends TestCase
     #[Test]
     public function serveServesJqueryFromSubdirectory(): void
     {
-        $request = new FakeRequest([], ['uri' => '/xhprof-assets/jquery/jquery-3.0.0.min.js']);
+        $request = new FakeRequest([], ['uri' => '/xhprof-assets/jquery/jquery-3.7.1.min.js']);
 
         $result = StaticController::serve($request, $this->response);
 
         $this->assertNotNull($result->filePath);
-        $this->assertStringEndsWith('jquery-3.0.0.min.js', $result->filePath);
+        $this->assertStringEndsWith('jquery-3.7.1.min.js', $result->filePath);
     }
 
     #[Test]
@@ -159,7 +159,7 @@ class StaticControllerTest extends TestCase
     {
         yield 'js' => ['js/xhprof_report.js', 'application/javascript'];
         yield 'js in subdir' => ['js/dataTables.bootstrap.js', 'application/javascript'];
-        yield 'jquery' => ['jquery/jquery-3.0.0.min.js', 'application/javascript'];
+        yield 'jquery' => ['jquery/jquery-3.7.1.min.js', 'application/javascript'];
         yield 'css' => ['css/xhprof.css', 'text/css'];
         yield 'css (bootstrap)' => ['css/bootstrap.css', 'text/css'];
         yield 'png' => ['images/sort_both.png', 'image/png'];

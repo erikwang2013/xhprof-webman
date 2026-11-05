@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="-apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 894" width="1200" height="894" role="img" font-family="Arial, &quot;Noto Sans CJK SC&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, &quot;Noto Sans SC&quot;, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, sans-serif">
   <title>XHProf Webman স্তরভিত্তিক আর্কিটেকচার</title>
   <desc>তিনটি স্তরভিত্তিক ডায়াগ্রাম: উপরের স্তরে ১২টি ফ্রেমওয়ার্ক এন্ট্রি ক্লাস (আগেই সমর্থিত ৪টি + পরে যোগ হওয়া ৮টি), মাঝের স্তরে src/Core/Contract/ এর ৫টি ইন্টারফেস, নিচের স্তরে Core-এর ৫টি ক্লাস। নিচের লাল ব্যান্ডটি Core-এ ফ্রেমওয়ার্কের সঙ্গে বাকি থাকা একমাত্র দুটি কাপলিং চিহ্নিত করে, আর জানায় যে পরে যোগ হওয়া ৮টি ফ্রেমওয়ার্ক কখনো autoDetect-এর ভেতর দিয়ে যায় না — সবগুলোই Xhprof::bootstrap() দিয়ে স্পষ্ট ইনজেকশন ব্যবহার করে। যন্ত্রানুবাদ। এই নথিটি স্বয়ংক্রিয়ভাবে অনূদিত হয়েছে এবং কোনো মাতৃভাষী দ্বারা পুনরালোচিত হয়নি। নির্ভরযোগ্য তথ্যের জন্য ইংরেজি সংস্করণ দেখুন।</desc>
 
