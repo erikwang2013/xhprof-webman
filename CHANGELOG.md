@@ -9,6 +9,41 @@
 生成的一行 compare 链接），2026-10-04 由同一工具按同一规则回溯生成。
 <!-- CHANGELOG:INSERT：新段落插在这一行下面（保持新→旧） -->
 
+## v3.10.1 — 2026-11-05
+
+### fix（修复）
+
+- **test**：match Han ideographs explicitly and lower the asset floor（18de7d6）
+  > CI's PHP 8.3.36 \p{Han} matched U+00B7 MIDDLE DOT, so the English page's
+  > "·" separators were reported as untranslated Chinese (footer.credit and
+  > the runs status bar). Match explicit CJK ideograph ranges via
+  > tests/Support/Han; real Han text still matches and punctuation does not.
+  > 
+  > The contract asset floor was pinned at 14; removing bootstrap.min.js and
+  > sort_desc.png leaves 12, so lower the tripwire to 12 with the history noted.
+- **security**：drop unused Bootstrap JS, upgrade jQuery, prefer open fonts（760ca3f）
+  > - remove src/html/js/bootstrap.min.js: no Bootstrap JS component is used; 3.3.5's JS carries XSS advisories fixed only in 3.4.0
+  > - upgrade bundled jQuery 3.0.0 -> 3.7.1 (three known advisories); verified against the npm dist file and against DataTables 1.10.15 in Chrome
+  > - delete unused sort_desc.png and the stale emoji/font license reference
+  > - put Arial (Liberation Sans here) and Noto Sans CJK SC first so generated SVGs/screenshots no longer fall back to the commercial Huakang face; regenerate all localized SVGs, the 26 screenshots and the HTML manifest
+
+### docs（文档）
+
+- add site homepage and ignore generated site（01c1b92）
+
+### chore（杂务）
+
+- **contracts**：lower Symfony assertion floors after the asset removals（9208dd0）
+  > Deleting bootstrap.min.js and sort_desc.png drops the per-asset MIME assertions
+  > by four on all three Symfony legs (232→228, 231→227, 232→228). Sign the
+  > frozen lower-bound table down to the measured counts; no case behavior changed.
+
+### 其他
+
+- 修复项目宠物表情：移除表情圆圈与重复五官 [skip ci]（c5adda0）
+
+**完整变更**：https://github.com/erikwang2013/xhprof-webman/compare/v3.10.0...v3.10.1
+
 ## v3.10.0 — 2026-10-18
 
 ### feat（新增）
