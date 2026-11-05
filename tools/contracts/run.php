@@ -147,13 +147,17 @@ const EXPECTED_SKIPS_SYMFONY8 = 0;
  * ext-xhprof + ext-redis + 127.0.0.1:6379 上的真 Redis）。数字与各 case 自己在 detail 里
  * 写的是**同一个** `$checks` 计数器，不是另数一套：
  *   * main（12 个）：Drupal 167、Joomla 145、Laravel 109、Psr7 65、Redis 52、Slim 108、
- *     Symfony 232、Thinkphp 231、Webman 160、Wordpress 69、Yii2 134、Yii3 123
+ *     Symfony 228、Thinkphp 231、Webman 160、Wordpress 69、Yii2 134、Yii3 123
  *     （Psr7 的 65 = 9 个接口逐字段比对 + 56 项 fake 行为；Wordpress 的 69 = L2-lite 40 +
  *     L3 29 —— 两家的数字都是照自己 detail 的口径合成的，不另立第二套计数）
- *   * symfony64：Symfony 231（这条腿没装 symfony/mime，走 prepare() 抛 LogicException 的
+ *   * symfony64：Symfony 227（这条腿没装 symfony/mime，走 prepare() 抛 LogicException 的
  *     分支，比有 mime 的腿少 1 条 —— 同一个 case 在不同腿上数字不同是**正常**的，
  *     这正是表要按腿分开的原因）
- *   * symfony8：Symfony 232、Laravel 109（Laravel 13）
+ *   * symfony8：Symfony 228、Laravel 109（Laravel 13）
+ *
+ * 2026-11-05 签字下调：删除 src/html/js/bootstrap.min.js 与 images/sort_desc.png
+ * （14→12 个资源）让 Symfony case 的逐资源断言各少 4 条：main 232→228、
+ * symfony64 231→227、symfony8 232→228。其余 case 未动。
  * 量法：把某条腿的表留空（或写个更小的值）跑一次，掉线清单里会带**本次实测条数**，
  * 照抄回表 —— 这次首次冻结就是这么量的；之后调表就是签字动作本身。
  *
@@ -163,7 +167,8 @@ const EXPECTED_SKIPS_SYMFONY8 = 0;
  * 判决函数把结论归给 SKIP-MISMATCH（后者是前者的后果），断言数明细照样打印出来。
  * 两条闸门是配对使用的：删掉任一条，另一条就会在环境降级时给出误导性的诊断。
  *
- * 签名：2026-10-04 首次冻结（审计 r4-tools #12 / M-5）。改这张表下沿 = 承认"这些条不再验了"，
+ * 签名：2026-10-04 首次冻结（审计 r4-tools #12 / M-5）；2026-11-05 资源删除签字下调
+ * （Symfony 三条腿各 -4）。改这张表下沿 = 承认"这些条不再验了"，
  * 与改 SKIP 常量一样要过人的眼睛；表里没有的 case 名字一律算问题（新 case 要签字进环）。
  */
 const EXPECTED_ASSERTIONS = [
@@ -174,15 +179,15 @@ const EXPECTED_ASSERTIONS = [
         'Psr7' => 65,
         'Redis' => 52,
         'Slim' => 108,
-        'Symfony' => 232,
+        'Symfony' => 228,
         'Thinkphp' => 231,
         'Webman' => 160,
         'Wordpress' => 69,
         'Yii2' => 134,
         'Yii3' => 123,
     ],
-    'symfony64' => ['Symfony' => 231],
-    'symfony8' => ['Symfony' => 232, 'Laravel' => 109],
+    'symfony64' => ['Symfony' => 227],
+    'symfony8' => ['Symfony' => 228, 'Laravel' => 109],
 ];
 
 /**
