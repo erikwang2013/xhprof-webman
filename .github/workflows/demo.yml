@@ -34,7 +34,7 @@ jobs:
     # 真出问题时的信号是失败日志，不是"超时杀进程"。
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # **不设 APK_MIRROR**：这里要验的就是 README 里那条原样命令，
       # 即 docker-compose.yml 里 APK_MIRROR 的默认值（官方 CDN）。换源是给
